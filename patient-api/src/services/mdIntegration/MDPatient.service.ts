@@ -229,22 +229,7 @@ class MDPatientService {
     return response.data;
   }
 
-  async getDriversLicense(patientId: string, accessToken: string): Promise<DriversLicenseResponse> {
-    const response = await axios.get<DriversLicenseResponse>(
-      `${this.apiUrl}/partner/patients/${patientId}/drivers-license`,
-      {
-        params: {
-          fullscreen: true
-        },
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
 
-    return response.data;
-  }
 }
 
 export default new MDPatientService();

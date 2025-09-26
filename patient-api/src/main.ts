@@ -3839,61 +3839,6 @@ const treatmentService = new TreatmentService();
 const orderService = new OrderService();
 
 
-// Check the status 
-app.get("/patient/verify-account", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    const verified = await userService.isUserVerified(currentUser.id);
-
-    res.status(200).json({ verified });
-
-  } catch (error) {
-    console.error('❌ Error updating patient:', error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
-});
-
-app.post("/patient/verify-account", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-
-    const result = await userService.verifyUserAccount(currentUser.id);
-
-    if (result.success) {
-      res.status(200).json(result);
-    } else {
-      res.status(400).json(result);
-    }
-
-  } catch (error) {
-    console.error('❌ Error verifying patient account:', error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    });
-  }
-});
-
 app.put("/patient", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
