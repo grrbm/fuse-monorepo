@@ -177,11 +177,11 @@ class MDWebhookService {
             last_name: clinicianDetails.last_name,
             phone_number: clinicianDetails.phone_number.replace(/[^0-9]/g, ''),
             email: clinicianDetails.email,
-            // TODO: Solve the address
-            street: 'MD Integration Provider',
-            city: 'Remote',
-            state: 'CA',
-            zip: '00000',
+            // Approved address for  all MDI clinicians
+            street: '100 Powell Place #1859r',
+            city: 'Nashville',
+            state: 'TN',
+            zip: '37204',
             licenses: allLicenses
           });
 
