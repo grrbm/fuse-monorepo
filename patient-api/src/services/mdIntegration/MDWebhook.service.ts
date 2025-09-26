@@ -117,7 +117,7 @@ class MDWebhookService {
       const expectedSignatureBuffer = Buffer.from(expectedSignature, 'hex');
 
       return providedSignatureBuffer.length === expectedSignatureBuffer.length &&
-             crypto.timingSafeEqual(providedSignatureBuffer, expectedSignatureBuffer);
+        crypto.timingSafeEqual(providedSignatureBuffer, expectedSignatureBuffer);
     } catch (error) {
       console.error('Error comparing webhook signatures:', error);
       return false;
