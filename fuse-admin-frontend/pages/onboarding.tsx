@@ -219,12 +219,17 @@ export default function OnboardingPage() {
 
             {/* Main Hero Content */}
             <h1 className="text-5xl font-bold text-foreground mb-4 leading-tight">
-              Your <span className="text-orange-500">revenue engine</span> setup
+              Choose <span className="text-foreground">Brand Setup</span> Option
             </h1>
             
-            <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-              Select your launch package below. From zero to first patient in 14 days.
+            <p className="text-xl text-muted-foreground mb-6 max-w-2xl mx-auto leading-relaxed">
+              Select your preferred one time onboarding package, we'll finalize details during your call.
             </p>
+            
+            <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-6 py-3 rounded-full text-sm font-medium mb-8">
+              <CheckCircle className="w-4 h-4" />
+              All options deliver the same 14-day launch timeline
+            </div>
             
           </div>
 
@@ -259,8 +264,7 @@ export default function OnboardingPage() {
                   
                   <div className="mb-4">
                     <div className="flex items-baseline gap-2 mb-1">
-                      <span className="text-4xl font-bold">${option.price.toLocaleString()}</span>
-                      <span className="text-sm text-green-600 font-semibold bg-green-50 px-2 py-1 rounded">one-time</span>
+                      <span className="text-4xl font-bold text-orange-500">${option.price.toLocaleString()}</span>
                     </div>
                   </div>
                   
@@ -321,11 +325,11 @@ export default function OnboardingPage() {
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
               <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-300"></div>
+                <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-8 hover:shadow-xl transition-all duration-300">
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                      <CreditCard className="w-8 h-8 text-white" />
+                    <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                      <CreditCard className="w-8 h-8 text-blue-600" />
                     </div>
                     <h3 className="text-xl font-bold mb-3 text-foreground">Secure Payment</h3>
                     <p className="text-muted-foreground leading-relaxed">
@@ -340,11 +344,11 @@ export default function OnboardingPage() {
               </div>
 
               <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-300"></div>
+                <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-8 hover:shadow-xl transition-all duration-300">
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                      <Clock className="w-8 h-8 text-white" />
+                    <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                      <Clock className="w-8 h-8 text-blue-600" />
                     </div>
                     <h3 className="text-xl font-bold mb-3 text-foreground">Schedule onboarding call</h3>
                     <p className="text-muted-foreground leading-relaxed">
@@ -359,11 +363,11 @@ export default function OnboardingPage() {
               </div>
 
               <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-300"></div>
+                <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-8 hover:shadow-xl transition-all duration-300">
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                      <Shield className="w-8 h-8 text-white" />
+                    <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                      <Shield className="w-8 h-8 text-blue-600" />
                     </div>
                     <h3 className="text-xl font-bold mb-3 text-foreground">Go Live</h3>
                     <p className="text-muted-foreground leading-relaxed">
