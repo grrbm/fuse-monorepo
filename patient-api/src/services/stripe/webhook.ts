@@ -31,8 +31,34 @@ export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.Payment
 
         console.log('✅ Order updated to paid status:', payment.order.orderNumber);
     } else {
-        // This is likely a subscription payment, not an order payment - ignore silently
-        console.log('ℹ️ Payment intent not associated with order (likely subscription):', paymentIntent.id);
+        // Check if this is a subscription payment
+        const userId = paymentIntent.metadata?.userId;
+        const planType = paymentIntent.metadata?.planType;
+
+        if (userId && planType) {
+            const user = await User.findByPk(userId);
+            if (user && user.role === 'brand') {
+                console.log("Creating brand subscription for payment intent:", paymentIntent.id);
+
+                const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+
+                if (selectedPlan) {
+                    const brandSub = await BrandSubscription.create({
+                        userId: userId,
+                        planType: planType as any,
+                        status: BrandSubscriptionStatus.ACTIVE,
+                        stripeCustomerId: paymentIntent.customer as string,
+                        monthlyPrice: selectedPlan.monthlyPrice,
+                        currentPeriodStart: new Date(),
+                        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+                        features: selectedPlan.getFeatures()
+                    });
+                    console.log('✅ Brand subscription created:', brandSub.id);
+                }
+            }
+        } else {
+            console.log('ℹ️ Payment intent not associated with order or subscription:', paymentIntent.id);
+        }
     }
 };
 

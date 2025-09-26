@@ -5,8 +5,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { 
-  CheckCircle, 
+import {
+  CheckCircle,
   ArrowLeft,
   ArrowRight,
   Monitor,
@@ -114,7 +114,7 @@ export default function OnboardingPage() {
 
     try {
       // Save onboarding selection to user profile
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('admin_token')
       if (token) {
         await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/profile`, {
           method: 'PUT',
@@ -170,13 +170,13 @@ export default function OnboardingPage() {
         <title>Choose Your Onboarding Experience - Fuse Health</title>
         <meta name="description" content="Select your onboarding experience" />
       </Head>
-      
+
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-6xl mx-auto">
           {/* Header with Back Button */}
           <div className="flex items-center justify-between mb-8">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={() => router.push('/plans')}
               className="flex items-center gap-2"
             >
@@ -207,9 +207,9 @@ export default function OnboardingPage() {
                 <span>Launch in 1-2 weeks</span>
               </div>
               <div className="w-px h-4 bg-border"></div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <AlertCircle className="w-4 h-4 mr-1" />
@@ -221,29 +221,28 @@ export default function OnboardingPage() {
             <h1 className="text-5xl font-bold text-foreground mb-4 leading-tight">
               Choose <span className="text-foreground">Brand Setup</span> Option
             </h1>
-            
+
             <p className="text-xl text-muted-foreground mb-6 max-w-2xl mx-auto leading-relaxed">
               Select your preferred one time onboarding package, we'll finalize details during your call.
             </p>
-            
+
             <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-6 py-3 rounded-full text-sm font-medium mb-8">
               <CheckCircle className="w-4 h-4" />
               All options deliver the same 14-day launch timeline
             </div>
-            
+
           </div>
 
 
           {/* Onboarding Options */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
             {onboardingOptions.map((option) => (
-              <Card 
+              <Card
                 key={option.id}
-                className={`relative group cursor-pointer transition-all duration-300 flex flex-col ${
-                  option.recommended 
-                    ? 'shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80' 
+                className={`relative group cursor-pointer transition-all duration-300 flex flex-col ${option.recommended
+                    ? 'shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80'
                     : 'border-muted hover:shadow-xl hover:scale-105 hover:border-primary'
-                }`}
+                  }`}
               >
                 {option.recommended && (
                   <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
@@ -261,13 +260,13 @@ export default function OnboardingPage() {
                     </div>
                     <CardTitle className="text-xl font-semibold">{option.name}</CardTitle>
                   </div>
-                  
+
                   <div className="mb-4">
                     <div className="flex items-baseline gap-2 mb-1">
                       <span className="text-4xl font-bold text-orange-500">${option.price.toLocaleString()}</span>
                     </div>
                   </div>
-                  
+
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     {option.description}
                   </p>
@@ -284,14 +283,13 @@ export default function OnboardingPage() {
                   </ul>
 
 
-                  <Button 
-                    className={`w-full mt-auto transition-colors ${
-                      option.id === 'standard' 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                  <Button
+                    className={`w-full mt-auto transition-colors ${option.id === 'standard'
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
                         : option.id === 'high-definition'
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                        : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
-                    }`}
+                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
+                      }`}
                     onClick={() => handleSelectOnboarding(option.id)}
                   >
                     {option.id === 'custom' ? (
@@ -322,7 +320,7 @@ export default function OnboardingPage() {
               <h2 className="text-2xl font-bold mb-3">What happens next</h2>
               <p className="text-muted-foreground">Your complete setup timeline</p>
             </div>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
               <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>

@@ -2111,7 +2111,7 @@ app.delete("/treatment-plans", authenticateJWT, async (req, res) => {
 
 // Payment routes
 // Create order and payment intent
-app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
+app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
   try {
     const {
       amount,
@@ -2946,6 +2946,239 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
     res.status(500).json({
       success: false,
       message: "Failed to create checkout session"
+    });
+  }
+});
+
+// Create payment intent for direct card processing
+app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    const { planType, amount, currency } = req.body;
+
+    if (currentUser?.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Brand role required."
+      });
+    }
+
+    // Check if user already has an active subscription
+    const existingSubscription = await BrandSubscription.findOne({
+      where: {
+        userId: currentUser.id,
+        status: ['active', 'processing', 'past_due']
+      }
+    });
+
+    if (existingSubscription) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
+      });
+    }
+
+    const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+
+    if (!selectedPlan) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid plan type"
+      });
+    }
+
+    // Get full user data from database
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Create or retrieve Stripe customer
+    let stripeCustomer;
+    try {
+      const customers = await stripe.customers.list({
+        email: user.email,
+        limit: 1
+      });
+
+      if (customers.data.length > 0) {
+        stripeCustomer = customers.data[0];
+      } else {
+        stripeCustomer = await stripe.customers.create({
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          metadata: {
+            userId: user.id,
+            role: user.role,
+            planType: planType
+          }
+        });
+      }
+    } catch (stripeError) {
+      console.error('Error with Stripe customer:', stripeError);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create Stripe customer"
+      });
+    }
+
+    // Create Payment Intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Convert to cents
+      currency: currency || 'usd',
+      customer: stripeCustomer.id,
+      metadata: {
+        userId: currentUser.id,
+        planType: planType,
+        amount: amount.toString()
+      },
+      automatic_payment_methods: {
+        enabled: true
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    });
+
+  } catch (error) {
+    console.error('Error creating payment intent:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create payment intent"
+    });
+  }
+});
+
+// Confirm payment intent with payment method
+app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
+  try {
+    console.log('🚀 BACKEND: Confirm payment intent called')
+    console.log('🚀 BACKEND: Request headers:', JSON.stringify(req.headers, null, 2))
+    console.log('🚀 BACKEND: Request body:', JSON.stringify(req.body, null, 2))
+
+    const currentUser = getCurrentUser(req);
+    const { paymentMethodId, planType, amount, currency } = req.body;
+
+    console.log('🚀 BACKEND: Extracted data:', { paymentMethodId, planType, amount, currency })
+    console.log('🚀 BACKEND: Current user:', currentUser?.id, currentUser?.role)
+
+    if (currentUser?.role !== 'brand') {
+      console.error('❌ BACKEND: Access denied - not brand role')
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Brand role required."
+      });
+    }
+
+    console.log('🚀 BACKEND: Getting plan and user data...')
+    // Get the payment intent that was created earlier
+    // In a real implementation, you'd store the payment intent ID in the session
+    // For now, we'll create a new payment intent for confirmation
+    const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+    console.log('🚀 BACKEND: Selected plan:', selectedPlan?.id)
+
+    if (!selectedPlan) {
+      console.error('❌ BACKEND: Invalid plan type:', planType)
+      return res.status(400).json({
+        success: false,
+        message: "Invalid plan type"
+      });
+    }
+
+    // Get full user data from database
+    const user = await User.findByPk(currentUser.id);
+    console.log('🚀 BACKEND: User found:', user?.id, user?.email)
+
+    if (!user) {
+      console.error('❌ BACKEND: User not found:', currentUser.id)
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Create or retrieve Stripe customer
+    console.log('🚀 BACKEND: Creating/retrieving Stripe customer...')
+    let stripeCustomer;
+    try {
+      const customers = await stripe.customers.list({
+        email: user.email,
+        limit: 1
+      });
+      console.log('🚀 BACKEND: Customers found:', customers.data.length)
+
+      if (customers.data.length > 0) {
+        stripeCustomer = customers.data[0];
+        console.log('🚀 BACKEND: Using existing customer:', stripeCustomer.id)
+      } else {
+        console.log('🚀 BACKEND: Creating new customer...')
+        stripeCustomer = await stripe.customers.create({
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          metadata: {
+            userId: user.id,
+            role: user.role,
+            planType: planType
+          }
+        });
+        console.log('🚀 BACKEND: Created customer:', stripeCustomer.id)
+      }
+    } catch (stripeError) {
+      console.error('❌ BACKEND: Error with Stripe customer:', stripeError);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create Stripe customer"
+      });
+    }
+
+    // Create Payment Intent for confirmation
+    console.log('🚀 BACKEND: Creating PaymentIntent...')
+    console.log('🚀 BACKEND: Amount:', amount, 'Currency:', currency)
+    console.log('🚀 BACKEND: Customer ID:', stripeCustomer.id)
+    console.log('🚀 BACKEND: Payment method ID:', paymentMethodId)
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Convert to cents
+      currency: currency || 'usd',
+      customer: stripeCustomer.id,
+      payment_method: paymentMethodId,
+      confirm: true,
+      metadata: {
+        userId: currentUser.id,
+        planType: planType,
+        amount: amount.toString()
+      },
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: 'never'
+      }
+    });
+
+    console.log('🚀 BACKEND: PaymentIntent created:', paymentIntent.id, 'Status:', paymentIntent.status)
+
+    res.status(200).json({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      requiresAction: paymentIntent.status === 'requires_action',
+      paymentIntent: {
+        id: paymentIntent.id,
+        status: paymentIntent.status
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ BACKEND: Error confirming payment intent:', error);
+    console.error('❌ BACKEND: Error stack:', error instanceof Error ? error.stack : 'No stack');
+    console.error('❌ BACKEND: Error details:', JSON.stringify(error, null, 2));
+    res.status(500).json({
+      success: false,
+      message: "Failed to confirm payment intent"
     });
   }
 });
