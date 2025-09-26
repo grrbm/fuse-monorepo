@@ -1,0 +1,23 @@
+# Node
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Builds
+dist
+coverage
+
+# Env & secrets (never commit these)
+.env
+.env.*
+.aptible.env
+
+# Git & OS cruft
+.git
+.gitignore
+.DS_Store
+
+# Docs & misc
+README.md

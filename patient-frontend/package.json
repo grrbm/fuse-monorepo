@@ -1,0 +1,38 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "print2": "node print-structure.js",
+    "print": "node print-structure-with-preview.js",
+    "pm2:start": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1024 --no-warnings' pm2 start npm --name patient-frontend -- start",
+    "pm2:reload": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1024 --no-warnings' pm2 reload patient-frontend",
+    "pm2:reload-no-build": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1024 --no-warnings' pm2 reload patient-frontend",
+    "pm2:stop": "pm2 stop patient-frontend"
+  },
+  "dependencies": {
+    "@heroui/react": "^2.8.3",
+    "@iconify/react": "^6.0.1",
+    "@stripe/react-stripe-js": "^2.8.1",
+    "@stripe/stripe-js": "^4.8.0",
+    "framer-motion": "^12.23.12",
+    "next": "^15.5.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.12",
+    "@types/node": "24.3.0",
+    "@types/react": "19.1.12",
+    "autoprefixer": "^10.4.21",
+    "eslint": "latest",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.12",
+    "typescript": "5.9.2"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}

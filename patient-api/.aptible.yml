@@ -1,0 +1,3 @@
+# .aptible.yml
+before_release:
+  - /bin/sh -lc 'if [ "$RUN_MIGRATIONS" = "true" ]; then echo "Running migrations"; yarn migrate; else echo "Skipping migrations"; fi'
