@@ -3912,21 +3912,36 @@ app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 // TODO: Add security
 app.post("/webhook/orders", async (req, res) => {
   try {
-    // Validate webhook secret
-    const providedSecret = req.headers['authorization'];
 
-    if (!providedSecret) {
+    // Validate webhook signature using HMAC SHA256
+    const providedSignature = req.headers['signature'];
+
+    if (!providedSignature) {
       return res.status(401).json({
         success: false,
-        message: "Webhook secret required"
+        message: "Webhook signature required"
       });
     }
 
+    if (!process.env.APP_WEBHOOK_SECRET) {
+      console.error('APP_WEBHOOK_SECRET environment variable is not set');
+      return res.status(500).json({
+        success: false,
+        message: "Server configuration error"
+      });
+    }
 
-    if (providedSecret !== process.env.APP_WEBHOOK_SECRET) {
+    // Verify signature using MDWebhookService
+    const isValidSignature = MDWebhookService.verifyWebhookSignature(
+      providedSignature as string,
+      req.body,
+      process.env.APP_WEBHOOK_SECRET
+    );
+
+    if (!isValidSignature) {
       return res.status(403).json({
         success: false,
-        message: "Invalid webhook secret"
+        message: "Invalid webhook signature"
       });
     }
 

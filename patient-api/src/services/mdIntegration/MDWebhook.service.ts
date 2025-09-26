@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import Order from '../../models/Order';
 import OrderService from '../order.service';
 import MDAuthService from './MDAuth.service';
@@ -94,6 +95,35 @@ interface MessageCreatedEvent {
 }
 
 class MDWebhookService {
+  /**
+   * Verify webhook signature using HMAC SHA256
+   * Matches PHP: hash_hmac('sha256', json_encode(payload), secret)
+   */
+  verifyWebhookSignature(providedSignature: string, payload: any, secret: string): boolean {
+    if (!providedSignature || !secret) {
+      return false;
+    }
+
+    // Calculate expected signature: hash_hmac('sha256', json_encode(payload), secret)
+    const payloadString = JSON.stringify(payload);
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(payloadString, 'utf8')
+      .digest('hex');
+
+    // Compare signatures using timing-safe comparison
+    try {
+      const providedSignatureBuffer = Buffer.from(providedSignature, 'hex');
+      const expectedSignatureBuffer = Buffer.from(expectedSignature, 'hex');
+
+      return providedSignatureBuffer.length === expectedSignatureBuffer.length &&
+             crypto.timingSafeEqual(providedSignatureBuffer, expectedSignatureBuffer);
+    } catch (error) {
+      console.error('Error comparing webhook signatures:', error);
+      return false;
+    }
+  }
+
   // This event will be dispatched when a treatment is approved and ready to be ordered, depending on the offering type:
   async handleOfferingSubmitted(eventData: OfferingSubmittedEvent): Promise<void> {
     console.log('🩺 MD Integration offering submitted:', eventData.case_id);
