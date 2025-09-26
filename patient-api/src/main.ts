@@ -34,8 +34,7 @@ import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
 import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
-import MDPatientService from "./services/mdIntegration/MDPatient.service";
-import MDAuthService from "./services/mdIntegration/MDAuth.service";
+import MessageService from "./services/Message.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -4019,6 +4018,146 @@ app.put("/physicians", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : "Failed to update physician"
+    });
+  }
+});
+
+// Message endpoints
+app.get("/messages", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    const { page = 1, per_page = 15 } = req.query;
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const params = {
+      page: parseInt(page as string),
+      per_page: parseInt(per_page as string),
+    };
+
+    const messages = await MessageService.getMessagesByUserId(currentUser.id, params);
+
+    res.json({
+      success: true,
+      data: messages
+    });
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to fetch messages"
+    });
+  }
+});
+
+app.post("/messages", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    const { text, reference_message_id, files } = req.body;
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const payload = {
+      channel: 'patient',
+      text,
+      reference_message_id,
+      files
+    };
+
+    const message = await MessageService.createMessageForUser(currentUser.id, payload);
+
+    res.json({
+      success: true,
+      message: "Message sent successfully",
+      data: message
+    });
+  } catch (error) {
+    console.error('Error creating message:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to send message"
+    });
+  }
+});
+
+app.post("/messages/:messageId/read", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    const { messageId } = req.params;
+
+    if (!messageId) {
+      return res.status(400).json({
+        success: false,
+        message: "Message ID is required"
+      });
+    }
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+
+
+    await MessageService.markMessageAsReadForUser(currentUser.id, messageId);
+
+    res.json({
+      success: true,
+      message: "Message marked as read"
+    });
+  } catch (error) {
+    console.error('Error marking message as read:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to mark message as read"
+    });
+  }
+});
+
+app.delete("/messages/:messageId/read", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    const { messageId } = req.params;
+
+    if (!messageId) {
+      return res.status(400).json({
+        success: false,
+        message: "Message ID is required"
+      });
+    }
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+
+
+    await MessageService.markMessageAsUnreadForUser(currentUser.id, messageId);
+
+    res.json({
+      success: true,
+      message: "Message marked as unread"
+    });
+  } catch (error) {
+    console.error('Error marking message as unread:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to mark message as unread"
     });
   }
 });
