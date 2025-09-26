@@ -34,6 +34,7 @@ import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
 import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
+import MDFilesService from "./services/mdIntegration/MDFiles.service";
 import MessageService from "./services/Message.service";
 
 // Helper function to generate unique clinic slug
@@ -4158,6 +4159,120 @@ app.delete("/messages/:messageId/read", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: error instanceof Error ? error.message : "Failed to mark message as unread"
+    });
+  }
+});
+
+// MD Files endpoints
+app.post("/md-files", authenticateJWT, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file provided"
+      });
+    }
+
+    const file = await MDFilesService.createFile(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    res.json({
+      success: true,
+      message: "File uploaded successfully",
+      data: file
+    });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to upload file"
+    });
+  }
+});
+
+app.get("/md-files/:fileId", authenticateJWT, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+
+    if (!fileId) {
+      return res.status(400).json({
+        success: false,
+        message: "File ID is required"
+      });
+    }
+
+    const file = await MDFilesService.getFile(fileId);
+
+    res.json({
+      success: true,
+      data: file
+    });
+  } catch (error) {
+    console.error('Error fetching file:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to fetch file"
+    });
+  }
+});
+
+app.get("/md-files/:fileId/download", authenticateJWT, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+
+    if (!fileId) {
+      return res.status(400).json({
+        success: false,
+        message: "File ID is required"
+      });
+    }
+
+    // Get file metadata first
+    const fileInfo = await MDFilesService.getFile(fileId);
+
+    // Download file content
+    const fileBuffer = await MDFilesService.downloadFile(fileId);
+
+    res.set({
+      'Content-Type': fileInfo.mime_type,
+      'Content-Disposition': `attachment; filename="${fileInfo.name}"`
+    });
+
+    res.send(fileBuffer);
+  } catch (error) {
+    console.error('Error downloading file:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to download file"
+    });
+  }
+});
+
+app.delete("/md-files/:fileId", authenticateJWT, async (req, res) => {
+  try {
+    const { fileId } = req.params;
+
+    if (!fileId) {
+      return res.status(400).json({
+        success: false,
+        message: "File ID is required"
+      });
+    }
+
+    await MDFilesService.deleteFile(fileId);
+
+    res.json({
+      success: true,
+      message: "File deleted successfully"
+    });
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to delete file"
     });
   }
 });
