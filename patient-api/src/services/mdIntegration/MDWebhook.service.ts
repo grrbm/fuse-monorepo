@@ -298,6 +298,7 @@ class MDWebhookService {
       }
 
       console.log('✅ Processing message created for user:', user.id);
+      // Update newMessages in user
 
       console.log('📋 Message details:', {
         userId: user.id,

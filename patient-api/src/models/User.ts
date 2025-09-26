@@ -150,7 +150,7 @@ export default class User extends Entity {
     allowNull: true,
     defaultValue: false
   })
-  declare mdValidated?: boolean;
+  declare newMessages?: boolean;
 
 
   @Column({
