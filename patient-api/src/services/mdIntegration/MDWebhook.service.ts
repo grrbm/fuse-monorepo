@@ -316,33 +316,29 @@ class MDWebhookService {
   async handleMessageCreated(eventData: MessageCreatedEvent): Promise<void> {
     console.log('💬 MD Integration message created:', eventData.message_id);
 
-    try {
-      // Find user by mdPatientId
-      const user = await User.findOne({
-        where: { mdPatientId: eventData.patient_id }
-      });
+    console.log('📋 Message details:', {
+      patientId: eventData.patient_id,
+      messageId: eventData.message_id,
+      userType: eventData.user_type,
+      channel: eventData.channel,
+      timestamp: eventData.timestamp
+    });
 
-      if (!user) {
-        console.log('⚠️ User not found for MD patient ID:', eventData.patient_id);
-        return;
+    try {
+
+      if (eventData.user_type == 'clinician') {
+        const user = await User.findOne({
+          where: { mdPatientId: eventData.patient_id }
+        });
+
+        user?.update({
+          newMessages: true
+        })
+        console.log('✅ Processing message created for user:', user?.id);
       }
 
-      console.log('✅ Processing message created for user:', user.id);
-      // Update newMessages in user
 
-      console.log('📋 Message details:', {
-        userId: user.id,
-        patientId: eventData.patient_id,
-        messageId: eventData.message_id,
-        userType: eventData.user_type,
-        channel: eventData.channel,
-        timestamp: eventData.timestamp
-      });
-
-      // TODO: Store message reference for future retrieval
       // TODO: Send push notification to user about new message
-      // TODO: Update user's last activity timestamp
-      // TODO: Mark user as having active communication
 
     } catch (error) {
       console.error('❌ Error processing message created:', error);

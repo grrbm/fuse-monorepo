@@ -15,7 +15,11 @@ class MessageService {
       throw new Error('User does not have an MD Patient ID');
     }
 
-    return MDMessagesService.getMessages(user.mdPatientId, {...params, channel: 'patient'});
+    user?.update({
+      newMessages: false
+    })
+
+    return MDMessagesService.getMessages(user.mdPatientId, { ...params, channel: 'patient' });
   }
 
   async createMessageForUser(userId: string, payload: CreateMessagePayload) {
