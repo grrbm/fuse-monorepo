@@ -13,7 +13,7 @@ import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
 import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
-import BrandSubscription from "./models/BrandSubscription";
+import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
@@ -2111,7 +2111,7 @@ app.delete("/treatment-plans", authenticateJWT, async (req, res) => {
 
 // Payment routes
 // Create order and payment intent
-app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
+app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
   try {
     const {
       amount,
@@ -2865,9 +2865,17 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
       });
     }
 
+    console.log('🚀 BACKEND CREATE: Looking up plan type:', planType)
     const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+    console.log('🚀 BACKEND CREATE: Plan found:', selectedPlan?.id, selectedPlan?.planType)
+
+    // Debug: List all available plans
+    const allPlans = await BrandSubscriptionPlans.findAll({ attributes: ['planType', 'name'] })
+    console.log('🚀 BACKEND CREATE: All available plans:', allPlans.map(p => ({ type: p.planType, name: p.name })))
 
     if (!selectedPlan) {
+      console.error('❌ BACKEND CREATE: Invalid plan type:', planType)
+      console.error('❌ BACKEND CREATE: Available types:', allPlans.map(p => p.planType))
       return res.status(400).json({
         success: false,
         message: "Invalid plan type"
@@ -2950,6 +2958,368 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
   }
 });
 
+// Create payment intent for direct card processing
+app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
+  try {
+    console.log('🚀 BACKEND CREATE: Payment intent creation called')
+    console.log('🚀 BACKEND CREATE: Request body:', JSON.stringify(req.body, null, 2))
+
+    const currentUser = getCurrentUser(req);
+    const { planType, amount, currency } = req.body;
+
+    console.log('🚀 BACKEND CREATE: Plan type received:', planType)
+    console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
+
+    if (currentUser?.role !== 'brand') {
+      console.error('❌ BACKEND CREATE: Access denied - not brand role')
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Brand role required."
+      });
+    }
+
+    // Check if user already has an active subscription
+    const existingSubscription = await BrandSubscription.findOne({
+      where: {
+        userId: currentUser.id,
+        status: ['active', 'processing', 'past_due']
+      }
+    });
+
+    if (existingSubscription) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
+      });
+    }
+
+    console.log('🚀 BACKEND CREATE: Looking up plan type:', planType)
+    const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+    console.log('🚀 BACKEND CREATE: Plan found:', selectedPlan?.id, selectedPlan?.planType)
+
+    // Debug: List all available plans
+    const allPlans = await BrandSubscriptionPlans.findAll({ attributes: ['planType', 'name'] })
+    console.log('🚀 BACKEND CREATE: All available plans:', allPlans.map(p => ({ type: p.planType, name: p.name })))
+
+    if (!selectedPlan) {
+      console.error('❌ BACKEND CREATE: Invalid plan type:', planType)
+      console.error('❌ BACKEND CREATE: Available types:', allPlans.map(p => p.planType))
+      return res.status(400).json({
+        success: false,
+        message: "Invalid plan type"
+      });
+    }
+
+    // Get full user data from database
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Create or retrieve Stripe customer
+    let stripeCustomer;
+    try {
+      const customers = await stripe.customers.list({
+        email: user.email,
+        limit: 1
+      });
+
+      if (customers.data.length > 0) {
+        stripeCustomer = customers.data[0];
+      } else {
+        stripeCustomer = await stripe.customers.create({
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          metadata: {
+            userId: user.id,
+            role: user.role,
+            planType: planType
+          }
+        });
+      }
+    } catch (stripeError) {
+      console.error('Error with Stripe customer:', stripeError);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create Stripe customer"
+      });
+    }
+
+    // Create Payment Intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Convert to cents
+      currency: currency || 'usd',
+      customer: stripeCustomer.id,
+      metadata: {
+        userId: currentUser.id,
+        planType: planType,
+        amount: amount.toString()
+      },
+      automatic_payment_methods: {
+        enabled: true
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    });
+
+  } catch (error) {
+    console.error('Error creating payment intent:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create payment intent"
+    });
+  }
+});
+
+// Confirm payment intent with payment method
+app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
+  try {
+    console.log('🚀 BACKEND: Confirm payment intent called')
+    console.log('🚀 BACKEND: Request headers:', JSON.stringify(req.headers, null, 2))
+    console.log('🚀 BACKEND: Request body:', JSON.stringify(req.body, null, 2))
+
+    const currentUser = getCurrentUser(req);
+    const { paymentMethodId, planType, amount, currency } = req.body;
+
+    console.log('🚀 BACKEND: Extracted data:', { paymentMethodId, planType, amount, currency })
+    console.log('🚀 BACKEND: Current user:', currentUser?.id, currentUser?.role)
+
+    if (currentUser?.role !== 'brand') {
+      console.error('❌ BACKEND: Access denied - not brand role')
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Brand role required."
+      });
+    }
+
+    console.log('🚀 BACKEND: Getting plan and user data...')
+    console.log('🚀 BACKEND: Plan type received:', planType)
+    // Get the payment intent that was created earlier
+    // In a real implementation, you'd store the payment intent ID in the session
+    // For now, we'll create a new payment intent for confirmation
+    const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+    console.log('🚀 BACKEND: Selected plan:', selectedPlan?.id)
+    console.log('🚀 BACKEND: Available plan types:', await BrandSubscriptionPlans.findAll({ attributes: ['planType'] }))
+
+    if (!selectedPlan) {
+      console.error('❌ BACKEND: Invalid plan type:', planType)
+      return res.status(400).json({
+        success: false,
+        message: "Invalid plan type"
+      });
+    }
+
+    // Get full user data from database
+    const user = await User.findByPk(currentUser.id);
+    console.log('🚀 BACKEND: User found:', user?.id, user?.email)
+
+    if (!user) {
+      console.error('❌ BACKEND: User not found:', currentUser.id)
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Create or retrieve Stripe customer
+    console.log('🚀 BACKEND: Creating/retrieving Stripe customer...')
+    let stripeCustomer;
+    try {
+      const customers = await stripe.customers.list({
+        email: user.email,
+        limit: 1
+      });
+      console.log('🚀 BACKEND: Customers found:', customers.data.length)
+
+      if (customers.data.length > 0) {
+        stripeCustomer = customers.data[0];
+        console.log('🚀 BACKEND: Using existing customer:', stripeCustomer.id)
+      } else {
+        console.log('🚀 BACKEND: Creating new customer...')
+        stripeCustomer = await stripe.customers.create({
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          metadata: {
+            userId: user.id,
+            role: user.role,
+            planType: planType
+          }
+        });
+        console.log('🚀 BACKEND: Created customer:', stripeCustomer.id)
+      }
+    } catch (stripeError) {
+      console.error('❌ BACKEND: Error with Stripe customer:', stripeError);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create Stripe customer"
+      });
+    }
+
+    // Create Stripe subscription instead of one-time payment
+    console.log('🚀 BACKEND: Creating Stripe subscription...')
+    console.log('🚀 BACKEND: Plan type:', planType)
+    console.log('🚀 BACKEND: Customer ID:', stripeCustomer.id)
+    console.log('🚀 BACKEND: Payment method ID:', paymentMethodId)
+
+    // Get the price ID for the selected plan
+    const priceId = selectedPlan.stripePriceId
+    console.log('🚀 BACKEND: Using price ID:', priceId)
+
+    // Create Stripe subscription schedule to handle introductory pricing
+    console.log('🚀 BACKEND: Preparing subscription schedule with introductory pricing...')
+
+    const introductoryPlanType = 'discounted_first_month'
+    const introductoryPlan = await BrandSubscriptionPlans.getPlanByType(introductoryPlanType)
+
+    if (!introductoryPlan) {
+      console.error('❌ BACKEND: Introductory plan not found:', introductoryPlanType)
+      return res.status(500).json({
+        success: false,
+        message: "Introductory pricing plan is not configured"
+      });
+    }
+
+    console.log('🚀 BACKEND: Introductory plan price ID:', introductoryPlan.stripePriceId)
+
+    // Attach payment method to customer first
+    console.log('🚀 BACKEND: Attaching payment method to customer...')
+    await stripe.paymentMethods.attach(paymentMethodId, {
+      customer: stripeCustomer.id,
+    });
+    console.log('🚀 BACKEND: Payment method attached successfully')
+
+    // Ensure customer has default payment method set for future invoices
+    await stripe.customers.update(stripeCustomer.id, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId
+      }
+    });
+
+    console.log('🚀 BACKEND: Creating Stripe subscription schedule...')
+    const subscriptionSchedule = await stripe.subscriptionSchedules.create({
+      customer: stripeCustomer.id,
+      start_date: 'now',
+      metadata: {
+        userId: currentUser.id,
+        planType,
+        introductoryPlanType: introductoryPlan.planType
+      },
+      default_settings: {
+        default_payment_method: paymentMethodId,
+        collection_method: 'charge_automatically'
+      },
+      phases: [
+        {
+          items: [{ price: introductoryPlan.stripePriceId, quantity: 1 }],
+          iterations: 1
+        },
+        {
+          items: [{ price: priceId, quantity: 1 }]
+        }
+      ],
+      expand: ['subscription', 'subscription.latest_invoice', 'subscription.latest_invoice.payment_intent']
+    });
+
+    console.log('🚀 BACKEND: Subscription schedule created:', subscriptionSchedule.id, 'Status:', subscriptionSchedule.status)
+
+    let subscription: any = (subscriptionSchedule as any).subscription;
+    if (!subscription) {
+      console.log('⚠️ BACKEND: Subscription not present on schedule response, retrieving separately...')
+      if (subscriptionSchedule.subscription) {
+        subscription = await stripe.subscriptions.retrieve(subscriptionSchedule.subscription as string, {
+          expand: ['latest_invoice.payment_intent']
+        });
+      } else {
+        const refreshedSchedule = await stripe.subscriptionSchedules.retrieve(subscriptionSchedule.id, {
+          expand: ['subscription']
+        });
+        const scheduleSubscription = (refreshedSchedule as any).subscription;
+        if (scheduleSubscription?.id) {
+          subscription = await stripe.subscriptions.retrieve(scheduleSubscription.id, {
+            expand: ['latest_invoice.payment_intent']
+          });
+        }
+      }
+    }
+
+    if (!subscription) {
+      console.error('❌ BACKEND: Unable to retrieve subscription created by schedule');
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create subscription"
+      });
+    }
+
+    console.log('🚀 BACKEND: Subscription created:', subscription.id, 'Status:', subscription.status)
+
+    // Derive current period timestamps if available
+    const currentPeriodStartUnix = (subscription as any)?.current_period_start
+    const currentPeriodEndUnix = (subscription as any)?.current_period_end
+    const currentPeriodStartDate = currentPeriodStartUnix ? new Date(currentPeriodStartUnix * 1000) : null
+    const currentPeriodEndDate = currentPeriodEndUnix ? new Date(currentPeriodEndUnix * 1000) : null
+
+    const planFeatures = selectedPlan.getFeatures()
+    const combinedFeatures = {
+      ...planFeatures,
+      subscriptionSchedule: {
+        id: subscriptionSchedule.id,
+        introductoryPlanType: introductoryPlan.planType,
+        introductoryStripePriceId: introductoryPlan.stripePriceId,
+        introductoryMonthlyPrice: introductoryPlan.monthlyPrice
+      }
+    }
+
+    // Create BrandSubscription record
+    try {
+      const brandSub = await BrandSubscription.create({
+        userId: currentUser.id,
+        planType: planType as any,
+        status: BrandSubscriptionStatus.ACTIVE,
+        stripeSubscriptionId: subscription.id,
+        stripeCustomerId: stripeCustomer.id,
+        stripePriceId: priceId,
+        monthlyPrice: selectedPlan.monthlyPrice,
+        currentPeriodStart: currentPeriodStartDate ?? undefined,
+        currentPeriodEnd: currentPeriodEndDate ?? undefined,
+        features: combinedFeatures
+      });
+      console.log('✅ BrandSubscription record created:', brandSub.id)
+    } catch (dbError) {
+      console.error('❌ Error creating BrandSubscription record:', dbError)
+      // Don't fail the whole request if DB creation fails
+    }
+
+    res.status(200).json({
+      success: true,
+      subscriptionId: subscription.id,
+      clientSecret: (subscription as any).latest_invoice?.payment_intent?.client_secret,
+      requiresAction: subscription.status === 'incomplete',
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+        current_period_start: (subscription as any).current_period_start,
+        current_period_end: (subscription as any).current_period_end
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ BACKEND: Error confirming payment intent:', error);
+    console.error('❌ BACKEND: Error stack:', error instanceof Error ? error.stack : 'No stack');
+    console.error('❌ BACKEND: Error details:', JSON.stringify(error, null, 2));
+    res.status(500).json({
+      success: false,
+      message: "Failed to confirm payment intent"
+    });
+  }
+});
+
 // Create combined checkout session (subscription + onboarding)
 app.post("/brand-subscriptions/create-combined-checkout", authenticateJWT, async (req, res) => {
   try {
@@ -2978,9 +3348,17 @@ app.post("/brand-subscriptions/create-combined-checkout", authenticateJWT, async
       });
     }
 
+    console.log('🚀 BACKEND CREATE: Looking up plan type:', planType)
     const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+    console.log('🚀 BACKEND CREATE: Plan found:', selectedPlan?.id, selectedPlan?.planType)
+
+    // Debug: List all available plans
+    const allPlans = await BrandSubscriptionPlans.findAll({ attributes: ['planType', 'name'] })
+    console.log('🚀 BACKEND CREATE: All available plans:', allPlans.map(p => ({ type: p.planType, name: p.name })))
 
     if (!selectedPlan) {
+      console.error('❌ BACKEND CREATE: Invalid plan type:', planType)
+      console.error('❌ BACKEND CREATE: Available types:', allPlans.map(p => p.planType))
       return res.status(400).json({
         success: false,
         message: "Invalid plan type"
@@ -4311,3 +4689,196 @@ async function startServer() {
 }
 
 startServer();
+
+app.post("/brand-subscriptions/test-upgrade-high-definition", async (req, res) => {
+  try {
+    const { stripeSubscriptionId, nextPriceId } = req.body;
+
+    if (!stripeSubscriptionId || typeof stripeSubscriptionId !== 'string') {
+      return res.status(400).json({ success: false, message: "stripeSubscriptionId is required" });
+    }
+
+    const brandSub = await BrandSubscription.findOne({
+      where: {
+        stripeSubscriptionId
+      }
+    });
+
+    if (!brandSub) {
+      return res.status(404).json({ success: false, message: "Subscription not found" });
+    }
+
+    const scheduleMetadata = (brandSub.features as any)?.subscriptionSchedule;
+    const scheduleId: string | undefined = scheduleMetadata?.id;
+
+    if (!scheduleId) {
+      return res.status(400).json({ success: false, message: "Subscription schedule not found for this subscription" });
+    }
+
+    const highDefinitionPlan = await BrandSubscriptionPlans.getPlanByType('high-definition');
+    if (!highDefinitionPlan) {
+      return res.status(500).json({ success: false, message: "High Definition plan is not configured" });
+    }
+
+    const overridePriceId = typeof nextPriceId === 'string' && nextPriceId.trim().length > 0
+      ? nextPriceId.trim()
+      : undefined;
+    const targetPriceId = overridePriceId || highDefinitionPlan.stripePriceId;
+
+    const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
+
+    const phases: Stripe.SubscriptionScheduleUpdateParams.Phase[] = (schedule.phases || []).map((phase, index, arr) => {
+      const phaseAny = phase as any;
+      const items = (phase.items || []).map(item => {
+        const itemAny = item as any;
+        const desiredPriceId = index === arr.length - 1
+          ? targetPriceId
+          : (typeof itemAny.price === 'string' ? itemAny.price : itemAny.price?.id);
+
+        if (!desiredPriceId) {
+          throw new Error('Unable to determine price for subscription schedule phase');
+        }
+
+        return {
+          price: desiredPriceId,
+          quantity: itemAny.quantity ?? 1
+        };
+      });
+
+      const phaseUpdate: Stripe.SubscriptionScheduleUpdateParams.Phase = {
+        items
+      };
+
+      if (typeof phaseAny.iterations === 'number') {
+        phaseUpdate.iterations = phaseAny.iterations;
+      } else if (phaseAny.end_date) {
+        phaseUpdate.end_date = phaseAny.end_date;
+      }
+
+      if (index < arr.length - 1 && !phaseUpdate.iterations && !phaseUpdate.end_date) {
+        phaseUpdate.iterations = 1;
+      }
+
+      if (phaseAny.start_date && !phaseUpdate.start_date) {
+        phaseUpdate.start_date = phaseAny.start_date;
+      }
+
+      if (phaseAny.proration_behavior) {
+        phaseUpdate.proration_behavior = phaseAny.proration_behavior;
+      }
+
+      if (phaseAny.collection_method) {
+        phaseUpdate.collection_method = phaseAny.collection_method;
+      }
+
+      if (phaseAny.billing_thresholds) {
+        phaseUpdate.billing_thresholds = phaseAny.billing_thresholds;
+      }
+
+      if (phaseAny.invoice_settings) {
+        phaseUpdate.invoice_settings = phaseAny.invoice_settings;
+      }
+
+      if (phaseAny.trial) {
+        phaseUpdate.trial = phaseAny.trial;
+      }
+
+      if (phaseAny.currency) {
+        phaseUpdate.currency = phaseAny.currency;
+      }
+
+      return phaseUpdate;
+    });
+
+    if (phases.length === 0) {
+      return res.status(400).json({ success: false, message: "Subscription schedule has no phases to update" });
+    }
+
+    await stripe.subscriptionSchedules.update(scheduleId, {
+      phases,
+      proration_behavior: 'none'
+    });
+
+    const updatedSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+    const updatedSubData = updatedSubscription as any;
+
+    const updatedPeriodStart = updatedSubData?.current_period_start ? new Date(updatedSubData.current_period_start * 1000) : brandSub.currentPeriodStart;
+    const updatedPeriodEnd = updatedSubData?.current_period_end ? new Date(updatedSubData.current_period_end * 1000) : brandSub.currentPeriodEnd;
+
+    const existingFeatures = (brandSub.features as any) || {};
+    const subscriptionScheduleFeature = existingFeatures.subscriptionSchedule || {};
+    const planFeatures = highDefinitionPlan.getFeatures();
+
+    const updatedFeatures = {
+      ...existingFeatures,
+      ...planFeatures,
+      subscriptionSchedule: {
+        ...subscriptionScheduleFeature,
+        id: scheduleId,
+        introductoryPlanType: subscriptionScheduleFeature.introductoryPlanType,
+        introductoryMonthlyPrice: subscriptionScheduleFeature.introductoryMonthlyPrice,
+        introductoryStripePriceId: subscriptionScheduleFeature.introductoryStripePriceId,
+        nextPlanType: 'high-definition',
+        nextStripePriceId: targetPriceId
+      }
+    };
+
+    await brandSub.update({
+      planType: 'high-definition',
+      stripePriceId: targetPriceId,
+      monthlyPrice: highDefinitionPlan.monthlyPrice,
+      currentPeriodStart: updatedPeriodStart ?? null,
+      currentPeriodEnd: updatedPeriodEnd ?? null,
+      features: updatedFeatures
+    });
+
+    const user = await User.findByPk(brandSub.userId);
+    if (user?.email) {
+      const plainMessage = `Hello ${user.firstName || ''},\n\nThis is a confirmation that your Fuse subscription will move to the High Definition plan starting with your next billing cycle. You will be billed $${Number(highDefinitionPlan.monthlyPrice).toFixed(2)} per month going forward.\n\nIf you have any questions, please reach out to our support team.\n\nBest regards,\nThe Fuse Team`;
+
+      const htmlMessage = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); padding: 24px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0;">Upcoming Plan Upgrade</h1>
+          </div>
+          <div style="padding: 32px; background-color: #f9fafb;">
+            <p style="color: #111827; font-size: 16px; line-height: 1.6;">Hello ${user.firstName || ''},</p>
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              We're letting you know that your Fuse subscription will upgrade to the <strong>High Definition</strong> plan at the start of your next billing cycle.
+            </p>
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              The new plan will be billed at <strong>$${Number(highDefinitionPlan.monthlyPrice).toFixed(2)} per month</strong> and unlocks the following benefits:
+            </p>
+            <ul style="color: #374151; font-size: 16px; line-height: 1.6; margin-left: 20px;">
+              <li>Priority customer support</li>
+              <li>Up to 200 products and 20 campaigns</li>
+              <li>Advanced analytics access</li>
+            </ul>
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              If you have any questions or would like help optimizing the new features, please contact our support team any time.
+            </p>
+          </div>
+          <div style="background-color: #111827; padding: 20px; text-align: center;">
+            <p style="color: #e5e7eb; margin: 0; font-size: 14px;">Best regards,<br />The Fuse Team</p>
+          </div>
+        </div>
+      `;
+
+      await MailsSender.sendEmail({
+        to: user.email,
+        subject: 'Your Fuse plan will upgrade to High Definition next month',
+        text: plainMessage,
+        html: htmlMessage
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      scheduleId,
+      updatedPlanType: 'high-definition'
+    });
+  } catch (error) {
+    console.error('❌ Error scheduling High Definition upgrade:', error);
+    res.status(500).json({ success: false, message: 'Failed to schedule High Definition upgrade' });
+  }
+});
