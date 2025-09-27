@@ -3195,6 +3195,12 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
 
     console.log('🚀 BACKEND: Subscription created:', subscription.id, 'Status:', subscription.status)
 
+    // Derive current period timestamps if available
+    const currentPeriodStartUnix = (subscription as any)?.current_period_start
+    const currentPeriodEndUnix = (subscription as any)?.current_period_end
+    const currentPeriodStartDate = currentPeriodStartUnix ? new Date(currentPeriodStartUnix * 1000) : null
+    const currentPeriodEndDate = currentPeriodEndUnix ? new Date(currentPeriodEndUnix * 1000) : null
+
     // Create BrandSubscription record
     try {
       const brandSub = await BrandSubscription.create({
@@ -3205,8 +3211,8 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
         stripeCustomerId: stripeCustomer.id,
         stripePriceId: priceId,
         monthlyPrice: selectedPlan.monthlyPrice,
-        currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-        currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+        currentPeriodStart: currentPeriodStartDate ?? undefined,
+        currentPeriodEnd: currentPeriodEndDate ?? undefined,
         features: selectedPlan.getFeatures()
       });
       console.log('✅ BrandSubscription record created:', brandSub.id)
