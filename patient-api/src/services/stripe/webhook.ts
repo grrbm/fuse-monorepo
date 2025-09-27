@@ -419,6 +419,68 @@ export const handleSubscriptionDeleted = async (subscription: Stripe.Subscriptio
     }
 };
 
+export const handleSubscriptionCreated = async (subscription: Stripe.Subscription): Promise<void> => {
+    console.log('📬 Subscription created event received:', subscription.id);
+
+    const subscriptionData = subscription as any;
+    const periodStart = subscriptionData?.current_period_start
+        ? new Date(subscriptionData.current_period_start * 1000)
+        : undefined;
+    const periodEnd = subscriptionData?.current_period_end
+        ? new Date(subscriptionData.current_period_end * 1000)
+        : undefined;
+
+    // First try to sync a brand subscription record
+    const brandSub = await BrandSubscription.findOne({
+        where: {
+            stripeSubscriptionId: subscription.id
+        }
+    });
+
+    if (brandSub) {
+        const updates: any = {
+            status: BrandSubscriptionStatus.ACTIVE,
+        };
+
+        if (periodStart) {
+            updates.currentPeriodStart = periodStart;
+        }
+
+        if (periodEnd) {
+            updates.currentPeriodEnd = periodEnd;
+        }
+
+        if (!brandSub.stripeCustomerId && subscription.customer) {
+            updates.stripeCustomerId = typeof subscription.customer === 'string'
+                ? subscription.customer
+                : subscription.customer.id;
+        }
+
+        if (subscription.schedule) {
+            const features = brandSub.features ? { ...brandSub.features } : {};
+            const scheduleFeature = features.subscriptionSchedule || {};
+            const price = subscription.items?.data?.[0]?.price;
+
+            features.subscriptionSchedule = {
+                ...scheduleFeature,
+                id: subscription.schedule,
+                currentPhasePriceId: price?.id ?? scheduleFeature.currentPhasePriceId,
+                currentPhaseLookupKey: price?.lookup_key ?? scheduleFeature.currentPhaseLookupKey,
+                currentPeriodEnd: periodEnd ? periodEnd.toISOString() : scheduleFeature.currentPeriodEnd
+            };
+
+            updates.features = features;
+        }
+
+        await brandSub.update(updates);
+        console.log('✅ Brand subscription synced from subscription.created webhook:', brandSub.id);
+        return;
+    }
+
+    // Fallback: log for other subscription types we might support later
+    console.log('ℹ️ No BrandSubscription record found for subscription:', subscription.id);
+};
+
 /**
  * This event fires when:
   - A payment method is authorized (validated) but not yet captured
@@ -543,6 +605,10 @@ export const processStripeWebhook = async (event: Stripe.Event): Promise<void> =
 
         case 'checkout.session.completed':
             await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+            break;
+
+        case 'customer.subscription.created':
+            await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
             break;
 
         case 'invoice.paid':

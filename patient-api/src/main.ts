@@ -4689,3 +4689,196 @@ async function startServer() {
 }
 
 startServer();
+
+app.post("/brand-subscriptions/test-upgrade-high-definition", async (req, res) => {
+  try {
+    const { stripeSubscriptionId, nextPriceId } = req.body;
+
+    if (!stripeSubscriptionId || typeof stripeSubscriptionId !== 'string') {
+      return res.status(400).json({ success: false, message: "stripeSubscriptionId is required" });
+    }
+
+    const brandSub = await BrandSubscription.findOne({
+      where: {
+        stripeSubscriptionId
+      }
+    });
+
+    if (!brandSub) {
+      return res.status(404).json({ success: false, message: "Subscription not found" });
+    }
+
+    const scheduleMetadata = (brandSub.features as any)?.subscriptionSchedule;
+    const scheduleId: string | undefined = scheduleMetadata?.id;
+
+    if (!scheduleId) {
+      return res.status(400).json({ success: false, message: "Subscription schedule not found for this subscription" });
+    }
+
+    const highDefinitionPlan = await BrandSubscriptionPlans.getPlanByType('high-definition');
+    if (!highDefinitionPlan) {
+      return res.status(500).json({ success: false, message: "High Definition plan is not configured" });
+    }
+
+    const overridePriceId = typeof nextPriceId === 'string' && nextPriceId.trim().length > 0
+      ? nextPriceId.trim()
+      : undefined;
+    const targetPriceId = overridePriceId || highDefinitionPlan.stripePriceId;
+
+    const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
+
+    const phases: Stripe.SubscriptionScheduleUpdateParams.Phase[] = (schedule.phases || []).map((phase, index, arr) => {
+      const phaseAny = phase as any;
+      const items = (phase.items || []).map(item => {
+        const itemAny = item as any;
+        const desiredPriceId = index === arr.length - 1
+          ? targetPriceId
+          : (typeof itemAny.price === 'string' ? itemAny.price : itemAny.price?.id);
+
+        if (!desiredPriceId) {
+          throw new Error('Unable to determine price for subscription schedule phase');
+        }
+
+        return {
+          price: desiredPriceId,
+          quantity: itemAny.quantity ?? 1
+        };
+      });
+
+      const phaseUpdate: Stripe.SubscriptionScheduleUpdateParams.Phase = {
+        items
+      };
+
+      if (typeof phaseAny.iterations === 'number') {
+        phaseUpdate.iterations = phaseAny.iterations;
+      } else if (phaseAny.end_date) {
+        phaseUpdate.end_date = phaseAny.end_date;
+      }
+
+      if (index < arr.length - 1 && !phaseUpdate.iterations && !phaseUpdate.end_date) {
+        phaseUpdate.iterations = 1;
+      }
+
+      if (phaseAny.start_date && !phaseUpdate.start_date) {
+        phaseUpdate.start_date = phaseAny.start_date;
+      }
+
+      if (phaseAny.proration_behavior) {
+        phaseUpdate.proration_behavior = phaseAny.proration_behavior;
+      }
+
+      if (phaseAny.collection_method) {
+        phaseUpdate.collection_method = phaseAny.collection_method;
+      }
+
+      if (phaseAny.billing_thresholds) {
+        phaseUpdate.billing_thresholds = phaseAny.billing_thresholds;
+      }
+
+      if (phaseAny.invoice_settings) {
+        phaseUpdate.invoice_settings = phaseAny.invoice_settings;
+      }
+
+      if (phaseAny.trial) {
+        phaseUpdate.trial = phaseAny.trial;
+      }
+
+      if (phaseAny.currency) {
+        phaseUpdate.currency = phaseAny.currency;
+      }
+
+      return phaseUpdate;
+    });
+
+    if (phases.length === 0) {
+      return res.status(400).json({ success: false, message: "Subscription schedule has no phases to update" });
+    }
+
+    await stripe.subscriptionSchedules.update(scheduleId, {
+      phases,
+      proration_behavior: 'none'
+    });
+
+    const updatedSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+    const updatedSubData = updatedSubscription as any;
+
+    const updatedPeriodStart = updatedSubData?.current_period_start ? new Date(updatedSubData.current_period_start * 1000) : brandSub.currentPeriodStart;
+    const updatedPeriodEnd = updatedSubData?.current_period_end ? new Date(updatedSubData.current_period_end * 1000) : brandSub.currentPeriodEnd;
+
+    const existingFeatures = (brandSub.features as any) || {};
+    const subscriptionScheduleFeature = existingFeatures.subscriptionSchedule || {};
+    const planFeatures = highDefinitionPlan.getFeatures();
+
+    const updatedFeatures = {
+      ...existingFeatures,
+      ...planFeatures,
+      subscriptionSchedule: {
+        ...subscriptionScheduleFeature,
+        id: scheduleId,
+        introductoryPlanType: subscriptionScheduleFeature.introductoryPlanType,
+        introductoryMonthlyPrice: subscriptionScheduleFeature.introductoryMonthlyPrice,
+        introductoryStripePriceId: subscriptionScheduleFeature.introductoryStripePriceId,
+        nextPlanType: 'high-definition',
+        nextStripePriceId: targetPriceId
+      }
+    };
+
+    await brandSub.update({
+      planType: 'high-definition',
+      stripePriceId: targetPriceId,
+      monthlyPrice: highDefinitionPlan.monthlyPrice,
+      currentPeriodStart: updatedPeriodStart ?? null,
+      currentPeriodEnd: updatedPeriodEnd ?? null,
+      features: updatedFeatures
+    });
+
+    const user = await User.findByPk(brandSub.userId);
+    if (user?.email) {
+      const plainMessage = `Hello ${user.firstName || ''},\n\nThis is a confirmation that your Fuse subscription will move to the High Definition plan starting with your next billing cycle. You will be billed $${Number(highDefinitionPlan.monthlyPrice).toFixed(2)} per month going forward.\n\nIf you have any questions, please reach out to our support team.\n\nBest regards,\nThe Fuse Team`;
+
+      const htmlMessage = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); padding: 24px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0;">Upcoming Plan Upgrade</h1>
+          </div>
+          <div style="padding: 32px; background-color: #f9fafb;">
+            <p style="color: #111827; font-size: 16px; line-height: 1.6;">Hello ${user.firstName || ''},</p>
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              We're letting you know that your Fuse subscription will upgrade to the <strong>High Definition</strong> plan at the start of your next billing cycle.
+            </p>
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              The new plan will be billed at <strong>$${Number(highDefinitionPlan.monthlyPrice).toFixed(2)} per month</strong> and unlocks the following benefits:
+            </p>
+            <ul style="color: #374151; font-size: 16px; line-height: 1.6; margin-left: 20px;">
+              <li>Priority customer support</li>
+              <li>Up to 200 products and 20 campaigns</li>
+              <li>Advanced analytics access</li>
+            </ul>
+            <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+              If you have any questions or would like help optimizing the new features, please contact our support team any time.
+            </p>
+          </div>
+          <div style="background-color: #111827; padding: 20px; text-align: center;">
+            <p style="color: #e5e7eb; margin: 0; font-size: 14px;">Best regards,<br />The Fuse Team</p>
+          </div>
+        </div>
+      `;
+
+      await MailsSender.sendEmail({
+        to: user.email,
+        subject: 'Your Fuse plan will upgrade to High Definition next month',
+        text: plainMessage,
+        html: htmlMessage
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      scheduleId,
+      updatedPlanType: 'high-definition'
+    });
+  } catch (error) {
+    console.error('❌ Error scheduling High Definition upgrade:', error);
+    res.status(500).json({ success: false, message: 'Failed to schedule High Definition upgrade' });
+  }
+});
