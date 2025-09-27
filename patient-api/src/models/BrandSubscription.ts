@@ -36,6 +36,12 @@ export default class BrandSubscription extends Entity {
 
   @Column({
     type: DataType.STRING,
+    allowNull: true,
+  })
+  declare planCategory?: string;
+
+  @Column({
+    type: DataType.STRING,
     allowNull: false,
     defaultValue: BrandSubscriptionStatus.PENDING,
   })
@@ -65,6 +71,12 @@ export default class BrandSubscription extends Entity {
     allowNull: false,
   })
   declare monthlyPrice: number;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: true,
+  })
+  declare downpaymentAmount?: number;
 
   @Column({
     type: DataType.DATE,

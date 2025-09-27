@@ -3282,11 +3282,13 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
       const brandSub = await BrandSubscription.create({
         userId: currentUser.id,
         planType: planType as any,
+        planCategory: planCategory || null,
         status: BrandSubscriptionStatus.ACTIVE,
         stripeSubscriptionId: subscription.id,
         stripeCustomerId: stripeCustomer.id,
         stripePriceId: priceId,
         monthlyPrice: selectedPlan.monthlyPrice,
+        downpaymentAmount: introductoryPlan.monthlyPrice,
         currentPeriodStart: currentPeriodStartDate ?? undefined,
         currentPeriodEnd: currentPeriodEndDate ?? undefined,
         features: combinedFeatures
@@ -4817,8 +4819,8 @@ app.post("/brand-subscriptions/test-upgrade-high-definition", async (req, res) =
         ...subscriptionScheduleFeature,
         id: scheduleId,
         introductoryPlanType: subscriptionScheduleFeature.introductoryPlanType,
-        introductoryMonthlyPrice: subscriptionScheduleFeature.introductoryMonthlyPrice,
         introductoryStripePriceId: subscriptionScheduleFeature.introductoryStripePriceId,
+        introductoryMonthlyPrice: subscriptionScheduleFeature.introductoryMonthlyPrice,
         nextPlanType: 'high-definition',
         nextStripePriceId: targetPriceId
       }
