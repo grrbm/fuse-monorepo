@@ -3059,8 +3059,12 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
         amount: amount.toString()
       },
       automatic_payment_methods: {
-        enabled: true
-      }
+        enabled: true,
+        allow_redirects: 'never'
+      },
+      setup_future_usage: 'off_session',
+      receipt_email: user.email || undefined,
+      description: `${selectedPlan.name} down payment`
     });
 
     res.status(200).json({

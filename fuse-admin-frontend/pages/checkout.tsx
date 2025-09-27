@@ -18,7 +18,7 @@ import {
 import { loadStripe } from '@stripe/stripe-js'
 import {
   Elements,
-  CardElement,
+  PaymentElement,
   useStripe,
   useElements
 } from '@stripe/react-stripe-js'
@@ -28,6 +28,17 @@ import Layout from '@/components/Layout'
 const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_...'
 console.log('🔑 Stripe publishable key loaded:', stripePublishableKey ? 'YES' : 'NO')
 const stripePromise = loadStripe(stripePublishableKey)
+
+const paymentElementOptions = {
+  layout: 'tabs' as const,
+  business: {
+    name: 'Fuse Health'
+  },
+  wallets: {
+    applePay: 'auto' as const,
+    googlePay: 'auto' as const
+  }
+}
 
 interface CheckoutData {
   planCategory: string
@@ -43,29 +54,12 @@ interface CheckoutData {
   downpaymentName?: string
 }
 
-// Card Element styling
-const cardElementOptions = {
-  style: {
-    base: {
-      fontSize: '16px',
-      color: '#424770',
-      '::placeholder': {
-        color: '#aab7c4',
-      },
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-    },
-    invalid: {
-      color: '#9e2146',
-    },
-  },
-  hidePostalCode: true,
-}
-
 // Checkout form component that uses Stripe hooks
-function CheckoutForm({ checkoutData, paymentData, token, onSuccess, onError }: {
+function CheckoutForm({ checkoutData, paymentData, token, intentClientSecret, onSuccess, onError }: {
   checkoutData: CheckoutData
   paymentData: any
   token: string | null
+  intentClientSecret: string
   onSuccess: () => void
   onError: (error: string) => void
 }) {
@@ -89,6 +83,13 @@ function CheckoutForm({ checkoutData, paymentData, token, onSuccess, onError }: 
       return
     }
 
+    if (!intentClientSecret) {
+      const errorMsg = 'Payment could not be initialized. Please refresh and try again.'
+      console.error('❌', errorMsg)
+      onError(errorMsg)
+      return
+    }
+
     if (!token) {
       const errorMsg = 'User not authenticated.'
       console.error('❌', errorMsg)
@@ -100,48 +101,76 @@ function CheckoutForm({ checkoutData, paymentData, token, onSuccess, onError }: 
     setCardError('')
 
     try {
-      // Create payment method
-      const cardElement = elements.getElement(CardElement)
-      console.log('🔍 CardElement found:', !!cardElement)
+      const paymentElement = elements.getElement(PaymentElement)
+      console.log('🔍 PaymentElement found:', !!paymentElement)
 
-      if (!cardElement) {
-        const errorMsg = 'Card element not found'
+      if (!paymentElement) {
+        const errorMsg = 'Payment details form is not ready yet.'
         console.error('❌', errorMsg)
         onError(errorMsg)
         return
       }
 
-      console.log('🔍 Creating payment method...')
-      const { error: paymentMethodError, paymentMethod } = await stripe.createPaymentMethod({
-        type: 'card',
-        card: cardElement,
-        billing_details: {
-          name: `${paymentData.firstName} ${paymentData.lastName}`,
-          email: paymentData.email,
-          phone: paymentData.phone,
-        },
-      })
-
-      console.log('🔍 Payment method result:', { error: paymentMethodError, paymentMethod: paymentMethod?.id })
-
-      if (paymentMethodError) {
-        const errorMsg = paymentMethodError.message || 'An error occurred with your card.'
-        console.error('❌ Payment method error:', paymentMethodError)
+      const { error: submitError } = await elements.submit()
+      if (submitError) {
+        const errorMsg = submitError.message || 'Please check your payment details and try again.'
+        console.error('❌ Payment element submission error:', submitError)
         setCardError(errorMsg)
         onError(errorMsg)
         return
       }
 
-      if (!paymentMethod) {
-        const errorMsg = 'Failed to create payment method'
+      const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        clientSecret: intentClientSecret,
+        redirect: 'if_required',
+        confirmParams: {
+          receipt_email: paymentData.email || undefined,
+          payment_method_data: {
+            billing_details: {
+              name: `${paymentData.firstName} ${paymentData.lastName}`.trim() || undefined,
+              email: paymentData.email || undefined,
+              phone: paymentData.phone || undefined
+            }
+          }
+        }
+      })
+
+      if (confirmError) {
+        const errorMsg = confirmError.message || 'Payment authorization failed.'
+        console.error('❌ Payment confirmation error:', confirmError)
+        setCardError(errorMsg)
+        onError(errorMsg)
+        return
+      }
+
+      if (!paymentIntent) {
+        const errorMsg = 'Stripe did not return a payment intent.'
         console.error('❌', errorMsg)
         onError(errorMsg)
         return
       }
 
-      // Confirm payment intent
-      console.log('🔍 Confirming payment intent...')
-      console.log('🔍 Payment method ID:', paymentMethod.id)
+      if (paymentIntent.status !== 'succeeded' && paymentIntent.status !== 'requires_capture') {
+        const errorMsg = `Downpayment not completed. Status: ${paymentIntent.status}`
+        console.error('❌', errorMsg)
+        onError(errorMsg)
+        return
+      }
+
+      const paymentMethodId = typeof paymentIntent.payment_method === 'string'
+        ? paymentIntent.payment_method
+        : paymentIntent.payment_method?.id
+
+      if (!paymentMethodId) {
+        const errorMsg = 'Unable to determine payment method after confirmation.'
+        console.error('❌', errorMsg)
+        onError(errorMsg)
+        return
+      }
+
+      console.log('🔍 Downpayment succeeded. Proceeding to create subscription...')
+      console.log('🔍 Payment method ID:', paymentMethodId)
       console.log('🔍 Plan type:', checkoutData.planType)
       console.log('🔍 Amount:', checkoutData.planPrice)
 
@@ -152,7 +181,7 @@ function CheckoutForm({ checkoutData, paymentData, token, onSuccess, onError }: 
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          paymentMethodId: paymentMethod.id,
+          paymentMethodId,
           planType: checkoutData.planType,
           planCategory: checkoutData.planCategory,
           downpaymentPlanType: checkoutData.downpaymentPlanType,
@@ -171,16 +200,16 @@ function CheckoutForm({ checkoutData, paymentData, token, onSuccess, onError }: 
         throw new Error(errorMsg)
       }
 
-      const { clientSecret, requiresAction, subscription, subscriptionId } = await response.json()
-      console.log('🔍 Subscription confirmation response:', { clientSecret: !!clientSecret, requiresAction, subscription, subscriptionId })
+      const { clientSecret: subscriptionClientSecret, requiresAction, subscription, subscriptionId } = await response.json()
+      console.log('🔍 Subscription confirmation response:', { clientSecret: !!subscriptionClientSecret, requiresAction, subscription, subscriptionId })
 
-      if (requiresAction && clientSecret) {
-        // Handle 3D Secure or other authentication
-        const { error: confirmError } = await stripe.confirmCardPayment(clientSecret)
+      if (requiresAction && subscriptionClientSecret) {
+        // Handle 3D Secure or other authentication for the subscription invoice
+        const { error: subscriptionConfirmError } = await stripe.confirmCardPayment(subscriptionClientSecret)
 
-        if (confirmError) {
-          setCardError(confirmError.message || 'Payment authentication failed.')
-          onError(confirmError.message || 'Payment failed')
+        if (subscriptionConfirmError) {
+          setCardError(subscriptionConfirmError.message || 'Subscription authentication failed.')
+          onError(subscriptionConfirmError.message || 'Subscription payment failed')
           return
         }
       }
@@ -263,14 +292,14 @@ function CheckoutForm({ checkoutData, paymentData, token, onSuccess, onError }: 
         </div>
       </div>
 
-      {/* Stripe Elements Card Form */}
+      {/* Stripe Payment Element */}
       <div>
         <h3 className="font-semibold mb-4 flex items-center gap-2">
           <CreditCard className="w-5 h-5 text-blue-600" />
           Payment method
         </h3>
         <div className="border rounded-lg p-4">
-          <CardElement options={cardElementOptions} />
+          <PaymentElement options={paymentElementOptions} />
           {cardError && (
             <div className="mt-2 text-sm text-red-600">
               {cardError}
@@ -552,7 +581,7 @@ export default function CheckoutPage() {
             </Card>
 
             {/* Stripe Elements Provider */}
-            <Elements stripe={stripePromise}>
+            <Elements stripe={stripePromise} options={{ clientSecret }}>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold">
@@ -591,6 +620,7 @@ export default function CheckoutPage() {
                     checkoutData={checkoutData}
                     paymentData={paymentData}
                     token={token}
+                    intentClientSecret={clientSecret}
                     onSuccess={handlePaymentSuccess}
                     onError={handlePaymentError}
                   />
