@@ -32,14 +32,13 @@ interface PlanFeatures {
 interface Plan {
   name: string
   price: number
+  planType?: string
   features: PlanFeatures
   stripePriceId: string
 }
 
-interface Plans {
-  starter: Plan
-  professional: Plan
-  enterprise: Plan
+interface PlansResponse {
+  [key: string]: Plan
 }
 
 interface Subscription {
@@ -56,7 +55,7 @@ interface Subscription {
 }
 
 export default function Plans() {
-  const [plans, setPlans] = useState<Plans | null>(null)
+  const [plans, setPlans] = useState<PlansResponse | null>(null)
   const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -130,54 +129,97 @@ export default function Plans() {
     fetchData()
   }, [token])
 
-  const handleSelectPlan = async (planType: string) => {
+  const handleSelectPlan = async (planCategory: string) => {
     if (!token) return
 
-    const planData = {
-      standard: { name: 'Standard', price: 1500 },
-      professional: { name: 'Controlled Substances', price: 2500 }
+    const standardPlan = plans?.standard_build
+    const professionalPlan = plans?.['high-definition']
+
+    const planMappings = {
+      standard: {
+        subscription: {
+          type: standardPlan?.planType || 'standard_build',
+          name: standardPlan?.name || 'Standard Build',
+          monthlyPrice: Number(standardPlan?.price) || 3000
+        },
+        downpayment: {
+          type: 'downpayment_standard',
+          name: 'Discounted First Month',
+          amount: 1500
+        }
+      },
+      professional: {
+        subscription: {
+          type: professionalPlan?.planType || 'high-definition',
+          name: professionalPlan?.name || 'High Definition',
+          monthlyPrice: Number(professionalPlan?.price) || 5000
+        },
+        downpayment: {
+          type: 'downpayment_professional',
+          name: 'Discounted Professional First Month',
+          amount: 2500
+        }
+      }
+    } as const
+
+    const mapping = planMappings[planCategory as keyof typeof planMappings]
+
+    if (!mapping) {
+      console.error('Unknown plan category selected:', planCategory)
+      return
     }
 
-    const selectedPlan = planData[planType as keyof typeof planData]
+    const downpaymentAmount = mapping.downpayment.amount
+    const monthlyPrice = mapping.subscription.monthlyPrice
 
-    if (selectedPlan) {
-      try {
-        // Save plan selection to user profile
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/profile`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            selectedPlanType: planType,
-            selectedPlanName: selectedPlan.name,
-            selectedPlanPrice: selectedPlan.price,
-            planSelectionTimestamp: new Date().toISOString()
-          })
+    try {
+      // Save plan selection to user profile
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          selectedPlanCategory: planCategory,
+          selectedPlanType: mapping.subscription.type,
+          selectedPlanName: mapping.subscription.name,
+          selectedPlanPrice: monthlyPrice,
+          selectedDownpaymentType: mapping.downpayment.type,
+          selectedDownpaymentName: mapping.downpayment.name,
+          selectedDownpaymentPrice: downpaymentAmount,
+          planSelectionTimestamp: new Date().toISOString()
         })
+      })
 
-        // Navigate to onboarding page with plan data
-        router.push({
-          pathname: '/onboarding',
-          query: {
-            planType,
-            planName: selectedPlan.name,
-            planPrice: selectedPlan.price
-          }
-        })
-      } catch (error) {
-        console.error('Error saving plan selection:', error)
-        // Still navigate even if saving fails
-        router.push({
-          pathname: '/onboarding',
-          query: {
-            planType,
-            planName: selectedPlan.name,
-            planPrice: selectedPlan.price
-          }
-        })
-      }
+      // Navigate to onboarding page with plan data
+      router.push({
+        pathname: '/onboarding',
+        query: {
+          planCategory,
+          planType: mapping.subscription.type,
+          planName: mapping.subscription.name,
+          planPrice: downpaymentAmount,
+          subscriptionMonthlyPrice: monthlyPrice,
+          downpaymentPlanType: mapping.downpayment.type,
+          downpaymentName: mapping.downpayment.name
+        }
+      })
+    } catch (error) {
+      console.error('Error handling plan selection:', error)
+      // Still navigate even if saving fails
+      router.push({
+        pathname: '/onboarding',
+        query: {
+          planCategory,
+          planType: mapping.subscription.type,
+          planName: mapping.subscription.name,
+          planPrice: downpaymentAmount,
+          subscriptionMonthlyPrice: monthlyPrice,
+          downpaymentPlanType: mapping.downpayment.type,
+          downpaymentName: mapping.downpayment.name
+        }
+      })
     }
   }
 

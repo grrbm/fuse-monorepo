@@ -31,9 +31,13 @@ interface OnboardingOption {
 }
 
 interface PlanData {
+  planCategory: string
   planType: string
   planName: string
   planPrice: number
+  subscriptionMonthlyPrice?: number
+  downpaymentPlanType?: string
+  downpaymentName?: string
 }
 
 const onboardingOptions: OnboardingOption[] = [
@@ -89,19 +93,25 @@ export default function OnboardingPage() {
   const [planData, setPlanData] = useState<PlanData | null>(null)
 
   useEffect(() => {
-    // Get plan data from query params or sessionStorage
+    const planCategory = router.query.planCategory as string
     const planType = router.query.planType as string
     const planName = router.query.planName as string
     const planPrice = router.query.planPrice as string
+    const subscriptionMonthlyPrice = router.query.subscriptionMonthlyPrice as string
+    const downpaymentPlanType = router.query.downpaymentPlanType as string
+    const downpaymentName = router.query.downpaymentName as string
 
-    if (planType && planName && planPrice) {
+    if (planCategory && planType && planName && planPrice) {
       setPlanData({
+        planCategory,
         planType,
         planName,
-        planPrice: parseInt(planPrice)
+        planPrice: parseInt(planPrice),
+        subscriptionMonthlyPrice: subscriptionMonthlyPrice ? parseInt(subscriptionMonthlyPrice) : undefined,
+        downpaymentPlanType,
+        downpaymentName
       })
     } else {
-      // Redirect back to plans if no plan data
       router.push('/plans')
     }
   }, [router.query])
@@ -135,9 +145,13 @@ export default function OnboardingPage() {
       router.push({
         pathname: '/checkout',
         query: {
+          planCategory: planData.planCategory,
           planType: planData.planType,
           planName: planData.planName,
           planPrice: planData.planPrice,
+          subscriptionMonthlyPrice: planData.subscriptionMonthlyPrice,
+          downpaymentPlanType: planData.downpaymentPlanType,
+          downpaymentName: planData.downpaymentName,
           onboardingType: optionId,
           onboardingName: selectedOnboarding.name,
           onboardingPrice: selectedOnboarding.price
@@ -149,9 +163,13 @@ export default function OnboardingPage() {
       router.push({
         pathname: '/checkout',
         query: {
+          planCategory: planData.planCategory,
           planType: planData.planType,
           planName: planData.planName,
           planPrice: planData.planPrice,
+          subscriptionMonthlyPrice: planData.subscriptionMonthlyPrice,
+          downpaymentPlanType: planData.downpaymentPlanType,
+          downpaymentName: planData.downpaymentName,
           onboardingType: optionId,
           onboardingName: selectedOnboarding.name,
           onboardingPrice: selectedOnboarding.price
@@ -240,8 +258,8 @@ export default function OnboardingPage() {
               <Card
                 key={option.id}
                 className={`relative group cursor-pointer transition-all duration-300 flex flex-col ${option.recommended
-                    ? 'shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80'
-                    : 'border-muted hover:shadow-xl hover:scale-105 hover:border-primary'
+                  ? 'shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80'
+                  : 'border-muted hover:shadow-xl hover:scale-105 hover:border-primary'
                   }`}
               >
                 {option.recommended && (
@@ -285,10 +303,10 @@ export default function OnboardingPage() {
 
                   <Button
                     className={`w-full mt-auto transition-colors ${option.id === 'standard'
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                        : option.id === 'high-definition'
-                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                          : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : option.id === 'high-definition'
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                        : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
                       }`}
                     onClick={() => handleSelectOnboarding(option.id)}
                   >

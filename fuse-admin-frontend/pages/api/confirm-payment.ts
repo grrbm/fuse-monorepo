@@ -8,10 +8,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
         console.log('🔍 Confirm payment API called')
-        const { paymentMethodId, planType, amount, currency } = req.body
+        const { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency } = req.body
         const token = req.headers.authorization?.replace('Bearer ', '')
 
-        console.log('🔍 Request body:', { paymentMethodId, planType, amount, currency })
+        console.log('🔍 Request body:', { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency })
         console.log('🔍 Authorization header present:', !!req.headers.authorization)
         console.log('🔍 Token extracted:', !!token)
 
@@ -39,6 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 paymentMethodId,
                 planType,
                 amount,
+                planCategory,
+                downpaymentPlanType,
                 currency: currency || 'usd'
             })
         })

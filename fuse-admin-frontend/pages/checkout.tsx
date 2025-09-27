@@ -30,6 +30,7 @@ console.log('🔑 Stripe publishable key loaded:', stripePublishableKey ? 'YES' 
 const stripePromise = loadStripe(stripePublishableKey)
 
 interface CheckoutData {
+  planCategory: string
   planType: string
   planName: string
   planPrice: number
@@ -37,6 +38,9 @@ interface CheckoutData {
   onboardingName: string
   onboardingPrice: number
   totalAmount: number
+  subscriptionMonthlyPrice?: number
+  downpaymentPlanType?: string
+  downpaymentName?: string
 }
 
 // Card Element styling
@@ -150,6 +154,8 @@ function CheckoutForm({ checkoutData, paymentData, token, onSuccess, onError }: 
         body: JSON.stringify({
           paymentMethodId: paymentMethod.id,
           planType: checkoutData.planType,
+          planCategory: checkoutData.planCategory,
+          downpaymentPlanType: checkoutData.downpaymentPlanType,
           amount: checkoutData.planPrice,
           currency: 'usd'
         })
@@ -349,26 +355,34 @@ export default function CheckoutPage() {
 
     // Get checkout data from query params
     const {
+      planCategory,
       planType,
       planName,
       planPrice,
       onboardingType,
       onboardingName,
-      onboardingPrice
+      onboardingPrice,
+      subscriptionMonthlyPrice,
+      downpaymentPlanType,
+      downpaymentName
     } = router.query
 
-    if (planType && planName && planPrice && onboardingType && onboardingName && onboardingPrice) {
+    if (planCategory && planType && planName && planPrice && onboardingType && onboardingName && onboardingPrice) {
       const planPriceNum = parseInt(planPrice as string)
       const onboardingPriceNum = parseInt(onboardingPrice as string)
 
       setCheckoutData({
+        planCategory: planCategory as string,
         planType: planType as string,
         planName: planName as string,
         planPrice: planPriceNum,
         onboardingType: onboardingType as string,
         onboardingName: onboardingName as string,
         onboardingPrice: onboardingPriceNum,
-        totalAmount: planPriceNum + onboardingPriceNum
+        totalAmount: planPriceNum + onboardingPriceNum,
+        subscriptionMonthlyPrice: subscriptionMonthlyPrice ? parseInt(subscriptionMonthlyPrice as string) : undefined,
+        downpaymentPlanType: downpaymentPlanType as string,
+        downpaymentName: downpaymentName as string
       })
 
       // Create payment intent

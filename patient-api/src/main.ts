@@ -3086,9 +3086,9 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     console.log('🚀 BACKEND: Request body:', JSON.stringify(req.body, null, 2))
 
     const currentUser = getCurrentUser(req);
-    const { paymentMethodId, planType, amount, currency } = req.body;
+    const { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency } = req.body;
 
-    console.log('🚀 BACKEND: Extracted data:', { paymentMethodId, planType, amount, currency })
+    console.log('🚀 BACKEND: Extracted data:', { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency })
     console.log('🚀 BACKEND: Current user:', currentUser?.id, currentUser?.role)
 
     if (currentUser?.role !== 'brand') {
@@ -3175,8 +3175,8 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     // Create Stripe subscription schedule to handle introductory pricing
     console.log('🚀 BACKEND: Preparing subscription schedule with introductory pricing...')
 
-    const introductoryPlanType = 'discounted_first_month'
-    const introductoryPlan = await BrandSubscriptionPlans.getPlanByType(introductoryPlanType)
+    const introductoryPlanType = downpaymentPlanType || (planCategory === 'professional' ? 'downpayment_professional' : 'downpayment_standard')
+    const introductoryPlan = await BrandSubscriptionPlans.getPlanByType(introductoryPlanType as any)
 
     if (!introductoryPlan) {
       console.error('❌ BACKEND: Introductory plan not found:', introductoryPlanType)
@@ -3209,6 +3209,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
       metadata: {
         userId: currentUser.id,
         planType,
+        planCategory: planCategory || 'standard',
         introductoryPlanType: introductoryPlan.planType
       },
       default_settings: {
@@ -3272,7 +3273,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
         id: subscriptionSchedule.id,
         introductoryPlanType: introductoryPlan.planType,
         introductoryStripePriceId: introductoryPlan.stripePriceId,
-        introductoryMonthlyPrice: introductoryPlan.monthlyPrice
+        introductoryMonthlyPrice: introductoryPlan.monthlyPrice,
       }
     }
 
