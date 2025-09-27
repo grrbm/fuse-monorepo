@@ -132,16 +132,9 @@ export default function Plans() {
   const handleSelectPlan = async (planCategory: string) => {
     if (!token) return
 
-    const standardPlan = plans?.standard_build
-    const professionalPlan = plans?.['high-definition']
-
     const planMappings = {
       standard: {
-        subscription: {
-          type: standardPlan?.planType || 'standard_build',
-          name: standardPlan?.name || 'Standard Build',
-          monthlyPrice: Number(standardPlan?.price) || 3000
-        },
+        displayName: 'Standard',
         downpayment: {
           type: 'downpayment_standard',
           name: 'Discounted First Month',
@@ -149,11 +142,7 @@ export default function Plans() {
         }
       },
       professional: {
-        subscription: {
-          type: professionalPlan?.planType || 'high-definition',
-          name: professionalPlan?.name || 'High Definition',
-          monthlyPrice: Number(professionalPlan?.price) || 5000
-        },
+        displayName: 'Controlled Substances',
         downpayment: {
           type: 'downpayment_professional',
           name: 'Discounted Professional First Month',
@@ -170,10 +159,8 @@ export default function Plans() {
     }
 
     const downpaymentAmount = mapping.downpayment.amount
-    const monthlyPrice = mapping.subscription.monthlyPrice
 
     try {
-      // Save plan selection to user profile
       await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/profile`, {
         method: 'PUT',
         headers: {
@@ -182,9 +169,9 @@ export default function Plans() {
         },
         body: JSON.stringify({
           selectedPlanCategory: planCategory,
-          selectedPlanType: mapping.subscription.type,
-          selectedPlanName: mapping.subscription.name,
-          selectedPlanPrice: monthlyPrice,
+          selectedPlanType: planCategory,
+          selectedPlanName: mapping.displayName,
+          selectedPlanPrice: downpaymentAmount,
           selectedDownpaymentType: mapping.downpayment.type,
           selectedDownpaymentName: mapping.downpayment.name,
           selectedDownpaymentPrice: downpaymentAmount,
@@ -192,30 +179,26 @@ export default function Plans() {
         })
       })
 
-      // Navigate to onboarding page with plan data
       router.push({
         pathname: '/onboarding',
         query: {
           planCategory,
-          planType: mapping.subscription.type,
-          planName: mapping.subscription.name,
-          planPrice: downpaymentAmount,
-          subscriptionMonthlyPrice: monthlyPrice,
+          planType: planCategory,
+          planName: mapping.displayName,
+          planPrice: downpaymentAmount.toString(),
           downpaymentPlanType: mapping.downpayment.type,
           downpaymentName: mapping.downpayment.name
         }
       })
     } catch (error) {
-      console.error('Error handling plan selection:', error)
-      // Still navigate even if saving fails
+      console.error('Error saving plan selection:', error)
       router.push({
         pathname: '/onboarding',
         query: {
           planCategory,
-          planType: mapping.subscription.type,
-          planName: mapping.subscription.name,
-          planPrice: downpaymentAmount,
-          subscriptionMonthlyPrice: monthlyPrice,
+          planType: planCategory,
+          planName: mapping.displayName,
+          planPrice: downpaymentAmount.toString(),
           downpaymentPlanType: mapping.downpayment.type,
           downpaymentName: mapping.downpayment.name
         }
@@ -407,7 +390,7 @@ export default function Plans() {
                   onClick={() => handleSelectPlan('standard')}
                   disabled={
                     !!creatingCheckout ||
-                    (currentSubscription?.planType === 'standard' && currentSubscription?.isActive)
+                    currentSubscription?.planType === 'standard_build'
                   }
                 >
                   {creatingCheckout === 'standard' ? (
@@ -464,7 +447,7 @@ export default function Plans() {
                   onClick={() => handleSelectPlan('professional')}
                   disabled={
                     !!creatingCheckout ||
-                    (currentSubscription?.planType === 'professional' && currentSubscription?.isActive)
+                    currentSubscription?.planType === 'high-definition'
                   }
                 >
                   {creatingCheckout === 'professional' ? (

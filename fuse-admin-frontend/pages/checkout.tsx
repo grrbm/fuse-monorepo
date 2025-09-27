@@ -356,37 +356,48 @@ export default function CheckoutPage() {
     // Get checkout data from query params
     const {
       planCategory,
-      planType,
-      planName,
-      planPrice,
       onboardingType,
       onboardingName,
       onboardingPrice,
-      subscriptionMonthlyPrice,
       downpaymentPlanType,
-      downpaymentName
+      downpaymentName,
+      downpaymentAmount,
+      subscriptionPlanType,
+      subscriptionPlanName,
+      subscriptionMonthlyPrice
     } = router.query
 
-    if (planCategory && planType && planName && planPrice && onboardingType && onboardingName && onboardingPrice) {
-      const planPriceNum = parseInt(planPrice as string)
+    if (
+      planCategory &&
+      onboardingType &&
+      onboardingName &&
+      onboardingPrice &&
+      downpaymentPlanType &&
+      downpaymentName &&
+      downpaymentAmount &&
+      subscriptionPlanType &&
+      subscriptionPlanName &&
+      subscriptionMonthlyPrice
+    ) {
+      const downpaymentAmountNum = parseInt(downpaymentAmount as string)
       const onboardingPriceNum = parseInt(onboardingPrice as string)
 
       setCheckoutData({
         planCategory: planCategory as string,
-        planType: planType as string,
-        planName: planName as string,
-        planPrice: planPriceNum,
+        planType: subscriptionPlanType as string,
+        planName: subscriptionPlanName as string,
+        planPrice: downpaymentAmountNum,
         onboardingType: onboardingType as string,
         onboardingName: onboardingName as string,
         onboardingPrice: onboardingPriceNum,
-        totalAmount: planPriceNum + onboardingPriceNum,
+        totalAmount: downpaymentAmountNum + onboardingPriceNum,
         subscriptionMonthlyPrice: subscriptionMonthlyPrice ? parseInt(subscriptionMonthlyPrice as string) : undefined,
         downpaymentPlanType: downpaymentPlanType as string,
         downpaymentName: downpaymentName as string
       })
 
       // Create payment intent
-      createPaymentIntent(planType as string, planPriceNum)
+      createPaymentIntent(subscriptionPlanType as string, downpaymentAmountNum)
     } else {
       // Redirect back if missing data
       router.push('/plans')

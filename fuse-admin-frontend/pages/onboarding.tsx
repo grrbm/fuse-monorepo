@@ -32,12 +32,9 @@ interface OnboardingOption {
 
 interface PlanData {
   planCategory: string
-  planType: string
-  planName: string
-  planPrice: number
-  subscriptionMonthlyPrice?: number
-  downpaymentPlanType?: string
-  downpaymentName?: string
+  downpaymentPlanType: string
+  downpaymentName: string
+  downpaymentAmount: number
 }
 
 const onboardingOptions: OnboardingOption[] = [
@@ -94,22 +91,16 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     const planCategory = router.query.planCategory as string
-    const planType = router.query.planType as string
-    const planName = router.query.planName as string
-    const planPrice = router.query.planPrice as string
-    const subscriptionMonthlyPrice = router.query.subscriptionMonthlyPrice as string
     const downpaymentPlanType = router.query.downpaymentPlanType as string
     const downpaymentName = router.query.downpaymentName as string
+    const planPrice = router.query.planPrice as string
 
-    if (planCategory && planType && planName && planPrice) {
+    if (planCategory && downpaymentPlanType && downpaymentName && planPrice) {
       setPlanData({
         planCategory,
-        planType,
-        planName,
-        planPrice: parseInt(planPrice),
-        subscriptionMonthlyPrice: subscriptionMonthlyPrice ? parseInt(subscriptionMonthlyPrice) : undefined,
         downpaymentPlanType,
-        downpaymentName
+        downpaymentName,
+        downpaymentAmount: parseInt(planPrice)
       })
     } else {
       router.push('/plans')
@@ -122,8 +113,42 @@ export default function OnboardingPage() {
     const selectedOnboarding = onboardingOptions.find(opt => opt.id === optionId)
     if (!selectedOnboarding) return
 
+    const subscriptionOptions = {
+      standard: {
+        standard: {
+          type: 'standard_build',
+          name: 'Standard Build',
+          monthlyPrice: 3000
+        },
+        'high-definition': {
+          type: 'high-definition',
+          name: 'High Definition',
+          monthlyPrice: 5000
+        }
+      },
+      professional: {
+        standard: {
+          type: planData.planCategory === 'professional' ? 'standard_build' : 'standard_build',
+          name: 'Standard Build',
+          monthlyPrice: 3000
+        },
+        'high-definition': {
+          type: 'high-definition',
+          name: 'High Definition',
+          monthlyPrice: 5000
+        }
+      }
+    } as const
+
+    const categoryOptions = subscriptionOptions[planData.planCategory as keyof typeof subscriptionOptions]
+    const selectedSubscription = categoryOptions?.[optionId as keyof typeof categoryOptions]
+
+    if (!selectedSubscription) {
+      console.error('No subscription plan mapping for category/onboarding combination')
+      return
+    }
+
     try {
-      // Save onboarding selection to user profile
       const token = localStorage.getItem('admin_token')
       if (token) {
         await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/profile`, {
@@ -136,22 +161,24 @@ export default function OnboardingPage() {
             selectedOnboardingType: optionId,
             selectedOnboardingName: selectedOnboarding.name,
             selectedOnboardingPrice: selectedOnboarding.price,
+            selectedPlanType: selectedSubscription.type,
+            selectedPlanName: selectedSubscription.name,
+            selectedPlanPrice: selectedSubscription.monthlyPrice,
             onboardingSelectionTimestamp: new Date().toISOString()
           })
         })
       }
 
-      // Navigate to checkout page with all metadata
       router.push({
         pathname: '/checkout',
         query: {
           planCategory: planData.planCategory,
-          planType: planData.planType,
-          planName: planData.planName,
-          planPrice: planData.planPrice,
-          subscriptionMonthlyPrice: planData.subscriptionMonthlyPrice,
           downpaymentPlanType: planData.downpaymentPlanType,
           downpaymentName: planData.downpaymentName,
+          downpaymentAmount: planData.downpaymentAmount,
+          subscriptionPlanType: selectedSubscription.type,
+          subscriptionPlanName: selectedSubscription.name,
+          subscriptionMonthlyPrice: selectedSubscription.monthlyPrice,
           onboardingType: optionId,
           onboardingName: selectedOnboarding.name,
           onboardingPrice: selectedOnboarding.price
@@ -159,17 +186,16 @@ export default function OnboardingPage() {
       })
     } catch (error) {
       console.error('Error saving onboarding selection:', error)
-      // Still navigate even if saving fails
       router.push({
         pathname: '/checkout',
         query: {
           planCategory: planData.planCategory,
-          planType: planData.planType,
-          planName: planData.planName,
-          planPrice: planData.planPrice,
-          subscriptionMonthlyPrice: planData.subscriptionMonthlyPrice,
           downpaymentPlanType: planData.downpaymentPlanType,
           downpaymentName: planData.downpaymentName,
+          downpaymentAmount: planData.downpaymentAmount,
+          subscriptionPlanType: selectedSubscription.type,
+          subscriptionPlanName: selectedSubscription.name,
+          subscriptionMonthlyPrice: selectedSubscription.monthlyPrice,
           onboardingType: optionId,
           onboardingName: selectedOnboarding.name,
           onboardingPrice: selectedOnboarding.price
