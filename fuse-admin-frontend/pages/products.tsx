@@ -106,11 +106,11 @@ export default function Products() {
                     console.log('✅ API call successful!')
                     const products = data.data || []
                     console.log('🔍 Products count:', products.length)
-                    console.log('🔍 Products with images:', products.filter(p => p.imageUrl).length)
-                    console.log('🔍 Sample product with image:', products.find(p => p.imageUrl))
-                    console.log('🔍 Products with clinicId:', products.filter(p => p.clinicId).length)
-                    console.log('🔍 Products without clinicId:', products.filter(p => !p.clinicId).length)
-                    console.log('🔍 All products:', products.map(p => ({ id: p.id, name: p.name, clinicId: p.clinicId })))
+                    console.log('🔍 Products with images:', products.filter((p: Product) => p.imageUrl).length)
+                    console.log('🔍 Sample product with image:', products.find((p: Product) => p.imageUrl))
+                    console.log('🔍 Products with clinicId:', products.filter((p: Product) => p.clinicId).length)
+                    console.log('🔍 Products without clinicId:', products.filter((p: Product) => !p.clinicId).length)
+                    console.log('🔍 All products:', products.map((p: Product) => ({ id: p.id, name: p.name, clinicId: p.clinicId })))
 
                     setProducts(products)
 

@@ -1,7 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = 'admin-jwt-secret-key'
+// Mock JWT token generation - consistent with other auth endpoints
+function generateMockToken(userId: string): string {
+  const payload = {
+    userId,
+    timestamp: Date.now(),
+    expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+  }
+  return Buffer.from(JSON.stringify(payload)).toString('base64')
+}
 
 interface BrandSignupRequest {
   companyName: string
@@ -51,9 +58,9 @@ export default function handler(
   const { companyName, contactName, email, phone, website, password, role }: BrandSignupRequest = req.body
 
   if (!companyName || !contactName || !email || !phone || !password) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Company name, contact name, email, phone, and password are required' 
+    return res.status(400).json({
+      success: false,
+      message: 'Company name, contact name, email, phone, and password are required'
     })
   }
 
@@ -75,15 +82,7 @@ export default function handler(
 
   mockUsers.push(newUser)
 
-  const token = jwt.sign(
-    { 
-      userId: newUser.id, 
-      email: newUser.email,
-      role: newUser.role 
-    },
-    JWT_SECRET,
-    { expiresIn: '24h' }
-  )
+  const token = generateMockToken(newUser.id)
 
   const { password: _, ...userWithoutPassword } = newUser
 

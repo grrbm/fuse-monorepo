@@ -1,4 +1,6 @@
+yarn
+rm -rf .next
 pm2 stop admin-frontend
-npm run build
+yarn build
 pm2 reload admin-frontend
 pm2 logs admin-frontend
