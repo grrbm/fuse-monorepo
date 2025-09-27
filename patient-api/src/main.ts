@@ -3172,6 +3172,22 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     const priceId = selectedPlan.stripePriceId
     console.log('🚀 BACKEND: Using price ID:', priceId)
 
+    // Create Stripe subscription schedule to handle introductory pricing
+    console.log('🚀 BACKEND: Preparing subscription schedule with introductory pricing...')
+
+    const introductoryPlanType = 'discounted_first_month'
+    const introductoryPlan = await BrandSubscriptionPlans.getPlanByType(introductoryPlanType)
+
+    if (!introductoryPlan) {
+      console.error('❌ BACKEND: Introductory plan not found:', introductoryPlanType)
+      return res.status(500).json({
+        success: false,
+        message: "Introductory pricing plan is not configured"
+      });
+    }
+
+    console.log('🚀 BACKEND: Introductory plan price ID:', introductoryPlan.stripePriceId)
+
     // Attach payment method to customer first
     console.log('🚀 BACKEND: Attaching payment method to customer...')
     await stripe.paymentMethods.attach(paymentMethodId, {
@@ -3179,19 +3195,67 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     });
     console.log('🚀 BACKEND: Payment method attached successfully')
 
-    const subscription = await stripe.subscriptions.create({
-      customer: stripeCustomer.id,
-      items: [{ price: priceId }],
-      default_payment_method: paymentMethodId,
-      metadata: {
-        userId: currentUser.id,
-        planType: planType,
-        amount: amount.toString()
-      },
-      payment_settings: {
-        save_default_payment_method: 'on_subscription'
+    // Ensure customer has default payment method set for future invoices
+    await stripe.customers.update(stripeCustomer.id, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId
       }
     });
+
+    console.log('🚀 BACKEND: Creating Stripe subscription schedule...')
+    const subscriptionSchedule = await stripe.subscriptionSchedules.create({
+      customer: stripeCustomer.id,
+      start_date: 'now',
+      metadata: {
+        userId: currentUser.id,
+        planType,
+        introductoryPlanType: introductoryPlan.planType
+      },
+      default_settings: {
+        default_payment_method: paymentMethodId,
+        collection_method: 'charge_automatically'
+      },
+      phases: [
+        {
+          items: [{ price: introductoryPlan.stripePriceId, quantity: 1 }],
+          iterations: 1
+        },
+        {
+          items: [{ price: priceId, quantity: 1 }]
+        }
+      ],
+      expand: ['subscription', 'subscription.latest_invoice', 'subscription.latest_invoice.payment_intent']
+    });
+
+    console.log('🚀 BACKEND: Subscription schedule created:', subscriptionSchedule.id, 'Status:', subscriptionSchedule.status)
+
+    let subscription: any = (subscriptionSchedule as any).subscription;
+    if (!subscription) {
+      console.log('⚠️ BACKEND: Subscription not present on schedule response, retrieving separately...')
+      if (subscriptionSchedule.subscription) {
+        subscription = await stripe.subscriptions.retrieve(subscriptionSchedule.subscription as string, {
+          expand: ['latest_invoice.payment_intent']
+        });
+      } else {
+        const refreshedSchedule = await stripe.subscriptionSchedules.retrieve(subscriptionSchedule.id, {
+          expand: ['subscription']
+        });
+        const scheduleSubscription = (refreshedSchedule as any).subscription;
+        if (scheduleSubscription?.id) {
+          subscription = await stripe.subscriptions.retrieve(scheduleSubscription.id, {
+            expand: ['latest_invoice.payment_intent']
+          });
+        }
+      }
+    }
+
+    if (!subscription) {
+      console.error('❌ BACKEND: Unable to retrieve subscription created by schedule');
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create subscription"
+      });
+    }
 
     console.log('🚀 BACKEND: Subscription created:', subscription.id, 'Status:', subscription.status)
 
@@ -3200,6 +3264,17 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     const currentPeriodEndUnix = (subscription as any)?.current_period_end
     const currentPeriodStartDate = currentPeriodStartUnix ? new Date(currentPeriodStartUnix * 1000) : null
     const currentPeriodEndDate = currentPeriodEndUnix ? new Date(currentPeriodEndUnix * 1000) : null
+
+    const planFeatures = selectedPlan.getFeatures()
+    const combinedFeatures = {
+      ...planFeatures,
+      subscriptionSchedule: {
+        id: subscriptionSchedule.id,
+        introductoryPlanType: introductoryPlan.planType,
+        introductoryStripePriceId: introductoryPlan.stripePriceId,
+        introductoryMonthlyPrice: introductoryPlan.monthlyPrice
+      }
+    }
 
     // Create BrandSubscription record
     try {
@@ -3213,7 +3288,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
         monthlyPrice: selectedPlan.monthlyPrice,
         currentPeriodStart: currentPeriodStartDate ?? undefined,
         currentPeriodEnd: currentPeriodEndDate ?? undefined,
-        features: selectedPlan.getFeatures()
+        features: combinedFeatures
       });
       console.log('✅ BrandSubscription record created:', brandSub.id)
     } catch (dbError) {
