@@ -5,12 +5,12 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  CreditCard, 
-  Check, 
+import {
+  CheckCircle,
+  XCircle,
+  Clock,
+  CreditCard,
+  Check,
   AlertCircle,
   ArrowRight,
   Building2,
@@ -67,14 +67,14 @@ export default function Plans() {
   // Handle success/cancel parameters
   useEffect(() => {
     const { success, canceled, session_id } = router.query
-    
+
     if (success === 'true') {
       setError(null)
       setTimeout(() => {
         router.replace('/plans', undefined, { shallow: true })
       }, 3000)
     }
-    
+
     if (canceled === 'true') {
       setError('Payment was canceled. You can try again anytime.')
       setTimeout(() => {
@@ -90,14 +90,14 @@ export default function Plans() {
 
       try {
         setLoading(true)
-        
+
         // Fetch available plans from backend
         const plansResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/brand-subscriptions/plans`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         })
-        
+
         if (plansResponse.ok) {
           const plansData = await plansResponse.json()
           setPlans(plansData.plans)
@@ -109,7 +109,7 @@ export default function Plans() {
             'Authorization': `Bearer ${token}`
           }
         })
-        
+
         if (subResponse.ok) {
           const subData = await subResponse.json()
           if (subData.success && subData.subscription) {
@@ -134,12 +134,12 @@ export default function Plans() {
     if (!token) return
 
     const planData = {
-      starter: { name: 'Standard', price: 1500 },
+      standard: { name: 'Standard', price: 1500 },
       professional: { name: 'Controlled Substances', price: 2500 }
     }
 
     const selectedPlan = planData[planType as keyof typeof planData]
-    
+
     if (selectedPlan) {
       try {
         // Save plan selection to user profile
@@ -217,50 +217,50 @@ export default function Plans() {
         <title>Subscription Plans - Fuse</title>
         <meta name="description" content="Choose your brand subscription plan" />
       </Head>
-      
+
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-5xl mx-auto">
-            {/* Hero Section - Conversion Optimized */}
-            <div className="text-center mb-16">
-              {/* Social Proof Bar */}
-              <div className="flex items-center justify-center gap-6 mb-8 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span>500+ clinics powered</span>
-                </div>
-                <div className="w-px h-4 bg-border"></div>
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-green-500" />
-                  <span>HIPAA compliant</span>
-                </div>
-                <div className="w-px h-4 bg-border"></div>
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-blue-500" />
-                  <span>Launch in 2 weeks</span>
-                </div>
-                <div className="w-px h-4 bg-border"></div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <AlertCircle className="w-4 h-4 mr-1" />
-                  Talk to expert
-                </Button>
+          {/* Hero Section - Conversion Optimized */}
+          <div className="text-center mb-16">
+            {/* Social Proof Bar */}
+            <div className="flex items-center justify-center gap-6 mb-8 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>500+ clinics powered</span>
               </div>
-
-              {/* Main Hero Content */}
-              <h1 className="text-5xl font-bold text-foreground mb-6 leading-tight">
-                Turn Your Clinic Into a
-                <span className="text-foreground block">Telehealth Powerhouse</span>
-              </h1>
-              
-              <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8 leading-relaxed">
-                Your brand + Licensed physicians + Pharmacies = 
-                <span className="font-semibold text-foreground"> Recurring revenue</span>
-              </p>
-
+              <div className="w-px h-4 bg-border"></div>
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-green-500" />
+                <span>HIPAA compliant</span>
+              </div>
+              <div className="w-px h-4 bg-border"></div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-500" />
+                <span>Launch in 2 weeks</span>
+              </div>
+              <div className="w-px h-4 bg-border"></div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <AlertCircle className="w-4 h-4 mr-1" />
+                Talk to expert
+              </Button>
             </div>
+
+            {/* Main Hero Content */}
+            <h1 className="text-5xl font-bold text-foreground mb-6 leading-tight">
+              Turn Your Clinic Into a
+              <span className="text-foreground block">Telehealth Powerhouse</span>
+            </h1>
+
+            <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8 leading-relaxed">
+              Your brand + Licensed physicians + Pharmacies =
+              <span className="font-semibold text-foreground"> Recurring revenue</span>
+            </p>
+
+          </div>
 
           {/* Error Message */}
           {error && (
@@ -304,7 +304,7 @@ export default function Plans() {
                     </h3>
                     <p className="text-2xl font-bold text-primary">${currentSubscription.monthlyPrice}/month</p>
                   </div>
-                  
+
                   {currentSubscription.isActive && (
                     <div>
                       <p className="text-sm text-muted-foreground">Next billing date</p>
@@ -335,7 +335,7 @@ export default function Plans() {
                   Monthly
                 </Badge>
               </div>
-              
+
               <CardHeader className="pt-12 pb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Building2 className="h-5 w-5" />
@@ -351,7 +351,7 @@ export default function Plans() {
                   physicians, and automate pharmacy fulfillment.
                 </p>
               </CardHeader>
-              
+
               <CardContent className="flex flex-col h-full">
                 <ul className="space-y-3 mb-8 flex-grow">
                   <li className="flex items-start gap-2 text-sm">
@@ -359,21 +359,21 @@ export default function Plans() {
                     <span>Ideal for wellness, aesthetics, weight-loss, and lifestyle telehealth brands that don't require controlled scripts.</span>
                   </li>
                 </ul>
-                
-                <Button 
+
+                <Button
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors mt-auto"
-                  onClick={() => handleSelectPlan('starter')}
+                  onClick={() => handleSelectPlan('standard')}
                   disabled={
-                    !!creatingCheckout || 
-                    (currentSubscription?.planType === 'starter' && currentSubscription?.isActive)
+                    !!creatingCheckout ||
+                    (currentSubscription?.planType === 'standard' && currentSubscription?.isActive)
                   }
                 >
-                  {creatingCheckout === 'starter' ? (
+                  {creatingCheckout === 'standard' ? (
                     <>
                       <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
                       Processing...
                     </>
-                  ) : currentSubscription?.planType === 'starter' && currentSubscription?.isActive ? (
+                  ) : currentSubscription?.planType === 'standard' && currentSubscription?.isActive ? (
                     'Current Plan'
                   ) : (
                     <>
@@ -392,7 +392,7 @@ export default function Plans() {
                   Monthly
                 </Badge>
               </div>
-              
+
               <CardHeader className="pt-12 pb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <Shield className="h-5 w-5" />
@@ -408,7 +408,7 @@ export default function Plans() {
                   prescribe regulated therapies through Fuse doctors and pharmacies.
                 </p>
               </CardHeader>
-              
+
               <CardContent className="flex flex-col h-full">
                 <ul className="space-y-3 mb-8 flex-grow">
                   <li className="flex items-start gap-2 text-sm">
@@ -416,12 +416,12 @@ export default function Plans() {
                     <span>Perfect for clinics offering TRT (testosterone replacement), growth hormone releasing peptides, and other Schedule III therapies that require licensed prescribers.</span>
                   </li>
                 </ul>
-                
-                <Button 
+
+                <Button
                   className="w-full bg-white border border-gray-300 text-gray-900 hover:bg-gray-50 transition-colors mt-auto"
                   onClick={() => handleSelectPlan('professional')}
                   disabled={
-                    !!creatingCheckout || 
+                    !!creatingCheckout ||
                     (currentSubscription?.planType === 'professional' && currentSubscription?.isActive)
                   }
                 >
@@ -457,19 +457,19 @@ export default function Plans() {
               <div className="relative group h-full">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 h-full">
-                <div className="text-center h-full flex flex-col">
-                  <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <CreditCard className="w-6 h-6 text-blue-600" />
+                  <div className="text-center h-full flex flex-col">
+                    <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <CreditCard className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <h3 className="text-lg font-bold mb-2 text-foreground">Recurring Revenue</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-grow">
+                      Build predictable monthly income that grows with your patient base
+                    </p>
+                    <div className="flex items-center justify-center text-xs font-medium text-blue-600 mt-auto">
+                      <span>Monthly Recurring Revenue</span>
+                      <ArrowRight className="w-3 h-3 ml-1" />
+                    </div>
                   </div>
-                  <h3 className="text-lg font-bold mb-2 text-foreground">Recurring Revenue</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-grow">
-                    Build predictable monthly income that grows with your patient base
-                  </p>
-                  <div className="flex items-center justify-center text-xs font-medium text-blue-600 mt-auto">
-                    <span>Monthly Recurring Revenue</span>
-                    <ArrowRight className="w-3 h-3 ml-1" />
-                  </div>
-                </div>
                 </div>
               </div>
 
@@ -477,19 +477,19 @@ export default function Plans() {
               <div className="relative group h-full">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 h-full">
-                <div className="text-center h-full flex flex-col">
-                  <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Clock className="w-6 h-6 text-blue-600" />
+                  <div className="text-center h-full flex flex-col">
+                    <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <Clock className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <h3 className="text-lg font-bold mb-2 text-foreground">1-2 Week Setup</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-grow">
+                      From signup to treating your first patient in record time
+                    </p>
+                    <div className="flex items-center justify-center text-xs font-medium text-blue-600 mt-auto">
+                      <span>Get started today</span>
+                      <ArrowRight className="w-3 h-3 ml-1" />
+                    </div>
                   </div>
-                  <h3 className="text-lg font-bold mb-2 text-foreground">1-2 Week Setup</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-grow">
-                    From signup to treating your first patient in record time
-                  </p>
-                  <div className="flex items-center justify-center text-xs font-medium text-blue-600 mt-auto">
-                    <span>Get started today</span>
-                    <ArrowRight className="w-3 h-3 ml-1" />
-                  </div>
-                </div>
                 </div>
               </div>
 
@@ -497,19 +497,19 @@ export default function Plans() {
               <div className="relative group h-full">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 h-full">
-                <div className="text-center h-full flex flex-col">
-                  <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Shield className="w-6 h-6 text-blue-600" />
+                  <div className="text-center h-full flex flex-col">
+                    <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <Shield className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <h3 className="text-lg font-bold mb-2 text-foreground">Zero Compliance Risk</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-grow">
+                      Licensed physicians handle everything—you focus on growth
+                    </p>
+                    <div className="flex items-center justify-center text-xs font-medium text-blue-600 mt-auto">
+                      <span>HIPAA compliant</span>
+                      <Check className="w-3 h-3 ml-1" />
+                    </div>
                   </div>
-                  <h3 className="text-lg font-bold mb-2 text-foreground">Zero Compliance Risk</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-grow">
-                    Licensed physicians handle everything—you focus on growth
-                  </p>
-                  <div className="flex items-center justify-center text-xs font-medium text-blue-600 mt-auto">
-                    <span>HIPAA compliant</span>
-                    <Check className="w-3 h-3 ml-1" />
-                  </div>
-                </div>
                 </div>
               </div>
 
@@ -517,19 +517,19 @@ export default function Plans() {
               <div className="relative group h-full">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 h-full">
-                <div className="text-center h-full flex flex-col">
-                  <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <CreditCard className="w-6 h-6 text-blue-600" />
+                  <div className="text-center h-full flex flex-col">
+                    <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <CreditCard className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <h3 className="text-lg font-bold mb-2 text-foreground">Transparent Pricing</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-grow">
+                      Simple monthly fee + 1% transaction rate. No hidden costs or surprises
+                    </p>
+                    <div className="flex items-center justify-center text-xs font-medium text-blue-600 mt-auto">
+                      <span>Industry standard rates</span>
+                      <Check className="w-3 h-3 ml-1" />
+                    </div>
                   </div>
-                  <h3 className="text-lg font-bold mb-2 text-foreground">Transparent Pricing</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4 flex-grow">
-                    Simple monthly fee + 1% transaction rate. No hidden costs or surprises
-                  </p>
-                  <div className="flex items-center justify-center text-xs font-medium text-blue-600 mt-auto">
-                    <span>Industry standard rates</span>
-                    <Check className="w-3 h-3 ml-1" />
-                  </div>
-                </div>
                 </div>
               </div>
             </div>

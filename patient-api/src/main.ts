@@ -13,7 +13,7 @@ import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
 import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
-import BrandSubscription from "./models/BrandSubscription";
+import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
 import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
@@ -2865,9 +2865,17 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
       });
     }
 
+    console.log('🚀 BACKEND CREATE: Looking up plan type:', planType)
     const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+    console.log('🚀 BACKEND CREATE: Plan found:', selectedPlan?.id, selectedPlan?.planType)
+
+    // Debug: List all available plans
+    const allPlans = await BrandSubscriptionPlans.findAll({ attributes: ['planType', 'name'] })
+    console.log('🚀 BACKEND CREATE: All available plans:', allPlans.map(p => ({ type: p.planType, name: p.name })))
 
     if (!selectedPlan) {
+      console.error('❌ BACKEND CREATE: Invalid plan type:', planType)
+      console.error('❌ BACKEND CREATE: Available types:', allPlans.map(p => p.planType))
       return res.status(400).json({
         success: false,
         message: "Invalid plan type"
@@ -2953,10 +2961,17 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
 // Create payment intent for direct card processing
 app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
   try {
+    console.log('🚀 BACKEND CREATE: Payment intent creation called')
+    console.log('🚀 BACKEND CREATE: Request body:', JSON.stringify(req.body, null, 2))
+
     const currentUser = getCurrentUser(req);
     const { planType, amount, currency } = req.body;
 
+    console.log('🚀 BACKEND CREATE: Plan type received:', planType)
+    console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
+
     if (currentUser?.role !== 'brand') {
+      console.error('❌ BACKEND CREATE: Access denied - not brand role')
       return res.status(403).json({
         success: false,
         message: "Access denied. Brand role required."
@@ -2978,9 +2993,17 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
+    console.log('🚀 BACKEND CREATE: Looking up plan type:', planType)
     const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+    console.log('🚀 BACKEND CREATE: Plan found:', selectedPlan?.id, selectedPlan?.planType)
+
+    // Debug: List all available plans
+    const allPlans = await BrandSubscriptionPlans.findAll({ attributes: ['planType', 'name'] })
+    console.log('🚀 BACKEND CREATE: All available plans:', allPlans.map(p => ({ type: p.planType, name: p.name })))
 
     if (!selectedPlan) {
+      console.error('❌ BACKEND CREATE: Invalid plan type:', planType)
+      console.error('❌ BACKEND CREATE: Available types:', allPlans.map(p => p.planType))
       return res.status(400).json({
         success: false,
         message: "Invalid plan type"
@@ -3077,11 +3100,13 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     }
 
     console.log('🚀 BACKEND: Getting plan and user data...')
+    console.log('🚀 BACKEND: Plan type received:', planType)
     // Get the payment intent that was created earlier
     // In a real implementation, you'd store the payment intent ID in the session
     // For now, we'll create a new payment intent for confirmation
     const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
     console.log('🚀 BACKEND: Selected plan:', selectedPlan?.id)
+    console.log('🚀 BACKEND: Available plan types:', await BrandSubscriptionPlans.findAll({ attributes: ['planType'] }))
 
     if (!selectedPlan) {
       console.error('❌ BACKEND: Invalid plan type:', planType)
@@ -3137,38 +3162,69 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Create Payment Intent for confirmation
-    console.log('🚀 BACKEND: Creating PaymentIntent...')
-    console.log('🚀 BACKEND: Amount:', amount, 'Currency:', currency)
+    // Create Stripe subscription instead of one-time payment
+    console.log('🚀 BACKEND: Creating Stripe subscription...')
+    console.log('🚀 BACKEND: Plan type:', planType)
     console.log('🚀 BACKEND: Customer ID:', stripeCustomer.id)
     console.log('🚀 BACKEND: Payment method ID:', paymentMethodId)
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
-      currency: currency || 'usd',
+    // Get the price ID for the selected plan
+    const priceId = selectedPlan.stripePriceId
+    console.log('🚀 BACKEND: Using price ID:', priceId)
+
+    // Attach payment method to customer first
+    console.log('🚀 BACKEND: Attaching payment method to customer...')
+    await stripe.paymentMethods.attach(paymentMethodId, {
       customer: stripeCustomer.id,
-      payment_method: paymentMethodId,
-      confirm: true,
+    });
+    console.log('🚀 BACKEND: Payment method attached successfully')
+
+    const subscription = await stripe.subscriptions.create({
+      customer: stripeCustomer.id,
+      items: [{ price: priceId }],
+      default_payment_method: paymentMethodId,
       metadata: {
         userId: currentUser.id,
         planType: planType,
         amount: amount.toString()
       },
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: 'never'
+      payment_settings: {
+        save_default_payment_method: 'on_subscription'
       }
     });
 
-    console.log('🚀 BACKEND: PaymentIntent created:', paymentIntent.id, 'Status:', paymentIntent.status)
+    console.log('🚀 BACKEND: Subscription created:', subscription.id, 'Status:', subscription.status)
+
+    // Create BrandSubscription record
+    try {
+      const brandSub = await BrandSubscription.create({
+        userId: currentUser.id,
+        planType: planType as any,
+        status: BrandSubscriptionStatus.ACTIVE,
+        stripeSubscriptionId: subscription.id,
+        stripeCustomerId: stripeCustomer.id,
+        stripePriceId: priceId,
+        monthlyPrice: selectedPlan.monthlyPrice,
+        currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+        currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
+        features: selectedPlan.getFeatures()
+      });
+      console.log('✅ BrandSubscription record created:', brandSub.id)
+    } catch (dbError) {
+      console.error('❌ Error creating BrandSubscription record:', dbError)
+      // Don't fail the whole request if DB creation fails
+    }
 
     res.status(200).json({
       success: true,
-      clientSecret: paymentIntent.client_secret,
-      requiresAction: paymentIntent.status === 'requires_action',
-      paymentIntent: {
-        id: paymentIntent.id,
-        status: paymentIntent.status
+      subscriptionId: subscription.id,
+      clientSecret: (subscription as any).latest_invoice?.payment_intent?.client_secret,
+      requiresAction: subscription.status === 'incomplete',
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+        current_period_start: (subscription as any).current_period_start,
+        current_period_end: (subscription as any).current_period_end
       }
     });
 
@@ -3211,9 +3267,17 @@ app.post("/brand-subscriptions/create-combined-checkout", authenticateJWT, async
       });
     }
 
+    console.log('🚀 BACKEND CREATE: Looking up plan type:', planType)
     const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+    console.log('🚀 BACKEND CREATE: Plan found:', selectedPlan?.id, selectedPlan?.planType)
+
+    // Debug: List all available plans
+    const allPlans = await BrandSubscriptionPlans.findAll({ attributes: ['planType', 'name'] })
+    console.log('🚀 BACKEND CREATE: All available plans:', allPlans.map(p => ({ type: p.planType, name: p.name })))
 
     if (!selectedPlan) {
+      console.error('❌ BACKEND CREATE: Invalid plan type:', planType)
+      console.error('❌ BACKEND CREATE: Available types:', allPlans.map(p => p.planType))
       return res.status(400).json({
         success: false,
         message: "Invalid plan type"

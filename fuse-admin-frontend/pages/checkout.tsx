@@ -165,10 +165,10 @@ function CheckoutForm({ checkoutData, paymentData, token, onSuccess, onError }: 
         throw new Error(errorMsg)
       }
 
-      const { clientSecret, requiresAction, paymentIntent } = await response.json()
-      console.log('🔍 Payment confirmation response:', { clientSecret: !!clientSecret, requiresAction, paymentIntent })
+      const { clientSecret, requiresAction, subscription, subscriptionId } = await response.json()
+      console.log('🔍 Subscription confirmation response:', { clientSecret: !!clientSecret, requiresAction, subscription, subscriptionId })
 
-      if (requiresAction) {
+      if (requiresAction && clientSecret) {
         // Handle 3D Secure or other authentication
         const { error: confirmError } = await stripe.confirmCardPayment(clientSecret)
 
@@ -179,7 +179,8 @@ function CheckoutForm({ checkoutData, paymentData, token, onSuccess, onError }: 
         }
       }
 
-      // Payment succeeded
+      // Subscription created successfully
+      console.log('✅ Subscription created successfully:', subscriptionId)
       onSuccess()
 
     } catch (error: any) {

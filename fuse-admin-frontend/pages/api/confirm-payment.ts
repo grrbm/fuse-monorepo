@@ -50,11 +50,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('🔍 Backend response data:', data)
 
         if (response.ok && data.success) {
-            console.log('✅ Payment confirmation successful')
+            console.log('✅ Subscription created successfully')
             res.status(200).json({
                 clientSecret: data.clientSecret,
                 requiresAction: data.requiresAction,
-                paymentIntent: data.paymentIntent
+                subscription: data.subscription,
+                subscriptionId: data.subscriptionId
             })
         } else {
             console.error('❌ Backend error:', data)

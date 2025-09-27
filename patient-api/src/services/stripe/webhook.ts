@@ -48,6 +48,7 @@ export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.Payment
                         planType: planType as any,
                         status: BrandSubscriptionStatus.ACTIVE,
                         stripeCustomerId: paymentIntent.customer as string,
+                        stripePriceId: selectedPlan.stripePriceId,
                         monthlyPrice: selectedPlan.monthlyPrice,
                         currentPeriodStart: new Date(),
                         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
