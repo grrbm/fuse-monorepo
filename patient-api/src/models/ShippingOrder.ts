@@ -7,9 +7,14 @@ import ShippingAddress from './ShippingAddress';
 export enum OrderShippingStatus {
   PENDING = 'pending',
   PROCESSING = 'processing',
+  FILLED = 'filled',
+  APPROVED = 'approved',
   SHIPPED = 'shipped',
   DELIVERED = 'delivered',
   CANCELLED = 'cancelled',
+  REJECTED = 'rejected',
+  PROBLEM = 'problem',
+  COMPLETED = 'completed',
 }
 
 @Table({
@@ -56,14 +61,4 @@ export default class ShippingOrder extends Entity {
   })
   declare deliveredAt?: Date;
 
-  // Update shipping status
-  public async updateStatus(status: OrderShippingStatus): Promise<void> {
-    this.status = status;
-
-    if (status === OrderShippingStatus.DELIVERED) {
-      this.deliveredAt = new Date();
-    }
-
-    await this.save();
-  }
 }

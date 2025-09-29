@@ -35,6 +35,7 @@ import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
 import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
 import MDFilesService from "./services/mdIntegration/MDFiles.service";
+import PharmacyWebhookService from "./services/pharmacy/webhook";
 import MessageService from "./services/Message.service";
 
 // Helper function to generate unique clinic slug
@@ -4339,6 +4340,53 @@ app.post("/webhook/orders", async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error processing MD Integration webhook:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
+// Pharmacy webhook endpoint
+app.post("/webhook/pharmacy", async (req, res) => {
+  try {
+    // Validate Authorization header with Bearer token
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        message: "Authorization header required"
+      });
+    }
+
+    if (!process.env.APP_WEBHOOK_SECRET) {
+      console.error('APP_WEBHOOK_SECRET environment variable is not set');
+      return res.status(500).json({
+        success: false,
+        message: "Server configuration error"
+      });
+    }
+
+    // Extract Bearer token
+    const expectedAuth = `Bearer ${process.env.APP_WEBHOOK_SECRET}`;
+
+    if (authHeader !== expectedAuth) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid authorization token"
+      });
+    }
+
+    // Process pharmacy webhook
+    await PharmacyWebhookService.processPharmacyWebhook(req.body);
+
+    res.json({
+      success: true,
+      message: "Pharmacy webhook processed successfully"
+    });
+  } catch (error) {
+    console.error('❌ Error processing pharmacy webhook:', error);
     res.status(500).json({
       success: false,
       message: "Internal server error"
