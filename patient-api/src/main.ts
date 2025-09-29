@@ -1823,6 +1823,14 @@ app.get("/treatments/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Support special virtual id "new" so the admin UI can preload defaults without hitting the DB
+    if (id === "new") {
+      return res.status(200).json({
+        success: true,
+        data: null,
+      });
+    }
+
     const treatment = await Treatment.findByPk(id, {
       include: [
         {

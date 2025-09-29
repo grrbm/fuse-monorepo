@@ -139,9 +139,9 @@ export default function Orders() {
             // Fetch orders for the clinic with timeout
             const controller = new AbortController()
             const timeoutId = setTimeout(() => {
-                console.log('⏰ Request timed out after 10 seconds')
+                console.log('⏰ Request timed out after 30 seconds')
                 controller.abort()
-            }, 10000) // 10 second timeout
+            }, 30000) // 10 second timeout
 
             console.log('🔍 Making fetch request...')
             console.log('🔍 📡 Making API request...')

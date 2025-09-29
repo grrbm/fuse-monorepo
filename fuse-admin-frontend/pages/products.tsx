@@ -80,9 +80,9 @@ export default function Products() {
             // Fetch products for the clinic with timeout
             const controller = new AbortController()
             const timeoutId = setTimeout(() => {
-                console.log('⏰ Request timed out after 10 seconds')
+                console.log('⏰ Request timed out after 30 seconds')
                 controller.abort()
-            }, 10000) // 10 second timeout
+            }, 30000) // 30 second timeout
 
             console.log('🔍 Making fetch request...')
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products/by-clinic/${userWithClinic.clinicId}`, {

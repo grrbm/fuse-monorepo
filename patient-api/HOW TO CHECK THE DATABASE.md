@@ -20,3 +20,19 @@ autossh -M 0 -f -N \
 # STEP 2: Configure pgAdmin / Beekeeper Studio
 
 Use the port you defined above (55432) and localhost address for the Host: 127.0.0.1
+
+# NOTE: Debug auto ssh:
+
+# Check if its running:
+
+    pgrep -fl autossh
+
+# Kill it (the previous method shows the process id):
+
+    kill 5651
+
+# Check if killed:
+
+    pgrep -fl autossh
+
+Run it again, then check it again.
