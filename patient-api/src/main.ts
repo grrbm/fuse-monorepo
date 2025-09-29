@@ -3060,6 +3060,9 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
             planType: planType
           }
         });
+        await user.update({
+          stripeCustomerId: stripeCustomer.id
+        })
       }
     } catch (stripeError) {
       console.error('Error with Stripe customer:', stripeError);
