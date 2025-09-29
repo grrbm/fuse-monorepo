@@ -9,6 +9,8 @@ interface UpgradeSubscriptionResult {
   data?: {
     subscription: BrandSubscription;
     newPlan: BrandSubscriptionPlans;
+    scheduleUpdated?: boolean;
+    immediateUpgrade?: boolean;
   };
   error?: string;
 }
@@ -40,6 +42,8 @@ class BrandSubscriptionService {
         };
       }
 
+      console.log("currentSubscription ", JSON.stringify(currentSubscription.features))
+
       // Find the new plan by ID
       const newPlan = await BrandSubscriptionPlans.findByPk(newPlanId);
 
@@ -58,7 +62,68 @@ class BrandSubscriptionService {
         };
       }
 
-      // Check if subscription has Stripe data for upgrade
+      const subscriptionSchedule = currentSubscription?.features?.subscriptionSchedule;
+      const stripeService = new StripeService();
+
+      // If subscription has a schedule, check its status
+      if (subscriptionSchedule?.id) {
+        const subSchedule = await stripeService.getSubscriptionSchedule(subscriptionSchedule.id);
+        console.log("subscriptionSchedule status:", subSchedule.status);
+
+        if (subSchedule.status === 'active') {
+          // Schedule is active - update the following phase
+          console.log('📅 Subscription schedule is active - updating future phase');
+
+          const phases = subSchedule.phases.map((phase, index, arr) => {
+            // Update the last phase (future/ongoing plan) to use the new plan
+            if (index === arr.length - 1) {
+              return {
+                items: [{
+                  price: newPlan.stripePriceId,
+                  quantity: 1
+                }],
+                start_date: phase.start_date,
+                ...(phase.end_date && { end_date: phase.end_date })
+              };
+            }
+            // Keep other phases unchanged - only include essential fields
+            return {
+              items: phase.items,
+              start_date: phase.start_date,
+              ...(phase.end_date && { end_date: phase.end_date })
+            };
+          }) as any;
+
+          await stripeService.updateSubscriptionSchedule(subscriptionSchedule.id, {
+            phases,
+            proration_behavior: 'none'
+          });
+
+          // Update local subscription with new plan details
+          await currentSubscription.update({
+            planType: newPlan.planType,
+            stripePriceId: newPlan.stripePriceId,
+            monthlyPrice: newPlan.monthlyPrice,
+            status: BrandSubscriptionStatus.PROCESSING
+          });
+
+          console.log('✅ Subscription schedule updated for future billing cycle');
+
+          return {
+            success: true,
+            message: `Successfully scheduled upgrade to ${newPlan.name} for next billing cycle`,
+            data: {
+              subscription: currentSubscription,
+              newPlan: newPlan,
+              scheduleUpdated: true
+            }
+          };
+        } else {
+          console.log('📋 Subscription schedule is completed - performing direct subscription update');
+        }
+      }
+
+      // Schedule is completed or doesn't exist - perform direct subscription update
       if (!currentSubscription.stripeSubscriptionId) {
         return {
           success: false,
@@ -75,6 +140,7 @@ class BrandSubscriptionService {
           error: "Unable to find Stripe subscription details"
         };
       }
+
       // Find the subscription item that doesn't match the new price ID (the one to replace)
       const itemToReplace = stripeSubscription.items.data.find(item =>
         item.price.id !== newPlan.stripePriceId
@@ -86,7 +152,7 @@ class BrandSubscriptionService {
 
       const stripeItemId = itemToReplace.id;
 
-      // Upgrade subscription in Stripe
+      // Upgrade subscription in Stripe immediately
       await this.stripeService.upgradeSubscriptionStripe({
         stripeSubscriptionId: currentSubscription.stripeSubscriptionId,
         stripeItemId,
@@ -98,11 +164,10 @@ class BrandSubscriptionService {
         planType: newPlan.planType,
         stripePriceId: newPlan.stripePriceId,
         monthlyPrice: newPlan.monthlyPrice,
-        // Reset status to processing while change is being applied
         status: BrandSubscriptionStatus.PROCESSING
       });
 
-      console.log('✅ Brand subscription upgraded:', {
+      console.log('✅ Brand subscription upgraded immediately:', {
         userId: userId,
         subscriptionId: currentSubscription.id,
         oldPlan: currentSubscription.planType,
@@ -114,7 +179,8 @@ class BrandSubscriptionService {
         message: `Successfully upgraded subscription to ${newPlan.name}`,
         data: {
           subscription: currentSubscription,
-          newPlan: newPlan
+          newPlan: newPlan,
+          immediateUpgrade: true
         }
       };
 
