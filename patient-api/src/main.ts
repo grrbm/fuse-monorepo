@@ -36,6 +36,7 @@ import SubscriptionService from "./services/subscription.service";
 import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
 import MDFilesService from "./services/mdIntegration/MDFiles.service";
 import PharmacyWebhookService from "./services/pharmacy/webhook";
+import BrandSubscriptionService from "./services/brandSubscription.service";
 import MessageService from "./services/Message.service";
 
 // Helper function to generate unique clinic slug
