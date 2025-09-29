@@ -481,6 +481,53 @@ export const handleSubscriptionCreated = async (subscription: Stripe.Subscriptio
     console.log('ℹ️ No BrandSubscription record found for subscription:', subscription.id);
 };
 
+export const handleSubscriptionUpdated = async (event: Stripe.Event): Promise<void> => {
+    const subscription = event.data.object as Stripe.Subscription;
+
+    console.log('🔄 Subscription updated event received:', subscription.id);
+
+    try {
+        // Find and update local BrandSubscription record
+        const brandSub = await BrandSubscription.findOne({
+            where: {
+                stripeSubscriptionId: subscription.id
+            }
+        });
+
+        if (brandSub) {
+            console.log('\n💾 UPDATING LOCAL BRAND SUBSCRIPTION:', brandSub.id);
+
+            // Get the current primary price (assuming first item is primary)
+            const primaryItem = subscription.items.data[0];
+            if (primaryItem) {
+                // Try to find the plan by stripe price ID
+                const newPlan = await BrandSubscriptionPlans.findOne({
+                    where: { stripePriceId: primaryItem.price.id }
+                });
+
+                if (newPlan) {
+                    console.log(`  🎯 Found matching plan: ${newPlan.planType} (${newPlan.name})`);
+
+                    await brandSub.update({
+                        status: BrandSubscriptionStatus.ACTIVE
+                    });
+
+                    console.log('✅ Brand subscription updated successfully');
+                } else {
+                    console.log(`⚠️ No local plan found for price ID: ${primaryItem.price.id}`);
+                }
+            }
+        } else {
+            console.log('⚠️ No local BrandSubscription found for Stripe subscription:', subscription.id);
+        }
+
+    } catch (error) {
+        console.error('❌ Error processing subscription update:', error);
+    }
+
+    console.log('\n🏁 Subscription update processing completed\n');
+};
+
 /**
  * This event fires when:
   - A payment method is authorized (validated) but not yet captured
@@ -609,6 +656,10 @@ export const processStripeWebhook = async (event: Stripe.Event): Promise<void> =
 
         case 'customer.subscription.created':
             await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
+            break;
+
+        case 'customer.subscription.updated':
+            await handleSubscriptionUpdated(event);
             break;
 
         case 'invoice.paid':
