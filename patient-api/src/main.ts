@@ -186,11 +186,11 @@ app.post("/auth/signup", async (req, res) => {
       });
     }
 
-    // Validate clinic name for healthcare providers
-    if (role === 'provider' && !clinicName?.trim()) {
+    // Validate clinic name for providers/brands (both require clinics)
+    if ((role === 'provider' || role === 'brand') && !clinicName?.trim()) {
       return res.status(400).json({
         success: false,
-        message: "Clinic name is required for healthcare providers"
+        message: "Clinic name is required for providers and brand users"
       });
     }
 
@@ -211,7 +211,7 @@ app.post("/auth/signup", async (req, res) => {
     let finalClinicId = clinicId; // Use provided clinicId from request body
 
     // Create clinic if user is a healthcare provider and no clinicId provided
-    if (role === 'provider' && clinicName && !clinicId) {
+    if ((role === 'provider' || role === 'brand') && clinicName && !clinicId) {
       console.log('🏥 Creating clinic with name:', clinicName);
 
       // Generate unique slug
@@ -251,6 +251,17 @@ app.post("/auth/signup", async (req, res) => {
       dob: dateOfBirth,
       phoneNumber,
     });
+
+    const isDevelopment = process.env.NODE_ENV === 'development';
+
+    if (isDevelopment) {
+      console.log('🧪 Development mode detected: auto-activating new user');
+      await user.update({
+        activated: true,
+        activationToken: null,
+        activationTokenExpiresAt: null,
+      });
+    }
 
     // Associate user with clinic if one is provided
     if (finalClinicId) {
