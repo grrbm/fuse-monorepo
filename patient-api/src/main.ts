@@ -3544,6 +3544,47 @@ app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
   }
 });
 
+// Change brand subscription plan
+app.post("/brand-subscriptions/change", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const { newPlanId } = req.body;
+
+    if (!newPlanId) {
+      return res.status(400).json({
+        success: false,
+        message: "New plan ID is required"
+      });
+    }
+
+    // Instantiate service
+    const brandSubscriptionService = new BrandSubscriptionService();
+
+    // Upgrade the subscription
+    const result = await brandSubscriptionService.upgradeSubscription(currentUser.id, newPlanId);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (error) {
+    console.error('❌ Error changing brand subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
+
 // Upgrade subscriptions for a treatment to a new treatment plan
 app.post("/subscriptions/upgrade", authenticateJWT, async (req, res) => {
   try {
