@@ -39,8 +39,6 @@ import PharmacyWebhookService from "./services/pharmacy/webhook";
 import BrandSubscriptionService from "./services/brandSubscription.service";
 import MessageService from "./services/Message.service";
 import BrandTreatment from "./models/BrandTreatment";
-import Subscription from "./models/Subscription";
-import Physician from "./models/Physician";
 import Questionnaire from "./models/Questionnaire";
 
 // Helper function to generate unique clinic slug
@@ -3047,42 +3045,29 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
     }
 
     // Create or retrieve Stripe customer
-    let stripeCustomer;
-    try {
-      const customers = await stripe.customers.list({
-        email: user.email,
-        limit: 1
-      });
+    let stripeCustomerId = user.stripeCustomerId;
 
-      if (customers.data.length > 0) {
-        stripeCustomer = customers.data[0];
-      } else {
-        stripeCustomer = await stripe.customers.create({
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
-          metadata: {
-            userId: user.id,
-            role: user.role,
-            planType: planType
-          }
-        });
-        await user.update({
-          stripeCustomerId: stripeCustomer.id
-        })
-      }
-    } catch (stripeError) {
-      console.error('Error with Stripe customer:', stripeError);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create Stripe customer"
+    if (!stripeCustomerId) {
+      const stripeCustomer = await stripe.customers.create({
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        metadata: {
+          userId: user.id,
+          role: user.role,
+          planType: planType
+        }
       });
+      await user.update({
+        stripeCustomerId: stripeCustomer.id
+      })
+      stripeCustomerId = stripeCustomer.id
     }
 
     // Create Payment Intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100), // Convert to cents
       currency: currency || 'usd',
-      customer: stripeCustomer.id,
+      customer: stripeCustomerId,
       metadata: {
         userId: currentUser.id,
         planType: planType,
