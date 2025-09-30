@@ -534,7 +534,9 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
     }
 
     // Find user in database
-    const user = await User.findByPk(currentUser.id);
+    const user = await User.findByPk(currentUser.id, {
+      include: [Clinic],
+    });
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -4969,7 +4971,9 @@ app.get("/brand-treatments", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const user = await User.findByPk(currentUser.id);
+    const user = await User.findByPk(currentUser.id, {
+      include: [Clinic],
+    });
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -4978,6 +4982,8 @@ app.get("/brand-treatments", authenticateJWT, async (req, res) => {
     if (user.role !== "brand") {
       return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
     }
+
+    const clinicSlug = user.clinic?.slug || null;
 
     const [treatments, selections] = await Promise.all([
       Treatment.findAll({
@@ -5002,6 +5008,7 @@ app.get("/brand-treatments", authenticateJWT, async (req, res) => {
         selected: Boolean(selection),
         brandLogo: selection?.brandLogo || null,
         brandColor: selection?.brandColor || null,
+        clinicSlug,
       };
     });
 

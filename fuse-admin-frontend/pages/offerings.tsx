@@ -32,6 +32,7 @@ interface OfferingItem {
     selected: boolean
     brandLogo?: string | null
     brandColor?: string | null
+    clinicSlug?: string | null
 }
 
 type Status = 'idle' | 'loading' | 'saving'
@@ -260,6 +261,11 @@ export default function OfferingsPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {offerings.map((item) => {
                                 const isSavingThisItem = Boolean(pendingSelection[item.id])
+                                const clinicSlug = item.clinicSlug || 'limitless.health'
+                                const devUrl = `http://${clinicSlug}.localhost:3000/my-treatments/${item.slug}`
+                                const prodDisplay = `${clinicSlug}.fuse.health/my-treatments/${item.slug}`
+                                const previewDisplay = process.env.NODE_ENV === 'production' ? prodDisplay : devUrl
+                                const previewHref = process.env.NODE_ENV === 'production' ? `https://${prodDisplay}` : devUrl
                                 return (
                                     <Card
                                         key={item.id}
@@ -328,7 +334,7 @@ export default function OfferingsPage() {
                                                 <div className="flex items-center gap-2 text-xs">
                                                     <span className="text-muted-foreground">Preview URL:</span>
                                                     <code className="px-2 py-1 bg-muted/30 rounded border">
-                                                        /brand-offerings/{item.slug}
+                                                        {previewDisplay}
                                                     </code>
                                                 </div>
                                             </div>
@@ -352,7 +358,7 @@ export default function OfferingsPage() {
                                                     )}
                                                 </Button>
                                                 <a
-                                                    href={`/brand-offerings/${item.slug}`}
+                                                    href={previewHref}
                                                     className="w-full"
                                                     target="_blank"
                                                     rel="noopener noreferrer"

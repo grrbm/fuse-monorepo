@@ -16,7 +16,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         // Expect hostname like "limitless.health.localhost:3000"
-        const clinicSlug = hostname.split('.localhost')[0]
+        let clinicSlug: string | null = null
+
+        if (process.env.NODE_ENV === 'production') {
+            // Expect host like "{clinicSlug}.fuse.health"
+            const parts = hostname.split('.fuse.health')
+            clinicSlug = parts.length > 1 ? parts[0] : null
+        } else {
+            // Expect host like "limitless.health.localhost:3000"
+            const parts = hostname.split('.localhost')
+            clinicSlug = parts.length > 1 ? parts[0] : null
+        }
 
         if (!clinicSlug) {
             return res.status(400).json({ success: false, message: 'Unable to determine clinic from hostname' })
