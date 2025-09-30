@@ -36,6 +36,7 @@ import SubscriptionService from "./services/subscription.service";
 import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
 import MDFilesService from "./services/mdIntegration/MDFiles.service";
 import PharmacyWebhookService from "./services/pharmacy/webhook";
+import BrandSubscriptionService from "./services/brandSubscription.service";
 import MessageService from "./services/Message.service";
 import BrandTreatment from "./models/BrandTreatment";
 import Subscription from "./models/Subscription";
@@ -3065,6 +3066,9 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
             planType: planType
           }
         });
+        await user.update({
+          stripeCustomerId: stripeCustomer.id
+        })
       }
     } catch (stripeError) {
       console.error('Error with Stripe customer:', stripeError);
@@ -3546,6 +3550,47 @@ app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to cancel subscription"
+    });
+  }
+});
+
+// Change brand subscription plan
+app.post("/brand-subscriptions/change", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const { newPlanId } = req.body;
+
+    if (!newPlanId) {
+      return res.status(400).json({
+        success: false,
+        message: "New plan ID is required"
+      });
+    }
+
+    // Instantiate service
+    const brandSubscriptionService = new BrandSubscriptionService();
+
+    // Upgrade the subscription
+    const result = await brandSubscriptionService.upgradeSubscription(currentUser.id, newPlanId);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (error) {
+    console.error('❌ Error changing brand subscription:', error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });
