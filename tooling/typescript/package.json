@@ -1,0 +1,13 @@
+{
+  "name": "@fuse/tsconfig",
+  "private": true,
+  "version": "1.0.0",
+  "files": [
+    "*.json"
+  ],
+  "scripts": {
+  },
+  "devDependencies": {
+    "cspell": "catalog:"
+  }
+}
