@@ -4,6 +4,7 @@ import Entity from './Entity';
 import Clinic from './Clinic';
 import ShippingAddress from './ShippingAddress';
 import { PatientAllergy, PatientDisease, PatientMedication } from '../services/pharmacy/patient';
+import BrandTreatment from './BrandTreatment';
 
 @Table({
   freezeTableName: true,
@@ -196,6 +197,9 @@ export default class User extends Entity {
   @HasMany(() => ShippingAddress)
   declare shippingAddresses: ShippingAddress[];
 
+  @HasMany(() => BrandTreatment)
+  declare brandTreatments: BrandTreatment[]
+
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {
     return bcrypt.compare(password, this.passwordHash);
@@ -272,11 +276,11 @@ export default class User extends Entity {
   public generateActivationToken(): string {
     const crypto = require('crypto');
     const token = crypto.randomBytes(32).toString('hex');
-    
+
     this.activationToken = token;
     // Token expires in 24 hours
     this.activationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    
+
     return token;
   }
 
@@ -297,7 +301,7 @@ export default class User extends Entity {
     if (!this.activationToken || !this.activationTokenExpiresAt) {
       return false;
     }
-    
+
     return this.activationToken === token && this.activationTokenExpiresAt > new Date();
   }
 }

@@ -37,6 +37,9 @@ import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
 import MDFilesService from "./services/mdIntegration/MDFiles.service";
 import PharmacyWebhookService from "./services/pharmacy/webhook";
 import MessageService from "./services/Message.service";
+import BrandTreatment from "./models/BrandTreatment";
+import Subscription from "./models/Subscription";
+import Physician from "./models/Physician";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -4954,5 +4957,148 @@ app.post("/brand-subscriptions/test-upgrade-high-definition", async (req, res) =
   } catch (error) {
     console.error('❌ Error scheduling High Definition upgrade:', error);
     res.status(500).json({ success: false, message: 'Failed to schedule High Definition upgrade' });
+  }
+});
+
+app.get("/brand-treatments", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.role !== "brand") {
+      return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
+    }
+
+    const [treatments, selections] = await Promise.all([
+      Treatment.findAll({
+        order: [["name", "ASC"]],
+      }),
+      BrandTreatment.findAll({
+        where: { userId: user.id },
+      }),
+    ]);
+
+    const selectionMap = new Map(
+      selections.map((bt) => [bt.treatmentId, bt])
+    );
+
+    const data = treatments.map((treatment) => {
+      const selection = selectionMap.get(treatment.id);
+      return {
+        id: treatment.id,
+        name: treatment.name,
+        treatmentLogo: treatment.treatmentLogo,
+        active: treatment.active,
+        selected: Boolean(selection),
+        brandLogo: selection?.brandLogo || null,
+        brandColor: selection?.brandColor || null,
+      };
+    });
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("❌ Error fetching brand treatments:", error);
+    res.status(500).json({ success: false, message: "Failed to fetch brand treatments" });
+  }
+});
+
+app.post("/brand-treatments", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.role !== "brand") {
+      return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
+    }
+
+    const { treatmentId, brandLogo, brandColor } = req.body;
+
+    if (!treatmentId) {
+      return res.status(400).json({ success: false, message: "treatmentId is required" });
+    }
+
+    const treatment = await Treatment.findByPk(treatmentId);
+
+    if (!treatment) {
+      return res.status(404).json({ success: false, message: "Treatment not found" });
+    }
+
+    const [record, created] = await BrandTreatment.findOrCreate({
+      where: { userId: user.id, treatmentId },
+      defaults: {
+        userId: user.id,
+        treatmentId,
+        brandLogo: brandLogo || null,
+        brandColor: brandColor || null,
+      },
+    });
+
+    if (!created) {
+      record.brandLogo = brandLogo ?? record.brandLogo;
+      record.brandColor = brandColor ?? record.brandColor;
+      await record.save();
+    }
+
+    res.status(200).json({ success: true, data: record });
+  } catch (error) {
+    console.error("❌ Error saving brand treatment:", error);
+    res.status(500).json({ success: false, message: "Failed to save brand treatment" });
+  }
+});
+
+app.delete("/brand-treatments", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.role !== "brand") {
+      return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
+    }
+
+    const { treatmentId } = req.body;
+
+    if (!treatmentId) {
+      return res.status(400).json({ success: false, message: "treatmentId is required" });
+    }
+
+    const deleted = await BrandTreatment.destroy({
+      where: { userId: user.id, treatmentId },
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: "Brand treatment not found" });
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("❌ Error removing brand treatment:", error);
+    res.status(500).json({ success: false, message: "Failed to remove brand treatment" });
   }
 });

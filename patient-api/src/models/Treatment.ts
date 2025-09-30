@@ -6,6 +6,7 @@ import Product from './Product';
 import TreatmentProducts from './TreatmentProducts';
 import TreatmentPlan from './TreatmentPlan';
 import Questionnaire from './Questionnaire';
+import BrandTreatment from './BrandTreatment';
 
 @Table({
     freezeTableName: true,
@@ -29,7 +30,7 @@ export default class Treatment extends Entity {
         allowNull: false,
         defaultValue: 0,
     })
-    declare productsPrice: number; 
+    declare productsPrice: number;
 
 
     @Column({
@@ -59,7 +60,7 @@ export default class Treatment extends Entity {
         allowNull: false,
     })
     declare userId: string;
-    
+
     @BelongsTo(() => User)
     declare user: User;
 
@@ -69,7 +70,7 @@ export default class Treatment extends Entity {
         allowNull: false,
     })
     declare clinicId: string;
-    
+
     @BelongsTo(() => Clinic)
     declare clinic: Clinic;
 
@@ -84,4 +85,7 @@ export default class Treatment extends Entity {
 
     @HasMany(() => Questionnaire)
     declare questionnaires: Questionnaire[];
+
+    @HasMany(() => BrandTreatment)
+    declare brandTreatments: BrandTreatment[];
 }

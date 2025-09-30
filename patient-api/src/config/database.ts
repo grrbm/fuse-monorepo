@@ -22,6 +22,7 @@ import ShippingOrder from '../models/ShippingOrder';
 import Subscription from '../models/Subscription';
 import TreatmentPlan from '../models/TreatmentPlan';
 import Physician from '../models/Physician';
+import BrandTreatment from '../models/BrandTreatment';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -70,7 +71,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     QuestionnaireStep, Question, QuestionOption,
     Order, OrderItem, Payment,
     ShippingAddress, ShippingOrder, Subscription,
-    TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician
+    TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment
   ],
 });
 
