@@ -5140,7 +5140,7 @@ app.get("/brand-treatments/published", authenticateJWT, async (req, res) => {
     });
 
     const data = selections
-      .filter((selection) => Boolean(selection.treatment?.active))
+      .filter((selection) => Boolean(selection.treatment))
       .map((selection) => {
         const treatment = selection.treatment!;
         const slug = treatment.name
@@ -5228,10 +5228,6 @@ app.get("/public/brand-treatments/:clinicSlug/:slug", async (req, res) => {
 
     if (computedSlug !== slug) {
       return res.status(404).json({ success: false, message: "Offering slug not found" });
-    }
-
-    if (!treatment.active) {
-      return res.status(404).json({ success: false, message: "Treatment is not active" });
     }
 
     res.status(200).json({
