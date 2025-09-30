@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Layout from '@/components/Layout'
@@ -20,6 +20,8 @@ import {
     CheckCircle,
     XCircle,
     RefreshCcw,
+    Copy,
+    Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -46,6 +48,8 @@ export default function OfferingsPage() {
     const [error, setError] = useState<string | null>(null)
     const [dirty, setDirty] = useState(false)
     const [pendingSelection, setPendingSelection] = useState<Record<string, OfferingItem>>({})
+    const [copiedId, setCopiedId] = useState<string | null>(null)
+    const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     const fetchOfferings = useCallback(async () => {
         if (!token) return
@@ -106,6 +110,37 @@ export default function OfferingsPage() {
 
         fetchOfferings()
     }, [token, router, fetchOfferings])
+
+    const handleCopyUrl = useCallback((url: string, id: string) => {
+        if (typeof navigator === 'undefined' || !navigator.clipboard) {
+            console.error('Clipboard API not available')
+            return
+        }
+
+        navigator.clipboard
+            .writeText(url)
+            .then(() => {
+                setCopiedId(id)
+                if (copyTimeoutRef.current) {
+                    clearTimeout(copyTimeoutRef.current)
+                }
+                copyTimeoutRef.current = setTimeout(() => {
+                    setCopiedId(null)
+                    copyTimeoutRef.current = null
+                }, 2000)
+            })
+            .catch((err) => {
+                console.error('Failed to copy preview URL:', err)
+            })
+    }, [])
+
+    useEffect(() => {
+        return () => {
+            if (copyTimeoutRef.current) {
+                clearTimeout(copyTimeoutRef.current)
+            }
+        }
+    }, [])
 
     const handleToggle = async (item: OfferingItem) => {
         if (!token) return
@@ -266,6 +301,7 @@ export default function OfferingsPage() {
                                 const prodDisplay = `${clinicSlug}.fuse.health/my-treatments/${item.slug}`
                                 const previewDisplay = process.env.NODE_ENV === 'production' ? prodDisplay : devUrl
                                 const previewHref = process.env.NODE_ENV === 'production' ? `https://${prodDisplay}` : devUrl
+                                const isCopied = copiedId === item.id
                                 return (
                                     <Card
                                         key={item.id}
@@ -333,9 +369,31 @@ export default function OfferingsPage() {
                                                 </p>
                                                 <div className="flex items-center gap-2 text-xs">
                                                     <span className="text-muted-foreground">Preview URL:</span>
-                                                    <code className="px-2 py-1 bg-muted/30 rounded border">
-                                                        {previewDisplay}
-                                                    </code>
+                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                        <code
+                                                            className="px-2 py-1 bg-muted/30 rounded border text-xs font-mono overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+                                                            title={previewDisplay}
+                                                        >
+                                                            {previewDisplay}
+                                                        </code>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className={cn(
+                                                                'h-7 w-7 shrink-0 transition-colors',
+                                                                isCopied ? 'text-green-600' : 'text-muted-foreground'
+                                                            )}
+                                                            onClick={() => handleCopyUrl(previewHref, item.id)}
+                                                            aria-label={isCopied ? 'Preview URL copied' : 'Copy preview URL'}
+                                                        >
+                                                            {isCopied ? (
+                                                                <Check className="h-3.5 w-3.5" />
+                                                            ) : (
+                                                                <Copy className="h-3.5 w-3.5" />
+                                                            )}
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             </div>
 
