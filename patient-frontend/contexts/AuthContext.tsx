@@ -13,6 +13,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const PUBLIC_PATH_PATTERNS = [
+  '/signin',
+  '/signup',
+  '/privacy',
+  '/terms',
+  '/hipaa-notice',
+  '/treatments/weightloss',
+  '/my-treatments/[slug]',
+  '/treatments/[slug]',
+]
+
+const matchesPublicPattern = (pattern: string, pathname: string, asPath: string) => {
+  if (!pattern.includes('[')) {
+    return pattern === pathname || pattern === asPath
+  }
+
+  const regex = new RegExp(`^${pattern.replace(/\[.*?\]/g, '[^/]+')}$`)
+  return regex.test(pathname) || regex.test(asPath)
+}
+
+const isPublicRoute = (pathname: string, asPath: string) => {
+  return PUBLIC_PATH_PATTERNS.some((pattern) => matchesPublicPattern(pattern, pathname, asPath))
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,10 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionManager.current.stop();
       }
       setShowSessionWarning(false);
-      
+
       // Remove JWT token from localStorage
       localStorage.removeItem('auth_token');
-      
+
       await signOut();
       setUser(null);
       router.push('/signin');
@@ -55,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleSessionWarning = () => {
     setShowSessionWarning(true);
     setCountdown(300); // 5 minutes
-    
+
     // Start countdown
     const interval = setInterval(() => {
       setCountdown(prev => {
@@ -78,9 +102,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const initAuth = async () => {
-      // Only check auth if we're not on public pages
-      const publicPaths = ['/signin', '/signup', '/privacy', '/terms', '/hipaa-notice', '/treatments/weightloss'];
-      if (!publicPaths.includes(router.pathname)) {
+      const publicRoute = isPublicRoute(router.pathname, router.asPath.split('?')[0])
+
+      if (!publicRoute) {
         await refreshUser();
       }
       setLoading(false);
@@ -91,16 +115,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Redirect to signin if user becomes unauthenticated
   useEffect(() => {
-    const publicPaths = ['/signin', '/signup', '/privacy', '/terms', '/hipaa-notice', '/treatments/weightloss'];
-    if (!loading && !user && !publicPaths.includes(router.pathname)) {
+    const publicRoute = isPublicRoute(router.pathname, router.asPath.split('?')[0])
+    if (!loading && !user && !publicRoute) {
       router.push('/signin');
     }
   }, [user, loading, router]);
 
   // Initialize session timeout when user is authenticated
   useEffect(() => {
-    const publicPaths = ['/signin', '/signup', '/privacy', '/terms', '/hipaa-notice'];
-    if (user && !publicPaths.includes(router.pathname)) {
+    const publicRoute = isPublicRoute(router.pathname, router.asPath.split('?')[0])
+    if (user && !publicRoute) {
       // Initialize session manager
       if (!sessionManager.current) {
         sessionManager.current = new SessionTimeoutManager({

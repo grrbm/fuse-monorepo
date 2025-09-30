@@ -1,55 +1,61 @@
-import React from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { useRouter } from 'next/router';
-import { Card, CardBody, Spinner } from '@heroui/react';
+import { ReactNode, useEffect, useState } from 'react'
+import { useRouter } from 'next/router'
+import { useAuth } from '../contexts/AuthContext'
+import { useProtectedRoute } from '../providers/ProtectedRouteProvider'
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
-  requiredRole?: ('patient' | 'doctor' | 'admin')[];
+  children: ReactNode
+  requiredRole?: string
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
+  const router = useRouter()
+  const { user, loading } = useAuth()
+  const { isProtected } = useProtectedRoute()
+  const [isAuthorized, setIsAuthorized] = useState(false)
 
-  React.useEffect(() => {
-    if (!loading && !user) {
-      router.push('/signin');
+  useEffect(() => {
+    if (!isProtected) {
+      console.log('[ProtectedRoute] Unprotected route - skipping auth checks', {
+        pathname: router.pathname,
+        asPath: router.asPath,
+      })
+      setIsAuthorized(true)
+      return
     }
-  }, [user, loading, router]);
 
-  // Show loading spinner while checking authentication
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card>
-          <CardBody className="flex items-center justify-center p-8">
-            <Spinner size="lg" />
-            <p className="mt-4 text-foreground-600">Loading...</p>
-          </CardBody>
-        </Card>
-      </div>
-    );
+    console.log('[ProtectedRoute] Protected route - checking auth', {
+      pathname: router.pathname,
+      asPath: router.asPath,
+      userExists: Boolean(user),
+      loading,
+      requiredRole,
+    })
+
+    if (loading) return
+
+    if (!user) {
+      console.log('[ProtectedRoute] No user found, redirecting to /signin')
+      router.push('/signin')
+      return
+    }
+
+    if (requiredRole && user.role !== requiredRole) {
+      console.log('[ProtectedRoute] User lacks required role, redirecting to /signin')
+      router.push('/signin')
+      return
+    }
+
+    setIsAuthorized(true)
+  }, [user, loading, requiredRole, router, isProtected])
+
+  if (!isProtected) {
+    return <>{children}</>
   }
 
-  // If not authenticated, don't render anything (redirect is happening)
-  if (!user) {
-    return null;
+  if (loading || !isAuthorized) {
+    return null
   }
 
-  // Check role-based access if required
-  if (requiredRole && !requiredRole.includes(user.role)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card>
-          <CardBody className="text-center p-8">
-            <h2 className="text-xl font-semibold text-foreground mb-2">Access Denied</h2>
-            <p className="text-foreground-600">You don't have permission to view this page.</p>
-          </CardBody>
-        </Card>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
+  return <>{children}</>
 }

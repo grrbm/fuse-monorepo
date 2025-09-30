@@ -1,0 +1,36 @@
+import type { NextApiRequest, NextApiResponse } from 'next'
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+    try {
+        const { slug } = req.query
+        const hostname = req.headers['x-forwarded-host'] || req.headers.host
+
+        if (!slug || typeof slug !== 'string') {
+            return res.status(400).json({ success: false, message: 'Treatment slug is required' })
+        }
+
+        if (!hostname || typeof hostname !== 'string') {
+            return res.status(400).json({ success: false, message: 'Clinic hostname not provided' })
+        }
+
+        // Expect hostname like "limitless.health.localhost:3000"
+        const clinicSlug = hostname.split('.localhost')[0]
+
+        if (!clinicSlug) {
+            return res.status(400).json({ success: false, message: 'Unable to determine clinic from hostname' })
+        }
+
+        const url = `${API_BASE}/public/brand-treatments/${encodeURIComponent(clinicSlug)}/${encodeURIComponent(slug)}`
+
+        const response = await fetch(url)
+        const data = await response.json()
+
+        res.status(response.status).json(data)
+    } catch (error) {
+        console.error('Proxy error /api/public/brand-treatments/[slug]:', error)
+        res.status(500).json({ success: false, message: 'Internal proxy error' })
+    }
+}
+

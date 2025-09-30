@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils'
 interface OfferingItem {
     id: string
     name: string
+    slug: string
     treatmentLogo?: string | null
     active: boolean
     selected: boolean
@@ -75,7 +76,17 @@ export default function OfferingsPage() {
                 return
             }
 
-            setOfferings(data.data || [])
+            const slugified = (data.data || []).map((item: OfferingItem) => ({
+                ...item,
+                slug:
+                    item.slug ||
+                    item.name
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '-')
+                        .replace(/^-+|-+$/g, ''),
+            }))
+
+            setOfferings(slugified)
         } catch (err) {
             console.error('❌ Exception while loading offerings:', err)
             setError('Failed to load offerings. Please try again later.')
@@ -314,25 +325,43 @@ export default function OfferingsPage() {
                                                     Selecting this treatment enables the related offerings across the entire platform,
                                                     including checkout flows, onboarding forms, and marketing experiences.
                                                 </p>
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <span className="text-muted-foreground">Preview URL:</span>
+                                                    <code className="px-2 py-1 bg-muted/30 rounded border">
+                                                        /brand-offerings/{item.slug}
+                                                    </code>
+                                                </div>
                                             </div>
 
-                                            <Button
-                                                variant={item.selected ? 'outline' : 'default'}
-                                                className="w-full"
-                                                disabled={status === 'saving'}
-                                                onClick={() => handleToggle(item)}
-                                            >
-                                                {status === 'saving' && isSavingThisItem ? (
-                                                    <>
-                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                        Updating...
-                                                    </>
-                                                ) : item.selected ? (
-                                                    'Disable Offering'
-                                                ) : (
-                                                    'Enable Offering'
-                                                )}
-                                            </Button>
+                                            <div className="flex flex-col gap-2">
+                                                <Button
+                                                    variant={item.selected ? 'outline' : 'default'}
+                                                    className="w-full"
+                                                    disabled={status === 'saving'}
+                                                    onClick={() => handleToggle(item)}
+                                                >
+                                                    {status === 'saving' && isSavingThisItem ? (
+                                                        <>
+                                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                            Updating...
+                                                        </>
+                                                    ) : item.selected ? (
+                                                        'Disable Offering'
+                                                    ) : (
+                                                        'Enable Offering'
+                                                    )}
+                                                </Button>
+                                                <a
+                                                    href={`/brand-offerings/${item.slug}`}
+                                                    className="w-full"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                >
+                                                    <Button variant="ghost" className="w-full">
+                                                        Preview
+                                                    </Button>
+                                                </a>
+                                            </div>
                                         </CardContent>
                                     </Card>
                                 )

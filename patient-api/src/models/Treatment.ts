@@ -19,6 +19,12 @@ export default class Treatment extends Entity {
     declare name: string;
 
     @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare slug?: string;
+
+    @Column({
         type: DataType.TEXT,
         allowNull: true,
     })

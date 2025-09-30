@@ -40,6 +40,7 @@ import MessageService from "./services/Message.service";
 import BrandTreatment from "./models/BrandTreatment";
 import Subscription from "./models/Subscription";
 import Physician from "./models/Physician";
+import Questionnaire from "./models/Questionnaire";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -5100,5 +5101,155 @@ app.delete("/brand-treatments", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error("❌ Error removing brand treatment:", error);
     res.status(500).json({ success: false, message: "Failed to remove brand treatment" });
+  }
+});
+
+app.get("/brand-treatments/published", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id, {
+      include: [Clinic],
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (user.role !== 'brand') {
+      return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
+    }
+
+    const selections = await BrandTreatment.findAll({
+      where: { userId: user.id },
+      include: [
+        {
+          model: Treatment,
+          include: [
+            {
+              model: Questionnaire,
+              attributes: ['id', 'title', 'description'],
+            },
+          ],
+        },
+      ],
+    });
+
+    const data = selections
+      .filter((selection) => Boolean(selection.treatment?.active))
+      .map((selection) => {
+        const treatment = selection.treatment!;
+        const slug = treatment.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+        return {
+          id: treatment.id,
+          name: treatment.name,
+          slug,
+          treatmentLogo: selection.brandLogo || treatment.treatmentLogo || null,
+          brandColor: selection.brandColor || null,
+          questionnaireId: treatment.questionnaires?.[0]?.id || null,
+          questionnaireTitle: treatment.questionnaires?.[0]?.title || null,
+          questionnaireDescription: treatment.questionnaires?.[0]?.description || null,
+          clinicSlug: user.clinic?.slug || null,
+        };
+      });
+
+    const { slug } = req.query;
+
+    if (typeof slug === 'string') {
+      const match = data.find((item) => item.slug === slug);
+      if (!match) {
+        return res.status(404).json({ success: false, message: 'Offering not found' });
+      }
+      return res.status(200).json({ success: true, data: match });
+    }
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error('❌ Error fetching published brand treatments:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch published treatments' });
+  }
+});
+
+app.get("/public/brand-treatments/:clinicSlug/:slug", async (req, res) => {
+  try {
+    const { clinicSlug, slug } = req.params;
+
+    const clinic = await Clinic.findOne({ where: { slug: clinicSlug } });
+
+    if (!clinic) {
+      return res.status(404).json({ success: false, message: "Clinic not found" });
+    }
+
+    const brandUser = await User.findOne({
+      where: {
+        clinicId: clinic.id,
+        role: 'brand',
+      },
+    });
+
+    if (!brandUser) {
+      return res.status(404).json({ success: false, message: "Brand user not found for clinic" });
+    }
+
+    const selection = await BrandTreatment.findOne({
+      where: {
+        userId: brandUser.id,
+      },
+      include: [
+        {
+          model: Treatment,
+          include: [
+            {
+              model: Questionnaire,
+              attributes: ['id', 'title', 'description'],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!selection || !selection.treatment) {
+      return res.status(404).json({ success: false, message: "Treatment not enabled for this brand" });
+    }
+
+    const treatment = selection.treatment;
+    const computedSlug = (treatment.slug || treatment.name)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (computedSlug !== slug) {
+      return res.status(404).json({ success: false, message: "Offering slug not found" });
+    }
+
+    if (!treatment.active) {
+      return res.status(404).json({ success: false, message: "Treatment is not active" });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: treatment.id,
+        name: treatment.name,
+        slug: computedSlug,
+        treatmentLogo: selection.brandLogo || treatment.treatmentLogo || null,
+        brandColor: selection.brandColor || null,
+        questionnaireId: treatment.questionnaires?.[0]?.id || null,
+        questionnaireTitle: treatment.questionnaires?.[0]?.title || null,
+        questionnaireDescription: treatment.questionnaires?.[0]?.description || null,
+        clinicSlug: clinic.slug,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error fetching public brand treatment:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch treatment' });
   }
 });
