@@ -30,6 +30,7 @@ import QuestionnaireService from "./services/questionnaire.service";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
 import { StripeService } from "@fuse/stripe";
+import { signInSchema } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
@@ -333,14 +334,18 @@ app.post("/auth/signup", async (req, res) => {
 
 app.post("/auth/signin", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    // Validate request body
+    const validation = signInSchema.safeParse(req.body);
 
-    if (!email || !password) {
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required"
+        message: "Validation failed",
+        errors: validation.error.format()
       });
     }
+
+    const { email, password } = validation.data;
 
     // Find user by email
     const user = await User.findByEmail(email);
