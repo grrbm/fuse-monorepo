@@ -2,8 +2,7 @@ import Product from '../models/Product';
 import User from '../models/User';
 import TreatmentProducts from '../models/TreatmentProducts';
 import { getTreatment } from './db/treatment';
-import Treatment from '../models/Treatment';
-import StripeService from './stripe';
+import { StripeService } from '@fuse/stripe';
 
 interface TreatmentProductData {
     productId: string;

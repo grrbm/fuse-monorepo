@@ -29,7 +29,7 @@ import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
-import StripeService from "./services/stripe";
+import { StripeService } from "@fuse/stripe";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
