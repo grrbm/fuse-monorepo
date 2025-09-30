@@ -257,28 +257,20 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
       return
     }
 
-    const planMappings = {
-      standard: {
-        apiPlanType: 'standard_build' as const,
-        downpayment: {
-          type: 'downpayment_standard',
-          name: 'Discounted First Month',
-          amount: 1500,
-        },
-        label: 'Standard',
-      },
-      professional: {
-        apiPlanType: 'high-definition' as const,
-        downpayment: {
+    const planTypeKey: SubscriptionPlanType = planType === 'professional' ? 'high-definition' : 'standard_build'
+    const planDefinition = PLAN_DEFINITIONS[planTypeKey]
+
+    const downpayment = planType === 'professional'
+      ? {
           type: 'downpayment_professional',
           name: 'Discounted Professional First Month',
           amount: 2500,
-        },
-        label: 'Controlled Substances',
-      },
-    } as const
-
-    const mapping = planMappings[planType]
+        }
+      : {
+          type: 'downpayment_standard',
+          name: 'Discounted First Month',
+          amount: 1500,
+        }
 
     try {
       setCreatingPlan(planType)
@@ -289,12 +281,12 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
         },
         body: JSON.stringify({
           selectedPlanCategory: planType,
-          selectedPlanType: mapping.apiPlanType,
-          selectedPlanName: mapping.label,
-          selectedPlanPrice: mapping.downpayment.amount,
-          selectedDownpaymentType: mapping.downpayment.type,
-          selectedDownpaymentName: mapping.downpayment.name,
-          selectedDownpaymentPrice: mapping.downpayment.amount,
+          selectedPlanType: planTypeKey,
+          selectedPlanName: planDefinition.label,
+          selectedPlanPrice: downpayment.amount,
+          selectedDownpaymentType: downpayment.type,
+          selectedDownpaymentName: downpayment.name,
+          selectedDownpaymentPrice: downpayment.amount,
           planSelectionTimestamp: new Date().toISOString(),
         }),
       })
@@ -307,10 +299,12 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
 
       const queryParams = new URLSearchParams({
         planCategory: planType,
-        subscriptionPlanType: mapping.apiPlanType,
-        subscriptionPlanName: mapping.label,
+        subscriptionPlanType: planTypeKey,
+        subscriptionPlanName: planDefinition.label,
         subscriptionMonthlyPrice: planDefinition.price.toString(),
-        downpaymentAmount: mapping.downpayment.amount.toString(),
+        downpaymentPlanType: downpayment.type,
+        downpaymentName: downpayment.name,
+        downpaymentAmount: downpayment.amount.toString(),
       })
 
       router.push(`/checkout?${queryParams.toString()}`)
