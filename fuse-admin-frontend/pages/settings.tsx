@@ -309,9 +309,7 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
         planCategory: planType,
         subscriptionPlanType: mapping.apiPlanType,
         subscriptionPlanName: mapping.label,
-        subscriptionMonthlyPrice: PLAN_DEFINITIONS[mapping.apiPlanType].price.toString(),
-        downpaymentPlanType: mapping.downpayment.type,
-        downpaymentName: mapping.downpayment.name,
+        subscriptionMonthlyPrice: planDefinition.price.toString(),
         downpaymentAmount: mapping.downpayment.amount.toString(),
       })
 

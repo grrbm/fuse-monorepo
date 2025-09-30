@@ -328,7 +328,7 @@ function CheckoutForm({ checkoutData, paymentData, token, intentClientSecret, on
         ) : (
           <>
             <CreditCard className="w-5 h-5 mr-2" />
-            <span>Pay ${checkoutData.planPrice.toLocaleString()} & Get Started</span>
+            <span>Pay ${checkoutData.subscriptionMonthlyPrice?.toLocaleString() || checkoutData.planPrice.toLocaleString()} & Get Started</span>
           </>
         )}
       </Button>
@@ -399,13 +399,14 @@ export default function CheckoutPage() {
       subscriptionMonthlyPrice
     ) {
       const downpaymentAmountNum = parseInt(downpaymentAmount as string)
+      const monthlyPriceNum = parseInt(subscriptionMonthlyPrice as string)
 
       setCheckoutData({
         planCategory: planCategory as string,
         planType: subscriptionPlanType as string,
         planName: subscriptionPlanName as string,
         planPrice: downpaymentAmountNum,
-        subscriptionMonthlyPrice: subscriptionMonthlyPrice ? parseInt(subscriptionMonthlyPrice as string) : undefined,
+        subscriptionMonthlyPrice: monthlyPriceNum,
         downpaymentPlanType: downpaymentPlanType as string,
         downpaymentName: downpaymentName as string
       })
@@ -553,16 +554,32 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="border-t mt-6 pt-4">
-                  <div className="flex justify-between items-center py-2 mt-4">
-                    <span className="font-bold">Due Today</span>
-                    <div className="text-3xl font-bold text-orange-500">${checkoutData.planPrice.toLocaleString()}</div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Monthly subscription</span>
+                    <span className="text-lg font-semibold text-[#825AD1]">
+                      ${checkoutData.subscriptionMonthlyPrice?.toLocaleString() || '0'} / month
+                    </span>
                   </div>
-                  {checkoutData.subscriptionMonthlyPrice && (
-                    <p className="text-sm text-muted-foreground">
-                      Then ${checkoutData.subscriptionMonthlyPrice.toLocaleString()} billed monthly starting next period.
-                    </p>
-                  )}
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Due today</span>
+                    <span className="text-lg font-semibold text-[#825AD1]">
+                      ${checkoutData.planPrice.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Transaction fee</span>
+                    <span className="text-sm font-medium">1% monthly</span>
+                  </div>
                 </div>
+                <div className="flex justify-between items-center py-2 mt-4">
+                  <span className="font-bold">Due Today</span>
+                  <div className="text-3xl font-bold text-[#825AD1]">${checkoutData.planPrice.toLocaleString()}</div>
+                </div>
+                {checkoutData.subscriptionMonthlyPrice && (
+                  <p className="text-sm text-muted-foreground">
+                    Then ${checkoutData.subscriptionMonthlyPrice.toLocaleString()} billed monthly starting next period.
+                  </p>
+                )}
               </CardContent>
             </Card>
 

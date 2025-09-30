@@ -226,10 +226,10 @@ export default function Plans() {
         planCategory,
         subscriptionPlanType: mapping.planType,
         subscriptionPlanName: mapping.displayName,
-        subscriptionMonthlyPrice: plans?.[mapping.planType]?.price?.toString() || String(downpaymentAmount),
+        subscriptionMonthlyPrice: plans?.[mapping.planType]?.price?.toString() || String(mapping.downpayment.amount),
         downpaymentPlanType: mapping.downpayment.type,
         downpaymentName: mapping.downpayment.name,
-        downpaymentAmount: String(downpaymentAmount)
+        downpaymentAmount: String(mapping.downpayment.amount)
       })
 
       router.push(`/checkout?${queryParams.toString()}`)
