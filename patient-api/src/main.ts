@@ -3008,7 +3008,7 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
     console.log('🚀 BACKEND CREATE: Request body:', JSON.stringify(req.body, null, 2))
 
     const currentUser = getCurrentUser(req);
-    const { planType, amount, currency } = req.body;
+    const { planType, amount, currency, upgrade } = req.body;
 
     console.log('🚀 BACKEND CREATE: Plan type received:', planType)
     console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
@@ -3021,19 +3021,21 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Check if user already has an active subscription
-    const existingSubscription = await BrandSubscription.findOne({
-      where: {
-        userId: currentUser.id,
-        status: ['active', 'processing', 'past_due']
-      }
-    });
-
-    if (existingSubscription) {
-      return res.status(400).json({
-        success: false,
-        message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
+    // If this is a new subscription (not an upgrade), block when already active
+    if (!upgrade) {
+      const existingSubscription = await BrandSubscription.findOne({
+        where: {
+          userId: currentUser.id,
+          status: ['active', 'processing', 'past_due']
+        }
       });
+
+      if (existingSubscription) {
+        return res.status(400).json({
+          success: false,
+          message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
+        });
+      }
     }
 
     console.log('🚀 BACKEND CREATE: Looking up plan type:', planType)
