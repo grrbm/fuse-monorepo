@@ -110,7 +110,7 @@ function extractKeyFromS3Url(url: string): string | null {
   try {
     const bucketPattern = new RegExp(`https://${BUCKET_NAME}\\.s3\\.${AWS_REGION}\\.amazonaws\\.com/(.+)`);
     const match = url.match(bucketPattern);
-    return match ? match[1] : null;
+    return match?.[1] ?? null;
   } catch (error) {
     console.error('Error extracting S3 key from URL:', error);
     return null;
