@@ -27,14 +27,14 @@
     "react-dom": "catalog:react18"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.12",
     "@types/node": "catalog:",
     "@types/react": "catalog:react18",
     "autoprefixer": "catalog:",
     "dotenv-cli": "catalog:",
     "eslint": "catalog:",
     "postcss": "catalog:",
-    "tailwindcss": "catalog:",
-    "typescript": "catalog:"
+    "tailwindcss": "^4.1.12",
+    "typescript": "catalog:",
+    "@tailwindcss/postcss": "^4.1.12"
   }
 }
