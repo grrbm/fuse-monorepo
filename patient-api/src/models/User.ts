@@ -63,6 +63,12 @@ export default class User extends Entity {
   })
   declare phoneNumber?: string;
 
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+  })
+  declare businessType?: string;
+
   // TODO: Deprecate this fields in favor of address relationship
   @Column({
     type: DataType.TEXT,
@@ -87,6 +93,64 @@ export default class User extends Entity {
     allowNull: true,
   })
   declare zipCode?: string;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+    validate: {
+      len: [0, 255],
+    },
+  })
+  declare website?: string;
+
+  // Plan selection fields
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+  })
+  declare selectedPlanCategory?: string;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+  })
+  declare selectedPlanType?: string;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+  })
+  declare selectedPlanName?: string;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: true,
+  })
+  declare selectedPlanPrice?: number;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+  })
+  declare selectedDownpaymentType?: string;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+  })
+  declare selectedDownpaymentName?: string;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: true,
+  })
+  declare selectedDownpaymentPrice?: number;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare planSelectionTimestamp?: Date;
 
   @Column({
     type: DataType.ENUM('patient', 'doctor', 'admin', 'brand'),
@@ -223,6 +287,8 @@ export default class User extends Entity {
       lastName: this.lastName,
       email: this.email,
       phoneNumber: this.phoneNumber,
+      website: this.website,
+      businessType: this.businessType,
       dob: this.dob,
       address: this.address,
       city: this.city,
@@ -249,6 +315,8 @@ export default class User extends Entity {
     role?: 'patient' | 'doctor' | 'admin' | 'brand';
     dob?: string;
     phoneNumber?: string;
+    website?: string;
+    businessType?: string;
   }): Promise<User> {
     const passwordHash = await this.hashPassword(userData.password);
 
@@ -260,6 +328,8 @@ export default class User extends Entity {
       role: userData.role || 'patient',
       dob: userData.dob,
       phoneNumber: userData.phoneNumber,
+      website: userData.website,
+      businessType: userData.businessType,
       consentGivenAt: new Date(), // Record consent when user signs up
     });
   }

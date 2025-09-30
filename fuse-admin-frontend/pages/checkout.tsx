@@ -45,13 +45,11 @@ interface CheckoutData {
   planType: string
   planName: string
   planPrice: number
-  onboardingType: string
-  onboardingName: string
-  onboardingPrice: number
-  totalAmount: number
   subscriptionMonthlyPrice?: number
   downpaymentPlanType?: string
   downpaymentName?: string
+  upgradeDelta?: number
+  previousMonthlyPrice?: number
 }
 
 // Checkout form component that uses Stripe hooks
@@ -332,26 +330,26 @@ function CheckoutForm({ checkoutData, paymentData, token, intentClientSecret, on
         ) : (
           <>
             <CreditCard className="w-5 h-5 mr-2" />
-            <span>Pay ${checkoutData.planPrice.toLocaleString()} & Get Started</span>
+            <span>Pay ${checkoutData.subscriptionMonthlyPrice?.toLocaleString() || checkoutData.planPrice.toLocaleString()} & Get Started</span>
           </>
         )}
       </Button>
 
-      <div className="text-center space-y-2">
-        <p className="text-sm font-medium">
-          ✅ Onboarding path decided during your call
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Additional onboarding fees only charged if you select them during your call. No hidden costs.
-        </p>
-      </div>
+          <div className="text-center space-y-2">
+            <p className="text-sm font-medium">
+              ✅ Subscription activates immediately after payment
+            </p>
+            <p className="text-xs text-muted-foreground">
+              You can add optional onboarding support later from Settings.
+            </p>
+          </div>
     </form>
   )
 }
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { user, token, isLoading } = useAuth()
+  const { user, token, isLoading, refreshSubscription, subscription } = useAuth()
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [clientSecret, setClientSecret] = useState('')
@@ -385,9 +383,6 @@ export default function CheckoutPage() {
     // Get checkout data from query params
     const {
       planCategory,
-      onboardingType,
-      onboardingName,
-      onboardingPrice,
       downpaymentPlanType,
       downpaymentName,
       downpaymentAmount,
@@ -398,9 +393,6 @@ export default function CheckoutPage() {
 
     if (
       planCategory &&
-      onboardingType &&
-      onboardingName &&
-      onboardingPrice &&
       downpaymentPlanType &&
       downpaymentName &&
       downpaymentAmount &&
@@ -409,29 +401,38 @@ export default function CheckoutPage() {
       subscriptionMonthlyPrice
     ) {
       const downpaymentAmountNum = parseInt(downpaymentAmount as string)
-      const onboardingPriceNum = parseInt(onboardingPrice as string)
+      const monthlyPriceNum = parseInt(subscriptionMonthlyPrice as string)
+
+      const existingPlanType = subscription?.plan?.type
+      const existingMonthlyPrice = subscription?.plan?.price ?? subscription?.monthlyPrice
+
+      const isUpgrade = Boolean(existingPlanType && existingPlanType !== subscriptionPlanType)
+      const delta = isUpgrade && existingMonthlyPrice
+        ? Math.max(monthlyPriceNum - Number(existingMonthlyPrice || 0), 0)
+        : 0
 
       setCheckoutData({
         planCategory: planCategory as string,
         planType: subscriptionPlanType as string,
         planName: subscriptionPlanName as string,
-        planPrice: downpaymentAmountNum,
-        onboardingType: onboardingType as string,
-        onboardingName: onboardingName as string,
-        onboardingPrice: onboardingPriceNum,
-        totalAmount: downpaymentAmountNum + onboardingPriceNum,
-        subscriptionMonthlyPrice: subscriptionMonthlyPrice ? parseInt(subscriptionMonthlyPrice as string) : undefined,
+        planPrice: isUpgrade ? delta : downpaymentAmountNum,
+        subscriptionMonthlyPrice: monthlyPriceNum,
         downpaymentPlanType: downpaymentPlanType as string,
-        downpaymentName: downpaymentName as string
+        downpaymentName: downpaymentName as string,
+        upgradeDelta: isUpgrade ? delta : undefined,
+        previousMonthlyPrice: existingMonthlyPrice ?? undefined,
       })
 
-      // Create payment intent
-      createPaymentIntent(subscriptionPlanType as string, downpaymentAmountNum)
+      if (isUpgrade) {
+        createUpgradePaymentIntent(subscriptionPlanType as string, delta)
+      } else {
+        createPaymentIntent(subscriptionPlanType as string, downpaymentAmountNum)
+      }
     } else {
       // Redirect back if missing data
       router.push('/plans')
     }
-  }, [router.query, user, isLoading])
+  }, [router.query, user, isLoading, subscription])
 
   const createPaymentIntent = async (planType: string, amount: number) => {
     try {
@@ -468,8 +469,47 @@ export default function CheckoutPage() {
     }
   }
 
-  const handlePaymentSuccess = () => {
-    router.push('/plans?success=true&payment_intent=completed')
+  const createUpgradePaymentIntent = async (planType: string, amount: number) => {
+    try {
+      if (!token) {
+        throw new Error('User not authenticated. Please log in again.')
+      }
+
+      const response = await fetch('/api/create-upgrade-payment-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          planType,
+          amount,
+          currency: 'usd',
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const { clientSecret } = await response.json()
+      setClientSecret(clientSecret)
+    } catch (error: any) {
+      console.error('Error creating upgrade payment intent:', error)
+      alert(`Upgrade payment setup failed: ${error.message}`)
+      router.push('/plans')
+    }
+  }
+
+  const handlePaymentSuccess = async () => {
+    try {
+      await refreshSubscription()
+    } catch (error) {
+      console.error('Error refreshing subscription after payment:', error)
+    } finally {
+      router.push('/plans?success=true&payment_intent=completed')
+    }
   }
 
   const handlePaymentError = (error: string) => {
@@ -544,7 +584,7 @@ export default function CheckoutPage() {
                   Complete your payment
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Start your subscription and schedule your onboarding call
+                  Start your subscription with Fuse
                 </p>
               </CardHeader>
               <CardContent>
@@ -562,21 +602,44 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="border-t mt-6 pt-4">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium">{checkoutData.onboardingName} Setup Fee</span>
-                    <div className="text-right">
-                      <div className="text-lg font-semibold">
-                        <span className="line-through text-muted-foreground">${checkoutData.onboardingPrice.toLocaleString()}.00</span>
-                      </div>
-                      <div className="text-sm font-medium">Pay Later</div>
-                    </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Monthly subscription</span>
+                    <span className="text-lg font-semibold text-[#825AD1]">
+                      ${checkoutData.subscriptionMonthlyPrice?.toLocaleString() || '0'} / month
+                    </span>
                   </div>
-
-                  <div className="flex justify-between items-center py-2 mt-4">
-                    <span className="font-bold">Due Today</span>
-                    <div className="text-3xl font-bold text-orange-500">${checkoutData.planPrice.toLocaleString()}</div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Previous plan</span>
+                    <span className="text-sm font-medium">
+                      {checkoutData.previousMonthlyPrice ? `$${checkoutData.previousMonthlyPrice.toLocaleString()} / month` : '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">New plan</span>
+                    <span className="text-lg font-semibold text-[#825AD1]">
+                      ${checkoutData.subscriptionMonthlyPrice?.toLocaleString() || '0'} / month
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Due today</span>
+                    <span className="text-lg font-semibold text-[#825AD1]">
+                      ${checkoutData.planPrice.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-muted-foreground">Transaction fee</span>
+                    <span className="text-sm font-medium">1% monthly</span>
                   </div>
                 </div>
+                <div className="flex justify-between items-center py-2 mt-4">
+                  <span className="font-bold">Due Today</span>
+                  <div className="text-3xl font-bold text-[#825AD1]">${checkoutData.planPrice.toLocaleString()}</div>
+                </div>
+                {checkoutData.subscriptionMonthlyPrice && (
+                  <p className="text-sm text-muted-foreground">
+                    Then ${checkoutData.subscriptionMonthlyPrice.toLocaleString()} billed monthly starting next period.
+                  </p>
+                )}
               </CardContent>
             </Card>
 

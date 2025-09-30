@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ message: 'No authorization token provided' })
     }
 
-    if (!planType || !amount) {
+    if (!planType || amount === undefined) {
       return res.status(400).json({ message: 'Missing required fields: planType, amount' })
     }
 

@@ -13,12 +13,31 @@ interface User {
   website?: string
 }
 
+interface Subscription {
+  id: string
+  planId: string | null
+  status: string
+  stripeSubscriptionId?: string
+  stripePriceId?: string | null
+  plan?: {
+    name: string
+    price: number
+    type: string
+    priceId?: string
+  }
+  nextBillingDate?: string
+}
+
 interface AuthContextType {
   user: User | null
   token: string | null
+  subscription: Subscription | null
+  hasActiveSubscription: boolean
   login: (email: string, password: string) => Promise<boolean>
   signup: (email: string, password: string, name: string) => Promise<boolean>
-  logout: () => void
+  logout: (options?: { message?: string }) => void
+  refreshSubscription: () => Promise<void>
+  authenticatedFetch: (input: RequestInfo | URL, init?: RequestInit & { skipLogoutOn401?: boolean }) => Promise<Response>
   isLoading: boolean
   error: string | null
 }
@@ -28,43 +47,101 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
+  const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
+  // Helper reused across unauthorized paths
+  const handleUnauthorized = (message?: string) => {
+    const logoutMessage = message || 'Your session has expired. Please sign in again.'
+
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_user')
+
+    setToken(null)
+    setUser(null)
+    setSubscription(null)
+    setError(logoutMessage)
+
+    if (router.pathname !== '/signin') {
+      router.push(`/signin?message=${encodeURIComponent(logoutMessage)}`)
+    }
+  }
+
+  const logout = ({ message }: { message?: string } = {}) => {
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_user')
+
+    setToken(null)
+    setUser(null)
+    setSubscription(null)
+    setError(message ?? null)
+
+    if (router.pathname !== '/signin') {
+      router.push(message ? `/signin?message=${encodeURIComponent(message)}` : '/signin')
+    }
+  }
+
+  const authenticatedFetch = async (
+    input: RequestInfo | URL,
+    init: RequestInit & { skipLogoutOn401?: boolean } = {}
+  ): Promise<Response> => {
+    const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null)
+    const headers = new Headers(init.headers || {})
+
+    if (activeToken && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${activeToken}`)
+    }
+
+    const response = await fetch(input, {
+      ...init,
+      headers,
+      credentials: init.credentials ?? 'include',
+    })
+
+    if (response.status === 401 && !init.skipLogoutOn401) {
+      handleUnauthorized()
+      throw new Error('unauthorized')
+    }
+
+    return response
+  }
+
   // Check for existing token on mount
   useEffect(() => {
-    console.log('🔐 AuthContext mounted')
-    const storedToken = localStorage.getItem('admin_token')
-    const storedUser = localStorage.getItem('admin_user')
-
-    console.log('🔐 Stored token exists:', !!storedToken)
-    console.log('🔐 Stored user exists:', !!storedUser)
+    const storedToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null
+    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('admin_user') : null
 
     if (storedToken && storedUser) {
       try {
         const userData = JSON.parse(storedUser)
-        console.log('🔐 Parsed user data from localStorage:', userData)
-        console.log('🔐 User clinicId from localStorage:', userData?.clinicId)
         setToken(storedToken)
         setUser(userData)
       } catch (error) {
-        // Clear invalid stored data
         localStorage.removeItem('admin_token')
         localStorage.removeItem('admin_user')
       }
     }
-    console.log('🔐 AuthContext initialization complete')
+
     setIsLoading(false)
   }, [])
+
+  // Fetch subscription data when user or token changes
+  useEffect(() => {
+    if (user && token) {
+      refreshSubscription()
+    } else {
+      setSubscription(null)
+    }
+  }, [user, token])
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-      console.log('API URL:', apiUrl)
       const response = await fetch(`${apiUrl}/auth/signin`, {
         method: 'POST',
         headers: {
@@ -77,15 +154,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.ok && data.success) {
         const { token: authToken, user: userData } = data
-        
-        // Store in localStorage
+
         localStorage.setItem('admin_token', authToken)
         localStorage.setItem('admin_user', JSON.stringify(userData))
-        
-        // Update state
+
         setToken(authToken)
         setUser(userData)
-        
+
         setIsLoading(false)
         return true
       } else {
@@ -103,24 +178,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = async (email: string, password: string, name: string): Promise<boolean> => {
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const [firstName, ...lastNameParts] = name.split(' ')
       const lastName = lastNameParts.join(' ') || ''
-      
+
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-      console.log('API URL:', apiUrl)
       const response = await fetch(`${apiUrl}/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          firstName, 
-          lastName, 
-          email, 
-          password, 
-          role: 'brand' 
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          password,
+          role: 'brand',
         }),
       })
 
@@ -128,15 +202,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.ok && data.success) {
         const { token: authToken, user: userData } = data
-        
-        // Store in localStorage
+
         localStorage.setItem('admin_token', authToken)
         localStorage.setItem('admin_user', JSON.stringify(userData))
-        
-        // Update state
+
         setToken(authToken)
         setUser(userData)
-        
+
         setIsLoading(false)
         return true
       } else {
@@ -151,30 +223,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const logout = () => {
-    // Clear localStorage
-    localStorage.removeItem('admin_token')
-    localStorage.removeItem('admin_user')
-    
-    // Clear state
-    setToken(null)
-    setUser(null)
-    setError(null)
-    
-    // Redirect to signin
-    router.push('/signin')
+  const refreshSubscription = async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await authenticatedFetch(`${apiUrl}/subscriptions/current`, {
+        method: 'GET',
+        skipLogoutOn401: true,
+      })
+
+      if (response.status === 401) {
+        handleUnauthorized()
+        return
+      }
+
+      if (response.ok) {
+        const subscriptionData = await response.json()
+        setSubscription(subscriptionData)
+      } else {
+        setSubscription(null)
+      }
+    } catch (error) {
+      if ((error as Error).message === 'unauthorized') {
+        return
+      }
+      console.error('Error fetching subscription:', error)
+      setSubscription(null)
+    }
   }
 
+  const hasActiveSubscription = subscription?.status === 'active'
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      token,
-      login,
-      signup,
-      logout,
-      isLoading,
-      error
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        subscription,
+        hasActiveSubscription,
+        login,
+        signup,
+        logout,
+        refreshSubscription,
+        authenticatedFetch,
+        isLoading,
+        error,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
