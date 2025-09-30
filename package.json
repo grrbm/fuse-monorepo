@@ -1,0 +1,22 @@
+{
+  "name": "fuse",
+  "version": "1.0.0",
+  "description": "",
+  "packageManager": "pnpm@10.5.2",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "clean": "git clean -xdf node_modules",
+    "clean:workspaces": "turbo run clean"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@turbo/gen": "catalog:",
+    "cspell": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  },
+  "private": true
+}
