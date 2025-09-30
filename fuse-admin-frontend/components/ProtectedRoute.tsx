@@ -7,33 +7,52 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, hasActiveSubscription } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    // If not loading and no user, redirect to signin
     if (!isLoading && !user) {
       router.push('/signin')
+      return
     }
-  }, [user, isLoading, router])
 
-  // Show loading spinner while checking auth
+    const subscriptionOptionalRoutes = new Set([
+      '/plans',
+      '/checkout',
+      '/checkout/success',
+      '/checkout/cancel',
+      '/settings',
+      '/settings/subscription',
+      '/settings?message=You already have an active subscription.',
+    ])
+
+    if (
+      !isLoading &&
+      user &&
+      !hasActiveSubscription &&
+      !subscriptionOptionalRoutes.has(router.pathname)
+    ) {
+      router.push('/plans?message=Please select a plan to continue using the platform.')
+    }
+  }, [user, isLoading, hasActiveSubscription, router])
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+        <div className="text-center space-y-4">
+          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div>
+            <p className="text-lg font-medium text-foreground">Refreshing your session…</p>
+            <p className="text-sm text-muted-foreground">One moment while we verify your access.</p>
+          </div>
         </div>
       </div>
     )
   }
 
-  // If no user after loading, show nothing (redirect is happening)
   if (!user) {
     return null
   }
 
-  // User is authenticated, show protected content
   return <>{children}</>
 }

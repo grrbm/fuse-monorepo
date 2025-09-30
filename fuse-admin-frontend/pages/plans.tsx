@@ -59,19 +59,27 @@ export default function Plans() {
   const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
   const [creatingCheckout, setCreatingCheckout] = useState<string | null>(null)
-  const { user, token } = useAuth()
+  const { user, token, hasActiveSubscription, refreshSubscription, authenticatedFetch } = useAuth()
   const router = useRouter()
+
+  // Handle URL messages
+  useEffect(() => {
+    if (router.query.message) {
+      setMessage(router.query.message as string)
+    }
+  }, [router.query.message])
 
   // Handle success/cancel parameters
   useEffect(() => {
-    const { success, canceled, session_id } = router.query
+    const { success, canceled } = router.query
 
     if (success === 'true') {
       setError(null)
-      setTimeout(() => {
-        router.replace('/plans', undefined, { shallow: true })
-      }, 3000)
+      refreshSubscription().finally(() => {
+        router.replace('/settings?message=Subscription activated successfully!', undefined, { shallow: true })
+      })
     }
 
     if (canceled === 'true') {
@@ -80,9 +88,8 @@ export default function Plans() {
         router.replace('/plans', undefined, { shallow: true })
       }, 3000)
     }
-  }, [router.query])
+  }, [router.query, refreshSubscription, router])
 
-  // Fetch plans and current subscription from backend API
   useEffect(() => {
     const fetchData = async () => {
       if (!token) return
@@ -90,34 +97,54 @@ export default function Plans() {
       try {
         setLoading(true)
 
-        // Fetch available plans from backend
-        const plansResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/brand-subscriptions/plans`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        const plansResponse = await authenticatedFetch(
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/plans`,
+          { method: 'GET' }
+        )
 
         if (plansResponse.ok) {
           const plansData = await plansResponse.json()
-          setPlans(plansData.plans)
+          if (plansData.success && plansData.plans) {
+            const plansObject = plansData.plans.reduce((acc: PlansResponse, plan: any) => {
+              acc[plan.planType] = {
+                name: plan.name,
+                price: plan.monthlyPrice,
+                planType: plan.planType,
+                features: plan.features,
+                stripePriceId: plan.stripePriceId
+              }
+              return acc
+            }, {} as PlansResponse)
+            setPlans(plansObject)
+          }
         }
 
-        // Fetch current subscription from backend
-        const subResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/brand-subscriptions/current`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        const subResponse = await authenticatedFetch(
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/subscriptions/current`,
+          { method: 'GET', skipLogoutOn401: true }
+        )
 
-        if (subResponse.ok) {
+        if (subResponse.status === 401) {
+          setCurrentSubscription(null)
+        } else if (subResponse.ok) {
           const subData = await subResponse.json()
-          if (subData.success && subData.subscription) {
-            setCurrentSubscription(subData.subscription)
+          if (subData && subData.status) {
+            setCurrentSubscription({
+              id: subData.id,
+              planType: subData.plan?.type || subData.planType,
+              status: subData.status,
+              monthlyPrice: subData.plan?.price || subData.monthlyPrice || 0,
+              currentPeriodStart: subData.currentPeriodStart,
+              currentPeriodEnd: subData.nextBillingDate,
+              daysUntilRenewal: 0,
+              isActive: subData.status === 'active',
+              isTrialing: subData.status === 'trialing',
+              planDetails: subData.plan
+            })
+          } else {
+            setCurrentSubscription(null)
           }
-        } else if (subResponse.status !== 404) {
-          console.error('Failed to fetch subscription')
         }
-
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load subscription data')
@@ -127,14 +154,18 @@ export default function Plans() {
     }
 
     fetchData()
-  }, [token])
+  }, [token, authenticatedFetch])
 
   const handleSelectPlan = async (planCategory: string) => {
-    if (!token) return
+    if (!token) {
+      alert('You need to be signed in to select a plan.')
+      return
+    }
 
     const planMappings = {
       standard: {
         displayName: 'Standard',
+        planType: 'standard_build',
         downpayment: {
           type: 'downpayment_standard',
           name: 'Discounted First Month',
@@ -143,6 +174,7 @@ export default function Plans() {
       },
       professional: {
         displayName: 'Controlled Substances',
+        planType: 'high-definition',
         downpayment: {
           type: 'downpayment_professional',
           name: 'Discounted Professional First Month',
@@ -154,55 +186,56 @@ export default function Plans() {
     const mapping = planMappings[planCategory as keyof typeof planMappings]
 
     if (!mapping) {
-      console.error('Unknown plan category selected:', planCategory)
       return
     }
 
     const downpaymentAmount = mapping.downpayment.amount
 
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/profile`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          selectedPlanCategory: planCategory,
-          selectedPlanType: planCategory,
-          selectedPlanName: mapping.displayName,
-          selectedPlanPrice: downpaymentAmount,
-          selectedDownpaymentType: mapping.downpayment.type,
-          selectedDownpaymentName: mapping.downpayment.name,
-          selectedDownpaymentPrice: downpaymentAmount,
-          planSelectionTimestamp: new Date().toISOString()
-        })
+      setCreatingCheckout(planCategory)
+
+      const payload = {
+        selectedPlanCategory: planCategory,
+        selectedPlanType: mapping.planType,
+        selectedPlanName: mapping.displayName,
+        selectedPlanPrice: downpaymentAmount,
+        selectedDownpaymentType: mapping.downpayment.type,
+        selectedDownpaymentName: mapping.downpayment.name,
+        selectedDownpaymentPrice: downpaymentAmount,
+        planSelectionTimestamp: new Date().toISOString()
+      }
+
+      const response = await authenticatedFetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/profile`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload),
+        }
+      )
+
+      if (!response.ok) {
+        alert('Plan selection failed. Status: ' + response.status)
+        setCreatingCheckout(null)
+        return
+      }
+
+      const queryParams = new URLSearchParams({
+        planCategory,
+        subscriptionPlanType: mapping.planType,
+        subscriptionPlanName: mapping.displayName,
+        subscriptionMonthlyPrice: plans?.[mapping.planType]?.price?.toString() || String(downpaymentAmount),
+        downpaymentPlanType: mapping.downpayment.type,
+        downpaymentName: mapping.downpayment.name,
+        downpaymentAmount: String(downpaymentAmount)
       })
 
-      router.push({
-        pathname: '/onboarding',
-        query: {
-          planCategory,
-          planType: planCategory,
-          planName: mapping.displayName,
-          planPrice: downpaymentAmount.toString(),
-          downpaymentPlanType: mapping.downpayment.type,
-          downpaymentName: mapping.downpayment.name
-        }
-      })
+      router.push(`/checkout?${queryParams.toString()}`)
     } catch (error) {
-      console.error('Error saving plan selection:', error)
-      router.push({
-        pathname: '/onboarding',
-        query: {
-          planCategory,
-          planType: planCategory,
-          planName: mapping.displayName,
-          planPrice: downpaymentAmount.toString(),
-          downpaymentPlanType: mapping.downpayment.type,
-          downpaymentName: mapping.downpayment.name
-        }
-      })
+      alert('Error saving plan selection: ' + (error instanceof Error ? error.message : String(error)))
+      setCreatingCheckout(null)
     }
   }
 
@@ -245,9 +278,13 @@ export default function Plans() {
 
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-5xl mx-auto">
-          {/* Hero Section - Conversion Optimized */}
+          {message && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-blue-800">{message}</p>
+            </div>
+          )}
+
           <div className="text-center mb-16">
-            {/* Social Proof Bar */}
             <div className="flex items-center justify-center gap-6 mb-8 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -274,7 +311,6 @@ export default function Plans() {
               </Button>
             </div>
 
-            {/* Main Hero Content */}
             <h1 className="text-5xl font-bold text-foreground mb-6 leading-tight">
               Turn Your Clinic Into a
               <span className="text-foreground block">Telehealth Powerhouse</span>
@@ -284,10 +320,8 @@ export default function Plans() {
               Your brand + Licensed physicians + Pharmacies =
               <span className="font-semibold text-foreground"> Recurring revenue</span>
             </p>
-
           </div>
 
-          {/* Error Message */}
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
               <div className="flex">
@@ -297,7 +331,6 @@ export default function Plans() {
             </div>
           )}
 
-          {/* Success Message */}
           {router.query.success === 'true' && (
             <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
               <div className="flex">
@@ -307,48 +340,7 @@ export default function Plans() {
             </div>
           )}
 
-          {/* Current Subscription */}
-          {currentSubscription && (
-            <Card className="mb-8 border-primary">
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <CreditCard className="h-5 w-5" />
-                      Current Subscription
-                    </CardTitle>
-                  </div>
-                  {getStatusBadge(currentSubscription.status)}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <h3 className="font-semibold">
-                      {currentSubscription.planDetails?.name} Plan
-                    </h3>
-                    <p className="text-2xl font-bold text-primary">${currentSubscription.monthlyPrice}/month</p>
-                  </div>
-
-                  {currentSubscription.isActive && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Next billing date</p>
-                      <p className="font-medium">
-                        {new Date(currentSubscription.currentPeriodEnd!).toLocaleDateString()}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        ({currentSubscription.daysUntilRenewal} days remaining)
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Plans Grid - Only show Standard and Controlled Substances */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-12">
-            {/* Standard Plan - Permanent elevation with enhanced hover */}
             <Card className="relative group cursor-pointer transition-all duration-300 shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80 flex flex-col">
               <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                 <Badge className="bg-primary text-primary-foreground font-medium">
@@ -372,8 +364,7 @@ export default function Plans() {
                   <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Core software to manage patient journeys, connect with Fuse telehealth
-                  physicians, and automate pharmacy fulfillment.
+                  Core software to manage patient journeys, connect with Fuse telehealth physicians, and automate pharmacy fulfillment.
                 </p>
               </CardHeader>
 
@@ -390,7 +381,7 @@ export default function Plans() {
                   onClick={() => handleSelectPlan('standard')}
                   disabled={
                     !!creatingCheckout ||
-                    currentSubscription?.planType === 'standard_build'
+                    (currentSubscription?.planType === 'standard_build' && currentSubscription?.status === 'active')
                   }
                 >
                   {creatingCheckout === 'standard' ? (
@@ -398,7 +389,7 @@ export default function Plans() {
                       <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
                       Processing...
                     </>
-                  ) : currentSubscription?.planType === 'standard' && currentSubscription?.isActive ? (
+                  ) : currentSubscription?.planType === 'standard_build' && currentSubscription?.status === 'active' ? (
                     'Current Plan'
                   ) : (
                     <>
@@ -410,7 +401,6 @@ export default function Plans() {
               </CardContent>
             </Card>
 
-            {/* Controlled Substances Plan - Only hover effects on interaction */}
             <Card className="relative group cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 hover:border-primary flex flex-col border-muted">
               <div className="absolute top-4 left-4">
                 <Badge variant="secondary" className="bg-blue-100 text-blue-800">
@@ -429,8 +419,7 @@ export default function Plans() {
                   <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Everything in the standard package plus the workflows you need to
-                  prescribe regulated therapies through Fuse doctors and pharmacies.
+                  Everything in the standard package plus the workflows you need to prescribe regulated therapies through Fuse doctors and pharmacies.
                 </p>
               </CardHeader>
 
@@ -438,7 +427,7 @@ export default function Plans() {
                 <ul className="space-y-3 mb-8 flex-grow">
                   <li className="flex items-start gap-2 text-sm">
                     <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Perfect for clinics offering TRT (testosterone replacement), growth hormone releasing peptides, and other Schedule III therapies that require licensed prescribers.</span>
+                    <span>Perfect for clinics offering TRT, growth hormone releasing peptides, and other Schedule III therapies that require licensed prescribers.</span>
                   </li>
                 </ul>
 
@@ -447,7 +436,7 @@ export default function Plans() {
                   onClick={() => handleSelectPlan('professional')}
                   disabled={
                     !!creatingCheckout ||
-                    currentSubscription?.planType === 'high-definition'
+                    (currentSubscription?.planType === 'high-definition' && currentSubscription?.status === 'active')
                   }
                 >
                   {creatingCheckout === 'professional' ? (
@@ -455,7 +444,7 @@ export default function Plans() {
                       <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
                       Processing...
                     </>
-                  ) : currentSubscription?.planType === 'professional' && currentSubscription?.isActive ? (
+                  ) : currentSubscription?.planType === 'high-definition' && currentSubscription?.status === 'active' ? (
                     'Current Plan'
                   ) : (
                     <>
@@ -468,17 +457,13 @@ export default function Plans() {
             </Card>
           </div>
 
-          {/* Key Benefits Section - Enhanced UX */}
           <div className="max-w-5xl mx-auto mt-16">
-            {/* Section Header */}
             <div className="text-center mb-12">
               <h2 className="text-2xl font-bold mb-3">Why clinics choose Fuse</h2>
               <p className="text-muted-foreground">Everything you need to scale your telehealth practice</p>
             </div>
 
-            {/* Benefits Grid - Clean Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8 items-stretch">
-              {/* Recurring Revenue */}
               <div className="relative group h-full">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 h-full">
@@ -498,7 +483,6 @@ export default function Plans() {
                 </div>
               </div>
 
-              {/* Fast Setup */}
               <div className="relative group h-full">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 h-full">
@@ -518,7 +502,6 @@ export default function Plans() {
                 </div>
               </div>
 
-              {/* Zero Risk */}
               <div className="relative group h-full">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 h-full">
@@ -538,7 +521,6 @@ export default function Plans() {
                 </div>
               </div>
 
-              {/* Transparent Pricing */}
               <div className="relative group h-full">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-2xl blur opacity-15 group-hover:opacity-40 transition duration-300"></div>
                 <div className="relative bg-white border border-blue-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 h-full">
@@ -559,7 +541,6 @@ export default function Plans() {
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </Layout>

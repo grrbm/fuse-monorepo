@@ -14,6 +14,7 @@ interface FormData {
   password: string
   confirmPassword: string
   companyName: string
+  businessType: string
   website: string
   phoneNumber: string
   address: string
@@ -30,6 +31,7 @@ export default function SignUp() {
     password: '',
     confirmPassword: '',
     companyName: '',
+    businessType: '',
     website: '',
     phoneNumber: '',
     address: '',
@@ -76,7 +78,7 @@ export default function SignUp() {
 
   const validateForm = (): string | null => {
     // Required fields validation
-    const requiredFields = ['firstName', 'lastName', 'email', 'password', 'confirmPassword', 'companyName', 'phoneNumber']
+    const requiredFields = ['firstName', 'lastName', 'email', 'password', 'confirmPassword', 'companyName', 'businessType', 'phoneNumber']
     
     for (const field of requiredFields) {
       if (!formData[field as keyof FormData]) {
@@ -135,7 +137,9 @@ export default function SignUp() {
           password: formData.password,
           role: 'brand',
           phoneNumber: formData.phoneNumber,
-          clinicName: formData.companyName
+          clinicName: formData.companyName,
+          businessType: formData.businessType,
+          website: formData.website
         }),
       })
 
@@ -144,8 +148,8 @@ export default function SignUp() {
       console.log('Signup response:', { status: response.status, data })
 
       if (response.ok && data.success) {
-        // Show success message and redirect to signin
-        router.push('/signin?message=Account created successfully! Please check your email to activate your account before signing in.')
+        // Show success message and redirect to plans (mandatory plan selection)
+        router.push('/plans?message=Account created successfully! Please select a plan to continue.')
       } else {
         // Handle different types of errors
         let errorMessage = 'Signup failed'
@@ -286,19 +290,41 @@ export default function SignUp() {
                     </div>
                   </div>
                   <div className="space-y-2">
+                    <label htmlFor="businessType" className="text-sm font-medium text-foreground">
+                      Business Type *
+                    </label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <select
+                        id="businessType"
+                        value={formData.businessType}
+                        onChange={(e) => handleInputChange('businessType', e.target.value)}
+                        className="w-full pl-10 pr-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        required
+                      >
+                        <option value="" disabled>Select type</option>
+                        <option value="clinic">Medical Clinic</option>
+                        <option value="telehealth">Telehealth Provider</option>
+                        <option value="wellness">Wellness Center</option>
+                        <option value="pharmacy">Pharmacy</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
                     <label htmlFor="website" className="text-sm font-medium text-foreground">
                       Website
                     </label>
                     <div className="relative">
                       <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <input
-                        id="website"
-                        type="url"
-                        value={formData.website}
-                        onChange={(e) => handleInputChange('website', e.target.value)}
-                        className="w-full pl-10 pr-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                        placeholder="https://company.com"
-                      />
+                    <input
+                      id="website"
+                      type="text"
+                      value={formData.website}
+                      onChange={(e) => handleInputChange('website', e.target.value)}
+                      className="w-full pl-10 pr-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      placeholder="company.com"
+                    />
                     </div>
                   </div>
                 </div>

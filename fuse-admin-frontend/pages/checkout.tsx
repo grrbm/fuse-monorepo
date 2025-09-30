@@ -45,10 +45,6 @@ interface CheckoutData {
   planType: string
   planName: string
   planPrice: number
-  onboardingType: string
-  onboardingName: string
-  onboardingPrice: number
-  totalAmount: number
   subscriptionMonthlyPrice?: number
   downpaymentPlanType?: string
   downpaymentName?: string
@@ -337,21 +333,21 @@ function CheckoutForm({ checkoutData, paymentData, token, intentClientSecret, on
         )}
       </Button>
 
-      <div className="text-center space-y-2">
-        <p className="text-sm font-medium">
-          ✅ Onboarding path decided during your call
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Additional onboarding fees only charged if you select them during your call. No hidden costs.
-        </p>
-      </div>
+          <div className="text-center space-y-2">
+            <p className="text-sm font-medium">
+              ✅ Subscription activates immediately after payment
+            </p>
+            <p className="text-xs text-muted-foreground">
+              You can add optional onboarding support later from Settings.
+            </p>
+          </div>
     </form>
   )
 }
 
 export default function CheckoutPage() {
   const router = useRouter()
-  const { user, token, isLoading } = useAuth()
+  const { user, token, isLoading, refreshSubscription } = useAuth()
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [clientSecret, setClientSecret] = useState('')
@@ -385,9 +381,6 @@ export default function CheckoutPage() {
     // Get checkout data from query params
     const {
       planCategory,
-      onboardingType,
-      onboardingName,
-      onboardingPrice,
       downpaymentPlanType,
       downpaymentName,
       downpaymentAmount,
@@ -398,9 +391,6 @@ export default function CheckoutPage() {
 
     if (
       planCategory &&
-      onboardingType &&
-      onboardingName &&
-      onboardingPrice &&
       downpaymentPlanType &&
       downpaymentName &&
       downpaymentAmount &&
@@ -409,17 +399,12 @@ export default function CheckoutPage() {
       subscriptionMonthlyPrice
     ) {
       const downpaymentAmountNum = parseInt(downpaymentAmount as string)
-      const onboardingPriceNum = parseInt(onboardingPrice as string)
 
       setCheckoutData({
         planCategory: planCategory as string,
         planType: subscriptionPlanType as string,
         planName: subscriptionPlanName as string,
         planPrice: downpaymentAmountNum,
-        onboardingType: onboardingType as string,
-        onboardingName: onboardingName as string,
-        onboardingPrice: onboardingPriceNum,
-        totalAmount: downpaymentAmountNum + onboardingPriceNum,
         subscriptionMonthlyPrice: subscriptionMonthlyPrice ? parseInt(subscriptionMonthlyPrice as string) : undefined,
         downpaymentPlanType: downpaymentPlanType as string,
         downpaymentName: downpaymentName as string
@@ -468,8 +453,14 @@ export default function CheckoutPage() {
     }
   }
 
-  const handlePaymentSuccess = () => {
-    router.push('/plans?success=true&payment_intent=completed')
+  const handlePaymentSuccess = async () => {
+    try {
+      await refreshSubscription()
+    } catch (error) {
+      console.error('Error refreshing subscription after payment:', error)
+    } finally {
+      router.push('/plans?success=true&payment_intent=completed')
+    }
   }
 
   const handlePaymentError = (error: string) => {
@@ -544,7 +535,7 @@ export default function CheckoutPage() {
                   Complete your payment
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Start your subscription and schedule your onboarding call
+                  Start your subscription with Fuse
                 </p>
               </CardHeader>
               <CardContent>
@@ -562,20 +553,15 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="border-t mt-6 pt-4">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium">{checkoutData.onboardingName} Setup Fee</span>
-                    <div className="text-right">
-                      <div className="text-lg font-semibold">
-                        <span className="line-through text-muted-foreground">${checkoutData.onboardingPrice.toLocaleString()}.00</span>
-                      </div>
-                      <div className="text-sm font-medium">Pay Later</div>
-                    </div>
-                  </div>
-
                   <div className="flex justify-between items-center py-2 mt-4">
                     <span className="font-bold">Due Today</span>
                     <div className="text-3xl font-bold text-orange-500">${checkoutData.planPrice.toLocaleString()}</div>
                   </div>
+                  {checkoutData.subscriptionMonthlyPrice && (
+                    <p className="text-sm text-muted-foreground">
+                      Then ${checkoutData.subscriptionMonthlyPrice.toLocaleString()} billed monthly starting next period.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

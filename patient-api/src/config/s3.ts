@@ -41,15 +41,25 @@ console.log('✅ S3 configuration loaded:', {
   hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY
 });
 
+const sanitizeFileName = (fileName: string) =>
+  fileName
+    .trim()
+    .replace(/[\s]+/g, '-')
+    .replace(/[^a-zA-Z0-9_.-]/g, '-');
+
 // Upload file to S3 and return the public URL
 export async function uploadToS3(
   fileBuffer: Buffer,
   fileName: string,
-  contentType: string
+  contentType: string,
+  folder = 'product-images',
+  prefix?: string
 ): Promise<string> {
   try {
-    // Generate unique key with timestamp
-    const key = `product-images/${Date.now()}-${fileName}`;
+    const timestamp = Date.now();
+    const safeName = sanitizeFileName(fileName || `upload-${timestamp}`);
+    const safePrefix = prefix ? `${sanitizeFileName(prefix)}-` : '';
+    const key = `${folder}/${timestamp}-${safePrefix}${safeName}`;
 
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
@@ -107,9 +117,9 @@ function extractKeyFromS3Url(url: string): string | null {
   }
 }
 
-// Validate file type for logo uploads
+// Validate file type for uploads (logos allow PDFs as well)
 export function isValidImageFile(contentType: string): boolean {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
   return allowedTypes.includes(contentType);
 }
 

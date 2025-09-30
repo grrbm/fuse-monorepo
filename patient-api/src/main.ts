@@ -112,7 +112,7 @@ const upload = multer({
     if (isValidImageFile(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, and WebP images are allowed.'));
+      cb(new Error('Invalid file type. Only JPEG, PNG, WebP images, and PDF files are allowed.'));
     }
   },
 });
@@ -176,7 +176,7 @@ app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 // Auth routes
 app.post("/auth/signup", async (req, res) => {
   try {
-    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName, clinicId } = req.body;
+    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName, clinicId, website, businessType } = req.body;
 
     // Basic validation
     if (!firstName || !lastName || !email || !password) {
@@ -221,6 +221,7 @@ app.post("/auth/signup", async (req, res) => {
         name: clinicName.trim(),
         slug: slug,
         logo: '', // Default empty logo, can be updated later
+        businessType: businessType || null,
       });
 
       finalClinicId = clinic.id;
@@ -241,7 +242,7 @@ app.post("/auth/signup", async (req, res) => {
     }
 
     // Create new user in database
-    console.log('🚀 Creating new user with data:', { firstName, lastName, email, role: mappedRole, dob: dateOfBirth, phoneNumber, finalClinicId });
+    console.log('🚀 Creating new user with data:', { firstName, lastName, email, role: mappedRole, dob: dateOfBirth, phoneNumber, website, finalClinicId });
     const user = await User.createUser({
       firstName,
       lastName,
@@ -250,6 +251,8 @@ app.post("/auth/signup", async (req, res) => {
       role: mappedRole,
       dob: dateOfBirth,
       phoneNumber,
+      website,
+      businessType,
     });
 
     const isDevelopment = process.env.NODE_ENV === 'development';
@@ -519,13 +522,16 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { firstName, lastName, phoneNumber, dob, address, city, state, zipCode } = req.body;
+    const { firstName, lastName, phoneNumber, dob, address, city, state, zipCode, selectedPlanCategory, selectedPlanType, selectedPlanName, selectedPlanPrice, selectedDownpaymentType, selectedDownpaymentName, selectedDownpaymentPrice, planSelectionTimestamp } = req.body;
 
-    // HIPAA Compliance: Validate required fields
-    if (!firstName || !lastName) {
+    // Check if this is a plan selection request (doesn't require firstName/lastName)
+    const isPlanSelection = selectedPlanCategory && selectedPlanType;
+
+    // HIPAA Compliance: Validate required fields for profile updates
+    if (!isPlanSelection && (!firstName || !lastName)) {
       return res.status(400).json({
         success: false,
-        message: "First name and last name are required"
+        message: "First name and last name are required for profile updates"
       });
     }
 
@@ -538,17 +544,34 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Update user profile (only allow certain fields to be updated)
-    await user.update({
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      phoneNumber: phoneNumber?.trim() || null,
-      dob: dob?.trim() || null,
-      address: address?.trim() || null,
-      city: city?.trim() || null,
-      state: state?.trim() || null,
-      zipCode: zipCode?.trim() || null,
-    });
+    // Prepare update data based on what's being updated
+    const updateData: any = {};
+
+    // Update profile fields if provided
+    if (firstName && lastName) {
+      updateData.firstName = firstName.trim();
+      updateData.lastName = lastName.trim();
+    }
+
+    if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber?.trim() || null;
+    if (dob !== undefined) updateData.dob = dob?.trim() || null;
+    if (address !== undefined) updateData.address = address?.trim() || null;
+    if (city !== undefined) updateData.city = city?.trim() || null;
+    if (state !== undefined) updateData.state = state?.trim() || null;
+    if (zipCode !== undefined) updateData.zipCode = zipCode?.trim() || null;
+
+    // Update plan selection fields if provided
+    if (selectedPlanCategory !== undefined) updateData.selectedPlanCategory = selectedPlanCategory?.trim() || null;
+    if (selectedPlanType !== undefined) updateData.selectedPlanType = selectedPlanType?.trim() || null;
+    if (selectedPlanName !== undefined) updateData.selectedPlanName = selectedPlanName?.trim() || null;
+    if (selectedPlanPrice !== undefined) updateData.selectedPlanPrice = selectedPlanPrice || null;
+    if (selectedDownpaymentType !== undefined) updateData.selectedDownpaymentType = selectedDownpaymentType?.trim() || null;
+    if (selectedDownpaymentName !== undefined) updateData.selectedDownpaymentName = selectedDownpaymentName?.trim() || null;
+    if (selectedDownpaymentPrice !== undefined) updateData.selectedDownpaymentPrice = selectedDownpaymentPrice || null;
+    if (planSelectionTimestamp !== undefined) updateData.planSelectionTimestamp = planSelectionTimestamp ? new Date(planSelectionTimestamp) : null;
+
+    // Update user with the prepared data
+    await user.update(updateData);
 
     console.log('Profile updated for user:', user.email); // Safe - no PHI
 
@@ -3332,7 +3355,8 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
         id: subscription.id,
         status: subscription.status,
         current_period_start: (subscription as any).current_period_start,
-        current_period_end: (subscription as any).current_period_end
+        current_period_end: (subscription as any).current_period_end,
+        stripePriceId: priceId
       }
     });
 
@@ -3347,150 +3371,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
   }
 });
 
-// Create combined checkout session (subscription + onboarding)
-app.post("/brand-subscriptions/create-combined-checkout", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-    const { planType, onboardingType, totalAmount, items, successUrl, cancelUrl } = req.body;
-
-    if (currentUser?.role !== 'brand') {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. Brand role required."
-      });
-    }
-
-    // Check if user already has an active subscription
-    const existingSubscription = await BrandSubscription.findOne({
-      where: {
-        userId: currentUser.id,
-        status: ['active', 'processing', 'past_due']
-      }
-    });
-
-    if (existingSubscription) {
-      return res.status(400).json({
-        success: false,
-        message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
-      });
-    }
-
-    console.log('🚀 BACKEND CREATE: Looking up plan type:', planType)
-    const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
-    console.log('🚀 BACKEND CREATE: Plan found:', selectedPlan?.id, selectedPlan?.planType)
-
-    // Debug: List all available plans
-    const allPlans = await BrandSubscriptionPlans.findAll({ attributes: ['planType', 'name'] })
-    console.log('🚀 BACKEND CREATE: All available plans:', allPlans.map(p => ({ type: p.planType, name: p.name })))
-
-    if (!selectedPlan) {
-      console.error('❌ BACKEND CREATE: Invalid plan type:', planType)
-      console.error('❌ BACKEND CREATE: Available types:', allPlans.map(p => p.planType))
-      return res.status(400).json({
-        success: false,
-        message: "Invalid plan type"
-      });
-    }
-
-    // Get full user data from database
-    const user = await User.findByPk(currentUser.id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found"
-      });
-    }
-
-    // Create or retrieve Stripe customer
-    let stripeCustomer;
-    try {
-      const customers = await stripe.customers.list({
-        email: user.email,
-        limit: 1
-      });
-
-      if (customers.data.length > 0) {
-        stripeCustomer = customers.data[0];
-      } else {
-        stripeCustomer = await stripe.customers.create({
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
-          metadata: {
-            userId: user.id,
-            role: user.role,
-            planType: planType
-          }
-        });
-      }
-    } catch (stripeError) {
-      console.error('Error with Stripe customer:', stripeError);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create Stripe customer"
-      });
-    }
-
-    // Create line items for Stripe checkout
-    const lineItems = items.map((item: any) => {
-      if (item.type === 'subscription') {
-        return {
-          price: selectedPlan.stripePriceId,
-          quantity: 1
-        };
-      } else {
-        // For one-time items (onboarding), create a price on the fly
-        return {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: item.name,
-              description: `One-time ${item.name} fee`
-            },
-            unit_amount: item.price * 100 // Convert to cents
-          },
-          quantity: 1
-        };
-      }
-    });
-
-    // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer: stripeCustomer.id,
-      payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: 'subscription', // This handles both subscription and one-time payments
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      metadata: {
-        userId: currentUser.id,
-        planType: planType,
-        onboardingType: onboardingType,
-        totalAmount: totalAmount.toString()
-      },
-      subscription_data: {
-        metadata: {
-          userId: currentUser.id,
-          planType: planType,
-          onboardingType: onboardingType
-        }
-      }
-    });
-
-    res.status(200).json({
-      success: true,
-      url: session.url,
-      sessionId: session.id
-    });
-
-  } catch (error) {
-    console.error('Error creating combined checkout session:', error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create checkout session"
-    });
-  }
-});
-
+// Onboarding add-ons are handled separately, no combined checkout needed
 // Cancel brand subscription
 app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
   try {
@@ -4741,6 +4622,248 @@ app.delete("/md-files/:fileId", authenticateJWT, async (req, res) => {
       success: false,
       message: error instanceof Error ? error.message : "Failed to delete file"
     });
+  }
+});
+
+// Settings page endpoints
+// Get organization/clinic data
+app.get("/organization", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: Clinic, as: 'clinic' }]
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const clinic = user.clinic;
+    
+    res.json({
+      clinicName: clinic?.name || '',
+      businessName: clinic?.name || '',
+      businessType: user.businessType || clinic?.businessType || '',
+      website: user.website || '',
+      phone: user.phoneNumber || '',
+      phoneNumber: user.phoneNumber || '',
+      address: user.address || '',
+      city: user.city || '',
+      state: user.state || '',
+      zipCode: user.zipCode || '',
+      logo: clinic?.logo || ''
+    });
+  } catch (error) {
+    console.error('Error fetching organization:', error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// Update organization/clinic data
+app.put("/organization/update", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { businessName, phone, address, city, state, zipCode, website } = req.body;
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Update user fields (User model has phoneNumber, address, city, state, zipCode, website)
+    await user.update({
+      phoneNumber: phone || user.phoneNumber,
+      address: address || user.address,
+      city: city || user.city,
+      state: state || user.state,
+      zipCode: zipCode || user.zipCode,
+      website: website !== undefined ? website : user.website
+    });
+
+    // Update clinic name if exists (Clinic only has name, slug, logo, active, status)
+    if (user.clinicId && businessName) {
+      const clinic = await Clinic.findByPk(user.clinicId);
+      if (clinic) {
+        await clinic.update({
+          name: businessName
+        });
+      }
+    }
+
+    res.json({ success: true, message: "Organization updated successfully" });
+  } catch (error) {
+    console.error('Error updating organization:', error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// Upload logo endpoint
+app.post("/upload/logo", authenticateJWT, upload.single('logo'), async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No file uploaded" });
+    }
+
+    // Upload to S3
+    const s3Url = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      'clinic-logos',
+      'logo'
+    );
+
+    // Update clinic logo
+    const user = await User.findByPk(currentUser.id);
+    if (user && user.clinicId) {
+      const clinic = await Clinic.findByPk(user.clinicId);
+      if (clinic) {
+        // Delete old logo if exists
+        if (clinic.logo) {
+          try {
+            await deleteFromS3(clinic.logo);
+          } catch (error) {
+            console.error('Error deleting old logo:', error);
+          }
+        }
+        
+        await clinic.update({ logo: s3Url });
+      }
+    }
+
+    res.json({ success: true, url: s3Url, message: "Logo uploaded successfully" });
+  } catch (error) {
+    console.error('Error uploading logo:', error);
+    res.status(500).json({ success: false, message: "Failed to upload logo" });
+  }
+});
+
+// Get current subscription
+app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const subscription = await BrandSubscription.findOne({
+      where: { userId: currentUser.id },
+      order: [['createdAt', 'DESC']]
+    });
+
+    if (!subscription) {
+      return res.json(null);
+    }
+
+    // Get plan details separately
+    const plan = await BrandSubscriptionPlans.findOne({
+      where: { planType: subscription.planType }
+    });
+    
+    res.json({
+      id: subscription.id,
+      planId: plan?.id || null,
+      status: subscription.status,
+      stripeSubscriptionId: subscription.stripeSubscriptionId,
+      stripePriceId: subscription.stripePriceId,
+      plan: plan ? {
+        name: plan.name,
+        price: Number(plan.monthlyPrice),
+        type: plan.planType
+      } : subscription.stripePriceId ? {
+        name: subscription.planType,
+        price: subscription.monthlyPrice ? Number(subscription.monthlyPrice) : 0,
+        type: subscription.planType,
+        priceId: subscription.stripePriceId
+      } : null,
+      nextBillingDate: subscription.currentPeriodEnd || null
+    });
+  } catch (error) {
+    console.error('Error fetching subscription:', error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// Get available plans
+app.get("/plans", authenticateJWT, async (req, res) => {
+  try {
+    const plans = await BrandSubscriptionPlans.findAll({
+      where: { isActive: true },
+      order: [["sortOrder", "ASC"]]
+    });
+
+    const formattedPlans = plans.map(plan => ({
+      id: plan.id,
+      name: plan.name,
+      description: plan.description || '',
+      monthlyPrice: Number(plan.monthlyPrice),
+      planType: plan.planType,
+      stripePriceId: plan.stripePriceId,
+      features: plan.getFeatures()
+    }));
+
+    res.json({ success: true, plans: formattedPlans });
+  } catch (error) {
+    console.error('Error fetching plans:', error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// Update user profile
+app.put("/users/profile", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { firstName, lastName, phone, currentPassword, newPassword } = req.body;
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // If password change requested, verify current password
+    if (newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ success: false, message: "Current password is required" });
+      }
+
+      const bcrypt = require('bcrypt');
+      const isValidPassword = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isValidPassword) {
+        return res.status(400).json({ success: false, message: "Current password is incorrect" });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await user.update({ passwordHash: hashedPassword });
+    }
+
+    // Update other fields
+    await user.update({
+      firstName: firstName || user.firstName,
+      lastName: lastName || user.lastName,
+      phoneNumber: phone || user.phoneNumber
+    });
+
+    res.json({ success: true, message: "Profile updated successfully" });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 
