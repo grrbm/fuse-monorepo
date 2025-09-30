@@ -26,11 +26,10 @@ const navigation = [
 
 const operations = [
   { name: "Treatments", icon: Stethoscope, current: false, href: "/treatments" },
+  { name: "Offerings", icon: Gift, current: false, href: "/offerings" },
   { name: "Products", icon: Package, current: false, href: "/products" },
   { name: "Orders", icon: ShoppingCart, current: false, href: "/orders", hasSubmenu: true },
 ]
-
-const services = [{ name: "Offerings", icon: Gift, current: false, hasSubmenu: true }]
 
 const networks = [
   { name: "Provider Networks", icon: Network, current: false },
@@ -100,26 +99,6 @@ export function Sidebar() {
                 </Link>
               )
             })}
-          </div>
-        </div>
-
-        {/* Services Section */}
-        <div className="pt-6">
-          <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Services</h3>
-          <div className="space-y-1">
-            {services.map((item) => (
-              <a
-                key={item.name}
-                href="#"
-                className="group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-              >
-                <div className="flex items-center">
-                  <item.icon className="mr-3 h-4 w-4" />
-                  {item.name}
-                </div>
-                {item.hasSubmenu && <ChevronDown className="h-4 w-4" />}
-              </a>
-            ))}
           </div>
         </div>
 
