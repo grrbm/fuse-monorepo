@@ -905,7 +905,7 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                                   <CardTitle className="text-xl font-semibold">{planDefinition.label}</CardTitle>
                                 </div>
                                 <div className="mb-4">
-                                  <span className={`text-3xl font-bold ${isStandard ? 'text-orange-500' : 'text-orange-500'}`}>
+                                  <span className={`text-3xl font-bold ${isStandard ? 'text-[#825AD1]' : 'text-[#825AD1]'}`}>
                                     {formatCurrency(planDefinition.price)}
                                   </span>
                                   <span className="text-muted-foreground"> / month</span>
