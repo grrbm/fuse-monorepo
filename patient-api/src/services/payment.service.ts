@@ -326,4 +326,4 @@ class PaymentService {
 }
 
 export default PaymentService;
-export { SubscribeTreatmentResult, SubscribeClinicResult };
+export type { SubscribeTreatmentResult, SubscribeClinicResult };

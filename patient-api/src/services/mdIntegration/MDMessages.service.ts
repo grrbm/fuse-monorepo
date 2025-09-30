@@ -1,7 +1,7 @@
 import axios from 'axios';
 import MDAuthService from './MDAuth.service';
 
-interface MessageUser {
+export interface MessageUser {
   id: string;
   first_name: string;
   last_name: string;
@@ -20,7 +20,7 @@ interface MessageUser {
   signature_id?: string;
 }
 
-interface Message {
+export interface Message {
   id: string;
   patient_id: string;
   channel: string;
@@ -42,7 +42,7 @@ interface Message {
   user: MessageUser;
 }
 
-interface MessagesResponse {
+export interface MessagesResponse {
   data: Message[];
 }
 

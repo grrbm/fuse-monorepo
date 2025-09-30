@@ -407,4 +407,4 @@ class UserService {
 }
 
 export default UserService;
-export { UserToPatientValidationResult, UserToPhysicianValidationResult };
+export type { UserToPatientValidationResult, UserToPhysicianValidationResult };

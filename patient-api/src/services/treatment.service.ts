@@ -281,4 +281,4 @@ class TreatmentService {
 }
 
 export default TreatmentService;
-export { TreatmentProductAssociationResult, TreatmentProductData, UpdateTreatmentData, UpdateTreatmentResult };
+export type { TreatmentProductAssociationResult, TreatmentProductData, UpdateTreatmentData, UpdateTreatmentResult };

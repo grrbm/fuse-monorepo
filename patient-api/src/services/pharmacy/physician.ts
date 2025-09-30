@@ -112,7 +112,7 @@ class PharmacyPhysicianService {
 }
 
 export default PharmacyPhysicianService;
-export {
+export type {
   CreatePhysicianRequest,
   PhysicianLicense,
 };

@@ -395,4 +395,4 @@ class OrderService {
 
 
 export default OrderService;
-export { ListOrdersByClinicResult, ListOrdersByUserResult, PaginationParams };
+export type { ListOrdersByClinicResult, ListOrdersByUserResult, PaginationParams };
