@@ -1,0 +1,21 @@
+{
+  "name": "@fuse/validators",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Shared validation schemas using Zod",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "type:check": "tsc --noEmit",
+    "clean": "git clean -xdf .cache .turbo dist node_modules"
+  },
+  "dependencies": {
+    "zod": "catalog:",
+    "@fuse/tsconfig": "workspace:*"
+  },
+  "devDependencies": {
+    "dotenv": "catalog:",
+    "typescript": "catalog:"
+  }
+}
