@@ -359,7 +359,7 @@ export default function Plans() {
                   <CardTitle className="text-xl font-semibold">Standard</CardTitle>
                 </div>
                 <div className="mb-4">
-                  <span className="text-3xl font-bold text-orange-500">$1,500</span>
+                  <span className="text-3xl font-bold text-[#C495E5]">$1,500</span>
                   <span className="text-muted-foreground"> / month</span>
                   <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
                 </div>
@@ -414,7 +414,7 @@ export default function Plans() {
                   <CardTitle className="text-xl font-semibold">Controlled Substances</CardTitle>
                 </div>
                 <div className="mb-4">
-                  <span className="text-3xl font-bold text-orange-500">$2,500</span>
+                  <span className="text-3xl font-bold text-[#C495E5]">$2,500</span>
                   <span className="text-muted-foreground"> / month</span>
                   <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
                 </div>
