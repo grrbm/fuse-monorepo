@@ -3073,36 +3073,15 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
     }
 
     // Create or retrieve Stripe customer
-    let stripeCustomer;
-    try {
-      const customers = await stripe.customers.list({
-        email: currentUser.email,
-        limit: 1
-      });
+    let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
+      userId: currentUser.id,
+      role: currentUser.role
+    });
 
-      if (customers.data.length > 0) {
-        stripeCustomer = customers.data[0];
-      } else {
-        stripeCustomer = await stripe.customers.create({
-          email: currentUser.email,
-          name: `${user.firstName} ${user.lastName}`,
-          metadata: {
-            userId: currentUser.id,
-            role: currentUser.role
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error creating Stripe customer:', error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create payment customer"
-      });
-    }
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
-      customer: stripeCustomer.id,
+      customer: stripeCustomerId,
       payment_method_types: ['card'],
       line_items: [{
         price: selectedPlan.stripePriceId,
@@ -3214,24 +3193,14 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Create or retrieve Stripe customer
-    let stripeCustomerId = user.stripeCustomerId;
 
-    if (!stripeCustomerId) {
-      const stripeCustomer = await stripe.customers.create({
-        email: user.email,
-        name: `${user.firstName} ${user.lastName}`,
-        metadata: {
-          userId: user.id,
-          role: user.role,
-          planType: planType
-        }
-      });
-      await user.update({
-        stripeCustomerId: stripeCustomer.id
-      })
-      stripeCustomerId = stripeCustomer.id
-    }
+    // Create or retrieve Stripe customer
+    let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
+      userId: user.id,
+      role: user.role,
+      planType: planType
+    });
+
 
     // Create Payment Intent
     const paymentIntent = await stripe.paymentIntents.create({
@@ -3329,43 +3298,16 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     }
 
     // Create or retrieve Stripe customer
-    console.log('🚀 BACKEND: Creating/retrieving Stripe customer...')
-    let stripeCustomer;
-    try {
-      const customers = await stripe.customers.list({
-        email: user.email,
-        limit: 1
-      });
-      console.log('🚀 BACKEND: Customers found:', customers.data.length)
-
-      if (customers.data.length > 0) {
-        stripeCustomer = customers.data[0];
-        console.log('🚀 BACKEND: Using existing customer:', stripeCustomer.id)
-      } else {
-        console.log('🚀 BACKEND: Creating new customer...')
-        stripeCustomer = await stripe.customers.create({
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
-          metadata: {
-            userId: user.id,
-            role: user.role,
-            planType: planType
-          }
-        });
-        console.log('🚀 BACKEND: Created customer:', stripeCustomer.id)
-      }
-    } catch (stripeError) {
-      console.error('❌ BACKEND: Error with Stripe customer:', stripeError);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create Stripe customer"
-      });
-    }
+    let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
+      userId: user.id,
+      role: user.role,
+      planType: planType
+    });
 
     // Create Stripe subscription instead of one-time payment
     console.log('🚀 BACKEND: Creating Stripe subscription...')
     console.log('🚀 BACKEND: Plan type:', planType)
-    console.log('🚀 BACKEND: Customer ID:', stripeCustomer.id)
+    console.log('🚀 BACKEND: Customer ID:', stripeCustomerId)
     console.log('🚀 BACKEND: Payment method ID:', paymentMethodId)
 
     // Get the price ID for the selected plan
@@ -3391,12 +3333,12 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     // Attach payment method to customer first
     console.log('🚀 BACKEND: Attaching payment method to customer...')
     await stripe.paymentMethods.attach(paymentMethodId, {
-      customer: stripeCustomer.id,
+      customer: stripeCustomerId,
     });
     console.log('🚀 BACKEND: Payment method attached successfully')
 
     // Ensure customer has default payment method set for future invoices
-    await stripe.customers.update(stripeCustomer.id, {
+    await stripe.customers.update(stripeCustomerId, {
       invoice_settings: {
         default_payment_method: paymentMethodId
       }
@@ -3404,7 +3346,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
 
     console.log('🚀 BACKEND: Creating Stripe subscription schedule...')
     const subscriptionSchedule = await stripe.subscriptionSchedules.create({
-      customer: stripeCustomer.id,
+      customer: stripeCustomerId,
       start_date: 'now',
       metadata: {
         userId: currentUser.id,
@@ -3485,7 +3427,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
         planCategory: planCategory || null,
         status: BrandSubscriptionStatus.ACTIVE,
         stripeSubscriptionId: subscription.id,
-        stripeCustomerId: stripeCustomer.id,
+        stripeCustomerId: stripeCustomerId,
         stripePriceId: priceId,
         monthlyPrice: selectedPlan.monthlyPrice,
         downpaymentAmount: introductoryPlan.monthlyPrice,
