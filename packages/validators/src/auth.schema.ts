@@ -5,6 +5,8 @@ import { emailSchema, passwordSchema } from './common.schema';
  * Authentication validation schemas
  */
 
+export const RoleEnum = z.enum(['patient', 'provider', 'brand', 'admin']);
+
 export const signInSchema = z.object({
   email: emailSchema,
   password: z.string().min(1, 'Password is required'),
@@ -15,10 +17,13 @@ export const signUpSchema = z.object({
   lastName: z.string().min(1, 'Last name is required').max(100),
   email: emailSchema,
   password: passwordSchema,
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
+  role: RoleEnum.optional(),
+  dateOfBirth: z.string().optional(),
+  phoneNumber: z.string().optional(),
+  clinicName: z.string().optional(),
+  clinicId: z.string().optional(),
+  website: z.string().optional(),
+  businessType: z.string().optional(),
 });
 
 export const forgotPasswordSchema = z.object({

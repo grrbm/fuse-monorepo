@@ -30,7 +30,7 @@ import QuestionnaireService from "./services/questionnaire.service";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
 import { StripeService } from "@fuse/stripe";
-import { signInSchema } from "@fuse/validators";
+import { signInSchema, signUpSchema } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
@@ -180,15 +180,16 @@ app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 // Auth routes
 app.post("/auth/signup", async (req, res) => {
   try {
-    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName, clinicId, website, businessType } = req.body;
-
-    // Basic validation
-    if (!firstName || !lastName || !email || !password) {
+    const validation = signUpSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName, clinicId,  website, businessType } = validation.data;
 
     // Validate clinic name for providers/brands (both require clinics)
     if ((role === 'provider' || role === 'brand') && !clinicName?.trim()) {
