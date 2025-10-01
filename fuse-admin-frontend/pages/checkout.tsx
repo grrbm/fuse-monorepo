@@ -330,7 +330,7 @@ function CheckoutForm({ checkoutData, paymentData, token, intentClientSecret, on
         ) : (
           <>
             <CreditCard className="w-5 h-5 mr-2" />
-            <span>Pay ${checkoutData.subscriptionMonthlyPrice?.toLocaleString() || checkoutData.planPrice.toLocaleString()} & Get Started</span>
+            <span>Pay ${checkoutData.planPrice.toLocaleString()} & Get Started</span>
           </>
         )}
       </Button>
