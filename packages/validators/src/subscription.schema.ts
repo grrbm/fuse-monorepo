@@ -28,17 +28,6 @@ export const brandConfirmPaymentSchema = z.object({
   currency: z.string().length(3).optional().default('usd'),
 });
 
-export const brandCombinedCheckoutSchema = z.object({
-  planType: brandPlanTypeSchema,
-  onboardingType: z.string().min(1),
-  totalAmount: z.number().positive('Total amount must be positive'),
-  items: z.array(z.object({
-    name: z.string(),
-    amount: z.number(),
-  })),
-  successUrl: z.string().url('Invalid success URL'),
-  cancelUrl: z.string().url('Invalid cancel URL'),
-});
 
 // Treatment subscription management schemas
 export const upgradeSubscriptionSchema = z.object({
@@ -56,6 +45,5 @@ export const cancelSubscriptionSchema = z.object({
 export type BrandCheckoutInput = z.infer<typeof brandCheckoutSchema>;
 export type BrandPaymentIntentInput = z.infer<typeof brandPaymentIntentSchema>;
 export type BrandConfirmPaymentInput = z.infer<typeof brandConfirmPaymentSchema>;
-export type BrandCombinedCheckoutInput = z.infer<typeof brandCombinedCheckoutSchema>;
 export type UpgradeSubscriptionInput = z.infer<typeof upgradeSubscriptionSchema>;
 export type CancelSubscriptionInput = z.infer<typeof cancelSubscriptionSchema>;

@@ -48,7 +48,6 @@ import {
   brandCheckoutSchema,
   brandPaymentIntentSchema,
   brandConfirmPaymentSchema,
-  brandCombinedCheckoutSchema,
   upgradeSubscriptionSchema,
   cancelSubscriptionSchema,
   questionnaireStepCreateSchema,
