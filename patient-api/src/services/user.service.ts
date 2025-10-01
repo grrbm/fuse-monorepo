@@ -6,6 +6,7 @@ import ShippingAddress from '../models/ShippingAddress';
 import MDPatientService from './mdIntegration/MDPatient.service';
 import MDAuthService from './mdIntegration/MDAuth.service';
 import { MDGender, MDPhoneType } from './mdIntegration/MDPatient.service';
+import { StripeService } from '@fuse/stripe';
 
 interface UserToPatientValidationResult {
     valid: boolean;
@@ -21,12 +22,33 @@ interface UserToPhysicianValidationResult {
 
 class UserService {
     private patientService: PatientService;
+    private stripeService: StripeService;
 
     constructor() {
         this.patientService = new PatientService();
+        this.stripeService = new StripeService();
     }
 
+    async getOrCreateCustomerId(user: User, metadata: Record<string, string>): Promise<string> {
+        let stripeCustomerId = user.stripeCustomerId;
 
+        if (!stripeCustomerId) {
+           
+
+            const stripeCustomer = await this.stripeService.createCustomer(user.email
+                , `${user.firstName} ${user.lastName}`,
+                metadata
+            );
+
+            await user.update({
+                stripeCustomerId: stripeCustomer.id
+            });
+
+            stripeCustomerId = stripeCustomer.id;
+        }
+
+        return stripeCustomerId;
+    }
 
     validateUserForPatientCreation(user: User): UserToPatientValidationResult {
         const missingFields: string[] = [];
