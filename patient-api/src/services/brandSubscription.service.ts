@@ -1,7 +1,7 @@
 import BrandSubscription, { BrandSubscriptionStatus } from '../models/BrandSubscription';
 import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
 import User from '../models/User';
-import StripeService from './stripe';
+import { StripeService } from '@fuse/stripe';
 
 interface UpgradeSubscriptionResult {
   success: boolean;
@@ -142,7 +142,7 @@ class BrandSubscriptionService {
       }
 
       // Find the subscription item that doesn't match the new price ID (the one to replace)
-      const itemToReplace = stripeSubscription.items.data.find(item =>
+      const itemToReplace = stripeSubscription.items.data.find((item: any) =>
         item.price.id !== newPlan.stripePriceId
       );
 

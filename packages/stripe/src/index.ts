@@ -255,6 +255,24 @@ class StripeService {
     });
   };
 
+    // Subscription Schedule methods
+    async getSubscriptionSchedule(scheduleId: string, options?: {
+      expand?: string[];
+    }) {
+      const expandOptions = options?.expand || [];
+      return stripe.subscriptionSchedules.retrieve(scheduleId, {
+        expand: expandOptions
+      });
+    }
+  
+    async updateSubscriptionSchedule(
+      scheduleId: string,
+      params: Stripe.SubscriptionScheduleUpdateParams
+    ) {
+      return stripe.subscriptionSchedules.update(scheduleId, params);
+    }
+  
+
 }
 
 export { type CheckoutSubParams, StripeService };
