@@ -9,9 +9,9 @@ export const createPaymentIntentSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
   currency: z.string().length(3).optional().default('usd'),
   treatmentId: z.string().uuid('Invalid treatment ID'),
-  selectedProducts: z.record(z.any()).optional(),
+  selectedProducts: z.record(z.string(), z.number().int().positive('Quantity must be positive')),
   selectedPlan: z.string().optional().default('monthly'),
-  shippingInfo: shippingInfoSchema.optional(),
+  shippingInfo: shippingInfoSchema,
   questionnaireAnswers: questionnaireAnswersSchema.optional(),
 });
 

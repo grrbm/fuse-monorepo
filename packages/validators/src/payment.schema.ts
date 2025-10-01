@@ -15,7 +15,7 @@ export const treatmentSubscriptionSchema = z.object({
     phoneNumber: z.string().optional(),
   }).optional(),
   questionnaireAnswers: questionnaireAnswersSchema.optional(),
-  shippingInfo: shippingInfoSchema.optional(),
+  shippingInfo: shippingInfoSchema,
 });
 
 export const clinicSubscriptionSchema = z.object({

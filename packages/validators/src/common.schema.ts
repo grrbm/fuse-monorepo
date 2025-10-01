@@ -40,6 +40,8 @@ export const shippingInfoSchema = z.object({
   city: z.string().min(1, 'City is required'),
   state: z.string().min(2, 'State is required').max(2, 'State must be 2 characters'),
   zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Invalid zip code format'),
+  apartment: z.string().optional(),
+  country: z.string().default('US'),
 });
 
 // Brand subscription plan type validation
