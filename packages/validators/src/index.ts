@@ -2,6 +2,12 @@
 export * from './common.schema';
 export * from './auth.schema';
 export * from './clinic.schema';
+export * from './product.schema';
+export * from './treatment.schema';
+export * from './treatmentPlan.schema';
+export * from './order.schema';
+export * from './payment.schema';
+export * from './subscription.schema';
 
 /**
  * Validation helper function

@@ -31,6 +31,22 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
+// Questionnaire answers validation (dynamic keys with string values)
+export const questionnaireAnswersSchema = z.record(z.string(), z.string());
+
+// Shipping information validation
+export const shippingInfoSchema = z.object({
+  address: z.string().min(1, 'Address is required'),
+  city: z.string().min(1, 'City is required'),
+  state: z.string().min(2, 'State is required').max(2, 'State must be 2 characters'),
+  zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Invalid zip code format'),
+});
+
+// Brand subscription plan type validation
+export const brandPlanTypeSchema = z.enum(['standard_build', 'enterprise', 'high-definition'], {
+  errorMap: () => ({ message: 'Invalid plan type. Must be one of: standard_build, enterprise, high-definition' })
+});
+
 /**
  * Type exports
  */
@@ -40,3 +56,6 @@ export type PasswordInput = z.infer<typeof passwordSchema>;
 export type PhoneInput = z.infer<typeof phoneSchema>;
 export type UuidInput = z.infer<typeof uuidSchema>;
 export type PaginationInput = z.infer<typeof paginationSchema>;
+export type QuestionnaireAnswersInput = z.infer<typeof questionnaireAnswersSchema>;
+export type ShippingInfoInput = z.infer<typeof shippingInfoSchema>;
+export type BrandPlanType = z.infer<typeof brandPlanTypeSchema>;
