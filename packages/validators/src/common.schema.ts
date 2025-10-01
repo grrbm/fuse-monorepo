@@ -38,7 +38,7 @@ export const questionnaireAnswersSchema = z.record(z.string(), z.string());
 export const shippingInfoSchema = z.object({
   address: z.string().min(1, 'Address is required'),
   city: z.string().min(1, 'City is required'),
-  state: z.string().min(2, 'State is required').max(2, 'State must be 2 characters'),
+  state: z.string(),
   zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Invalid zip code format'),
   apartment: z.string().optional(),
   country: z.string().default('US'),
