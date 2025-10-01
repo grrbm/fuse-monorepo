@@ -1898,7 +1898,7 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
 });
 
 // Update treatment
-app.put("/treatments/:treatmentId", authenticateJWT, async (req, res) => {
+app.put(["/treatments/:treatmentId", "/treatments"], authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
 
