@@ -37,19 +37,21 @@ if (!databaseUrl) {
 const isLocalhost = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
 
 // HIPAA-compliant database connection
-const shouldUseSSL = process.env.NODE_ENV === 'production' || process.env.USE_DB_SSL === 'true';
 const sequelizeConfig = {
   dialect: 'postgres' as const,
   dialectOptions: {
     // SSL configuration: 
     // - Production (Aptible): require SSL with relaxed validation
-    // - Local dev default: no SSL
-    // - Optional: enable via USE_DB_SSL=true (for RDS over localhost tunnel)
-    ssl: shouldUseSSL ? {
+    // - Localhost tunnel: use SSL but don't require it
+    // - Development: no SSL
+    ssl: process.env.NODE_ENV === 'production' ? {
       require: true,
       rejectUnauthorized: false,
       ca: undefined, // Don't validate CA certificate
       checkServerIdentity: () => undefined, // Skip hostname verification
+    } : isLocalhost ? {
+      require: false, // Don't require SSL for localhost tunnel
+      rejectUnauthorized: false,
     } : false,
   },
   logging: false, // Don't log SQL queries in production (could contain PHI)
