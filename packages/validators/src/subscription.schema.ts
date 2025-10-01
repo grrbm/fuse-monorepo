@@ -16,6 +16,7 @@ export const brandPaymentIntentSchema = z.object({
   planType: brandPlanTypeSchema,
   amount: z.number().positive('Amount must be positive'),
   currency: z.string().length(3).optional().default('usd'),
+  upgrade: z.boolean().optional(),
 });
 
 export const brandConfirmPaymentSchema = z.object({

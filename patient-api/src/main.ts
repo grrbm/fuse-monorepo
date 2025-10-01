@@ -40,7 +40,17 @@ import {
   treatmentCreateSchema,
   treatmentUpdateSchema,
   treatmentPlanCreateSchema,
-  treatmentPlanUpdateSchema
+  treatmentPlanUpdateSchema,
+  createPaymentIntentSchema,
+  confirmPaymentSchema,
+  treatmentSubscriptionSchema,
+  clinicSubscriptionSchema,
+  brandCheckoutSchema,
+  brandPaymentIntentSchema,
+  brandConfirmPaymentSchema,
+  brandCombinedCheckoutSchema,
+  upgradeSubscriptionSchema,
+  cancelSubscriptionSchema
 } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
@@ -2243,15 +2253,6 @@ app.delete("/treatment-plans", authenticateJWT, async (req, res) => {
 // Create order and payment intent
 app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
   try {
-    const {
-      amount,
-      currency = 'usd',
-      treatmentId,
-      selectedProducts = {},
-      selectedPlan = 'monthly',
-      shippingInfo = {},
-      questionnaireAnswers = {}
-    } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2261,21 +2262,25 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate amount
-    if (!amount || amount <= 0) {
+    // Validate request body using createPaymentIntentSchema
+    const validation = createPaymentIntentSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Invalid amount"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
 
-    // Validate required fields
-    if (!treatmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "Treatment ID is required"
-      });
-    }
+    const {
+      amount,
+      currency,
+      treatmentId,
+      selectedProducts,
+      selectedPlan,
+      shippingInfo,
+      questionnaireAnswers
+    } = validation.data;
 
     // Get treatment with products to validate order
     const treatment = await Treatment.findByPk(treatmentId, {
@@ -2416,7 +2421,6 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
 // Confirm payment completion
 app.post("/confirm-payment", authenticateJWT, async (req, res) => {
   try {
-    const { paymentIntentId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2425,6 +2429,18 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using confirmPaymentSchema
+    const validation = confirmPaymentSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { paymentIntentId } = validation.data;
 
     // Retrieve payment intent from Stripe
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -2474,7 +2490,17 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
 // Create subscription for treatment
 app.post("/payments/treatment/sub", async (req, res) => {
   try {
-    const { treatmentId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = req.body;
+    // Validate request body using treatmentSubscriptionSchema
+    const validation = treatmentSubscriptionSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { treatmentId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = validation.data;
 
     let currentUser = null;
 
@@ -2580,7 +2606,6 @@ app.post("/payments/treatment/sub", async (req, res) => {
 // Create subscription for clinic
 app.post("/payments/clinic/sub", authenticateJWT, async (req, res) => {
   try {
-    const { clinicId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2590,13 +2615,17 @@ app.post("/payments/clinic/sub", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!clinicId) {
+    // Validate request body using clinicSubscriptionSchema
+    const validation = clinicSubscriptionSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Clinic ID is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { clinicId } = validation.data;
 
     const paymentService = new PaymentService();
     const result = await paymentService.subscribeClinic(
@@ -2971,7 +3000,6 @@ app.get("/brand-subscriptions/current", authenticateJWT, async (req, res) => {
 app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
-    const { planType, successUrl, cancelUrl } = req.body;
 
     if (currentUser?.role !== 'brand') {
       return res.status(403).json({
@@ -2979,6 +3007,18 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
         message: "Access denied. Brand role required."
       });
     }
+
+    // Validate request body using brandCheckoutSchema
+    const validation = brandCheckoutSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { planType, successUrl, cancelUrl } = validation.data;
 
     // Check if user already has an active subscription
     const existingSubscription = await BrandSubscription.findOne({
@@ -3095,10 +3135,6 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
     console.log('🚀 BACKEND CREATE: Request body:', JSON.stringify(req.body, null, 2))
 
     const currentUser = getCurrentUser(req);
-    const { planType, amount, currency, upgrade } = req.body;
-
-    console.log('🚀 BACKEND CREATE: Plan type received:', planType)
-    console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
 
     if (currentUser?.role !== 'brand') {
       console.error('❌ BACKEND CREATE: Access denied - not brand role')
@@ -3108,7 +3144,21 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // If this is a new subscription (not an upgrade), block when already active
+    // Validate request body using brandPaymentIntentSchema
+    const validation = brandPaymentIntentSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { planType, amount, currency, upgrade } = validation.data;
+
+    console.log('🚀 BACKEND CREATE: Plan type received:', planType)
+    console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
+
     if (!upgrade) {
       const existingSubscription = await BrandSubscription.findOne({
         where: {
@@ -3117,11 +3167,13 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
         }
       });
 
+
       if (existingSubscription) {
         return res.status(400).json({
           success: false,
           message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
         });
+
       }
     }
 
@@ -3212,10 +3264,6 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     console.log('🚀 BACKEND: Request body:', JSON.stringify(req.body, null, 2))
 
     const currentUser = getCurrentUser(req);
-    const { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency } = req.body;
-
-    console.log('🚀 BACKEND: Extracted data:', { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency })
-    console.log('🚀 BACKEND: Current user:', currentUser?.id, currentUser?.role)
 
     if (currentUser?.role !== 'brand') {
       console.error('❌ BACKEND: Access denied - not brand role')
@@ -3224,6 +3272,21 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
         message: "Access denied. Brand role required."
       });
     }
+
+    // Validate request body using brandConfirmPaymentSchema
+    const validation = brandConfirmPaymentSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency } = validation.data;
+
+    console.log('🚀 BACKEND: Extracted data:', { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency })
+    console.log('🚀 BACKEND: Current user:', currentUser?.id, currentUser?.role)
 
     console.log('🚀 BACKEND: Getting plan and user data...')
     console.log('🚀 BACKEND: Plan type received:', planType)
@@ -3548,26 +3611,29 @@ app.post("/brand-subscriptions/change", authenticateJWT, async (req, res) => {
 // Upgrade subscriptions for a treatment to a new treatment plan
 app.post("/subscriptions/upgrade", authenticateJWT, async (req, res) => {
   try {
-    const { treatmentId } = req.body;
     const currentUser = getCurrentUser(req);
-    const userId = currentUser?.id;
 
-    if (!treatmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "treatmentId is required"
-      });
-    }
-
-    if (!userId) {
+    if (!currentUser) {
       return res.status(401).json({
         success: false,
         message: "User authentication required"
       });
     }
 
+    // Validate request body using upgradeSubscriptionSchema
+    const validation = upgradeSubscriptionSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { treatmentId } = validation.data;
+
     const subscriptionService = new SubscriptionService();
-    await subscriptionService.upgradeSubscription(treatmentId, userId);
+    await subscriptionService.upgradeSubscription(treatmentId, currentUser.id);
 
     res.json({
       success: true,
@@ -3585,26 +3651,29 @@ app.post("/subscriptions/upgrade", authenticateJWT, async (req, res) => {
 // Cancel all subscriptions for a treatment
 app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
   try {
-    const { treatmentId } = req.body;
     const currentUser = getCurrentUser(req);
-    const userId = currentUser?.id;
 
-    if (!treatmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "treatmentId is required"
-      });
-    }
-
-    if (!userId) {
+    if (!currentUser) {
       return res.status(401).json({
         success: false,
         message: "User authentication required"
       });
     }
 
+    // Validate request body using cancelSubscriptionSchema
+    const validation = cancelSubscriptionSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { treatmentId } = validation.data;
+
     const subscriptionService = new SubscriptionService();
-    await subscriptionService.cancelSubscriptions(treatmentId, userId);
+    await subscriptionService.cancelSubscriptions(treatmentId, currentUser.id);
 
     res.json({
       success: true,
