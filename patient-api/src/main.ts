@@ -30,7 +30,7 @@ import QuestionnaireService from "./services/questionnaire.service";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
 import { StripeService } from "@fuse/stripe";
-import { signInSchema, signUpSchema, updateProfileSchema } from "@fuse/validators";
+import { signInSchema, signUpSchema, updateProfileSchema, clinicUpdateSchema } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
@@ -717,6 +717,18 @@ app.put("/clinic/:id", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using clinicUpdateSchema
+    const validation = clinicUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, logo } = validation.data;
 
     // Fetch full user data from database to get clinicId
     const user = await User.findByPk(currentUser.id);

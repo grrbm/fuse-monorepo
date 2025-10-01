@@ -1,6 +1,7 @@
 // Re-export all schemas
 export * from './common.schema';
 export * from './auth.schema';
+export * from './clinic.schema';
 
 /**
  * Validation helper function
