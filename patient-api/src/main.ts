@@ -61,7 +61,8 @@ import {
   physicianUpdateSchema,
   messageCreateSchema,
   patientUpdateSchema,
-  brandTreatmentSchema
+  brandTreatmentSchema,
+  organizationUpdateSchema
 } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
@@ -4822,7 +4823,17 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const { businessName, phone, address, city, state, zipCode, website } = req.body;
+    // Validate request body using organizationUpdateSchema
+    const validation = organizationUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { businessName, phone, address, city, state, zipCode, website } = validation.data;
 
     const user = await User.findByPk(currentUser.id);
     if (!user) {
