@@ -17,6 +17,7 @@ interface TreatmentProductAssociationResult {
 
 interface UpdateTreatmentData {
     name?: string;
+    active?: boolean;
     price?: number;
     products?: TreatmentProductData[];
 }
@@ -195,7 +196,7 @@ class TreatmentService {
                 };
             }
 
-            if (user.role !== 'doctor') {
+            if (user.role !== 'doctor' && user.role !== 'brand') {
                 return {
                     success: false,
                     message: "Access denied",
@@ -229,6 +230,10 @@ class TreatmentService {
             }
             if (updateData.price !== undefined) {
                 updateFields.price = updateData.price;
+            }
+
+            if (updateData.active !== undefined) {
+                updateFields.active = updateData.active;
             }
 
             if (Object.keys(updateFields).length > 0) {
