@@ -1898,7 +1898,7 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
 });
 
 // Update treatment
-app.put("/treatments", authenticateJWT, async (req, res) => {
+app.put("/treatments/:treatmentId", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
 
@@ -1909,8 +1909,21 @@ app.put("/treatments", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Get treatmentId from URL param or body
+    const treatmentId = req.params.treatmentId || req.body.treatmentId;
+
+    if (!treatmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "treatmentId is required in URL or request body"
+      });
+    }
+
     // Validate request body using treatmentUpdateSchema
-    const validation = treatmentUpdateSchema.safeParse(req.body);
+    const validation = treatmentUpdateSchema.safeParse({
+      ...req.body,
+      treatmentId
+    });
     if (!validation.success) {
       return res.status(400).json({
         success: false,
@@ -1918,8 +1931,6 @@ app.put("/treatments", authenticateJWT, async (req, res) => {
         errors: validation.error.errors
       });
     }
-
-    const { treatmentId } = validation.data;
 
     const treatment = await treatmentService.updateTreatment(treatmentId, validation.data, currentUser.id)
 
