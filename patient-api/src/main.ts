@@ -50,7 +50,18 @@ import {
   brandConfirmPaymentSchema,
   brandCombinedCheckoutSchema,
   upgradeSubscriptionSchema,
-  cancelSubscriptionSchema
+  cancelSubscriptionSchema,
+  questionnaireStepCreateSchema,
+  questionnaireStepUpdateSchema,
+  questionnaireStepOrderSchema,
+  questionCreateSchema,
+  questionUpdateSchema,
+  questionOrderSchema,
+  physicianCreateSchema,
+  physicianUpdateSchema,
+  messageCreateSchema,
+  patientUpdateSchema,
+  brandTreatmentSchema
 } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
@@ -3692,7 +3703,6 @@ app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
 // Add questionnaire step
 app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
   try {
-    const { questionnaireId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -3702,13 +3712,17 @@ app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!questionnaireId) {
+    // Validate request body using questionnaireStepCreateSchema
+    const validation = questionnaireStepCreateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "treatmentId and questionnaireId are required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { questionnaireId } = validation.data;
 
     // Create questionnaire step service instance
     const questionnaireStepService = new QuestionnaireStepService();
@@ -3751,7 +3765,6 @@ app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
 // Update questionnaire step
 app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
   try {
-    const { stepId, title, description } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -3761,21 +3774,17 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!stepId) {
+    // Validate request body using questionnaireStepUpdateSchema
+    const validation = questionnaireStepUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "stepId is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
 
-    // Validate at least one field to update is provided
-    if (title === undefined && description === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one field (title or description) must be provided"
-      });
-    }
+    const { stepId, title, description } = validation.data;
 
     // Create questionnaire step service instance
     const questionnaireStepService = new QuestionnaireStepService();
@@ -3882,7 +3891,6 @@ app.delete("/questionnaires/step", authenticateJWT, async (req, res) => {
 // Update questionnaire steps order
 app.post("/questionnaires/step/order", authenticateJWT, async (req, res) => {
   try {
-    const { steps, questionnaireId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -3892,30 +3900,17 @@ app.post("/questionnaires/step/order", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!steps || !Array.isArray(steps)) {
+    // Validate request body using questionnaireStepOrderSchema
+    const validation = questionnaireStepOrderSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "steps array is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
 
-    if (!questionnaireId) {
-      return res.status(400).json({
-        success: false,
-        message: "questionnaireId is required"
-      });
-    }
-
-    // Validate steps array structure
-    for (const step of steps) {
-      if (!step.id || typeof step.stepOrder !== 'number') {
-        return res.status(400).json({
-          success: false,
-          message: "Each step must have id (string) and stepOrder (number)"
-        });
-      }
-    }
+    const { steps, questionnaireId } = validation.data;
 
     // Create questionnaire step service instance
     const questionnaireStepService = new QuestionnaireStepService();
@@ -4047,7 +4042,6 @@ app.get("/questions/step/:stepId", authenticateJWT, async (req, res) => {
 // Create question
 app.post("/questions", authenticateJWT, async (req, res) => {
   try {
-    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -4057,13 +4051,17 @@ app.post("/questions", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!stepId || !questionText || !answerType) {
+    // Validate request body using questionCreateSchema
+    const validation = questionCreateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "stepId, questionText, and answerType are required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -4111,7 +4109,6 @@ app.post("/questions", authenticateJWT, async (req, res) => {
 // Update question
 app.put("/questions", authenticateJWT, async (req, res) => {
   try {
-    const { questionId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -4121,13 +4118,17 @@ app.put("/questions", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!questionId) {
+    // Validate request body using questionUpdateSchema
+    const validation = questionUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "questionId is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { questionId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -4233,7 +4234,6 @@ app.delete("/questions", authenticateJWT, async (req, res) => {
 // Update questions order
 app.post("/questions/order", authenticateJWT, async (req, res) => {
   try {
-    const { questions, stepId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -4243,30 +4243,17 @@ app.post("/questions/order", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!questions || !Array.isArray(questions)) {
+    // Validate request body using questionOrderSchema
+    const validation = questionOrderSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "questions array is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
 
-    if (!stepId) {
-      return res.status(400).json({
-        success: false,
-        message: "stepId is required"
-      });
-    }
-
-    // Validate questions array structure
-    for (const question of questions) {
-      if (!question.id || typeof question.questionOrder !== 'number') {
-        return res.status(400).json({
-          success: false,
-          message: "Each question must have id (string) and questionOrder (number)"
-        });
-      }
-    }
+    const { questions, stepId } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -4325,7 +4312,17 @@ app.put("/patient", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { address, ...data } = req.body
+    // Validate request body using patientUpdateSchema
+    const validation = patientUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { address, ...data } = validation.data
 
     const result = await userService.updateUserPatient(currentUser.id, data, address);
 
@@ -4486,7 +4483,6 @@ app.post("/webhook/pharmacy", async (req, res) => {
 // Physicians endpoints
 app.post("/physicians", authenticateJWT, async (req, res) => {
   try {
-
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -4496,9 +4492,19 @@ app.post("/physicians", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Validate request body using physicianCreateSchema
+    const validation = physicianCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
     const physicianService = new PhysicianService();
 
-    const physician = await physicianService.createPhysician(req.body, currentUser.id);
+    const physician = await physicianService.createPhysician(validation.data, currentUser.id);
 
     res.status(201).json({
       success: true,
@@ -4529,14 +4535,17 @@ app.put("/physicians", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { physicianId, ...updateData } = req.body;
-
-    if (!physicianId) {
+    // Validate request body using physicianUpdateSchema
+    const validation = physicianUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "physicianId is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { physicianId, ...updateData } = validation.data;
 
     const physicianService = new PhysicianService();
 
@@ -4596,7 +4605,6 @@ app.get("/messages", authenticateJWT, async (req, res) => {
 app.post("/messages", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
-    const { text, reference_message_id, files } = req.body;
 
     if (!currentUser) {
       return res.status(401).json({
@@ -4604,6 +4612,18 @@ app.post("/messages", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using messageCreateSchema
+    const validation = messageCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { text, reference_message_id, files } = validation.data;
 
     const payload = {
       channel: 'patient',
@@ -5343,11 +5363,17 @@ app.post("/brand-treatments", authenticateJWT, async (req, res) => {
       return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
     }
 
-    const { treatmentId, brandLogo, brandColor } = req.body;
-
-    if (!treatmentId) {
-      return res.status(400).json({ success: false, message: "treatmentId is required" });
+    // Validate request body using brandTreatmentSchema
+    const validation = brandTreatmentSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
     }
+
+    const { treatmentId, brandLogo, brandColor } = validation.data;
 
     const treatment = await Treatment.findByPk(treatmentId);
 
