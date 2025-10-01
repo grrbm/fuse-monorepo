@@ -30,7 +30,7 @@ import QuestionnaireService from "./services/questionnaire.service";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
 import { StripeService } from "@fuse/stripe";
-import { signInSchema, signUpSchema } from "@fuse/validators";
+import { signInSchema, signUpSchema, updateProfileSchema } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
@@ -189,7 +189,7 @@ app.post("/auth/signup", async (req, res) => {
       });
     }
 
-    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName, clinicId,  website, businessType } = validation.data;
+    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName, clinicId, website, businessType } = validation.data;
 
     // Validate clinic name for providers/brands (both require clinics)
     if ((role === 'provider' || role === 'brand') && !clinicName?.trim()) {
@@ -531,7 +531,21 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { firstName, lastName, phoneNumber, dob, address, city, state, zipCode, selectedPlanCategory, selectedPlanType, selectedPlanName, selectedPlanPrice, selectedDownpaymentType, selectedDownpaymentName, selectedDownpaymentPrice, planSelectionTimestamp } = req.body;
+    // Validate request body using updateProfileSchema
+    const validation = updateProfileSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+
+    const { firstName, lastName, phoneNumber, dob, address, city, state, zipCode,
+      selectedPlanCategory, selectedPlanType, selectedPlanName, selectedPlanPrice,
+      selectedDownpaymentType, selectedDownpaymentName, selectedDownpaymentPrice, planSelectionTimestamp } = validation.data;
+
 
     // Check if this is a plan selection request (doesn't require firstName/lastName)
     const isPlanSelection = selectedPlanCategory && selectedPlanType;
@@ -541,7 +555,7 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "First name and last name are required for profile updates"
-      });
+      })
     }
 
     // Find user in database
@@ -4687,7 +4701,7 @@ app.get("/organization", authenticateJWT, async (req, res) => {
     }
 
     const clinic = user.clinic;
-    
+
     res.json({
       clinicName: clinic?.name || '',
       businessName: clinic?.name || '',
@@ -4783,7 +4797,7 @@ app.post("/upload/logo", authenticateJWT, upload.single('logo'), async (req, res
             console.error('Error deleting old logo:', error);
           }
         }
-        
+
         await clinic.update({ logo: s3Url });
       }
     }
@@ -4816,7 +4830,7 @@ app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
     const plan = await BrandSubscriptionPlans.findOne({
       where: { planType: subscription.planType }
     });
-    
+
     res.json({
       id: subscription.id,
       planId: plan?.id || null,

@@ -48,6 +48,25 @@ export const changePasswordSchema = z.object({
   path: ["confirmPassword"],
 });
 
+export const updateProfileSchema = z.object({
+  firstName: z.string().min(1, 'First name is required').max(100),
+  lastName: z.string().min(1, 'Last name is required').max(100),
+  phoneNumber: z.string().optional(),
+  dob: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional(),
+  selectedPlanCategory: z.string().optional(),
+  selectedPlanType: z.string().optional(),
+  selectedPlanName: z.string().optional(),
+  selectedPlanPrice: z.number().optional(),
+  selectedDownpaymentType: z.string().optional(),
+  selectedDownpaymentName: z.string().optional(),
+  selectedDownpaymentPrice: z.number().optional(),
+  planSelectionTimestamp: z.string().optional(),
+});
+
 /**
  * Type exports
  */
@@ -57,3 +76,4 @@ export type SignUpInput = z.infer<typeof signUpSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
