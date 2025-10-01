@@ -1,0 +1,27 @@
+import { z } from 'zod';
+import { questionnaireAnswersSchema, shippingInfoSchema } from './common.schema';
+
+/**
+ * Order validation schemas
+ */
+
+export const createPaymentIntentSchema = z.object({
+  amount: z.number().positive('Amount must be positive'),
+  currency: z.string().length(3).optional().default('usd'),
+  treatmentId: z.string().uuid('Invalid treatment ID'),
+  selectedProducts: z.record(z.any()).optional(),
+  selectedPlan: z.string().optional().default('monthly'),
+  shippingInfo: shippingInfoSchema.optional(),
+  questionnaireAnswers: questionnaireAnswersSchema.optional(),
+});
+
+export const confirmPaymentSchema = z.object({
+  paymentIntentId: z.string().min(1, 'Payment intent ID is required'),
+});
+
+/**
+ * Type exports
+ */
+
+export type CreatePaymentIntentInput = z.infer<typeof createPaymentIntentSchema>;
+export type ConfirmPaymentInput = z.infer<typeof confirmPaymentSchema>;
