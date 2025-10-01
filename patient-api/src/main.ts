@@ -24,13 +24,24 @@ import TreatmentService from "./services/treatment.service";
 import PaymentService from "./services/payment.service";
 import { processStripeWebhook } from "./services/stripe/webhook";
 import TreatmentProducts from "./models/TreatmentProducts";
-import TreatmentPlan from "./models/TreatmentPlan";
+import TreatmentPlan, { BillingInterval } from "./models/TreatmentPlan";
 import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
 import { StripeService } from "@fuse/stripe";
-import { signInSchema, signUpSchema, updateProfileSchema, clinicUpdateSchema } from "@fuse/validators";
+import {
+  signInSchema,
+  signUpSchema,
+  updateProfileSchema,
+  clinicUpdateSchema,
+  productCreateSchema,
+  productUpdateSchema,
+  treatmentCreateSchema,
+  treatmentUpdateSchema,
+  treatmentPlanCreateSchema,
+  treatmentPlanUpdateSchema
+} from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
@@ -708,7 +719,6 @@ app.get("/clinic/:id", authenticateJWT, async (req, res) => {
 app.put("/clinic/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, logo } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1147,7 +1157,6 @@ app.get("/products/:id", authenticateJWT, async (req, res) => {
 // Create product endpoint
 app.post("/products", authenticateJWT, async (req, res) => {
   try {
-    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1156,6 +1165,18 @@ app.post("/products", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using productCreateSchema
+    const validation = productCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = validation.data;
 
     // Fetch full user data from database to get role and clinicId
     const user = await User.findByPk(currentUser.id);
@@ -1179,7 +1200,7 @@ app.post("/products", authenticateJWT, async (req, res) => {
     // Create the product
     const newProduct = await Product.create({
       name,
-      price: parseFloat(price),
+      price: price,
       description,
       pharmacyProductId,
       dosage,
@@ -1288,7 +1309,6 @@ app.delete("/products/:id", authenticateJWT, async (req, res) => {
 app.put("/products/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1297,6 +1317,18 @@ app.put("/products/:id", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using productUpdateSchema
+    const validation = productUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = validation.data;
 
     // Fetch full user data from database to get role
     const user = await User.findByPk(currentUser.id);
@@ -1329,7 +1361,7 @@ app.put("/products/:id", authenticateJWT, async (req, res) => {
     // Update the product
     const updatedProduct = await product.update({
       name,
-      price: parseFloat(price),
+      price: price,
       description,
       pharmacyProductId,
       dosage,
@@ -1758,7 +1790,6 @@ app.get("/treatments/by-clinic-id/:clinicId", authenticateJWT, async (req, res) 
 // Create new treatment
 app.post("/treatments", authenticateJWT, async (req, res) => {
   try {
-    const { name, defaultQuestionnaire } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1767,6 +1798,18 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using treatmentCreateSchema
+    const validation = treatmentCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, defaultQuestionnaire } = validation.data;
 
     // Fetch full user data from database to get clinicId
     const user = await User.findByPk(currentUser.id);
@@ -1782,14 +1825,6 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Only doctors and brand users with a clinic can create treatments"
-      });
-    }
-
-    // Validate input
-    if (!name || !name.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Treatment name is required"
       });
     }
 
@@ -1844,8 +1879,6 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
 // Update treatment
 app.put("/treatments", authenticateJWT, async (req, res) => {
   try {
-    const { treatmentId } = req.body;
-
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1855,8 +1888,19 @@ app.put("/treatments", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Validate request body using treatmentUpdateSchema
+    const validation = treatmentUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
 
-    const treatment = await treatmentService.updateTreatment(treatmentId, req.body, currentUser.id)
+    const { treatmentId } = validation.data;
+
+    const treatment = await treatmentService.updateTreatment(treatmentId, validation.data, currentUser.id)
 
 
     res.status(200).json({
@@ -2007,7 +2051,6 @@ app.get("/treatment-plans/treatment/:treatmentId", authenticateJWT, async (req, 
 // Create treatment plan
 app.post("/treatment-plans", authenticateJWT, async (req, res) => {
   try {
-    const { name, description, billingInterval, price, active, popular, sortOrder, treatmentId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2017,20 +2060,24 @@ app.post("/treatment-plans", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!name || !billingInterval || price === undefined || !treatmentId) {
+    // Validate request body using treatmentPlanCreateSchema
+    const validation = treatmentPlanCreateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "name, billingInterval, price, and treatmentId are required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { name, description, billingInterval, price, active, popular, sortOrder, treatmentId } = validation.data;
 
     // Create treatment plan service instance
     const treatmentPlanService = new TreatmentPlanService();
 
     // Create treatment plan
     const newTreatmentPlan = await treatmentPlanService.createTreatmentPlan(
-      { name, description, billingInterval, price, active, popular, sortOrder, treatmentId },
+      { name, description, billingInterval: billingInterval as BillingInterval, price, active, popular, sortOrder, treatmentId },
       currentUser.id
     );
 
@@ -2070,7 +2117,6 @@ app.post("/treatment-plans", authenticateJWT, async (req, res) => {
 // Update treatment plan
 app.put("/treatment-plans", authenticateJWT, async (req, res) => {
   try {
-    const { planId, name, description, billingInterval, price, active, popular, sortOrder } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2080,13 +2126,17 @@ app.put("/treatment-plans", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!planId) {
+    // Validate request body using treatmentPlanUpdateSchema
+    const validation = treatmentPlanUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "planId is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { planId, name, description, billingInterval, price, active, popular, sortOrder } = validation.data;
 
     // Create treatment plan service instance
     const treatmentPlanService = new TreatmentPlanService();
@@ -2094,7 +2144,7 @@ app.put("/treatment-plans", authenticateJWT, async (req, res) => {
     // Update treatment plan
     const updatedTreatmentPlan = await treatmentPlanService.updateTreatmentPlan(
       planId,
-      { name, description, billingInterval, price, active, popular, sortOrder },
+      { name, description, billingInterval: billingInterval as BillingInterval, price, active, popular, sortOrder },
       currentUser.id
     );
 
