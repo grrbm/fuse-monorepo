@@ -12,6 +12,7 @@ export const treatmentCreateSchema = z.object({
 export const treatmentUpdateSchema = z.object({
   treatmentId: z.string().uuid('Invalid treatment ID'),
   name: z.string().min(1).max(200).optional(),
+  active: z.boolean().optional(),
   treatmentLogo: z.string().url().optional(),
   productsPrice: z.number().optional(),
 });
