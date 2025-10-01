@@ -43,6 +43,7 @@ export function usePlacesAutocomplete({
       }
 
       try {
+        //@ts-ignore
         const google = await loaderRef.current.load()
         if (!isMounted || !inputRef.current) return
 

@@ -70,12 +70,13 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/google.maps": "^3.58.1",
     "@types/node": "catalog:",
     "@types/react": "catalog:react18",
     "@types/react-dom": "catalog:react18",
     "dotenv-cli": "catalog:",
     "postcss": "catalog:",
-    "typescript": "catalog:",
-    "tailwindcss": "^3.3.0"
+    "tailwindcss": "^3.3.0",
+    "typescript": "catalog:"
   }
 }

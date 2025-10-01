@@ -26,6 +26,7 @@ interface Subscription {
     priceId?: string
   }
   nextBillingDate?: string
+  monthlyPrice?: number
 }
 
 interface AuthContextType {

@@ -335,14 +335,14 @@ function CheckoutForm({ checkoutData, paymentData, token, intentClientSecret, on
         )}
       </Button>
 
-          <div className="text-center space-y-2">
-            <p className="text-sm font-medium">
-              ✅ Subscription activates immediately after payment
-            </p>
-            <p className="text-xs text-muted-foreground">
-              You can add optional onboarding support later from Settings.
-            </p>
-          </div>
+      <div className="text-center space-y-2">
+        <p className="text-sm font-medium">
+          ✅ Subscription activates immediately after payment
+        </p>
+        <p className="text-xs text-muted-foreground">
+          You can add optional onboarding support later from Settings.
+        </p>
+      </div>
     </form>
   )
 }
@@ -404,7 +404,8 @@ export default function CheckoutPage() {
       const monthlyPriceNum = parseInt(subscriptionMonthlyPrice as string)
 
       const existingPlanType = subscription?.plan?.type
-      const existingMonthlyPrice = subscription?.plan?.price ?? subscription?.monthlyPrice
+      const existingMonthlyPrice =
+        subscription?.plan?.price ?? (subscription as any)?.monthlyPrice
 
       const isUpgrade = Boolean(existingPlanType && existingPlanType !== subscriptionPlanType)
       const delta = isUpgrade && existingMonthlyPrice

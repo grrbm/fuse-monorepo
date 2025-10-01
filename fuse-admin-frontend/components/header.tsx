@@ -7,7 +7,7 @@ import { useTheme } from "@/contexts/ThemeContext"
 export function Header() {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  
+
   return (
     <header className="border-b border-border bg-background px-6 py-4">
       <div className="flex items-center justify-between">
@@ -27,9 +27,9 @@ export function Header() {
           </Button>
 
           {/* Theme Toggle */}
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={toggleTheme}
             className="p-2"
             title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
@@ -54,12 +54,13 @@ export function Header() {
               </span>
             </div>
             <span className="text-sm font-medium">
-              {user?.firstName && user?.lastName 
+              {user?.firstName && user?.lastName
                 ? `${user.firstName} ${user.lastName}`
                 : user?.email || 'Admin User'
               }
             </span>
             <button
+              //@ts-ignore
               onClick={logout}
               className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
               title="Logout"
