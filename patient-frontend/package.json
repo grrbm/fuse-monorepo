@@ -9,9 +9,9 @@
     "lint": "next lint",
     "print2": "node print-structure.js",
     "print": "node print-structure-with-preview.js",
-    "pm2:start": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1024 --no-warnings' pm2 start npm --name patient-frontend -- start",
-    "pm2:reload": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1024 --no-warnings' pm2 reload patient-frontend",
-    "pm2:reload-no-build": "NODE_ENV=production NODE_OPTIONS='--max-old-space-size=1024 --no-warnings' pm2 reload patient-frontend",
+    "pm2:start": "pnpm with-env pm2 start npm --name patient-frontend --node-args='--max-old-space-size=1024 --no-warnings' -- start",
+    "pm2:reload": "pnpm build && pnpm with-env pm2 reload patient-frontend",
+    "pm2:reload-no-build": "pnpm with-env pm2 reload patient-frontend",
     "pm2:stop": "pm2 stop patient-frontend",
     "clean": "git clean -xdf .cache .turbo dist .next node_modules",
     "with-env": "dotenv -e ../.env.local --"
