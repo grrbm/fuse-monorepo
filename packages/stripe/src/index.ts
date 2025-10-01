@@ -44,10 +44,11 @@ class StripeService {
     });
   }
 
-  async createCustomer(email: string, name?: string) {
+  async createCustomer(email: string, name?: string, metadata?: Record<string, string>) {
     return stripe.customers.create({
       email,
-      name
+      name,
+      metadata
     });
 
   }
