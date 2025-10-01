@@ -49,8 +49,8 @@ export const changePasswordSchema = z.object({
 });
 
 export const updateProfileSchema = z.object({
-  firstName: z.string().min(1, 'First name is required').max(100),
-  lastName: z.string().min(1, 'Last name is required').max(100),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
   phoneNumber: z.string().optional(),
   dob: z.string().optional(),
   address: z.string().optional(),
