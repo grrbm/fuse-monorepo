@@ -270,23 +270,48 @@ class StripeService {
     });
   };
 
-    // Subscription Schedule methods
-    async getSubscriptionSchedule(scheduleId: string, options?: {
-      expand?: string[];
-    }) {
-      const expandOptions = options?.expand || [];
-      return stripe.subscriptionSchedules.retrieve(scheduleId, {
-        expand: expandOptions
-      });
-    }
-  
-    async updateSubscriptionSchedule(
-      scheduleId: string,
-      params: Stripe.SubscriptionScheduleUpdateParams
-    ) {
-      return stripe.subscriptionSchedules.update(scheduleId, params);
-    }
-  
+  // Subscription Schedule methods
+  async getSubscriptionSchedule(scheduleId: string, options?: {
+    expand?: string[];
+  }) {
+    const expandOptions = options?.expand || [];
+    return stripe.subscriptionSchedules.retrieve(scheduleId, {
+      expand: expandOptions
+    });
+  }
+
+  async updateSubscriptionSchedule(
+    scheduleId: string,
+    params: Stripe.SubscriptionScheduleUpdateParams
+  ) {
+    return stripe.subscriptionSchedules.update(scheduleId, params);
+  }
+
+  async createSchedule({
+    customerId,
+    paymentMethodId,
+    metadata,
+    phases
+  }: {
+    customerId: string;
+    paymentMethodId: string;
+    metadata: Record<string, string>;
+    phases: Stripe.SubscriptionScheduleCreateParams.Phase[];
+  }) {
+    return stripe.subscriptionSchedules.create({
+      customer: customerId,
+      start_date: 'now',
+      metadata: metadata,
+      phases: phases,
+      default_settings: {
+        default_payment_method: paymentMethodId,
+        collection_method: 'charge_automatically'
+      },
+      expand: ['subscription', 'subscription.latest_invoice', 'subscription.latest_invoice.payment_intent']
+    });
+  }
+
+
 
 }
 
