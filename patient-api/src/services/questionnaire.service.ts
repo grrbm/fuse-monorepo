@@ -8,7 +8,38 @@ import User from '../models/User';
 class QuestionnaireService {
 
     async listTemplates() {
-        return Questionnaire.findAll({ where: { isTemplate: true } });
+        return Questionnaire.findAll({
+            where: { isTemplate: true },
+            include: [
+                {
+                    model: QuestionnaireStep,
+                    as: 'steps',
+                    include: [
+                        {
+                            model: Question,
+                            as: 'questions',
+                            include: [
+                                {
+                                    model: QuestionOption,
+                                    as: 'options',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+            order: [
+                [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+                [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+                [
+                    { model: QuestionnaireStep, as: 'steps' },
+                    { model: Question, as: 'questions' },
+                    { model: QuestionOption, as: 'options' },
+                    'optionOrder',
+                    'ASC',
+                ],
+            ],
+        });
     }
 
     async duplicateTemplate(questionnaireId: string, userId: string) {
@@ -98,7 +129,39 @@ class QuestionnaireService {
 
             await transaction?.commit();
 
-            return clone;
+            const fullClone = await Questionnaire.findByPk(clone.id, {
+                include: [
+                    {
+                        model: QuestionnaireStep,
+                        as: 'steps',
+                        include: [
+                            {
+                                model: Question,
+                                as: 'questions',
+                                include: [
+                                    {
+                                        model: QuestionOption,
+                                        as: 'options',
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+                order: [
+                    [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+                    [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+                    [
+                        { model: QuestionnaireStep, as: 'steps' },
+                        { model: Question, as: 'questions' },
+                        { model: QuestionOption, as: 'options' },
+                        'optionOrder',
+                        'ASC',
+                    ],
+                ],
+            });
+
+            return fullClone ?? clone;
         } catch (error) {
             await transaction?.rollback();
             throw error;
