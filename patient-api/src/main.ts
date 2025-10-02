@@ -143,6 +143,8 @@ app.use(cors({
       (process.env.NODE_ENV === 'development' && /^http:\/\/[a-zA-Z0-9.-]+\.localhost:3000$/.test(origin)) ||
       // Allow production clinic domains (e.g., app.limitless.health, app.hims.com)
       (process.env.NODE_ENV === 'production' && /^https:\/\/app\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$/.test(origin)) ||
+      // Allow fuse.health root domain and any subdomain (e.g., https://limitless.fuse.health)
+      (process.env.NODE_ENV === 'production' && /^https:\/\/([a-zA-Z0-9-]+\.)*fuse\.health$/.test(origin)) ||
       // Allow all subdomains of unboundedhealth.xyz (legacy support)
       /^https:\/\/[a-zA-Z0-9-]+\.unboundedhealth\.xyz$/.test(origin);
 
@@ -4681,7 +4683,7 @@ app.get("/organization", authenticateJWT, async (req, res) => {
     }
 
     const clinic = user.clinic;
-    
+
     res.json({
       clinicName: clinic?.name || '',
       businessName: clinic?.name || '',
@@ -4777,7 +4779,7 @@ app.post("/upload/logo", authenticateJWT, upload.single('logo'), async (req, res
             console.error('Error deleting old logo:', error);
           }
         }
-        
+
         await clinic.update({ logo: s3Url });
       }
     }
@@ -4810,7 +4812,7 @@ app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
     const plan = await BrandSubscriptionPlans.findOne({
       where: { planType: subscription.planType }
     });
-    
+
     res.json({
       id: subscription.id,
       planId: plan?.id || null,
