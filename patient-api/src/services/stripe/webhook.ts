@@ -22,9 +22,47 @@ export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.Payment
         include: [{ model: Order, as: 'order' }]
     });
 
-    if (payment) {
-        // Update payment status
-        await payment.updateFromStripeEvent({ object: paymentIntent });
+
+
+    // Attach payment method to customer and set as default if customer exists
+    if (paymentIntent.customer && paymentIntent.payment_method) {
+        try {
+            const stripeService = new StripeService();
+            const customerId = typeof paymentIntent.customer === 'string'
+                ? paymentIntent.customer
+                : paymentIntent.customer.id;
+            const paymentMethodId = typeof paymentIntent.payment_method === 'string'
+                ? paymentIntent.payment_method
+                : paymentIntent.payment_method.id;
+
+            // Attach payment method to customer (if not already attached)
+            try {
+                await stripeService.attachPaymentMethodToCustomer(paymentMethodId, customerId);
+                console.log('✅ Payment method attached to customer:', customerId);
+            } catch (attachError: any) {
+                // Ignore if already attached
+                if (attachError.code !== 'resource_already_exists') {
+                    throw attachError;
+                }
+                console.log('ℹ️ Payment method already attached to customer');
+            }
+
+            // Set as default payment method
+            await stripeService.updateCustomerDefaultPaymentMethod(customerId, paymentMethodId);
+            console.log('✅ Default payment method updated for customer:', customerId);
+        } catch (error) {
+            console.error('❌ Error attaching payment method to customer:', error);
+            // Don't fail the whole webhook if this fails
+        }
+    }
+
+    if (!payment) {
+        console.log('⚠️ Payment intent not associated with any Payment record:', paymentIntent.id);
+        return;
+    }
+
+    // Update payment status
+    await payment.updateFromStripeEvent({ object: paymentIntent });
 
         // Update order status
         await payment.order.updateStatus(OrderStatus.PAID);
