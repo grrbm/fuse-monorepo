@@ -81,6 +81,45 @@ class QuestionnaireService {
         });
     }
 
+    async getByIdForUser(questionnaireId: string, userId: string) {
+        return Questionnaire.findOne({
+            where: {
+                id: questionnaireId,
+                userId,
+                isTemplate: false,
+            },
+            include: [
+                {
+                    model: QuestionnaireStep,
+                    as: 'steps',
+                    include: [
+                        {
+                            model: Question,
+                            as: 'questions',
+                            include: [
+                                {
+                                    model: QuestionOption,
+                                    as: 'options',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+            order: [
+                [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+                [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+                [
+                    { model: QuestionnaireStep, as: 'steps' },
+                    { model: Question, as: 'questions' },
+                    { model: QuestionOption, as: 'options' },
+                    'optionOrder',
+                    'ASC',
+                ],
+            ],
+        });
+    }
+
     async duplicateTemplate(questionnaireId: string, userId: string) {
         const template = await Questionnaire.findByPk(questionnaireId, {
             include: [

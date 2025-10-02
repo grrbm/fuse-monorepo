@@ -52,6 +52,7 @@ export default function Forms() {
   const [error, setError] = useState<string | null>(null)
   const [selectedQuestionnaire, setSelectedQuestionnaire] = useState<string | null>(null)
   const [showEditor, setShowEditor] = useState(false)
+  const [editorQuestionnaire, setEditorQuestionnaire] = useState<QuestionnaireTemplate | null>(null)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [templateError, setTemplateError] = useState<string | null>(null)
@@ -102,9 +103,28 @@ export default function Forms() {
     loadData()
   }, [token])
 
-  const handleEditQuestionnaire = (id: string) => {
+  const handleEditQuestionnaire = async (id: string) => {
+    if (!token) return
     setSelectedQuestionnaire(id)
     setShowEditor(true)
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      const res = await fetch(`${baseUrl}/questionnaires/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to load questionnaire')
+      }
+
+      const data = await res.json()
+      setEditorQuestionnaire(data.data)
+    } catch (err) {
+      console.error('❌ Error loading questionnaire for editor:', err)
+    }
   }
 
   const handleImportTemplate = async (templateId: string) => {
@@ -177,7 +197,7 @@ export default function Forms() {
             </Card>
           ) : showEditor ? (
             <QuestionnaireEditor
-              questionnaireId={selectedQuestionnaire}
+              questionnaire={editorQuestionnaire}
               onBack={() => setShowEditor(false)}
             />
           ) : (
@@ -338,47 +358,8 @@ export default function Forms() {
 }
 
 // Questionnaire Visual Editor Component
-function QuestionnaireEditor({ questionnaireId, onBack }: { questionnaireId: string | null, onBack: () => void }) {
-  // Mock questionnaire steps data
-  const [steps, setSteps] = useState([
-    {
-      id: "step1",
-      title: "Personal Information",
-      description: "Basic demographic and contact information",
-      questions: 4,
-      order: 1
-    },
-    {
-      id: "step2",
-      title: "Medical History",
-      description: "Previous medical conditions and treatments",
-      questions: 6,
-      order: 2
-    },
-    {
-      id: "step3",
-      title: "Current Medications",
-      description: "Current prescription and over-the-counter medications",
-      questions: 3,
-      order: 3
-    },
-    {
-      id: "step4",
-      title: "Weight Loss Goals",
-      description: "Target weight and timeline preferences",
-      questions: 5,
-      order: 4
-    }
-  ])
-
-  const moveStep = (stepId: string, direction: 'up' | 'down') => {
-    // Logic to reorder steps
-    console.log(`Moving step ${stepId} ${direction}`)
-  }
-
-  const editStep = (stepId: string) => {
-    console.log(`Editing step ${stepId}`)
-  }
+function QuestionnaireEditor({ questionnaire, onBack }: { questionnaire: QuestionnaireTemplate | null, onBack: () => void }) {
+  const steps = questionnaire?.steps ?? []
 
   return (
     <div className="space-y-6">
@@ -388,88 +369,91 @@ function QuestionnaireEditor({ questionnaireId, onBack }: { questionnaireId: str
           <Button variant="ghost" onClick={onBack} className="mb-4">
             ← Back to Forms
           </Button>
-          <h2 className="text-2xl font-semibold text-foreground mb-2">Weight Loss Assessment - Editor</h2>
-          <p className="text-muted-foreground">Drag and drop to reorder steps, click to edit questions</p>
+          <h2 className="text-2xl font-semibold text-foreground mb-2">{questionnaire?.title || 'Questionnaire'} - Editor</h2>
+          <p className="text-muted-foreground">Review and manage questionnaire steps</p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline">
+          <Button variant="outline" disabled>
             <Eye className="mr-2 h-4 w-4" />
             Preview
           </Button>
-          <Button>
+          <Button disabled>
             Save Changes
           </Button>
         </div>
       </div>
 
-      {/* Step Blocks */}
       <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="text-lg font-semibold text-foreground">Questionnaire Steps</CardTitle>
-          <p className="text-sm text-muted-foreground">Click on a step to edit questions, use arrows to reorder</p>
+          <p className="text-sm text-muted-foreground">{steps.length} total steps</p>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {steps
-              .sort((a, b) => a.order - b.order)
-              .map((step, index) => (
-                <div
-                  key={step.id}
-                  className="flex items-center justify-between p-4 border-2 border-dashed border-border rounded-lg hover:border-primary/50 transition-colors cursor-pointer"
-                  onClick={() => editStep(step.id)}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-primary">{step.order}</span>
+            {steps.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No steps available for this questionnaire.</div>
+            ) : (
+              steps
+                .slice()
+                .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                .map((step) => (
+                  <div
+                    key={step.id}
+                    className="p-4 border border-border rounded-lg bg-muted/30"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                            {step.stepOrder ?? 0}
+                          </span>
+                          <h4 className="font-medium text-foreground">{step.title}</h4>
+                        </div>
+                        {step.description && (
+                          <p className="text-sm text-muted-foreground">{step.description}</p>
+                        )}
+                        <div className="text-xs text-muted-foreground">
+                          {(step.questions?.length || 0)} questions
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-medium text-foreground">{step.title}</h4>
-                      <p className="text-sm text-muted-foreground">{step.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{step.questions} questions</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        moveStep(step.id, 'up')
-                      }}
-                      disabled={index === 0}
-                    >
-                      <ArrowUpDown className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        editStep(step.id)
-                      }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
 
-            {/* Add New Step */}
-            <div className="flex items-center justify-center p-8 border-2 border-dashed border-muted rounded-lg hover:border-primary/50 transition-colors cursor-pointer">
-              <div className="text-center">
-                <Plus className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Add New Step</p>
-              </div>
-            </div>
+                    {step.questions && step.questions.length > 0 && (
+                      <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+                        {step.questions
+                          .slice()
+                          .sort((a, b) => (a.questionOrder ?? 0) - (b.questionOrder ?? 0))
+                          .map((question) => (
+                            <div key={question.id} className="text-sm">
+                              <div className="font-medium text-foreground">
+                                {question.questionOrder}. {question.questionText}
+                              </div>
+                              <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                                Type: {question.answerType}
+                              </div>
+
+                              {question.options && question.options.length > 0 && (
+                                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                  {question.options
+                                    .slice()
+                                    .sort((a, b) => (a.optionOrder ?? 0) - (b.optionOrder ?? 0))
+                                    .map((option) => (
+                                      <div key={option.id} className="flex items-center gap-2">
+                                        <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-muted text-[10px] font-medium">
+                                          {option.optionOrder ?? 0}
+                                        </span>
+                                        <span>{option.optionText}</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+            )}
           </div>
         </CardContent>
       </Card>
