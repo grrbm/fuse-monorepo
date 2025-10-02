@@ -21,6 +21,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
@@ -32,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const storedToken = localStorage.getItem('tenant_token')
     const storedUser = localStorage.getItem('tenant_user')
-    
+
     if (storedToken && storedUser) {
       try {
         const userData = JSON.parse(storedUser)
@@ -50,9 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true)
     setError(null)
-    
+
     try {
-      const response = await fetch('/api/auth/signin', {
+      const response = await fetch(`${API_BASE_URL}/auth/signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -62,17 +64,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json()
 
-      if (response.ok && data.success) {
-        const { token: authToken, user: userData } = data.data
-        
+      if (response.ok && data.success && data.token && data.user) {
+        const authToken = data.token as string
+        const userData = data.user as User
+
         // Store in localStorage
         localStorage.setItem('tenant_token', authToken)
         localStorage.setItem('tenant_user', JSON.stringify(userData))
-        
+
         // Update state
         setToken(authToken)
         setUser(userData)
-        
+
         setIsLoading(false)
         return true
       } else {
@@ -90,9 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = async (email: string, password: string, name: string, organization: string): Promise<boolean> => {
     setIsLoading(true)
     setError(null)
-    
+
     try {
-      const response = await fetch('/api/auth/signup', {
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -102,17 +105,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json()
 
-      if (response.ok && data.success) {
-        const { token: authToken, user: userData } = data.data
-        
+      if (response.ok && data.success && data.token && data.user) {
+        const authToken = data.token as string
+        const userData = data.user as User
+
         // Store in localStorage
         localStorage.setItem('tenant_token', authToken)
         localStorage.setItem('tenant_user', JSON.stringify(userData))
-        
+
         // Update state
         setToken(authToken)
         setUser(userData)
-        
+
         setIsLoading(false)
         return true
       } else {
@@ -131,12 +135,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear localStorage
     localStorage.removeItem('tenant_token')
     localStorage.removeItem('tenant_user')
-    
+
     // Clear state
     setToken(null)
     setUser(null)
     setError(null)
-    
+
     // Redirect to signin
     router.push('/signin')
   }
