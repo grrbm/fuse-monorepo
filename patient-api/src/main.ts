@@ -3674,6 +3674,22 @@ app.get("/questionnaires/templates", authenticateJWT, async (req, res) => {
   }
 });
 
+app.get("/questionnaires", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const questionnaires = await questionnaireService.listForUser(currentUser.id);
+    res.status(200).json({ success: true, data: questionnaires });
+  } catch (error) {
+    console.error('❌ Error fetching questionnaires for user:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch questionnaires' });
+  }
+});
+
 app.post("/questionnaires/import", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);

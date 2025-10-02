@@ -63,19 +63,33 @@ export default function Forms() {
       setError(null)
 
       try {
-        const templatesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/templates`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
+        const [templatesRes, questionnairesRes] = await Promise.all([
+          fetch(`${baseUrl}/questionnaires/templates`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+          fetch(`${baseUrl}/questionnaires`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+        ])
 
         if (!templatesRes.ok) {
           throw new Error('Failed to load templates')
         }
 
-        const templatesData = await templatesRes.json()
+        if (!questionnairesRes.ok) {
+          throw new Error('Failed to load questionnaires')
+        }
 
-        setQuestionnaires([])
+        const templatesData = await templatesRes.json()
+        const questionnairesData = await questionnairesRes.json()
+
+        setQuestionnaires(questionnairesData.data || [])
         setTemplates(templatesData.data || [])
       } catch (err: any) {
         console.error('❌ Error loading questionnaires:', err)

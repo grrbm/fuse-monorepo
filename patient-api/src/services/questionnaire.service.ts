@@ -4,12 +4,51 @@ import Question from '../models/Question';
 import QuestionOption from '../models/QuestionOption';
 import Treatment from '../models/Treatment';
 import User from '../models/User';
+import { Transaction } from 'sequelize';
 
 class QuestionnaireService {
 
     async listTemplates() {
         return Questionnaire.findAll({
             where: { isTemplate: true },
+            include: [
+                {
+                    model: QuestionnaireStep,
+                    as: 'steps',
+                    include: [
+                        {
+                            model: Question,
+                            as: 'questions',
+                            include: [
+                                {
+                                    model: QuestionOption,
+                                    as: 'options',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+            order: [
+                [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+                [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+                [
+                    { model: QuestionnaireStep, as: 'steps' },
+                    { model: Question, as: 'questions' },
+                    { model: QuestionOption, as: 'options' },
+                    'optionOrder',
+                    'ASC',
+                ],
+            ],
+        });
+    }
+
+    async listForUser(userId: string) {
+        return Questionnaire.findAll({
+            where: {
+                userId,
+                isTemplate: false,
+            },
             include: [
                 {
                     model: QuestionnaireStep,
@@ -75,7 +114,12 @@ class QuestionnaireService {
 
         const treatment = await Treatment.findOne({ where: { clinicId: user.clinicId } });
 
-        const transaction = await Questionnaire.sequelize?.transaction();
+        const sequelize = Questionnaire.sequelize;
+        if (!sequelize) {
+            throw new Error('Database connection not available');
+        }
+
+        const transaction: Transaction = await sequelize.transaction();
 
         try {
             const clone = await Questionnaire.create(
