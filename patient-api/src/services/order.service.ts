@@ -9,7 +9,7 @@ import { OrderStatus } from '../models/Order';
 import ShippingOrder, { OrderShippingStatus } from '../models/ShippingOrder';
 import ShippingAddress from '../models/ShippingAddress';
 import UserService from "./user.service";
-import StripeService from "./stripe";
+import { StripeService } from '@fuse/stripe';
 import Subscription, { PaymentStatus } from "../models/Subscription";
 import TreatmentPlan from "../models/TreatmentPlan";
 import Physician from "../models/Physician";
@@ -395,4 +395,4 @@ class OrderService {
 
 
 export default OrderService;
-export { ListOrdersByClinicResult, ListOrdersByUserResult, PaginationParams };
+export type { ListOrdersByClinicResult, ListOrdersByUserResult, PaginationParams };

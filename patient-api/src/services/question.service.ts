@@ -31,7 +31,7 @@ class QuestionService {
             throw new Error('Questionnaire step not found');
         }
 
-        if (step.questionnaire.treatment.clinicId !== user.clinicId) {
+        if (step.questionnaire?.treatment && step.questionnaire.treatment.clinicId !== user.clinicId) {
             throw new Error('Questionnaire does not belong to your clinic');
         }
 
@@ -76,7 +76,7 @@ class QuestionService {
             limit: 1
         });
 
-        const nextQuestionOrder = existingQuestions.length > 0 ? existingQuestions[0].questionOrder + 1 : 1;
+        const nextQuestionOrder = existingQuestions.length > 0 && existingQuestions[0]?.questionOrder ? existingQuestions[0].questionOrder + 1 : 1;
 
         // Create the question
         const question = await Question.create({

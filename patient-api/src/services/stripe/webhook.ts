@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import Payment from '../../models/Payment';
 import Order, { OrderStatus } from '../../models/Order';
-import StripeService from '.';
+import { StripeService } from '@fuse/stripe';
 import Subscription from '../../models/Subscription';
 import Clinic, { PaymentStatus } from '../../models/Clinic';
 import BrandSubscription, { BrandSubscriptionStatus } from '../../models/BrandSubscription';

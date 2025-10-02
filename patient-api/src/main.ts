@@ -24,12 +24,45 @@ import TreatmentService from "./services/treatment.service";
 import PaymentService from "./services/payment.service";
 import { processStripeWebhook } from "./services/stripe/webhook";
 import TreatmentProducts from "./models/TreatmentProducts";
-import TreatmentPlan from "./models/TreatmentPlan";
+import TreatmentPlan, { BillingInterval } from "./models/TreatmentPlan";
 import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
-import StripeService from "./services/stripe";
+import { StripeService } from "@fuse/stripe";
+import {
+  signInSchema,
+  signUpSchema,
+  updateProfileSchema,
+  clinicUpdateSchema,
+  productCreateSchema,
+  productUpdateSchema,
+  treatmentCreateSchema,
+  treatmentUpdateSchema,
+  treatmentPlanCreateSchema,
+  treatmentPlanUpdateSchema,
+  createPaymentIntentSchema,
+  confirmPaymentSchema,
+  treatmentSubscriptionSchema,
+  clinicSubscriptionSchema,
+  brandCheckoutSchema,
+  brandPaymentIntentSchema,
+  brandConfirmPaymentSchema,
+  upgradeSubscriptionSchema,
+  cancelSubscriptionSchema,
+  questionnaireStepCreateSchema,
+  questionnaireStepUpdateSchema,
+  questionnaireStepOrderSchema,
+  questionCreateSchema,
+  questionUpdateSchema,
+  questionOrderSchema,
+  physicianCreateSchema,
+  physicianUpdateSchema,
+  messageCreateSchema,
+  patientUpdateSchema,
+  brandTreatmentSchema,
+  organizationUpdateSchema
+} from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
@@ -181,15 +214,16 @@ app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 // Auth routes
 app.post("/auth/signup", async (req, res) => {
   try {
-    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName, clinicId, website, businessType } = req.body;
-
-    // Basic validation
-    if (!firstName || !lastName || !email || !password) {
+    const validation = signUpSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { firstName, lastName, email, password, role, dateOfBirth, phoneNumber, clinicName, clinicId, website, businessType } = validation.data;
 
     // Validate clinic name for providers/brands (both require clinics)
     if ((role === 'provider' || role === 'brand') && !clinicName?.trim()) {
@@ -335,14 +369,18 @@ app.post("/auth/signup", async (req, res) => {
 
 app.post("/auth/signin", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    // Validate request body
+    const validation = signInSchema.safeParse(req.body);
 
-    if (!email || !password) {
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required"
+        message: "Validation failed",
+        errors: validation.error.format()
       });
     }
+
+    const { email, password } = validation.data;
 
     // Find user by email
     const user = await User.findByEmail(email);
@@ -527,7 +565,21 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { firstName, lastName, phoneNumber, dob, address, city, state, zipCode, selectedPlanCategory, selectedPlanType, selectedPlanName, selectedPlanPrice, selectedDownpaymentType, selectedDownpaymentName, selectedDownpaymentPrice, planSelectionTimestamp } = req.body;
+    // Validate request body using updateProfileSchema
+    const validation = updateProfileSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+
+    const { firstName, lastName, phoneNumber, dob, address, city, state, zipCode,
+      selectedPlanCategory, selectedPlanType, selectedPlanName, selectedPlanPrice,
+      selectedDownpaymentType, selectedDownpaymentName, selectedDownpaymentPrice, planSelectionTimestamp } = validation.data;
+
 
     // Check if this is a plan selection request (doesn't require firstName/lastName)
     const isPlanSelection = selectedPlanCategory && selectedPlanType;
@@ -537,7 +589,7 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "First name and last name are required for profile updates"
-      });
+      })
     }
 
     // Find user in database
@@ -690,7 +742,6 @@ app.get("/clinic/:id", authenticateJWT, async (req, res) => {
 app.put("/clinic/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, logo } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -699,6 +750,18 @@ app.put("/clinic/:id", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using clinicUpdateSchema
+    const validation = clinicUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, logo } = validation.data;
 
     // Fetch full user data from database to get clinicId
     const user = await User.findByPk(currentUser.id);
@@ -1117,7 +1180,6 @@ app.get("/products/:id", authenticateJWT, async (req, res) => {
 // Create product endpoint
 app.post("/products", authenticateJWT, async (req, res) => {
   try {
-    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1126,6 +1188,18 @@ app.post("/products", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using productCreateSchema
+    const validation = productCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = validation.data;
 
     // Fetch full user data from database to get role and clinicId
     const user = await User.findByPk(currentUser.id);
@@ -1149,7 +1223,7 @@ app.post("/products", authenticateJWT, async (req, res) => {
     // Create the product
     const newProduct = await Product.create({
       name,
-      price: parseFloat(price),
+      price: price,
       description,
       pharmacyProductId,
       dosage,
@@ -1258,7 +1332,6 @@ app.delete("/products/:id", authenticateJWT, async (req, res) => {
 app.put("/products/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1267,6 +1340,18 @@ app.put("/products/:id", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using productUpdateSchema
+    const validation = productUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, price, description, pharmacyProductId, dosage, activeIngredients, active } = validation.data;
 
     // Fetch full user data from database to get role
     const user = await User.findByPk(currentUser.id);
@@ -1299,7 +1384,7 @@ app.put("/products/:id", authenticateJWT, async (req, res) => {
     // Update the product
     const updatedProduct = await product.update({
       name,
-      price: parseFloat(price),
+      price: price,
       description,
       pharmacyProductId,
       dosage,
@@ -1728,7 +1813,6 @@ app.get("/treatments/by-clinic-id/:clinicId", authenticateJWT, async (req, res) 
 // Create new treatment
 app.post("/treatments", authenticateJWT, async (req, res) => {
   try {
-    const { name, defaultQuestionnaire } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1737,6 +1821,18 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using treatmentCreateSchema
+    const validation = treatmentCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, defaultQuestionnaire } = validation.data;
 
     // Fetch full user data from database to get clinicId
     const user = await User.findByPk(currentUser.id);
@@ -1752,14 +1848,6 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Only doctors and brand users with a clinic can create treatments"
-      });
-    }
-
-    // Validate input
-    if (!name || !name.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Treatment name is required"
       });
     }
 
@@ -1787,7 +1875,7 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
       const questionnaireService = new QuestionnaireService()
 
       console.log("Creating default questionnaire")
-      questionnaireService.createDefaultQuestionnaire(treatment.id)
+      questionnaireService.createDefaultQuestionnaire(treatment.id, true, null)
     }
 
 
@@ -1812,10 +1900,8 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
 });
 
 // Update treatment
-app.put("/treatments", authenticateJWT, async (req, res) => {
+app.put(["/treatments/:treatmentId", "/treatments"], authenticateJWT, async (req, res) => {
   try {
-    const { treatmentId } = req.body;
-
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1825,8 +1911,30 @@ app.put("/treatments", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Get treatmentId from URL param or body
+    const treatmentId = req.params.treatmentId || req.body.treatmentId;
 
-    const treatment = await treatmentService.updateTreatment(treatmentId, req.body, currentUser.id)
+    if (!treatmentId) {
+      return res.status(400).json({
+        success: false,
+        message: "treatmentId is required in URL or request body"
+      });
+    }
+
+    // Validate request body using treatmentUpdateSchema
+    const validation = treatmentUpdateSchema.safeParse({
+      ...req.body,
+      treatmentId
+    });
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const treatment = await treatmentService.updateTreatment(treatmentId, validation.data, currentUser.id)
 
 
     res.status(200).json({
@@ -1977,7 +2085,6 @@ app.get("/treatment-plans/treatment/:treatmentId", authenticateJWT, async (req, 
 // Create treatment plan
 app.post("/treatment-plans", authenticateJWT, async (req, res) => {
   try {
-    const { name, description, billingInterval, price, active, popular, sortOrder, treatmentId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -1987,20 +2094,24 @@ app.post("/treatment-plans", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!name || !billingInterval || price === undefined || !treatmentId) {
+    // Validate request body using treatmentPlanCreateSchema
+    const validation = treatmentPlanCreateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "name, billingInterval, price, and treatmentId are required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { name, description, billingInterval, price, active, popular, sortOrder, treatmentId } = validation.data;
 
     // Create treatment plan service instance
     const treatmentPlanService = new TreatmentPlanService();
 
     // Create treatment plan
     const newTreatmentPlan = await treatmentPlanService.createTreatmentPlan(
-      { name, description, billingInterval, price, active, popular, sortOrder, treatmentId },
+      { name, description, billingInterval: billingInterval as BillingInterval, price, active, popular, sortOrder, treatmentId },
       currentUser.id
     );
 
@@ -2040,7 +2151,6 @@ app.post("/treatment-plans", authenticateJWT, async (req, res) => {
 // Update treatment plan
 app.put("/treatment-plans", authenticateJWT, async (req, res) => {
   try {
-    const { planId, name, description, billingInterval, price, active, popular, sortOrder } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2050,13 +2160,17 @@ app.put("/treatment-plans", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!planId) {
+    // Validate request body using treatmentPlanUpdateSchema
+    const validation = treatmentPlanUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "planId is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { planId, name, description, billingInterval, price, active, popular, sortOrder } = validation.data;
 
     // Create treatment plan service instance
     const treatmentPlanService = new TreatmentPlanService();
@@ -2064,7 +2178,7 @@ app.put("/treatment-plans", authenticateJWT, async (req, res) => {
     // Update treatment plan
     const updatedTreatmentPlan = await treatmentPlanService.updateTreatmentPlan(
       planId,
-      { name, description, billingInterval, price, active, popular, sortOrder },
+      { name, description, billingInterval: billingInterval as BillingInterval, price, active, popular, sortOrder },
       currentUser.id
     );
 
@@ -2163,15 +2277,6 @@ app.delete("/treatment-plans", authenticateJWT, async (req, res) => {
 // Create order and payment intent
 app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
   try {
-    const {
-      amount,
-      currency = 'usd',
-      treatmentId,
-      selectedProducts = {},
-      selectedPlan = 'monthly',
-      shippingInfo = {},
-      questionnaireAnswers = {}
-    } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2181,21 +2286,25 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate amount
-    if (!amount || amount <= 0) {
+    // Validate request body using createPaymentIntentSchema
+    const validation = createPaymentIntentSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Invalid amount"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
 
-    // Validate required fields
-    if (!treatmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "Treatment ID is required"
-      });
-    }
+    const {
+      amount,
+      currency,
+      treatmentId,
+      selectedProducts,
+      selectedPlan,
+      shippingInfo,
+      questionnaireAnswers
+    } = validation.data;
 
     // Get treatment with products to validate order
     const treatment = await Treatment.findByPk(treatmentId, {
@@ -2336,7 +2445,6 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
 // Confirm payment completion
 app.post("/confirm-payment", authenticateJWT, async (req, res) => {
   try {
-    const { paymentIntentId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2345,6 +2453,18 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using confirmPaymentSchema
+    const validation = confirmPaymentSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { paymentIntentId } = validation.data;
 
     // Retrieve payment intent from Stripe
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -2394,7 +2514,17 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
 // Create subscription for treatment
 app.post("/payments/treatment/sub", async (req, res) => {
   try {
-    const { treatmentId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = req.body;
+    // Validate request body using treatmentSubscriptionSchema
+    const validation = treatmentSubscriptionSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { treatmentId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = validation.data;
 
     let currentUser = null;
 
@@ -2500,7 +2630,6 @@ app.post("/payments/treatment/sub", async (req, res) => {
 // Create subscription for clinic
 app.post("/payments/clinic/sub", authenticateJWT, async (req, res) => {
   try {
-    const { clinicId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -2510,13 +2639,17 @@ app.post("/payments/clinic/sub", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!clinicId) {
+    // Validate request body using clinicSubscriptionSchema
+    const validation = clinicSubscriptionSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Clinic ID is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { clinicId } = validation.data;
 
     const paymentService = new PaymentService();
     const result = await paymentService.subscribeClinic(
@@ -2891,7 +3024,6 @@ app.get("/brand-subscriptions/current", authenticateJWT, async (req, res) => {
 app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
-    const { planType, successUrl, cancelUrl } = req.body;
 
     if (currentUser?.role !== 'brand') {
       return res.status(403).json({
@@ -2899,6 +3031,18 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
         message: "Access denied. Brand role required."
       });
     }
+
+    // Validate request body using brandCheckoutSchema
+    const validation = brandCheckoutSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { planType, successUrl, cancelUrl } = validation.data;
 
     // Check if user already has an active subscription
     const existingSubscription = await BrandSubscription.findOne({
@@ -2942,36 +3086,15 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
     }
 
     // Create or retrieve Stripe customer
-    let stripeCustomer;
-    try {
-      const customers = await stripe.customers.list({
-        email: currentUser.email,
-        limit: 1
-      });
+    let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
+      userId: currentUser.id,
+      role: currentUser.role
+    });
 
-      if (customers.data.length > 0) {
-        stripeCustomer = customers.data[0];
-      } else {
-        stripeCustomer = await stripe.customers.create({
-          email: currentUser.email,
-          name: `${user.firstName} ${user.lastName}`,
-          metadata: {
-            userId: currentUser.id,
-            role: currentUser.role
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error creating Stripe customer:', error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create payment customer"
-      });
-    }
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
-      customer: stripeCustomer.id,
+      customer: stripeCustomerId,
       payment_method_types: ['card'],
       line_items: [{
         price: selectedPlan.stripePriceId,
@@ -3015,10 +3138,6 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
     console.log('🚀 BACKEND CREATE: Request body:', JSON.stringify(req.body, null, 2))
 
     const currentUser = getCurrentUser(req);
-    const { planType, amount, currency, upgrade } = req.body;
-
-    console.log('🚀 BACKEND CREATE: Plan type received:', planType)
-    console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
 
     if (currentUser?.role !== 'brand') {
       console.error('❌ BACKEND CREATE: Access denied - not brand role')
@@ -3028,7 +3147,21 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // If this is a new subscription (not an upgrade), block when already active
+    // Validate request body using brandPaymentIntentSchema
+    const validation = brandPaymentIntentSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { planType, amount, currency, upgrade } = validation.data;
+
+    console.log('🚀 BACKEND CREATE: Plan type received:', planType)
+    console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
+
     if (!upgrade) {
       const existingSubscription = await BrandSubscription.findOne({
         where: {
@@ -3037,11 +3170,13 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
         }
       });
 
+
       if (existingSubscription) {
         return res.status(400).json({
           success: false,
           message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
         });
+
       }
     }
 
@@ -3071,24 +3206,14 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Create or retrieve Stripe customer
-    let stripeCustomerId = user.stripeCustomerId;
 
-    if (!stripeCustomerId) {
-      const stripeCustomer = await stripe.customers.create({
-        email: user.email,
-        name: `${user.firstName} ${user.lastName}`,
-        metadata: {
-          userId: user.id,
-          role: user.role,
-          planType: planType
-        }
-      });
-      await user.update({
-        stripeCustomerId: stripeCustomer.id
-      })
-      stripeCustomerId = stripeCustomer.id
-    }
+    // Create or retrieve Stripe customer
+    let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
+      userId: user.id,
+      role: user.role,
+      planType: planType
+    });
+
 
     // Create Payment Intent
     const paymentIntent = await stripe.paymentIntents.create({
@@ -3132,10 +3257,6 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     console.log('🚀 BACKEND: Request body:', JSON.stringify(req.body, null, 2))
 
     const currentUser = getCurrentUser(req);
-    const { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency } = req.body;
-
-    console.log('🚀 BACKEND: Extracted data:', { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency })
-    console.log('🚀 BACKEND: Current user:', currentUser?.id, currentUser?.role)
 
     if (currentUser?.role !== 'brand') {
       console.error('❌ BACKEND: Access denied - not brand role')
@@ -3144,6 +3265,21 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
         message: "Access denied. Brand role required."
       });
     }
+
+    // Validate request body using brandConfirmPaymentSchema
+    const validation = brandConfirmPaymentSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency } = validation.data;
+
+    console.log('🚀 BACKEND: Extracted data:', { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency })
+    console.log('🚀 BACKEND: Current user:', currentUser?.id, currentUser?.role)
 
     console.log('🚀 BACKEND: Getting plan and user data...')
     console.log('🚀 BACKEND: Plan type received:', planType)
@@ -3175,43 +3311,16 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     }
 
     // Create or retrieve Stripe customer
-    console.log('🚀 BACKEND: Creating/retrieving Stripe customer...')
-    let stripeCustomer;
-    try {
-      const customers = await stripe.customers.list({
-        email: user.email,
-        limit: 1
-      });
-      console.log('🚀 BACKEND: Customers found:', customers.data.length)
-
-      if (customers.data.length > 0) {
-        stripeCustomer = customers.data[0];
-        console.log('🚀 BACKEND: Using existing customer:', stripeCustomer.id)
-      } else {
-        console.log('🚀 BACKEND: Creating new customer...')
-        stripeCustomer = await stripe.customers.create({
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
-          metadata: {
-            userId: user.id,
-            role: user.role,
-            planType: planType
-          }
-        });
-        console.log('🚀 BACKEND: Created customer:', stripeCustomer.id)
-      }
-    } catch (stripeError) {
-      console.error('❌ BACKEND: Error with Stripe customer:', stripeError);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create Stripe customer"
-      });
-    }
+    let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
+      userId: user.id,
+      role: user.role,
+      planType: planType
+    });
 
     // Create Stripe subscription instead of one-time payment
     console.log('🚀 BACKEND: Creating Stripe subscription...')
     console.log('🚀 BACKEND: Plan type:', planType)
-    console.log('🚀 BACKEND: Customer ID:', stripeCustomer.id)
+    console.log('🚀 BACKEND: Customer ID:', stripeCustomerId)
     console.log('🚀 BACKEND: Payment method ID:', paymentMethodId)
 
     // Get the price ID for the selected plan
@@ -3237,12 +3346,12 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
     // Attach payment method to customer first
     console.log('🚀 BACKEND: Attaching payment method to customer...')
     await stripe.paymentMethods.attach(paymentMethodId, {
-      customer: stripeCustomer.id,
+      customer: stripeCustomerId,
     });
     console.log('🚀 BACKEND: Payment method attached successfully')
 
     // Ensure customer has default payment method set for future invoices
-    await stripe.customers.update(stripeCustomer.id, {
+    await stripe.customers.update(stripeCustomerId, {
       invoice_settings: {
         default_payment_method: paymentMethodId
       }
@@ -3250,7 +3359,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
 
     console.log('🚀 BACKEND: Creating Stripe subscription schedule...')
     const subscriptionSchedule = await stripe.subscriptionSchedules.create({
-      customer: stripeCustomer.id,
+      customer: stripeCustomerId,
       start_date: 'now',
       metadata: {
         userId: currentUser.id,
@@ -3331,7 +3440,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
         planCategory: planCategory || null,
         status: BrandSubscriptionStatus.ACTIVE,
         stripeSubscriptionId: subscription.id,
-        stripeCustomerId: stripeCustomer.id,
+        stripeCustomerId: stripeCustomerId,
         stripePriceId: priceId,
         monthlyPrice: selectedPlan.monthlyPrice,
         downpaymentAmount: introductoryPlan.monthlyPrice,
@@ -3468,26 +3577,29 @@ app.post("/brand-subscriptions/change", authenticateJWT, async (req, res) => {
 // Upgrade subscriptions for a treatment to a new treatment plan
 app.post("/subscriptions/upgrade", authenticateJWT, async (req, res) => {
   try {
-    const { treatmentId } = req.body;
     const currentUser = getCurrentUser(req);
-    const userId = currentUser?.id;
 
-    if (!treatmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "treatmentId is required"
-      });
-    }
-
-    if (!userId) {
+    if (!currentUser) {
       return res.status(401).json({
         success: false,
         message: "User authentication required"
       });
     }
 
+    // Validate request body using upgradeSubscriptionSchema
+    const validation = upgradeSubscriptionSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { treatmentId } = validation.data;
+
     const subscriptionService = new SubscriptionService();
-    await subscriptionService.upgradeSubscription(treatmentId, userId);
+    await subscriptionService.upgradeSubscription(treatmentId, currentUser.id);
 
     res.json({
       success: true,
@@ -3505,26 +3617,29 @@ app.post("/subscriptions/upgrade", authenticateJWT, async (req, res) => {
 // Cancel all subscriptions for a treatment
 app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
   try {
-    const { treatmentId } = req.body;
     const currentUser = getCurrentUser(req);
-    const userId = currentUser?.id;
 
-    if (!treatmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "treatmentId is required"
-      });
-    }
-
-    if (!userId) {
+    if (!currentUser) {
       return res.status(401).json({
         success: false,
         message: "User authentication required"
       });
     }
 
+    // Validate request body using cancelSubscriptionSchema
+    const validation = cancelSubscriptionSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { treatmentId } = validation.data;
+
     const subscriptionService = new SubscriptionService();
-    await subscriptionService.cancelSubscriptions(treatmentId, userId);
+    await subscriptionService.cancelSubscriptions(treatmentId, currentUser.id);
 
     res.json({
       success: true,
@@ -3541,9 +3656,48 @@ app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
 
 // Questionnaire routes
 // Add questionnaire step
+const questionnaireService = new QuestionnaireService();
+
+app.get("/questionnaires/templates", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const templates = await questionnaireService.listTemplates();
+    res.status(200).json({ success: true, data: templates });
+  } catch (error) {
+    console.error('❌ Error fetching questionnaire templates:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch questionnaire templates' });
+  }
+});
+
+app.post("/questionnaires/import", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { templateId } = req.body;
+
+    if (!templateId) {
+      return res.status(400).json({ success: false, message: 'templateId is required' });
+    }
+
+    const clone = await questionnaireService.duplicateTemplate(templateId, currentUser.id);
+    res.status(201).json({ success: true, data: clone });
+  } catch (error: any) {
+    console.error('❌ Error importing questionnaire template:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to import template' });
+  }
+});
+
 app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
   try {
-    const { questionnaireId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -3553,13 +3707,17 @@ app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!questionnaireId) {
+    // Validate request body using questionnaireStepCreateSchema
+    const validation = questionnaireStepCreateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "treatmentId and questionnaireId are required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { questionnaireId } = validation.data;
 
     // Create questionnaire step service instance
     const questionnaireStepService = new QuestionnaireStepService();
@@ -3602,7 +3760,6 @@ app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
 // Update questionnaire step
 app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
   try {
-    const { stepId, title, description } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -3612,21 +3769,17 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!stepId) {
+    // Validate request body using questionnaireStepUpdateSchema
+    const validation = questionnaireStepUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "stepId is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
 
-    // Validate at least one field to update is provided
-    if (title === undefined && description === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one field (title or description) must be provided"
-      });
-    }
+    const { stepId, title, description } = validation.data;
 
     // Create questionnaire step service instance
     const questionnaireStepService = new QuestionnaireStepService();
@@ -3733,7 +3886,6 @@ app.delete("/questionnaires/step", authenticateJWT, async (req, res) => {
 // Update questionnaire steps order
 app.post("/questionnaires/step/order", authenticateJWT, async (req, res) => {
   try {
-    const { steps, questionnaireId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -3743,30 +3895,17 @@ app.post("/questionnaires/step/order", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!steps || !Array.isArray(steps)) {
+    // Validate request body using questionnaireStepOrderSchema
+    const validation = questionnaireStepOrderSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "steps array is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
 
-    if (!questionnaireId) {
-      return res.status(400).json({
-        success: false,
-        message: "questionnaireId is required"
-      });
-    }
-
-    // Validate steps array structure
-    for (const step of steps) {
-      if (!step.id || typeof step.stepOrder !== 'number') {
-        return res.status(400).json({
-          success: false,
-          message: "Each step must have id (string) and stepOrder (number)"
-        });
-      }
-    }
+    const { steps, questionnaireId } = validation.data;
 
     // Create questionnaire step service instance
     const questionnaireStepService = new QuestionnaireStepService();
@@ -3898,7 +4037,6 @@ app.get("/questions/step/:stepId", authenticateJWT, async (req, res) => {
 // Create question
 app.post("/questions", authenticateJWT, async (req, res) => {
   try {
-    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -3908,13 +4046,17 @@ app.post("/questions", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!stepId || !questionText || !answerType) {
+    // Validate request body using questionCreateSchema
+    const validation = questionCreateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "stepId, questionText, and answerType are required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -3962,7 +4104,6 @@ app.post("/questions", authenticateJWT, async (req, res) => {
 // Update question
 app.put("/questions", authenticateJWT, async (req, res) => {
   try {
-    const { questionId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -3972,13 +4113,17 @@ app.put("/questions", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!questionId) {
+    // Validate request body using questionUpdateSchema
+    const validation = questionUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "questionId is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { questionId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -4084,7 +4229,6 @@ app.delete("/questions", authenticateJWT, async (req, res) => {
 // Update questions order
 app.post("/questions/order", authenticateJWT, async (req, res) => {
   try {
-    const { questions, stepId } = req.body;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -4094,30 +4238,17 @@ app.post("/questions/order", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!questions || !Array.isArray(questions)) {
+    // Validate request body using questionOrderSchema
+    const validation = questionOrderSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "questions array is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
 
-    if (!stepId) {
-      return res.status(400).json({
-        success: false,
-        message: "stepId is required"
-      });
-    }
-
-    // Validate questions array structure
-    for (const question of questions) {
-      if (!question.id || typeof question.questionOrder !== 'number') {
-        return res.status(400).json({
-          success: false,
-          message: "Each question must have id (string) and questionOrder (number)"
-        });
-      }
-    }
+    const { questions, stepId } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -4176,7 +4307,17 @@ app.put("/patient", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { address, ...data } = req.body
+    // Validate request body using patientUpdateSchema
+    const validation = patientUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { address, ...data } = validation.data
 
     const result = await userService.updateUserPatient(currentUser.id, data, address);
 
@@ -4337,7 +4478,6 @@ app.post("/webhook/pharmacy", async (req, res) => {
 // Physicians endpoints
 app.post("/physicians", authenticateJWT, async (req, res) => {
   try {
-
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -4347,9 +4487,19 @@ app.post("/physicians", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Validate request body using physicianCreateSchema
+    const validation = physicianCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
     const physicianService = new PhysicianService();
 
-    const physician = await physicianService.createPhysician(req.body, currentUser.id);
+    const physician = await physicianService.createPhysician(validation.data, currentUser.id);
 
     res.status(201).json({
       success: true,
@@ -4380,14 +4530,17 @@ app.put("/physicians", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { physicianId, ...updateData } = req.body;
-
-    if (!physicianId) {
+    // Validate request body using physicianUpdateSchema
+    const validation = physicianUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "physicianId is required"
+        message: "Validation failed",
+        errors: validation.error.errors
       });
     }
+
+    const { physicianId, ...updateData } = validation.data;
 
     const physicianService = new PhysicianService();
 
@@ -4447,7 +4600,6 @@ app.get("/messages", authenticateJWT, async (req, res) => {
 app.post("/messages", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
-    const { text, reference_message_id, files } = req.body;
 
     if (!currentUser) {
       return res.status(401).json({
@@ -4455,6 +4607,18 @@ app.post("/messages", authenticateJWT, async (req, res) => {
         message: "Not authenticated"
       });
     }
+
+    // Validate request body using messageCreateSchema
+    const validation = messageCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { text, reference_message_id, files } = validation.data;
 
     const payload = {
       channel: 'patient',
@@ -4711,7 +4875,17 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const { businessName, phone, address, city, state, zipCode, website } = req.body;
+    // Validate request body using organizationUpdateSchema
+    const validation = organizationUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { businessName, phone, address, city, state, zipCode, website } = validation.data;
 
     const user = await User.findByPk(currentUser.id);
     if (!user) {
@@ -5194,11 +5368,17 @@ app.post("/brand-treatments", authenticateJWT, async (req, res) => {
       return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
     }
 
-    const { treatmentId, brandLogo, brandColor } = req.body;
-
-    if (!treatmentId) {
-      return res.status(400).json({ success: false, message: "treatmentId is required" });
+    // Validate request body using brandTreatmentSchema
+    const validation = brandTreatmentSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
     }
+
+    const { treatmentId, brandLogo, brandColor } = validation.data;
 
     const treatment = await Treatment.findByPk(treatmentId);
 

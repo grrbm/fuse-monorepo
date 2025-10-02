@@ -1,6 +1,12 @@
 import Stripe from 'stripe';
 import { stripe } from './config';
-import { BillingInterval } from '../../models/TreatmentPlan';
+
+export enum BillingInterval {
+  MONTHLY = 'monthly',
+  QUARTERLY = 'quarterly',
+  BIANNUAL = 'biannual',
+  ANNUAL = 'annual'
+}
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000"
 
@@ -38,10 +44,11 @@ class StripeService {
     });
   }
 
-  async createCustomer(email: string, name?: string) {
+  async createCustomer(email: string, name?: string, metadata?: Record<string, string>) {
     return stripe.customers.create({
       email,
-      name
+      name,
+      metadata
     });
 
   }
@@ -249,24 +256,24 @@ class StripeService {
     });
   };
 
-  // Subscription Schedule methods
-  async getSubscriptionSchedule(scheduleId: string, options?: {
-    expand?: string[];
-  }) {
-    const expandOptions = options?.expand || [];
-    return stripe.subscriptionSchedules.retrieve(scheduleId, {
-      expand: expandOptions
-    });
-  }
-
-  async updateSubscriptionSchedule(
-    scheduleId: string,
-    params: Stripe.SubscriptionScheduleUpdateParams
-  ) {
-    return stripe.subscriptionSchedules.update(scheduleId, params);
-  }
+    // Subscription Schedule methods
+    async getSubscriptionSchedule(scheduleId: string, options?: {
+      expand?: string[];
+    }) {
+      const expandOptions = options?.expand || [];
+      return stripe.subscriptionSchedules.retrieve(scheduleId, {
+        expand: expandOptions
+      });
+    }
+  
+    async updateSubscriptionSchedule(
+      scheduleId: string,
+      params: Stripe.SubscriptionScheduleUpdateParams
+    ) {
+      return stripe.subscriptionSchedules.update(scheduleId, params);
+    }
+  
 
 }
 
-export default StripeService;
-export { CheckoutSubParams };
+export { type CheckoutSubParams, StripeService };

@@ -3,7 +3,7 @@ import TreatmentPlan from '../models/TreatmentPlan';
 import Order from '../models/Order';
 import Treatment from '../models/Treatment';
 import User from '../models/User';
-import StripeService from './stripe';
+import { StripeService } from '@fuse/stripe';
 
 class SubscriptionService {
     private stripeService: StripeService;

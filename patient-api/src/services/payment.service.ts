@@ -6,7 +6,7 @@ import OrderItem from '../models/OrderItem';
 import Product from '../models/Product';
 import TreatmentProducts from '../models/TreatmentProducts';
 import ShippingAddress from '../models/ShippingAddress';
-import StripeService from './stripe';
+import { StripeService } from '@fuse/stripe';
 import TreatmentPlan, { BillingInterval } from '../models/TreatmentPlan';
 import Payment from '../models/Payment';
 
@@ -326,4 +326,4 @@ class PaymentService {
 }
 
 export default PaymentService;
-export { SubscribeTreatmentResult, SubscribeClinicResult };
+export type { SubscribeTreatmentResult, SubscribeClinicResult };

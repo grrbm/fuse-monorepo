@@ -120,7 +120,7 @@ class PatientService {
 }
 
 export default PatientService;
-export {
+export type {
   CreatePatientRequest,
   PatientAllergy,
   PatientDisease,

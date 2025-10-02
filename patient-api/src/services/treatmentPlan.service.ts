@@ -1,7 +1,7 @@
 import TreatmentPlan, { BillingInterval } from '../models/TreatmentPlan';
 import Treatment from '../models/Treatment';
 import User from '../models/User';
-import StripeService from './stripe';
+import { StripeService } from '@fuse/stripe';
 
 interface CreateTreatmentPlanData {
     name: string;

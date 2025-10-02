@@ -1,76 +1,40 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = 'tenant-portal-jwt-secret-key'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
-interface LoginRequest {
-  email: string
-  password: string
-}
-
-interface LoginResponse {
-  success: boolean
-  data?: {
-    token: string
-    user: {
-      id: string
-      email: string
-      name: string
-      role: string
-      organization?: string
-    }
-  }
-  message?: string
-}
-
-const mockUsers = [
-  {
-    id: '1',
-    email: 'tenant@demo.com',
-    password: 'demo123',
-    name: 'Demo Tenant',
-    role: 'tenant',
-    organization: 'Demo Healthcare Corp'
-  }
-]
-
-export default function handler(
+export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<LoginResponse>
+  res: NextApiResponse
 ) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' })
   }
 
-  const { email, password }: LoginRequest = req.body
+  const { email, password } = req.body as { email?: string; password?: string }
 
   if (!email || !password) {
     return res.status(400).json({ success: false, message: 'Email and password are required' })
   }
 
-  const user = mockUsers.find(u => u.email === email && u.password === password)
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/signin`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    })
 
-  if (!user) {
-    return res.status(401).json({ success: false, message: 'Invalid credentials' })
-  }
+    const data = await response.json()
 
-  const token = jwt.sign(
-    { 
-      userId: user.id, 
-      email: user.email,
-      role: user.role 
-    },
-    JWT_SECRET,
-    { expiresIn: '24h' }
-  )
-
-  const { password: _, ...userWithoutPassword } = user
-
-  res.status(200).json({
-    success: true,
-    data: {
-      token,
-      user: userWithoutPassword
+    if (!response.ok) {
+      return res.status(response.status).json(data)
     }
-  })
+
+    return res.status(200).json(data)
+  } catch (error) {
+    console.error('Tenant portal signin proxy error:', error)
+    return res.status(500).json({ success: false, message: 'Failed to sign in. Please try again.' })
+  }
 }

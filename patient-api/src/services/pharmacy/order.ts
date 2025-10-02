@@ -194,4 +194,4 @@ class OrderService {
 }
 
 export default OrderService;
-export { CreateOrderRequest, PharmacyProduct, UpdatePatientAddressRequest };
+export type { CreateOrderRequest, PharmacyProduct, UpdatePatientAddressRequest };

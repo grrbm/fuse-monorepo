@@ -1,10 +1,11 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useAuth } from "@/contexts/AuthContext"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { 
-  FileText, 
+import {
+  FileText,
   Plus,
   Copy,
   Edit,
@@ -12,45 +13,118 @@ import {
   Eye,
   MoreHorizontal,
   ArrowUpDown,
-  Settings
+  Settings,
+  Loader2,
 } from "lucide-react"
 
-// Mock questionnaire data
-const questionnaires = [
-  {
-    id: "1",
-    title: "Weight Loss Assessment",
-    description: "Comprehensive weight loss evaluation questionnaire",
-    steps: 8,
-    questions: 24,
-    status: "Active",
-    lastModified: "2 days ago",
-    createdFrom: "Original Template"
-  },
-  {
-    id: "2", 
-    title: "Weight Loss Assessment (Custom)",
-    description: "Modified version for specific clinic requirements",
-    steps: 6,
-    questions: 18,
-    status: "Draft",
-    lastModified: "1 week ago",
-    createdFrom: "Weight Loss Assessment"
-  }
-]
+interface QuestionnaireTemplate {
+  id: string
+  title: string
+  description?: string | null
+  checkoutStepPosition: number
+  treatmentId: string | null
+  isTemplate?: boolean
+  steps?: Array<{
+    id: string
+    title: string
+    description?: string | null
+    stepOrder: number
+    questions?: Array<{
+      id: string
+      questionText: string
+      answerType: string
+      questionOrder: number
+      options?: Array<{
+        id: string
+        optionText: string
+        optionValue: string
+        optionOrder: number
+      }>
+    }>
+  }>
+}
 
 export default function Forms() {
+  const { token } = useAuth()
+  const [questionnaires, setQuestionnaires] = useState<QuestionnaireTemplate[]>([])
+  const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedQuestionnaire, setSelectedQuestionnaire] = useState<string | null>(null)
   const [showEditor, setShowEditor] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [templateError, setTemplateError] = useState<string | null>(null)
 
-  const handleCreateCopy = (originalId: string) => {
-    // This would create a copy of the questionnaire
-    console.log(`Creating copy of questionnaire ${originalId}`)
-  }
+  useEffect(() => {
+    const loadData = async () => {
+      if (!token) return
+      setLoading(true)
+      setError(null)
+
+      try {
+        const templatesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/templates`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!templatesRes.ok) {
+          throw new Error('Failed to load templates')
+        }
+
+        const templatesData = await templatesRes.json()
+
+        setQuestionnaires([])
+        setTemplates(templatesData.data || [])
+      } catch (err: any) {
+        console.error('❌ Error loading questionnaires:', err)
+        setError(err.message || 'Failed to load questionnaires')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [token])
 
   const handleEditQuestionnaire = (id: string) => {
     setSelectedQuestionnaire(id)
     setShowEditor(true)
+  }
+
+  const handleImportTemplate = async (templateId: string) => {
+    if (!token) return
+    setIsImporting(true)
+    setTemplateError(null)
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ templateId }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.message || 'Failed to import template')
+      }
+
+      const data = await response.json()
+      if (data?.data) {
+        setQuestionnaires((prev) => [data.data, ...prev])
+      }
+
+      setShowTemplateModal(false)
+    } catch (err: any) {
+      console.error('❌ Error importing template:', err)
+      setTemplateError(err.message || 'Unable to import template')
+    } finally {
+      setIsImporting(false)
+    }
   }
 
   return (
@@ -66,18 +140,33 @@ export default function Forms() {
               <p className="text-muted-foreground">Create and manage questionnaire templates</p>
             </div>
             <div className="flex space-x-2">
-              <Button variant="outline">
+              <Button variant="outline" onClick={() => setShowTemplateModal(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Import Template
-              </Button>
-              <Button onClick={() => handleCreateCopy("1")}>
-                <Copy className="mr-2 h-4 w-4" />
-                Create Copy
               </Button>
             </div>
           </div>
 
-          {!showEditor ? (
+          {error && (
+            <Card className="border-destructive/40 bg-destructive/10">
+              <CardContent className="p-4 text-sm text-destructive">
+                {error}
+              </CardContent>
+            </Card>
+          )}
+
+          {loading ? (
+            <Card>
+              <CardContent className="p-8 flex items-center justify-center gap-3 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" /> Loading questionnaires...
+              </CardContent>
+            </Card>
+          ) : showEditor ? (
+            <QuestionnaireEditor
+              questionnaireId={selectedQuestionnaire}
+              onBack={() => setShowEditor(false)}
+            />
+          ) : (
             <>
               {/* Questionnaire List */}
               <Card className="bg-card border-border">
@@ -97,36 +186,20 @@ export default function Forms() {
                             <h4 className="font-medium text-foreground">{questionnaire.title}</h4>
                             <p className="text-sm text-muted-foreground">{questionnaire.description}</p>
                             <div className="flex items-center space-x-4 mt-2 text-xs text-muted-foreground">
-                              <span>{questionnaire.steps} steps</span>
-                              <span>{questionnaire.questions} questions</span>
-                              <span>Modified {questionnaire.lastModified}</span>
-                              {questionnaire.createdFrom !== "Original Template" && (
-                                <span className="text-blue-600">Copy of: {questionnaire.createdFrom}</span>
-                              )}
+                              <span>{questionnaire.steps?.length || 0} steps</span>
+                              <span>
+                                {questionnaire.steps?.reduce((total, step) => total + (step.questions?.length || 0), 0) || 0} questions
+                              </span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <span className={`px-2 py-1 text-xs rounded-full ${
-                            questionnaire.status === 'Active' 
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            {questionnaire.status}
-                          </span>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => handleEditQuestionnaire(questionnaire.id)}
                           >
                             <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleCreateCopy(questionnaire.id)}
-                          >
-                            <Copy className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="sm">
                             <Eye className="h-4 w-4" />
@@ -151,7 +224,7 @@ export default function Forms() {
                     </div>
                     <div className="space-y-2">
                       <p className="text-2xl font-bold text-foreground">{questionnaires.length}</p>
-                      <p className="text-xs text-muted-foreground">Active questionnaire templates</p>
+                      <p className="text-xs text-muted-foreground">Questionnaires available for your clinic</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -159,12 +232,12 @@ export default function Forms() {
                 <Card className="bg-card border-border">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-medium text-muted-foreground">Custom Forms</h3>
+                      <h3 className="text-sm font-medium text-muted-foreground">Available Templates</h3>
                       <Copy className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="space-y-2">
-                      <p className="text-2xl font-bold text-foreground">1</p>
-                      <p className="text-xs text-muted-foreground">Customized versions created</p>
+                      <p className="text-2xl font-bold text-foreground">{templates.length}</p>
+                      <p className="text-xs text-muted-foreground">Reusable templates</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -183,15 +256,69 @@ export default function Forms() {
                 </Card>
               </div>
             </>
-          ) : (
-            /* Questionnaire Editor */
-            <QuestionnaireEditor 
-              questionnaireId={selectedQuestionnaire}
-              onBack={() => setShowEditor(false)}
-            />
           )}
         </main>
       </div>
+
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <Card className="max-w-2xl w-full">
+            <CardHeader className="flex flex-row items-start justify-between">
+              <div>
+                <CardTitle>Import Template</CardTitle>
+                <CardDescription>Select a template to duplicate into your clinic.</CardDescription>
+              </div>
+              <Button variant="ghost" onClick={() => setShowTemplateModal(false)}>
+                Close
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {templateError && (
+                <div className="rounded-md bg-destructive/10 border border-destructive/40 px-3 py-2 text-sm text-destructive">
+                  {templateError}
+                </div>
+              )}
+
+              {templates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No templates available.</p>
+              ) : (
+                <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                  {templates.map((template) => (
+                    <div key={template.id} className="border border-border rounded-lg p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <h3 className="font-medium text-foreground">{template.title}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {template.description || 'No description provided.'}
+                          </p>
+                          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                            <span>{template.steps?.length || 0} steps</span>
+                            <span>
+                              {template.steps?.reduce((total, step) => total + (step.questions?.length || 0), 0) || 0} questions
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handleImportTemplate(template.id)}
+                          disabled={isImporting}
+                        >
+                          {isImporting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importing
+                            </>
+                          ) : (
+                            'Import'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
@@ -208,7 +335,7 @@ function QuestionnaireEditor({ questionnaireId, onBack }: { questionnaireId: str
       order: 1
     },
     {
-      id: "step2", 
+      id: "step2",
       title: "Medical History",
       description: "Previous medical conditions and treatments",
       questions: 6,
@@ -272,8 +399,8 @@ function QuestionnaireEditor({ questionnaireId, onBack }: { questionnaireId: str
             {steps
               .sort((a, b) => a.order - b.order)
               .map((step, index) => (
-                <div 
-                  key={step.id} 
+                <div
+                  key={step.id}
                   className="flex items-center justify-between p-4 border-2 border-dashed border-border rounded-lg hover:border-primary/50 transition-colors cursor-pointer"
                   onClick={() => editStep(step.id)}
                 >
@@ -288,8 +415,8 @@ function QuestionnaireEditor({ questionnaireId, onBack }: { questionnaireId: str
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -299,8 +426,8 @@ function QuestionnaireEditor({ questionnaireId, onBack }: { questionnaireId: str
                     >
                       <ArrowUpDown className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -309,8 +436,8 @@ function QuestionnaireEditor({ questionnaireId, onBack }: { questionnaireId: str
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -321,7 +448,7 @@ function QuestionnaireEditor({ questionnaireId, onBack }: { questionnaireId: str
                   </div>
                 </div>
               ))}
-            
+
             {/* Add New Step */}
             <div className="flex items-center justify-center p-8 border-2 border-dashed border-muted rounded-lg hover:border-primary/50 transition-colors cursor-pointer">
               <div className="text-center">
