@@ -25,7 +25,7 @@ class QuestionnaireStepService {
             throw new Error('Questionnaire not found');
         }
 
-        if (questionnaire.treatment.clinicId !== user.clinicId) {
+        if (questionnaire.treatment && questionnaire.treatment.clinicId !== user.clinicId) {
             throw new Error('Questionnaire does not belong to your clinic');
         }
 

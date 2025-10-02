@@ -1,10 +1,18 @@
-import { Table, Column, DataType, BelongsTo, ForeignKey, HasMany } from 'sequelize-typescript';
+import { Table, Column, DataType, BelongsTo, ForeignKey, HasMany, Index } from 'sequelize-typescript';
 import Entity from './Entity';
 import Treatment from './Treatment';
 import QuestionnaireStep from './QuestionnaireStep';
+import User from './User';
 
 @Table({
     freezeTableName: true,
+    indexes: [
+        {
+            unique: true,
+            fields: ['title', 'userId'],
+            name: 'questionnaire_title_user_unique',
+        },
+    ],
 })
 export default class Questionnaire extends Entity {
     @Column({
@@ -29,12 +37,29 @@ export default class Questionnaire extends Entity {
     @ForeignKey(() => Treatment)
     @Column({
         type: DataType.UUID,
-        allowNull: false,
+        allowNull: true,
     })
-    declare treatmentId: string;
-    
+    declare treatmentId: string | null;
+
     @BelongsTo(() => Treatment)
-    declare treatment: Treatment;
+    declare treatment?: Treatment | null;
+
+    @ForeignKey(() => User)
+    @Column({
+        type: DataType.UUID,
+        allowNull: true,
+    })
+    declare userId: string | null;
+
+    @BelongsTo(() => User)
+    declare user?: User | null;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare isTemplate: boolean;
 
     @HasMany(() => QuestionnaireStep)
     declare steps: QuestionnaireStep[];

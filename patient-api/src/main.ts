@@ -1785,7 +1785,7 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
       const questionnaireService = new QuestionnaireService()
 
       console.log("Creating default questionnaire")
-      questionnaireService.createDefaultQuestionnaire(treatment.id)
+      questionnaireService.createDefaultQuestionnaire(treatment.id, true, null)
     }
 
 
@@ -3539,6 +3539,46 @@ app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
 
 // Questionnaire routes
 // Add questionnaire step
+const questionnaireService = new QuestionnaireService();
+
+app.get("/questionnaires/templates", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const templates = await questionnaireService.listTemplates();
+    res.status(200).json({ success: true, data: templates });
+  } catch (error) {
+    console.error('❌ Error fetching questionnaire templates:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch questionnaire templates' });
+  }
+});
+
+app.post("/questionnaires/import", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { templateId } = req.body;
+
+    if (!templateId) {
+      return res.status(400).json({ success: false, message: 'templateId is required' });
+    }
+
+    const clone = await questionnaireService.duplicateTemplate(templateId, currentUser.id);
+    res.status(201).json({ success: true, data: clone });
+  } catch (error: any) {
+    console.error('❌ Error importing questionnaire template:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to import template' });
+  }
+});
+
 app.post("/questionnaires/step", authenticateJWT, async (req, res) => {
   try {
     const { questionnaireId } = req.body;
@@ -4681,7 +4721,7 @@ app.get("/organization", authenticateJWT, async (req, res) => {
     }
 
     const clinic = user.clinic;
-    
+
     res.json({
       clinicName: clinic?.name || '',
       businessName: clinic?.name || '',
@@ -4777,7 +4817,7 @@ app.post("/upload/logo", authenticateJWT, upload.single('logo'), async (req, res
             console.error('Error deleting old logo:', error);
           }
         }
-        
+
         await clinic.update({ logo: s3Url });
       }
     }
@@ -4810,7 +4850,7 @@ app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
     const plan = await BrandSubscriptionPlans.findOne({
       where: { planType: subscription.planType }
     });
-    
+
     res.json({
       id: subscription.id,
       planId: plan?.id || null,

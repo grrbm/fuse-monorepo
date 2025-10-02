@@ -3,10 +3,109 @@ import QuestionnaireStep from '../models/QuestionnaireStep';
 import Question from '../models/Question';
 import QuestionOption from '../models/QuestionOption';
 import Treatment from '../models/Treatment';
+import User from '../models/User';
 
 class QuestionnaireService {
 
-    async createDefaultQuestionnaire(treatmentId: string): Promise<Questionnaire> {
+    async listTemplates() {
+        return Questionnaire.findAll({ where: { isTemplate: true } });
+    }
+
+    async duplicateTemplate(questionnaireId: string, userId: string) {
+        const template = await Questionnaire.findByPk(questionnaireId, {
+            include: [
+                {
+                    model: QuestionnaireStep,
+                    as: 'steps',
+                    include: [
+                        {
+                            model: Question,
+                            as: 'questions',
+                            include: [
+                                {
+                                    model: QuestionOption,
+                                    as: 'options',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        });
+
+        if (!template) {
+            throw new Error('Template not found');
+        }
+
+        const user = await User.findByPk(userId);
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        const treatment = await Treatment.findOne({ where: { clinicId: user.clinicId } });
+
+        const transaction = await Questionnaire.sequelize?.transaction();
+
+        try {
+            const clone = await Questionnaire.create(
+                {
+                    title: template.title,
+                    description: template.description,
+                    checkoutStepPosition: template.checkoutStepPosition,
+                    treatmentId: treatment ? treatment.id : template.treatmentId,
+                    isTemplate: false,
+                    userId,
+                },
+                { transaction }
+            );
+
+            for (const step of template.steps || []) {
+                const clonedStep = await QuestionnaireStep.create(
+                    {
+                        title: step.title,
+                        description: step.description,
+                        stepOrder: step.stepOrder,
+                        questionnaireId: clone.id,
+                    },
+                    { transaction }
+                );
+
+                for (const question of step.questions || []) {
+                    const clonedQuestion = await Question.create(
+                        {
+                            questionText: question.questionText,
+                            answerType: question.answerType,
+                            isRequired: question.isRequired,
+                            questionOrder: question.questionOrder,
+                            stepId: clonedStep.id,
+                        },
+                        { transaction }
+                    );
+
+                    if (question.options?.length) {
+                        await QuestionOption.bulkCreate(
+                            question.options.map((option) => ({
+                                optionText: option.optionText,
+                                optionValue: option.optionValue,
+                                optionOrder: option.optionOrder,
+                                questionId: clonedQuestion.id,
+                            })),
+                            { transaction }
+                        );
+                    }
+                }
+            }
+
+            await transaction?.commit();
+
+            return clone;
+        } catch (error) {
+            await transaction?.rollback();
+            throw error;
+        }
+    }
+
+    async createDefaultQuestionnaire(treatmentId: string, isTemplate = false, userId?: string | null): Promise<Questionnaire> {
         const treatment = await Treatment.findByPk(treatmentId);
 
         if (!treatment) {
@@ -17,7 +116,9 @@ class QuestionnaireService {
             title: `${treatment.name} Intake Form`,
             description: `Medical intake questionnaire for ${treatment.name} treatment`,
             checkoutStepPosition: -1,
-            treatmentId: treatmentId
+            treatmentId: treatmentId,
+            isTemplate,
+            userId: userId ?? null,
         });
 
         // Step 1: How are you feeling?
