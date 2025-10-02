@@ -102,17 +102,26 @@ export const handlePaymentIntentFailed = async (failedPayment: Stripe.PaymentInt
     // Find payment record
     const failedPaymentRecord = await Payment.findOne({
         where: { stripePaymentIntentId: failedPayment.id },
-        include: [{ model: Order, as: 'order' }]
+        include: [
+            { model: Order, as: 'order' },
+            { model: BrandSubscription, as: 'brandSubscription' }
+        ]
     });
 
     if (failedPaymentRecord) {
         // Update payment status
         await failedPaymentRecord.updateFromStripeEvent({ object: failedPayment });
 
-        // Update order status
-        await failedPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
-
-        console.log('❌ Order updated to cancelled status:', failedPaymentRecord.order.orderNumber);
+        if (failedPaymentRecord.order) {
+            // Update order status
+            await failedPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
+            console.log('❌ Order updated to cancelled status:', failedPaymentRecord.order.orderNumber);
+        }
+        if (failedPaymentRecord.brandSubscription) {
+            // Update brand subscription status
+            await failedPaymentRecord.brandSubscription.cancel();
+            console.log('❌ Brand subscription updated to cancelled status:', failedPaymentRecord.brandSubscription.id);
+        }
     }
 };
 
@@ -122,17 +131,27 @@ export const handlePaymentIntentCanceled = async (cancelledPayment: Stripe.Payme
     // Find payment record
     const cancelledPaymentRecord = await Payment.findOne({
         where: { stripePaymentIntentId: cancelledPayment.id },
-        include: [{ model: Order, as: 'order' }]
+        include: [
+            { model: Order, as: 'order' },
+            { model: BrandSubscription, as: 'brandSubscription' }
+        ]
     });
 
     if (cancelledPaymentRecord) {
         // Update payment status
         await cancelledPaymentRecord.updateFromStripeEvent({ object: cancelledPayment });
 
-        // Update order status
-        await cancelledPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
+        if (cancelledPaymentRecord.order) {
+            // Update order status
+            await cancelledPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
+            console.log('🚫 Order updated to cancelled status:', cancelledPaymentRecord.order.orderNumber);
+        }
 
-        console.log('🚫 Order updated to cancelled status:', cancelledPaymentRecord.order.orderNumber);
+        if (cancelledPaymentRecord.brandSubscription) {
+            // Update brand subscription status
+            await cancelledPaymentRecord.brandSubscription.cancel();
+            console.log('❌ Brand subscription updated to cancelled status:', cancelledPaymentRecord.brandSubscription.id);
+        }
     }
 };
 
