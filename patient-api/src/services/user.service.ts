@@ -29,7 +29,7 @@ class UserService {
         this.stripeService = new StripeService();
     }
 
-    async getOrCreateCustomerId(user: User, metadata: Record<string, string>): Promise<string> {
+    async getOrCreateCustomerId(user: User, metadata?: Record<string, string>): Promise<string> {
         let stripeCustomerId = user.stripeCustomerId;
 
         if (!stripeCustomerId) {
@@ -37,7 +37,7 @@ class UserService {
 
             const stripeCustomer = await this.stripeService.createCustomer(user.email
                 , `${user.firstName} ${user.lastName}`,
-                metadata
+                metadata || {}
             );
 
             await user.update({
