@@ -29,6 +29,7 @@ interface QuestionnaireTemplate {
     title: string
     description?: string | null
     stepOrder: number
+    category?: 'normal' | 'user_profile' | 'doctor'
     questions?: Array<{
       id: string
       questionText: string
@@ -361,6 +362,30 @@ export default function Forms() {
 function QuestionnaireEditor({ questionnaire, onBack }: { questionnaire: QuestionnaireTemplate | null, onBack: () => void }) {
   const steps = questionnaire?.steps ?? []
 
+  const getCategoryStyles = (category?: string) => {
+    switch (category) {
+      case 'user_profile':
+        return {
+          container: 'bg-emerald-950/5 border-emerald-300/60',
+          badge: 'bg-emerald-500/20 text-emerald-700',
+          chip: 'bg-emerald-500/15 text-emerald-800 border border-emerald-400/60'
+        }
+      case 'doctor':
+        return {
+          container: 'bg-rose-950/5 border-rose-300/60',
+          badge: 'bg-rose-500/20 text-rose-700',
+          chip: 'bg-rose-500/15 text-rose-800 border border-rose-400/60'
+        }
+      case 'normal':
+      default:
+        return {
+          container: 'bg-sky-950/5 border-sky-300/60',
+          badge: 'bg-sky-500/20 text-sky-700',
+          chip: 'bg-sky-500/15 text-sky-800 border border-sky-400/60'
+        }
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Editor Header */}
@@ -396,63 +421,70 @@ function QuestionnaireEditor({ questionnaire, onBack }: { questionnaire: Questio
               steps
                 .slice()
                 .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
-                .map((step) => (
-                  <div
-                    key={step.id}
-                    className="p-4 border border-border rounded-lg bg-muted/30"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                            {step.stepOrder ?? 0}
-                          </span>
-                          <h4 className="font-medium text-foreground">{step.title}</h4>
-                        </div>
-                        {step.description && (
-                          <p className="text-sm text-muted-foreground">{step.description}</p>
-                        )}
-                        <div className="text-xs text-muted-foreground">
-                          {(step.questions?.length || 0)} questions
+                .map((step) => {
+                  const styles = getCategoryStyles(step.category)
+                  return (
+                    <div
+                      key={step.id}
+                      className={`p-4 rounded-lg border ${styles.container}`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${styles.badge}`}>
+                              {step.stepOrder ?? 0}
+                            </span>
+                            <h4 className="font-medium text-foreground">{step.title}</h4>
+                          </div>
+                          <div className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium uppercase tracking-wide ${styles.chip}`}>
+                            <span>Category:</span>
+                            <span>{step.category || 'normal'}</span>
+                          </div>
+                          {step.description && (
+                            <p className="text-sm text-muted-foreground">{step.description}</p>
+                          )}
+                          <div className="text-xs text-muted-foreground">
+                            {(step.questions?.length || 0)} questions
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {step.questions && step.questions.length > 0 && (
-                      <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
-                        {step.questions
-                          .slice()
-                          .sort((a, b) => (a.questionOrder ?? 0) - (b.questionOrder ?? 0))
-                          .map((question) => (
-                            <div key={question.id} className="text-sm">
-                              <div className="font-medium text-foreground">
-                                {question.questionOrder}. {question.questionText}
-                              </div>
-                              <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                                Type: {question.answerType}
-                              </div>
-
-                              {question.options && question.options.length > 0 && (
-                                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                                  {question.options
-                                    .slice()
-                                    .sort((a, b) => (a.optionOrder ?? 0) - (b.optionOrder ?? 0))
-                                    .map((option) => (
-                                      <div key={option.id} className="flex items-center gap-2">
-                                        <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-muted text-[10px] font-medium">
-                                          {option.optionOrder ?? 0}
-                                        </span>
-                                        <span>{option.optionText}</span>
-                                      </div>
-                                    ))}
+                      {step.questions && step.questions.length > 0 && (
+                        <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
+                          {step.questions
+                            .slice()
+                            .sort((a, b) => (a.questionOrder ?? 0) - (b.questionOrder ?? 0))
+                            .map((question) => (
+                              <div key={question.id} className="text-sm">
+                                <div className="font-medium text-foreground">
+                                  {question.questionOrder}. {question.questionText}
                                 </div>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                ))
+                                <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                                  Type: {question.answerType}
+                                </div>
+
+                                {question.options && question.options.length > 0 && (
+                                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                    {question.options
+                                      .slice()
+                                      .sort((a, b) => (a.optionOrder ?? 0) - (b.optionOrder ?? 0))
+                                      .map((option) => (
+                                        <div key={option.id} className="flex items-center gap-2">
+                                          <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-muted text-[10px] font-medium">
+                                            {option.optionOrder ?? 0}
+                                          </span>
+                                          <span>{option.optionText}</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
             )}
           </div>
         </CardContent>
