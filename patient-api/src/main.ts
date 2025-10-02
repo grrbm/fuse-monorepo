@@ -4140,6 +4140,49 @@ app.post("/questions", authenticateJWT, async (req, res) => {
   }
 });
 
+app.put("/questions/:questionId", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const { questionId } = req.params;
+
+    const questionService = new QuestionService();
+
+    const updated = await questionService.updateQuestion(questionId, req.body, currentUser.id);
+
+    res.status(200).json({
+      success: true,
+      message: "Question updated successfully",
+      data: updated
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating question:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+        error.message.includes('does not belong to your clinic')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update question"
+    });
+  }
+});
+
 // Update question
 app.put("/questions", authenticateJWT, async (req, res) => {
   try {

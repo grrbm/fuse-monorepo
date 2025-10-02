@@ -4,6 +4,7 @@ import QuestionnaireStep from '../models/QuestionnaireStep';
 import Questionnaire from '../models/Questionnaire';
 import Treatment from '../models/Treatment';
 import User from '../models/User';
+import { Transaction } from 'sequelize';
 
 class QuestionService {
     async validateQuestionOperation(questionnaireStepId: string, userId: string) {
@@ -133,49 +134,66 @@ class QuestionService {
         // Validate question operation permission
         await this.validateQuestionOperation(question.stepId, userId);
 
-        // Update question fields
-        await question.update({
-            ...(updateData.questionText !== undefined && { questionText: updateData.questionText }),
-            ...(updateData.answerType !== undefined && { answerType: updateData.answerType }),
-            ...(updateData.isRequired !== undefined && { isRequired: updateData.isRequired }),
-            ...(updateData.placeholder !== undefined && { placeholder: updateData.placeholder }),
-            ...(updateData.helpText !== undefined && { helpText: updateData.helpText }),
-            ...(updateData.footerNote !== undefined && { footerNote: updateData.footerNote })
-        });
-
-        // Update options if provided
-        if (updateData.options) {
-            // Delete existing options
-            await QuestionOption.destroy({
-                where: { questionId: questionId },
-                force: true
-            });
-
-            // Create new options
-            if (updateData.options.length > 0) {
-                const optionPromises = updateData.options.map((option, index) =>
-                    QuestionOption.create({
-                        optionText: option.optionText,
-                        optionValue: option.optionValue || option.optionText,
-                        optionOrder: index + 1,
-                        questionId: questionId
-                    })
-                );
-
-                await Promise.all(optionPromises);
-            }
+        const sequelize = Question.sequelize;
+        if (!sequelize) {
+            throw new Error('Database connection not available');
         }
 
-        // Return updated question with options
-        return await Question.findByPk(questionId, {
-            include: [
-                {
-                    model: QuestionOption,
-                    as: 'options',
-                    order: [['optionOrder', 'ASC']]
+        const transaction: Transaction = await sequelize.transaction();
+
+        try {
+            // Update question fields
+            await question.update({
+                ...(updateData.questionText !== undefined && { questionText: updateData.questionText }),
+                ...(updateData.answerType !== undefined && { answerType: updateData.answerType }),
+                ...(updateData.isRequired !== undefined && { isRequired: updateData.isRequired }),
+                ...(updateData.placeholder !== undefined && { placeholder: updateData.placeholder }),
+                ...(updateData.helpText !== undefined && { helpText: updateData.helpText }),
+                ...(updateData.footerNote !== undefined && { footerNote: updateData.footerNote })
+            }, { transaction });
+
+            // Update options if provided
+            if (updateData.options) {
+                const questionIdValue = question.id;
+
+                // Delete existing options
+                await QuestionOption.destroy({
+                    where: { questionId: questionIdValue },
+                    transaction,
+                    force: true,
+                });
+
+                // Create new options
+                if (updateData.options.length > 0) {
+                    const optionPromises = updateData.options.map((option, index) =>
+                        QuestionOption.create({
+                            optionText: option.optionText,
+                            optionValue: option.optionValue ?? option.optionText,
+                            optionOrder: index + 1,
+                            questionId: questionIdValue,
+                        }, { transaction })
+                    );
+
+                    await Promise.all(optionPromises);
                 }
-            ]
-        });
+            }
+
+            await transaction.commit();
+
+            // Return updated question with options
+            return await Question.findByPk(questionId, {
+                include: [
+                    {
+                        model: QuestionOption,
+                        as: 'options',
+                        order: [['optionOrder', 'ASC']]
+                    }
+                ]
+            });
+        } catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
     }
 
     async deleteQuestion(questionId: string, userId: string) {
