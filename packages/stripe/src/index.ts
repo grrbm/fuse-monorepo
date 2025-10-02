@@ -57,6 +57,20 @@ class StripeService {
     return stripe.customers.retrieve(customerId);
   }
 
+  async updateCustomerDefaultPaymentMethod(customerId: string, paymentMethodId: string) {
+    return stripe.customers.update(customerId, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId
+      }
+    });
+  }
+
+  async attachPaymentMethodToCustomer(paymentMethodId: string, customerId: string) {
+    return stripe.paymentMethods.attach(paymentMethodId, {
+      customer: customerId
+    });
+  }
+
   async getPaymentIntent(paymentIntentId: string) {
     return stripe.paymentIntents.retrieve(
       paymentIntentId,
