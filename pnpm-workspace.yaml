@@ -4,6 +4,7 @@ packages:
   - fuse-admin-frontend/
   - fuse-tenant-portal-frontend/
   - packages/*
+  - tooling/*
   
 catalog:
   # Build & Development Tools

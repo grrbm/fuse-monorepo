@@ -42,7 +42,7 @@ class QuestionnaireStepService {
             limit: 1
         });
 
-        const nextStepOrder = existingSteps.length > 0 ? existingSteps[0].stepOrder + 1 : 1;
+        const nextStepOrder = existingSteps.length > 0 && existingSteps[0]?.stepOrder ? existingSteps[0].stepOrder + 1 : 1;
 
         const newStep = await QuestionnaireStep.create({
             title: 'New Step',

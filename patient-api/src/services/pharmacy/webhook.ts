@@ -337,4 +337,4 @@ class PharmacyWebhookService {
 }
 
 export default new PharmacyWebhookService();
-export { PharmacyWebhookEvent };
+export type { PharmacyWebhookEvent };

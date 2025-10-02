@@ -28,4 +28,4 @@ export default class Entity extends Model {
 
 type IEntity = typeof Entity;
 
-export { IEntity };
+export { type IEntity };

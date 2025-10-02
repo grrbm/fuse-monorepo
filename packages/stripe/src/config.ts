@@ -1,12 +1,12 @@
 import Stripe from "stripe";
 
-export interface StripeConfig {
+interface StripeConfig {
   secretKey: string;
   webhookSecret: string;
   apiVersion: string;
 }
 
-export const stripeConfig: StripeConfig = {
+const stripeConfig: StripeConfig = {
   secretKey: process.env.STRIPE_SECRET_KEY!,
   webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
   apiVersion: '2024-06-20'
@@ -22,6 +22,8 @@ if (!stripeConfig.webhookSecret) {
 }
 
 // Initialize Stripe with secret key
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-08-27.basil",
 });
+
+export { stripeConfig, stripe };

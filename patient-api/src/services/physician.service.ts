@@ -258,4 +258,4 @@ class PhysicianService {
 }
 
 export default PhysicianService;
-export { CreatePhysicianData, UpdatePhysicianData, PhysicianLicenseType };
+export type { CreatePhysicianData, UpdatePhysicianData, PhysicianLicenseType };

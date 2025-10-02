@@ -2,8 +2,7 @@ import Product from '../models/Product';
 import User from '../models/User';
 import TreatmentProducts from '../models/TreatmentProducts';
 import { getTreatment } from './db/treatment';
-import Treatment from '../models/Treatment';
-import StripeService from './stripe';
+import { StripeService } from '@fuse/stripe';
 
 interface TreatmentProductData {
     productId: string;
@@ -18,6 +17,7 @@ interface TreatmentProductAssociationResult {
 
 interface UpdateTreatmentData {
     name?: string;
+    active?: boolean;
     price?: number;
     products?: TreatmentProductData[];
 }
@@ -196,7 +196,7 @@ class TreatmentService {
                 };
             }
 
-            if (user.role !== 'doctor') {
+            if (user.role !== 'doctor' && user.role !== 'brand') {
                 return {
                     success: false,
                     message: "Access denied",
@@ -230,6 +230,10 @@ class TreatmentService {
             }
             if (updateData.price !== undefined) {
                 updateFields.price = updateData.price;
+            }
+
+            if (updateData.active !== undefined) {
+                updateFields.active = updateData.active;
             }
 
             if (Object.keys(updateFields).length > 0) {
@@ -281,4 +285,4 @@ class TreatmentService {
 }
 
 export default TreatmentService;
-export { TreatmentProductAssociationResult, TreatmentProductData, UpdateTreatmentData, UpdateTreatmentResult };
+export type { TreatmentProductAssociationResult, TreatmentProductData, UpdateTreatmentData, UpdateTreatmentResult };

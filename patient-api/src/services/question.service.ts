@@ -76,7 +76,7 @@ class QuestionService {
             limit: 1
         });
 
-        const nextQuestionOrder = existingQuestions.length > 0 ? existingQuestions[0].questionOrder + 1 : 1;
+        const nextQuestionOrder = existingQuestions.length > 0 && existingQuestions[0]?.questionOrder ? existingQuestions[0].questionOrder + 1 : 1;
 
         // Create the question
         const question = await Question.create({
