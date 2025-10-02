@@ -20,6 +20,13 @@ export default class QuestionnaireStep extends Entity {
     declare description: string;
 
     @Column({
+        type: DataType.ENUM('normal', 'user_profile', 'doctor'),
+        allowNull: false,
+        defaultValue: 'normal',
+    })
+    declare category: 'normal' | 'user_profile' | 'doctor';
+
+    @Column({
         type: DataType.INTEGER,
         allowNull: false,
     })
@@ -31,7 +38,7 @@ export default class QuestionnaireStep extends Entity {
         allowNull: false,
     })
     declare questionnaireId: string;
-    
+
     @BelongsTo(() => Questionnaire)
     declare questionnaire: Questionnaire;
 
