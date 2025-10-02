@@ -186,29 +186,6 @@ export const handleCheckoutSessionCompleted = async (session: Stripe.Checkout.Se
 
         let createSub = false
 
-        // Handle brand subscription
-        if (userId && planType) {
-            const user = await User.findByPk(userId);
-            if (user && user.role === 'brand') {
-                console.log("Creating brand subscription for user:", userId);
-
-                const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
-
-                if (selectedPlan) {
-                    const brandSub = await BrandSubscription.create({
-                        userId: userId,
-                        planType: planType as any,
-                        status: BrandSubscriptionStatus.PROCESSING,
-                        stripeSubscriptionId: subscription as string,
-                        stripeCustomerId: session.customer as string,
-                        stripePriceId: selectedPlan.stripePriceId,
-                        monthlyPrice: selectedPlan.monthlyPrice
-                    });
-                    console.log('✅ Brand subscription created:', brandSub.id);
-                }
-                return; // Exit early for brand subscriptions
-            }
-        }
 
         // Handle existing clinic/order subscriptions
         if (orderId) {
