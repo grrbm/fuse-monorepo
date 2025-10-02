@@ -1,6 +1,7 @@
 import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import Entity from './Entity';
 import Order from './Order';
+import BrandSubscription from './BrandSubscription';
 
 export enum PaymentStatus {
   PENDING = 'pending',
@@ -26,13 +27,24 @@ export default class Payment extends Entity {
   @ForeignKey(() => Order)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
     unique: true,
   })
-  declare orderId: string;
+  declare orderId?: string;
 
   @BelongsTo(() => Order, 'orderId')
-  declare order: Order;
+  declare order?: Order;
+
+  @ForeignKey(() => BrandSubscription)
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+    unique: true,
+  })
+  declare brandSubscriptionId?: string;
+
+  @BelongsTo(() => BrandSubscription, 'brandSubscriptionId')
+  declare brandSubscription?: BrandSubscription;
 
   @Column({
     type: DataType.STRING,
