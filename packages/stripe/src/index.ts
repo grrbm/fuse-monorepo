@@ -84,8 +84,8 @@ class StripeService {
     });
   }
 
-  async getSubscription(subscriptionId: string) {
-    return stripe.subscriptions.retrieve(subscriptionId);
+  async getSubscription(subscriptionId: string, params?: Stripe.SubscriptionRetrieveParams) {
+    return stripe.subscriptions.retrieve(subscriptionId, params);
   }
 
   async cancelSubscription(subscriptionId: string) {
