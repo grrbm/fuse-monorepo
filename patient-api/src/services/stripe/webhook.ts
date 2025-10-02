@@ -161,10 +161,13 @@ export const handleChargeDisputeCreated = async (dispute: Stripe.Dispute): Promi
     // Find payment by charge ID
     const disputedPayment = await Payment.findOne({
         where: { stripeChargeId: dispute.charge },
-        include: [{ model: Order, as: 'order' }]
+        include: [
+            { model: Order, as: 'order' },
+            { model: BrandSubscription, as: 'brandSubscription' }
+        ]
     });
 
-    if (disputedPayment) {
+    if (disputedPayment && disputedPayment.order) {
         // Update order status to refunded (dispute handling)
         await disputedPayment.order.updateStatus(OrderStatus.REFUNDED);
         console.log('⚠️ Order marked as disputed:', disputedPayment.order.orderNumber);
