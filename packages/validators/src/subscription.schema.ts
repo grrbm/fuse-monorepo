@@ -14,6 +14,8 @@ export const brandCheckoutSchema = z.object({
 
 export const brandPaymentIntentSchema = z.object({
   planType: brandPlanTypeSchema,
+  planCategory: z.enum(["professional", "standard"]).optional(),
+  downpaymentPlanType: z.string().optional(),
   amount: z.number().positive('Amount must be positive'),
   currency: z.string().length(3).optional().default('usd'),
   upgrade: z.boolean().optional(),
@@ -22,7 +24,6 @@ export const brandPaymentIntentSchema = z.object({
 export const brandConfirmPaymentSchema = z.object({
   paymentMethodId: z.string().min(1, 'Payment method ID is required'),
   planType: brandPlanTypeSchema,
-  planCategory: z.string().optional(),
   downpaymentPlanType: z.string().optional(),
   amount: z.number().positive('Amount must be positive'),
   currency: z.string().length(3).optional().default('usd'),
