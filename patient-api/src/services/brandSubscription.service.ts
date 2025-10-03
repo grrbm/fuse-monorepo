@@ -1,7 +1,24 @@
 import BrandSubscription, { BrandSubscriptionStatus } from '../models/BrandSubscription';
 import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
 import User from '../models/User';
+import Payment from '../models/Payment';
 import { StripeService } from '@fuse/stripe';
+import UserService from './user.service';
+import Stripe from 'stripe';
+
+interface CreateFromPaymentParams {
+  paymentId: string;
+  brandSubscriptionId: string;
+}
+
+interface CreateFromPaymentResult {
+  success: boolean;
+  message?: string;
+  data?: {
+    subscription: BrandSubscription;
+  };
+  error?: string;
+}
 
 interface UpgradeSubscriptionResult {
   success: boolean;
@@ -17,9 +34,193 @@ interface UpgradeSubscriptionResult {
 
 class BrandSubscriptionService {
   private stripeService: StripeService;
+  private userService: UserService;
 
   constructor() {
     this.stripeService = new StripeService();
+    this.userService = new UserService();
+  }
+
+  /**
+   * Create BrandSubscription from Payment record (called by webhook)
+   * This method provisions the subscription schedule if not already done,
+   * then creates the BrandSubscription record
+   */
+  async createFromPayment(params: CreateFromPaymentParams): Promise<CreateFromPaymentResult> {
+    const { paymentId, brandSubscriptionId } = params;
+
+    try {
+      console.log('🚀 SERVICE: Creating BrandSubscription from payment:', paymentId);
+
+      // 1. Find payment record
+      const payment = await Payment.findByPk(paymentId);
+      if (!payment) {
+        return {
+          success: false,
+          error: 'Payment not found'
+        };
+      }
+
+      const brandSubscription = await BrandSubscription.findByPk(brandSubscriptionId);
+      if (!brandSubscription) {
+        return {
+          success: false,
+          error: 'Brand subscription not found'
+        };
+      }
+
+
+      const { userId, planType } = brandSubscription;
+
+      const metadata = payment.stripeMetadata;
+
+      if (!metadata) {
+        return {
+          success: false,
+          error: 'Payment metadata incomplete'
+        };
+      }
+
+      // 3. Verify user
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return {
+          success: false,
+          error: 'Invalid user or user is not a brand'
+        };
+      }
+
+      // 4. Check for existing active subscription
+      const existingSubscription = await BrandSubscription.findOne({
+        where: {
+          userId: userId,
+          status: [BrandSubscriptionStatus.ACTIVE, BrandSubscriptionStatus.PROCESSING]
+        }
+      });
+
+      if (existingSubscription) {
+        return {
+          success: false,
+          error: 'User already has an active subscription'
+        };
+      }
+
+      // 5. Get or verify subscription schedule exists
+
+      console.log('⚠️ No subscription schedule ID in metadata, creating new schedule');
+
+      // Get plan details
+      const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
+      if (!selectedPlan) {
+        return {
+          success: false,
+          error: `Invalid plan type: ${planType}`
+        };
+      }
+
+
+      // Get introductory plan
+      const introductoryPlanType = metadata.downpaymentPlanType ||
+        (metadata.planCategory === 'professional' ? 'downpayment_professional' : 'downpayment_standard');
+      const introductoryPlan = await BrandSubscriptionPlans.getPlanByType(introductoryPlanType as any);
+
+      if (!introductoryPlan) {
+        return {
+          success: false,
+          error: `Introductory plan not found: ${introductoryPlanType}`
+        };
+      }
+
+      // Get or create Stripe customer
+      const stripeCustomerId = await this.userService.getOrCreateCustomerId(user);
+
+      const subscriptionSchedule = await this.stripeService.createSchedule({
+        customerId: stripeCustomerId,
+        paymentMethodId: metadata.paymentMethodId,
+        metadata: {
+          userId: metadata.userId,
+          planType: metadata.planType,
+          planCategory: metadata.planCategory || 'standard',
+          introductoryPlanType: introductoryPlan.planType
+        },
+        phases: [
+          {
+            items: [{ price: introductoryPlan.stripePriceId, quantity: 1 }],
+            iterations: 1
+          },
+          {
+            items: [{ price: selectedPlan.stripePriceId, quantity: 1 }]
+          }
+        ]
+      });
+
+
+
+      const subscriptionScheduleId = subscriptionSchedule.id;
+      console.log('✅ SERVICE: Subscription schedule created:', subscriptionScheduleId);
+
+      const subscription = subscriptionSchedule.subscription as Stripe.Subscription;
+
+      if (!subscription) {
+        return {
+          success: false,
+          error: 'Subscription not found'
+        };
+      }
+
+      // 8. Build features object
+      const planFeatures = selectedPlan.getFeatures();
+      const features = {
+        ...planFeatures,
+        subscriptionSchedule: {
+          id: subscriptionScheduleId,
+          introductoryPlanType: metadata.downpaymentPlanType ||
+            (metadata.planCategory === 'professional' ? 'downpayment_professional' : 'downpayment_standard'),
+          // TODO: Review this variables
+          introductoryStripePriceId: metadata.introductoryStripePriceId,
+          introductoryMonthlyPrice: metadata.downpaymentAmount,
+        }
+      };
+
+      // Derive current period timestamps if available
+      const currentPeriodStartUnix = (subscription as any)?.current_period_start
+      const currentPeriodEndUnix = (subscription as any)?.current_period_end
+      const currentPeriodStartDate = currentPeriodStartUnix ? new Date(currentPeriodStartUnix * 1000) : null
+      const currentPeriodEndDate = currentPeriodEndUnix ? new Date(currentPeriodEndUnix * 1000) : null
+
+      // 9. Create BrandSubscription
+      brandSubscription.update({
+        userId: user.id,
+        planType: metadata.planType,
+        planCategory: metadata.planCategory || null,
+        status: BrandSubscriptionStatus.ACTIVE,
+        stripeSubscriptionId: subscription.id,
+        stripeCustomerId: user.stripeCustomerId,
+        stripePriceId: selectedPlan.stripePriceId,
+        monthlyPrice: selectedPlan.monthlyPrice,
+        downpaymentAmount: introductoryPlan.monthlyPrice,
+        currentPeriodStart: currentPeriodStartDate,
+        currentPeriodEnd: currentPeriodEndDate,
+        features: features
+      });
+
+      console.log('✅ SERVICE: BrandSubscription created and linked:', brandSubscription.id);
+
+      return {
+        success: true,
+        message: 'Brand subscription created successfully',
+        data: {
+          subscription: brandSubscription
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ SERVICE: Error creating BrandSubscription:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
   }
 
   /**

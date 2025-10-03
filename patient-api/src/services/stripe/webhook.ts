@@ -8,6 +8,7 @@ import BrandSubscription, { BrandSubscriptionStatus } from '../../models/BrandSu
 import User from '../../models/User';
 import BrandSubscriptionPlans from '../../models/BrandSubscriptionPlans';
 import OrderService from '../order.service';
+import BrandSubscriptionService from '../brandSubscription.service';
 import MDAuthService from '../mdIntegration/MDAuth.service';
 import MDCaseService from '../mdIntegration/MDCase.service';
 import Treatment from '../../models/Treatment';
@@ -19,48 +20,80 @@ export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.Payment
     // Find payment record
     const payment = await Payment.findOne({
         where: { stripePaymentIntentId: paymentIntent.id },
-        include: [{ model: Order, as: 'order' }]
+        include: [
+            { model: Order, as: 'order' },
+            { model: BrandSubscription, as: 'brandSubscription' }
+        ]
     });
 
-    if (payment) {
-        // Update payment status
-        await payment.updateFromStripeEvent({ object: paymentIntent });
 
-        // Update order status
-        await payment.order.updateStatus(OrderStatus.PAID);
 
-        console.log('✅ Order updated to paid status:', payment.order.orderNumber);
-    } else {
-        // Check if this is a subscription payment
-        const userId = paymentIntent.metadata?.userId;
-        const planType = paymentIntent.metadata?.planType;
+    // Attach payment method to customer and set as default if customer exists
+    if (paymentIntent.customer && paymentIntent.payment_method) {
+        try {
+            const stripeService = new StripeService();
+            const customerId = typeof paymentIntent.customer === 'string'
+                ? paymentIntent.customer
+                : paymentIntent.customer.id;
+            const paymentMethodId = typeof paymentIntent.payment_method === 'string'
+                ? paymentIntent.payment_method
+                : paymentIntent.payment_method.id;
 
-        if (userId && planType) {
-            const user = await User.findByPk(userId);
-            if (user && user.role === 'brand') {
-                console.log("Creating brand subscription for payment intent:", paymentIntent.id);
-
-                const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
-
-                if (selectedPlan) {
-                    const brandSub = await BrandSubscription.create({
-                        userId: userId,
-                        planType: planType as any,
-                        status: BrandSubscriptionStatus.ACTIVE,
-                        stripeCustomerId: paymentIntent.customer as string,
-                        stripePriceId: selectedPlan.stripePriceId,
-                        monthlyPrice: selectedPlan.monthlyPrice,
-                        currentPeriodStart: new Date(),
-                        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-                        features: selectedPlan.getFeatures()
-                    });
-                    console.log('✅ Brand subscription created:', brandSub.id);
+            // Attach payment method to customer (if not already attached)
+            try {
+                await stripeService.attachPaymentMethodToCustomer(paymentMethodId, customerId);
+                console.log('✅ Payment method attached to customer:', customerId);
+            } catch (attachError: any) {
+                // Ignore if already attached
+                if (attachError.code !== 'resource_already_exists') {
+                    throw attachError;
                 }
+                console.log('ℹ️ Payment method already attached to customer');
             }
-        } else {
-            console.log('ℹ️ Payment intent not associated with order or subscription:', paymentIntent.id);
+
+            // Set as default payment method
+            await stripeService.updateCustomerDefaultPaymentMethod(customerId, paymentMethodId);
+            console.log('✅ Default payment method updated for customer:', customerId);
+        } catch (error) {
+            console.error('❌ Error attaching payment method to customer:', error);
+            // Don't fail the whole webhook if this fails
         }
     }
+
+    if (!payment) {
+        console.log('⚠️ Payment intent not associated with any Payment record:', paymentIntent.id);
+        return;
+    }
+
+    // Update payment status
+    await payment.updateFromStripeEvent({ object: paymentIntent });
+
+    // CASE 1: Treatment order payment
+    if (payment.orderId && payment.order) {
+        await payment.order.updateStatus(OrderStatus.PAID);
+        console.log('✅ Order updated to paid status:', payment.order.orderNumber);
+        return;
+    }
+
+    // CASE 2: Brand subscription 
+    if (payment.brandSubscriptionId) {
+        console.log('🆕 Enable brand subscription from payment');
+
+        const brandSubscriptionService = new BrandSubscriptionService();
+        const result = await brandSubscriptionService.createFromPayment({
+            paymentId: payment.id,
+            brandSubscriptionId: payment.brandSubscriptionId
+        });
+
+        if (result.success) {
+            console.log('✅ Brand subscription created via webhook:', result.data?.subscription.id);
+        } else {
+            console.error('❌ Failed to create brand subscription:', result.error);
+        }
+        return;
+    }
+
+    console.log('⚠️ Payment has no associated order or brand subscription metadata:', paymentIntent.id);
 };
 
 export const handlePaymentIntentFailed = async (failedPayment: Stripe.PaymentIntent): Promise<void> => {
@@ -69,17 +102,26 @@ export const handlePaymentIntentFailed = async (failedPayment: Stripe.PaymentInt
     // Find payment record
     const failedPaymentRecord = await Payment.findOne({
         where: { stripePaymentIntentId: failedPayment.id },
-        include: [{ model: Order, as: 'order' }]
+        include: [
+            { model: Order, as: 'order' },
+            { model: BrandSubscription, as: 'brandSubscription' }
+        ]
     });
 
     if (failedPaymentRecord) {
         // Update payment status
         await failedPaymentRecord.updateFromStripeEvent({ object: failedPayment });
 
-        // Update order status
-        await failedPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
-
-        console.log('❌ Order updated to cancelled status:', failedPaymentRecord.order.orderNumber);
+        if (failedPaymentRecord.order) {
+            // Update order status
+            await failedPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
+            console.log('❌ Order updated to cancelled status:', failedPaymentRecord.order.orderNumber);
+        }
+        if (failedPaymentRecord.brandSubscription) {
+            // Update brand subscription status
+            await failedPaymentRecord.brandSubscription.cancel();
+            console.log('❌ Brand subscription updated to cancelled status:', failedPaymentRecord.brandSubscription.id);
+        }
     }
 };
 
@@ -89,17 +131,27 @@ export const handlePaymentIntentCanceled = async (cancelledPayment: Stripe.Payme
     // Find payment record
     const cancelledPaymentRecord = await Payment.findOne({
         where: { stripePaymentIntentId: cancelledPayment.id },
-        include: [{ model: Order, as: 'order' }]
+        include: [
+            { model: Order, as: 'order' },
+            { model: BrandSubscription, as: 'brandSubscription' }
+        ]
     });
 
     if (cancelledPaymentRecord) {
         // Update payment status
         await cancelledPaymentRecord.updateFromStripeEvent({ object: cancelledPayment });
 
-        // Update order status
-        await cancelledPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
+        if (cancelledPaymentRecord.order) {
+            // Update order status
+            await cancelledPaymentRecord.order.updateStatus(OrderStatus.CANCELLED);
+            console.log('🚫 Order updated to cancelled status:', cancelledPaymentRecord.order.orderNumber);
+        }
 
-        console.log('🚫 Order updated to cancelled status:', cancelledPaymentRecord.order.orderNumber);
+        if (cancelledPaymentRecord.brandSubscription) {
+            // Update brand subscription status
+            await cancelledPaymentRecord.brandSubscription.cancel();
+            console.log('❌ Brand subscription updated to cancelled status:', cancelledPaymentRecord.brandSubscription.id);
+        }
     }
 };
 
@@ -109,10 +161,13 @@ export const handleChargeDisputeCreated = async (dispute: Stripe.Dispute): Promi
     // Find payment by charge ID
     const disputedPayment = await Payment.findOne({
         where: { stripeChargeId: dispute.charge },
-        include: [{ model: Order, as: 'order' }]
+        include: [
+            { model: Order, as: 'order' },
+            { model: BrandSubscription, as: 'brandSubscription' }
+        ]
     });
 
-    if (disputedPayment) {
+    if (disputedPayment && disputedPayment.order) {
         // Update order status to refunded (dispute handling)
         await disputedPayment.order.updateStatus(OrderStatus.REFUNDED);
         console.log('⚠️ Order marked as disputed:', disputedPayment.order.orderNumber);
@@ -131,29 +186,6 @@ export const handleCheckoutSessionCompleted = async (session: Stripe.Checkout.Se
 
         let createSub = false
 
-        // Handle brand subscription
-        if (userId && planType) {
-            const user = await User.findByPk(userId);
-            if (user && user.role === 'brand') {
-                console.log("Creating brand subscription for user:", userId);
-
-                const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
-
-                if (selectedPlan) {
-                    const brandSub = await BrandSubscription.create({
-                        userId: userId,
-                        planType: planType as any,
-                        status: BrandSubscriptionStatus.PROCESSING,
-                        stripeSubscriptionId: subscription as string,
-                        stripeCustomerId: session.customer as string,
-                        stripePriceId: selectedPlan.stripePriceId,
-                        monthlyPrice: selectedPlan.monthlyPrice
-                    });
-                    console.log('✅ Brand subscription created:', brandSub.id);
-                }
-                return; // Exit early for brand subscriptions
-            }
-        }
 
         // Handle existing clinic/order subscriptions
         if (orderId) {

@@ -3216,7 +3216,7 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { planType, amount, currency, upgrade } = validation.data;
+    const { planType, amount, currency, upgrade, planCategory, downpaymentPlanType } = validation.data;
 
     console.log('🚀 BACKEND CREATE: Plan type received:', planType)
     console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
@@ -3293,6 +3293,39 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       description: `${selectedPlan.name} down payment`
     });
 
+
+
+    const brandSubscription = await BrandSubscription.create({
+      userId: user.id,
+      planType: planType,
+      planCategory: planCategory,
+      status: BrandSubscriptionStatus.PENDING,
+      stripeCustomerId: user.stripeCustomerId,
+      stripePriceId: selectedPlan.stripePriceId,
+      monthlyPrice: selectedPlan.monthlyPrice,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), 
+    });
+
+    // Create payment record
+    await Payment.create({
+      stripePaymentIntentId: paymentIntent.id,
+      status: 'pending',
+      paymentMethod: 'card',
+      amount: amount,
+      currency: 'usd',
+      stripeMetadata: {
+        userId: currentUser.id,
+        planType: planType,
+        stripePriceId: selectedPlan.stripePriceId,
+        planCategory: planCategory,
+        downpaymentPlanType: downpaymentPlanType,
+        amount: amount.toString()
+      },
+      brandSubscriptionId: brandSubscription.id
+    });
+
+
     res.status(200).json({
       success: true,
       clientSecret: paymentIntent.client_secret,
@@ -3311,21 +3344,16 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
 // Confirm payment intent with payment method
 app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
   try {
-    console.log('🚀 BACKEND: Confirm payment intent called')
-    console.log('🚀 BACKEND: Request headers:', JSON.stringify(req.headers, null, 2))
-    console.log('🚀 BACKEND: Request body:', JSON.stringify(req.body, null, 2))
-
     const currentUser = getCurrentUser(req);
 
-    if (currentUser?.role !== 'brand') {
-      console.error('❌ BACKEND: Access denied - not brand role')
+    if (!currentUser || currentUser.role !== 'brand') {
       return res.status(403).json({
         success: false,
         message: "Access denied. Brand role required."
       });
     }
 
-    // Validate request body using brandConfirmPaymentSchema
+    // Validate request body
     const validation = brandConfirmPaymentSchema.safeParse(req.body);
     if (!validation.success) {
       return res.status(400).json({
@@ -3335,202 +3363,13 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency } = validation.data;
-
-    console.log('🚀 BACKEND: Extracted data:', { paymentMethodId, planType, planCategory, downpaymentPlanType, amount, currency })
-    console.log('🚀 BACKEND: Current user:', currentUser?.id, currentUser?.role)
-
-    console.log('🚀 BACKEND: Getting plan and user data...')
-    console.log('🚀 BACKEND: Plan type received:', planType)
-    // Get the payment intent that was created earlier
-    // In a real implementation, you'd store the payment intent ID in the session
-    // For now, we'll create a new payment intent for confirmation
-    const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
-    console.log('🚀 BACKEND: Selected plan:', selectedPlan?.id)
-    console.log('🚀 BACKEND: Available plan types:', await BrandSubscriptionPlans.findAll({ attributes: ['planType'] }))
-
-    if (!selectedPlan) {
-      console.error('❌ BACKEND: Invalid plan type:', planType)
-      return res.status(400).json({
-        success: false,
-        message: "Invalid plan type"
-      });
-    }
-
-    // Get full user data from database
-    const user = await User.findByPk(currentUser.id);
-    console.log('🚀 BACKEND: User found:', user?.id, user?.email)
-
-    if (!user) {
-      console.error('❌ BACKEND: User not found:', currentUser.id)
-      return res.status(404).json({
-        success: false,
-        message: "User not found"
-      });
-    }
-
-    // Create or retrieve Stripe customer
-    let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
-      userId: user.id,
-      role: user.role,
-      planType: planType
-    });
-
-    // Create Stripe subscription instead of one-time payment
-    console.log('🚀 BACKEND: Creating Stripe subscription...')
-    console.log('🚀 BACKEND: Plan type:', planType)
-    console.log('🚀 BACKEND: Customer ID:', stripeCustomerId)
-    console.log('🚀 BACKEND: Payment method ID:', paymentMethodId)
-
-    // Get the price ID for the selected plan
-    const priceId = selectedPlan.stripePriceId
-    console.log('🚀 BACKEND: Using price ID:', priceId)
-
-    // Create Stripe subscription schedule to handle introductory pricing
-    console.log('🚀 BACKEND: Preparing subscription schedule with introductory pricing...')
-
-    const introductoryPlanType = downpaymentPlanType || (planCategory === 'professional' ? 'downpayment_professional' : 'downpayment_standard')
-    const introductoryPlan = await BrandSubscriptionPlans.getPlanByType(introductoryPlanType as any)
-
-    if (!introductoryPlan) {
-      console.error('❌ BACKEND: Introductory plan not found:', introductoryPlanType)
-      return res.status(500).json({
-        success: false,
-        message: "Introductory pricing plan is not configured"
-      });
-    }
-
-    console.log('🚀 BACKEND: Introductory plan price ID:', introductoryPlan.stripePriceId)
-
-    // Attach payment method to customer first
-    console.log('🚀 BACKEND: Attaching payment method to customer...')
-    await stripe.paymentMethods.attach(paymentMethodId, {
-      customer: stripeCustomerId,
-    });
-    console.log('🚀 BACKEND: Payment method attached successfully')
-
-    // Ensure customer has default payment method set for future invoices
-    await stripe.customers.update(stripeCustomerId, {
-      invoice_settings: {
-        default_payment_method: paymentMethodId
-      }
-    });
-
-    console.log('🚀 BACKEND: Creating Stripe subscription schedule...')
-    const subscriptionSchedule = await stripe.subscriptionSchedules.create({
-      customer: stripeCustomerId,
-      start_date: 'now',
-      metadata: {
-        userId: currentUser.id,
-        planType,
-        planCategory: planCategory || 'standard',
-        introductoryPlanType: introductoryPlan.planType
-      },
-      default_settings: {
-        default_payment_method: paymentMethodId,
-        collection_method: 'charge_automatically'
-      },
-      phases: [
-        {
-          items: [{ price: introductoryPlan.stripePriceId, quantity: 1 }],
-          iterations: 1
-        },
-        {
-          items: [{ price: priceId, quantity: 1 }]
-        }
-      ],
-      expand: ['subscription', 'subscription.latest_invoice', 'subscription.latest_invoice.payment_intent']
-    });
-
-    console.log('🚀 BACKEND: Subscription schedule created:', subscriptionSchedule.id, 'Status:', subscriptionSchedule.status)
-
-    let subscription: any = (subscriptionSchedule as any).subscription;
-    if (!subscription) {
-      console.log('⚠️ BACKEND: Subscription not present on schedule response, retrieving separately...')
-      if (subscriptionSchedule.subscription) {
-        subscription = await stripe.subscriptions.retrieve(subscriptionSchedule.subscription as string, {
-          expand: ['latest_invoice.payment_intent']
-        });
-      } else {
-        const refreshedSchedule = await stripe.subscriptionSchedules.retrieve(subscriptionSchedule.id, {
-          expand: ['subscription']
-        });
-        const scheduleSubscription = (refreshedSchedule as any).subscription;
-        if (scheduleSubscription?.id) {
-          subscription = await stripe.subscriptions.retrieve(scheduleSubscription.id, {
-            expand: ['latest_invoice.payment_intent']
-          });
-        }
-      }
-    }
-
-    if (!subscription) {
-      console.error('❌ BACKEND: Unable to retrieve subscription created by schedule');
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create subscription"
-      });
-    }
-
-    console.log('🚀 BACKEND: Subscription created:', subscription.id, 'Status:', subscription.status)
-
-    // Derive current period timestamps if available
-    const currentPeriodStartUnix = (subscription as any)?.current_period_start
-    const currentPeriodEndUnix = (subscription as any)?.current_period_end
-    const currentPeriodStartDate = currentPeriodStartUnix ? new Date(currentPeriodStartUnix * 1000) : null
-    const currentPeriodEndDate = currentPeriodEndUnix ? new Date(currentPeriodEndUnix * 1000) : null
-
-    const planFeatures = selectedPlan.getFeatures()
-    const combinedFeatures = {
-      ...planFeatures,
-      subscriptionSchedule: {
-        id: subscriptionSchedule.id,
-        introductoryPlanType: introductoryPlan.planType,
-        introductoryStripePriceId: introductoryPlan.stripePriceId,
-        introductoryMonthlyPrice: introductoryPlan.monthlyPrice,
-      }
-    }
-
-    // Create BrandSubscription record
-    try {
-      const brandSub = await BrandSubscription.create({
-        userId: currentUser.id,
-        planType: planType as any,
-        planCategory: planCategory || null,
-        status: BrandSubscriptionStatus.ACTIVE,
-        stripeSubscriptionId: subscription.id,
-        stripeCustomerId: stripeCustomerId,
-        stripePriceId: priceId,
-        monthlyPrice: selectedPlan.monthlyPrice,
-        downpaymentAmount: introductoryPlan.monthlyPrice,
-        currentPeriodStart: currentPeriodStartDate ?? undefined,
-        currentPeriodEnd: currentPeriodEndDate ?? undefined,
-        features: combinedFeatures
-      });
-      console.log('✅ BrandSubscription record created:', brandSub.id)
-    } catch (dbError) {
-      console.error('❌ Error creating BrandSubscription record:', dbError)
-      // Don't fail the whole request if DB creation fails
-    }
-
+    // Return success - webhook will handle subscription creation
     res.status(200).json({
-      success: true,
-      subscriptionId: subscription.id,
-      clientSecret: (subscription as any).latest_invoice?.payment_intent?.client_secret,
-      requiresAction: subscription.status === 'incomplete',
-      subscription: {
-        id: subscription.id,
-        status: subscription.status,
-        current_period_start: (subscription as any).current_period_start,
-        current_period_end: (subscription as any).current_period_end,
-        stripePriceId: priceId
-      }
+      success: true
     });
 
   } catch (error) {
-    console.error('❌ BACKEND: Error confirming payment intent:', error);
-    console.error('❌ BACKEND: Error stack:', error instanceof Error ? error.stack : 'No stack');
-    console.error('❌ BACKEND: Error details:', JSON.stringify(error, null, 2));
+    console.error('❌ Error confirming payment intent:', error);
     res.status(500).json({
       success: false,
       message: "Failed to confirm payment intent"
@@ -5152,7 +4991,7 @@ app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
     }
 
     const subscription = await BrandSubscription.findOne({
-      where: { userId: currentUser.id },
+      where: { userId: currentUser.id, status: BrandSubscriptionStatus.ACTIVE },
       order: [['createdAt', 'DESC']]
     });
 
