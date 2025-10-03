@@ -1800,11 +1800,17 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                 const targetQuestion = currentStep.questions.find(q => q.questionOrder === targetQuestionOrder);
                                 if (targetQuestion) {
                                   const targetAnswer = answers[targetQuestion.id];
+
+                                  // Handle array answers (for checkboxes/multiple choice)
+                                  if (Array.isArray(targetAnswer)) {
+                                    return targetAnswer.includes(requiredAnswer);
+                                  }
+
                                   return targetAnswer === requiredAnswer;
                                 }
                                 return false;
                               } catch (error) {
-                                console.error('Error parsing conditional logic:', conditionalLogic);
+                                console.error('Error parsing conditional logic:', conditionalLogic, error);
                                 return true;
                               }
                             })
