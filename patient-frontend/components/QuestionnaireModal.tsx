@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Modal,
@@ -24,6 +24,76 @@ import { apiCall } from "../lib/api";
 import { Elements } from "@stripe/react-stripe-js";
 import { stripePromise } from "../lib/stripe";
 import { StripePaymentForm } from "./StripePaymentForm";
+
+const DEFAULT_THEME_COLOR = "#047857";
+
+type ThemePalette = {
+  primary: string;
+  primaryDark: string;
+  primaryDarker: string;
+  primaryLight: string;
+  primaryLighter: string;
+  text: string;
+};
+
+const isValidHex = (value?: string | null): value is string => {
+  if (!value) return false;
+  return /^#?([0-9A-F]{3}){1,2}$/i.test(value.trim());
+};
+
+const normalizeHex = (hex: string): string => {
+  const cleaned = hex.trim().replace(/^#/, "");
+  if (cleaned.length === 3) {
+    return `#${cleaned[0]}${cleaned[0]}${cleaned[1]}${cleaned[1]}${cleaned[2]}${cleaned[2]}`.toUpperCase();
+  }
+  return `#${cleaned.toUpperCase()}`;
+};
+
+const hexToRgb = (hex: string) => {
+  const normalized = normalizeHex(hex).replace("#", "");
+  const bigint = parseInt(normalized, 16);
+  return {
+    r: (bigint >> 16) & 255,
+    g: (bigint >> 8) & 255,
+    b: bigint & 255,
+  };
+};
+
+const rgbToHex = (r: number, g: number, b: number) => {
+  return `#${[r, g, b]
+    .map((x) => {
+      const clamped = Math.max(0, Math.min(255, Math.round(x)));
+      const hex = clamped.toString(16);
+      return hex.length === 1 ? `0${hex}` : hex;
+    })
+    .join("")}`.toUpperCase();
+};
+
+const lighten = (hex: string, amount: number) => {
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHex(
+    r + (255 - r) * amount,
+    g + (255 - g) * amount,
+    b + (255 - b) * amount
+  );
+};
+
+const darken = (hex: string, amount: number) => {
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
+};
+
+const createTheme = (color?: string | null): ThemePalette => {
+  const base = isValidHex(color) ? normalizeHex(color) : DEFAULT_THEME_COLOR;
+  return {
+    primary: base,
+    primaryDark: darken(base, 0.15),
+    primaryDarker: darken(base, 0.3),
+    primaryLight: lighten(base, 0.65),
+    primaryLighter: lighten(base, 0.85),
+    text: darken(base, 0.2),
+  };
+};
 
 // Types
 interface QuestionOption {
@@ -66,6 +136,7 @@ interface QuestionnaireData {
   title: string;
   description?: string;
   checkoutStepPosition: number;
+  color?: string | null;
   steps: QuestionnaireStep[];
   treatment?: {
     products: Product[];
@@ -98,7 +169,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
-  
+
   // Medication modal state
   const [showMedicationModal, setShowMedicationModal] = React.useState(false);
   const [selectedMedication, setSelectedMedication] = React.useState("semaglutide-orals");
@@ -147,13 +218,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
   // Set default selected plan to first available plan
   React.useEffect(() => {
-    console.log('🎯 Plan selection useEffect:', { 
-      plansLength: plans.length, 
-      selectedPlan, 
+    console.log('🎯 Plan selection useEffect:', {
+      plansLength: plans.length,
+      selectedPlan,
       firstPlanId: plans[0]?.id,
       allPlans: plans.map(p => ({ id: p.id, name: p.name }))
     });
-    
+
     if (plans.length > 0 && !selectedPlan) {
       console.log('🎯 Setting selectedPlan to first plan:', plans[0].id);
       setSelectedPlan(plans[0].id);
@@ -345,17 +416,17 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           plansAvailable: plans.map(p => ({ id: p.id, name: p.name })),
           planLookupResult: plans.find(plan => plan.id === selectedPlan)
         });
-        
+
         const selectedPlanData = plans.find(plan => plan.id === selectedPlan);
         const stripePriceId = selectedPlanData?.stripePriceId;
-        
+
         if (!stripePriceId) {
           console.error('❌ No stripePriceId found for selected plan:', selectedPlan);
           setPaymentStatus('idle');
           return;
         }
 
-        
+
         // Prepare user details for subscription
         const userDetails = {
           firstName: answers['firstName'],
@@ -363,7 +434,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           email: answers['email'],
           phoneNumber: answers['mobile']
         };
-        
+
         console.log('💳 Request payload:', {
           treatmentId: treatmentId,
           stripePriceId: stripePriceId,
@@ -451,13 +522,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Function to build questionnaire answers object (for real-time logging)
   const buildQuestionnaireAnswers = (currentAnswers: Record<string, any>) => {
     const questionnaireAnswers: Record<string, string> = {};
-    
+
     // Process each questionnaire step and question
     questionnaire?.steps?.forEach(step => {
       step.questions?.forEach(question => {
         const answerKey = question.id;
         const answerValue = currentAnswers[answerKey];
-        
+
         if (answerValue !== undefined && answerValue !== '') {
           // For single/multiple choice and checkbox questions, get the option text
           if (question.answerType === 'single_choice' || question.answerType === 'multiple_choice' || question.answerType === 'checkbox') {
@@ -505,19 +576,19 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       ...answers,
       [questionId]: value
     };
-    
+
     // Calculate BMI if weight or height fields are being updated
     if (questionId === 'weight' || questionId === 'heightFeet' || questionId === 'heightInches') {
       const weight = parseFloat(newAnswers['weight'] as string);
       const feet = parseFloat(newAnswers['heightFeet'] as string);
       const inches = parseFloat(newAnswers['heightInches'] as string);
-      
+
       if (weight && feet >= 0 && inches >= 0) {
         const totalInches = feet * 12 + inches;
         const heightInMeters = totalInches * 0.0254;
         const weightInKg = weight * 0.453592;
         const bmi = weightInKg / (heightInMeters * heightInMeters);
-        
+
         let category = '';
         if (bmi < 18.5) {
           category = 'Underweight';
@@ -528,14 +599,14 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         } else {
           category = 'Obese';
         }
-        
+
         // Add BMI data to answers
         newAnswers['bmi'] = bmi.toFixed(1);
         newAnswers['bmiCategory'] = category;
         newAnswers['heightAndWeight'] = `${weight} lbs, ${feet}'${inches}"`;
       }
     }
-    
+
     setAnswers(newAnswers);
 
     // Clear error for this question
@@ -557,29 +628,29 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const handleRadioChange = (questionId: string, value: any) => {
     // Update state synchronously for immediate navigation
     let newAnswers = { ...answers, [questionId]: value };
-    
+
     // Log the updated questionnaire answers in real-time
     const questionnaireAnswers = buildQuestionnaireAnswers(newAnswers);
     console.log('📋 ⚡ Real-time questionnaire update (Radio):');
     console.log(`📋 Changed: "${questionId}" = `, value);
     console.log('📋 Current questionnaire answers:', questionnaireAnswers);
-    
+
     // Generic logic: Clear dependent questions when ANY radio answer actually changes
     const currentStep = getCurrentQuestionnaireStep();
     const question = currentStep?.questions?.find(q => q.id === questionId);
-    
+
     if (question && question.answerType === 'radio') {
       const previousValue = answers[questionId];
-      
+
       // Only clear dependent questions if the answer actually changed
       if (previousValue !== value) {
         // Helper function to recursively find all questions that depend on a given question
         const findDependentQuestions = (targetQuestionOrder: number, visitedOrders = new Set()): number[] => {
           if (visitedOrders.has(targetQuestionOrder)) return [];
           visitedOrders.add(targetQuestionOrder);
-          
+
           const dependentOrders: number[] = [];
-          
+
           currentStep.questions.forEach(q => {
             const logic = (q as any).conditionalLogic;
             if (logic && logic.includes(`questionOrder:${targetQuestionOrder},answer:`)) {
@@ -589,13 +660,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
               dependentOrders.push(...subDependents);
             }
           });
-          
+
           return dependentOrders;
         };
-        
+
         // Find all questions that depend on this radio question
         const dependentOrders = findDependentQuestions(question.questionOrder);
-        
+
         // Clear answers for all dependent questions
         currentStep.questions.forEach(q => {
           if (dependentOrders.includes(q.questionOrder)) {
@@ -604,9 +675,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         });
       }
     }
-    
+
     setAnswers(newAnswers);
-    
+
     // Clear errors for this question
     if (errors[questionId]) {
       setErrors(prev => {
@@ -617,7 +688,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
 
     // Check if current step has conditional questions
-    const hasConditionalQuestions = currentStep?.questions?.some(q => 
+    const hasConditionalQuestions = currentStep?.questions?.some(q =>
       (q as any).conditionalLogic
     );
 
@@ -637,13 +708,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const newValues = isChecked
       ? [...currentValues, optionValue]
       : currentValues.filter((v: string) => v !== optionValue);
-    
+
     // Update state
     setAnswers(prev => ({
       ...prev,
       [questionId]: newValues
     }));
-    
+
     // Clear errors for this question
     if (errors[questionId]) {
       setErrors(prev => {
@@ -663,11 +734,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     console.log('📋 Current questionnaire answers:', questionnaireAnswers);
 
     // Auto-advance if "None of the above" is selected
-    if (isChecked && (optionValue.toLowerCase().includes('none of the above') || 
-                      optionValue.toLowerCase().includes('none of these'))) {
+    if (isChecked && (optionValue.toLowerCase().includes('none of the above') ||
+      optionValue.toLowerCase().includes('none of these'))) {
       // Check if current step has conditional questions
       const currentStep = getCurrentQuestionnaireStep();
-      const hasConditionalQuestions = currentStep?.questions?.some(q => 
+      const hasConditionalQuestions = currentStep?.questions?.some(q =>
         (q as any).conditionalLogic
       );
 
@@ -826,10 +897,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Handle plan selection and create subscription
   const handlePlanSelection = async (planId: string) => {
     setSelectedPlan(planId);
-    
+
     // Clear any existing client secret to show loading state
     setClientSecret(null);
-    
+
     // Create subscription for the newly selected plan
     setTimeout(async () => {
       await createSubscriptionForPlan(planId);
@@ -840,10 +911,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const createSubscriptionForPlan = async (planId: string) => {
     try {
       setPaymentStatus('processing');
-      
+
       const selectedPlanData = plans.find(plan => plan.id === planId);
       const stripePriceId = selectedPlanData?.stripePriceId;
-      
+
       if (!stripePriceId) {
         console.error('❌ No stripePriceId found for plan:', planId);
         setPaymentStatus('failed');
@@ -860,24 +931,24 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
       // Prepare questionnaire answers in the required format
       const questionnaireAnswers: Record<string, string> = {};
-      
+
       console.log('📋 Starting questionnaire answers collection...');
       console.log('📋 Raw answers object:', answers);
-      
+
       // Process each questionnaire step and question
       questionnaire?.steps?.forEach((step, stepIndex) => {
         console.log(`📋 Processing Step ${stepIndex + 1}: ${step.title}`);
-        
+
         step.questions?.forEach((question, questionIndex) => {
           const answerKey = question.id; // Use question ID as the key
           const answerValue = answers[answerKey];
-          
+
           console.log(`📋   Question ${questionIndex + 1}: "${question.questionText}"`);
           console.log(`📋   Answer key: "${answerKey}", Raw value:`, answerValue);
-          
+
           if (answerValue !== undefined && answerValue !== '') {
             let processedAnswer = '';
-            
+
             // For single/multiple choice questions, get the option text
             if (question.answerType === 'single_choice' || question.answerType === 'multiple_choice') {
               if (Array.isArray(answerValue)) {
@@ -899,14 +970,14 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
               processedAnswer = String(answerValue);
               console.log(`📋   Text input processed: "${processedAnswer}"`);
             }
-            
+
             questionnaireAnswers[question.questionText] = processedAnswer;
             console.log(`📋   ✅ Added to answers: "${question.questionText}" = "${processedAnswer}"`);
           } else {
             console.log(`📋   ⏭️ Skipped (empty/undefined)`);
           }
         });
-        
+
         console.log(`📋 Step ${stepIndex + 1} complete. Current answers:`, { ...questionnaireAnswers });
       });
 
@@ -928,9 +999,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         questionnaireAnswers['Mobile Number'] = answers['mobile'];
         console.log(`📋 ✅ Added: "Mobile Number" = "${answers['mobile']}"`);
       }
-      
+
       console.log('📋 🎉 Final questionnaire answers object:', questionnaireAnswers);
-      
+
       console.log('💳 Creating subscription for selected plan:', {
         treatmentId,
         stripePriceId,
@@ -959,7 +1030,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           return subscriptionData.clientSecret;
         }
       }
-      
+
       console.error('❌ Subscription creation failed:', result);
       setPaymentStatus('failed');
       return null;
@@ -982,7 +1053,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setPaymentStatus('succeeded');
       console.log('💳 Payment authorized successfully:', paymentIntentId);
       console.log('💳 Subscription will be created after manual payment capture');
-      
+
       // Don't close modal, allow user to continue with questionnaire steps
     } catch (error) {
       setPaymentStatus('failed');
@@ -1133,13 +1204,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                     {plans.map((plan) => (
                       <div
                         key={plan.id}
-                        className={`relative rounded-lg border-2 p-4 transition-all ${
-                          paymentStatus === 'processing' || !!clientSecret 
-                            ? 'opacity-60 cursor-not-allowed bg-gray-50' 
-                            : ''
-                        } ${selectedPlan === plan.id
-                          ? "border-success-500 bg-success-50"
-                          : "border-gray-200 bg-white hover:border-gray-300"
+                        className={`relative rounded-lg border-2 p-4 transition-all ${paymentStatus === 'processing' || !!clientSecret
+                          ? 'opacity-60 cursor-not-allowed bg-gray-50'
+                          : ''
+                          } ${selectedPlan === plan.id
+                            ? "border-success-500 bg-success-50"
+                            : "border-gray-200 bg-white hover:border-gray-300"
                           }`}
                       >
                         <div className="flex items-start gap-3">
@@ -1348,9 +1418,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             {selectedPlanData?.name} - ${selectedPlanData?.price}/mo
                           </p>
                         </div>
-                        <Button 
-                          color="primary" 
-                          size="lg" 
+                        <Button
+                          color="primary"
+                          size="lg"
                           className="w-full"
                           onPress={() => createSubscriptionForPlan(selectedPlan)}
                         >
@@ -1577,7 +1647,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       case 'phone':
         return (
           <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
               {question.questionText}
               {question.isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
@@ -1586,10 +1656,25 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
               placeholder={question.placeholder}
               value={value}
               onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-              className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
-                ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-gray-300 focus:border-emerald-500 focus:bg-emerald-50'
-                } outline-none`}
+              className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'}`}
+              style={hasError ? undefined : {
+                borderColor: theme.primaryLight,
+                color: '#111827'
+              }}
+              onFocus={(e) => {
+                if (!hasError) {
+                  e.currentTarget.style.borderColor = theme.primary;
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
+                  e.currentTarget.style.backgroundColor = theme.primaryLighter;
+                }
+              }}
+              onBlur={(e) => {
+                if (!hasError) {
+                  e.currentTarget.style.borderColor = theme.primaryLight;
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                }
+              }}
             />
             {question.helpText && (
               <p className="text-sm text-gray-600">{question.helpText}</p>
@@ -1621,11 +1706,26 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 onChange={(e) => handleAnswerChange(question.id, e.target.value)}
                 className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
                   ? 'border-red-300 bg-red-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300 focus:border-emerald-500 focus:bg-emerald-50'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
                   } outline-none ${hasSubtype ? 'pr-16' : ''}`}
-                style={hasSubtype ? {
-                  MozAppearance: 'textfield'
-                } : {}}
+                style={hasError ? undefined : {
+                  borderColor: theme.primaryLight,
+                  color: '#111827'
+                }}
+                onFocus={(e) => {
+                  if (!hasError) {
+                    e.currentTarget.style.borderColor = theme.primary;
+                    e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
+                    e.currentTarget.style.backgroundColor = theme.primaryLighter;
+                  }
+                }}
+                onBlur={(e) => {
+                  if (!hasError) {
+                    e.currentTarget.style.borderColor = theme.primaryLight;
+                    e.currentTarget.style.boxShadow = 'none';
+                    e.currentTarget.style.backgroundColor = '#FFFFFF';
+                  }
+                }}
                 onWheel={(e) => hasSubtype && e.currentTarget.blur()}
               />
               {hasSubtype && (
@@ -1636,7 +1736,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             </div>
             {(question as any).footerNote && (
               <div className="bg-gray-100 mt-8 rounded-xl p-4">
-                <p 
+                <p
                   className="text-gray-600 text-sm"
                   dangerouslySetInnerHTML={{ __html: (question as any).footerNote }}
                 />
@@ -1651,7 +1751,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       case 'date':
         return (
           <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
               {question.questionText}
               {question.isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
@@ -1661,7 +1761,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
               onChange={(e) => handleAnswerChange(question.id, e.target.value)}
               className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
                 ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-gray-300 focus:border-emerald-500 focus:bg-emerald-50'
+                : 'border-gray-200 bg-white hover:border-gray-300 focus:border-primary focus:bg-primary-light'
                 } outline-none`}
             />
             {question.helpText && (
@@ -1676,7 +1776,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       case 'textarea':
         return (
           <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
               {question.questionText}
               {question.isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
@@ -1687,8 +1787,26 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
               rows={4}
               className={`w-full p-4 rounded-2xl border-2 transition-all resize-none ${hasError
                 ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-gray-300 focus:border-emerald-500 focus:bg-emerald-50'
+                : 'border-gray-200 bg-white hover:border-gray-300'
                 } outline-none`}
+              style={hasError ? undefined : {
+                borderColor: theme.primaryLight,
+                color: '#111827'
+              }}
+              onFocus={(e) => {
+                if (!hasError) {
+                  e.currentTarget.style.borderColor = theme.primary;
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
+                  e.currentTarget.style.backgroundColor = theme.primaryLighter;
+                }
+              }}
+              onBlur={(e) => {
+                if (!hasError) {
+                  e.currentTarget.style.borderColor = theme.primaryLight;
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                }
+              }}
             />
             {question.helpText && (
               <p className="text-sm text-gray-600">{question.helpText}</p>
@@ -1699,8 +1817,54 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           </div>
         );
 
-      case 'radio':
-        // Special styling for gender question
+      case 'radio': {
+        const renderGenericRadio = () => (
+          <div key={question.id} className="space-y-4">
+            <div>
+              <h3 className="text-2xl font-medium text-gray-900 mb-3">
+                {question.questionText}
+                {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+              </h3>
+              {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
+            </div>
+
+            <div className="space-y-3">
+              {question.options?.map((option) => {
+                const isSelected = value === option.optionValue;
+                return (
+                  <label
+                    key={option.id}
+                    className={`block w-full p-4 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? '' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                    style={isSelected ? { backgroundColor: theme.primaryLight, borderColor: theme.primary } : undefined}
+                  >
+                    <div className="flex items-center">
+                      <div className="relative">
+                        <input
+                          type="radio"
+                          name={question.id}
+                          value={option.optionValue}
+                          checked={isSelected}
+                          onChange={(e) => handleRadioChange(question.id, e.target.value)}
+                          className="sr-only"
+                        />
+                        <div
+                          className="w-5 h-5 rounded-full border-2 flex items-center justify-center"
+                          style={isSelected ? { borderColor: theme.primary, backgroundColor: theme.primary } : undefined}
+                        >
+                          {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                        </div>
+                      </div>
+                      <span className="ml-3 text-gray-900 font-medium">{option.optionText}</span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            {hasError && <p className="text-sm text-red-600">{errors[question.id]}</p>}
+          </div>
+        );
+
         if (question.questionText === "What's your gender at birth?") {
           const genderOptions = [
             { value: 'Male', label: 'Male', emoji: '🧑' },
@@ -1714,9 +1878,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                   {question.questionText}
                   {question.isRequired && <span className="text-red-500 ml-1">*</span>}
                 </h3>
-                {question.helpText && (
-                  <p className="text-gray-600">{question.helpText}</p>
-                )}
+                {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1726,16 +1888,14 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                     <button
                       key={option.value}
                       type="button"
-                      className={`p-6 rounded-2xl border-2 text-center transition-all ${isSelected
-                        ? "bg-emerald-50 border-emerald-400"
-                        : "bg-white border-gray-200 hover:border-gray-300"
-                        }`}
+                      className={`p-6 rounded-2xl border-2 text-center transition-all ${isSelected ? '' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                      style={isSelected ? { backgroundColor: theme.primaryLight, borderColor: theme.primary } : undefined}
                       onClick={() => handleRadioChange(question.id, option.value)}
                     >
                       <div className="text-4xl mb-3">{option.emoji}</div>
                       <span
-                        className={`font-medium text-lg ${isSelected ? "text-emerald-600" : "text-gray-900"
-                          }`}
+                        className={`font-medium text-lg ${isSelected ? '' : 'text-gray-900'}`}
+                        style={{ color: isSelected ? theme.primary : undefined }}
                       >
                         {option.label}
                       </span>
@@ -1747,7 +1907,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           );
         }
 
-        // Default radio styling for other questions
+        return renderGenericRadio();
+      }
+
+      case 'checkbox': {
         return (
           <div key={question.id} className="space-y-4">
             <div>
@@ -1755,60 +1918,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 {question.questionText}
                 {question.isRequired && <span className="text-red-500 ml-1">*</span>}
               </h3>
-              {question.helpText && (
-                <p className="text-gray-600">{question.helpText}</p>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              {question.options?.map((option) => (
-                <label
-                  key={option.id}
-                  className={`block w-full p-4 rounded-2xl border-2 cursor-pointer transition-all ${value === option.optionValue
-                    ? "bg-emerald-100 border-emerald-300"
-                    : "bg-white border-gray-200 hover:border-gray-300"
-                    }`}
-                >
-                  <div className="flex items-center">
-                    <div className="relative">
-                      <input
-                        type="radio"
-                        name={question.id}
-                        value={option.optionValue}
-                        checked={value === option.optionValue}
-                        onChange={(e) => handleRadioChange(question.id, e.target.value)}
-                        className="sr-only"
-                      />
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${value === option.optionValue ? "border-emerald-500 bg-emerald-500" : "border-gray-300 bg-white"
-                          }`}
-                      >
-                        {value === option.optionValue && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                      </div>
-                    </div>
-                    <span className="ml-3 text-gray-900 font-medium">{option.optionText}</span>
-                  </div>
-                </label>
-              ))}
-            </div>
-
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
-          </div>
-        );
-
-      case 'checkbox':
-        return (
-          <div key={question.id} className="space-y-4">
-            <div>
-              <h3 className="text-2xl font-medium text-gray-900 mb-3">
-                {question.questionText}
-                {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-              </h3>
-              {question.helpText && (
-                <p className="text-gray-600">{question.helpText}</p>
-              )}
+              {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
             </div>
 
             <div className="space-y-3">
@@ -1817,10 +1927,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 return (
                   <label
                     key={option.id}
-                    className={`block w-full p-4 rounded-2xl border-2 cursor-pointer transition-all ${isChecked
-                      ? "bg-emerald-100 border-emerald-300"
-                      : "bg-white border-gray-200 hover:border-gray-300"
-                      }`}
+                    className={`block w-full p-4 rounded-2xl border-2 cursor-pointer transition-all ${isChecked ? '' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                    style={isChecked ? { backgroundColor: theme.primaryLight, borderColor: theme.primary } : undefined}
                   >
                     <div className="flex items-center">
                       <div className="relative">
@@ -1828,18 +1936,14 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           type="checkbox"
                           value={option.optionValue}
                           checked={isChecked}
-                          onChange={(e) => {
-                            handleCheckboxChange(question.id, option.optionValue, e.target.checked);
-                          }}
+                          onChange={(e) => handleCheckboxChange(question.id, option.optionValue, e.target.checked)}
                           className="sr-only"
                         />
                         <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isChecked ? "border-emerald-500 bg-emerald-500" : "border-gray-300 bg-white"
-                            }`}
+                          className="w-5 h-5 rounded-full border-2 flex items-center justify-center"
+                          style={isChecked ? { borderColor: theme.primary, backgroundColor: theme.primary } : undefined}
                         >
-                          {isChecked && (
-                            <Icon icon="lucide:check" className="w-3 h-3 text-white" />
-                          )}
+                          {isChecked && <Icon icon="lucide:check" className="w-3 h-3 text-white" />}
                         </div>
                       </div>
                       <span className="ml-3 text-gray-900 font-medium">{option.optionText}</span>
@@ -1849,15 +1953,29 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
               })}
             </div>
 
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
+            {hasError && <p className="text-sm text-red-600">{errors[question.id]}</p>}
           </div>
         );
+      }
 
-      case 'select':
-        // Special styling for state selection
+      case 'select': {
         if (question.questionText === 'What state do you live in?') {
+          const stateAbbreviations: Record<string, string> = {
+            'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR',
+            'California': 'CA', 'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE',
+            'Florida': 'FL', 'Georgia': 'GA', 'Hawaii': 'HI', 'Idaho': 'ID',
+            'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA', 'Kansas': 'KS',
+            'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+            'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS',
+            'Missouri': 'MO', 'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV',
+            'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY',
+            'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH', 'Oklahoma': 'OK',
+            'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+            'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT',
+            'Vermont': 'VT', 'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV',
+            'Wisconsin': 'WI', 'Wyoming': 'WY', 'District of Columbia': 'DC'
+          };
+
           return (
             <div key={question.id} className="space-y-4">
               <div>
@@ -1865,93 +1983,49 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                   {question.questionText}
                   {question.isRequired && <span className="text-red-500 ml-1">*</span>}
                 </h3>
-                {question.helpText && (
-                  <p className="text-gray-600">{question.helpText}</p>
-                )}
+                {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
               </div>
 
               <div className="space-y-3">
                 {question.options?.map((option) => {
-                  // Define which states are available (you can customize this list)
-                  const unavailableStates = []; // No states are unavailable
-                  const isAvailable = !unavailableStates.includes(option.optionText);
-                  const isSelected = value === option.optionValue;
-
-                  // Map state names to their abbreviations for the SVG files
-                  const stateAbbreviations: Record<string, string> = {
-                    'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR',
-                    'California': 'CA', 'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE',
-                    'Florida': 'FL', 'Georgia': 'GA', 'Hawaii': 'HI', 'Idaho': 'ID',
-                    'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA', 'Kansas': 'KS',
-                    'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
-                    'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS',
-                    'Missouri': 'MO', 'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV',
-                    'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY',
-                    'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH', 'Oklahoma': 'OK',
-                    'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-                    'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT',
-                    'Vermont': 'VT', 'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV',
-                    'Wisconsin': 'WI', 'Wyoming': 'WY', 'District of Columbia': 'DC'
-                  };
-
                   const stateAbbr = stateAbbreviations[option.optionText];
+                  const isSelected = value === option.optionValue;
 
                   return (
                     <button
                       key={option.id}
                       type="button"
-                      className={`block w-full p-4 rounded-2xl border-2 text-left transition-all ${isSelected
-                        ? "bg-emerald-100 border-emerald-300"
-                        : "bg-white border-gray-200 hover:border-gray-300"
-                        } ${!isAvailable ? "opacity-75" : ""}`}
-                      onClick={() => isAvailable && handleRadioChange(question.id, option.optionValue)}
-                      disabled={!isAvailable}
+                      className={`block w-full p-4 rounded-2xl border-2 text-left transition-all ${isSelected ? '' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                      style={isSelected ? { backgroundColor: theme.primaryLight, borderColor: theme.primary } : undefined}
+                      onClick={() => handleRadioChange(question.id, option.optionValue)}
                     >
                       <div className="flex items-center">
                         <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3 overflow-hidden">
-                          {!isAvailable ? (
-                            <Icon icon="lucide:x" className="w-4 h-4 text-red-500" />
-                          ) : stateAbbr ? (
+                          {stateAbbr ? (
                             <img
                               src={`/images/${stateAbbr}.svg`}
                               alt={`${option.optionText} flag`}
                               className="w-6 h-4 object-cover rounded-sm"
-                              onError={(e) => {
-                                // Fallback to gradient if SVG fails to load
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                const parent = target.parentElement;
-                                if (parent) {
-                                  const fallback = document.createElement('div');
-                                  fallback.className = 'w-6 h-4 bg-gradient-to-r from-blue-500 to-red-500 rounded-sm';
-                                  parent.appendChild(fallback);
-                                }
-                              }}
                             />
                           ) : (
                             <div className="w-6 h-4 bg-gradient-to-r from-blue-500 to-red-500 rounded-sm"></div>
                           )}
                         </div>
-                        <span className={`font-medium ${!isAvailable ? "text-gray-500" : "text-gray-900"}`}>
-                          {option.optionText}
-                        </span>
+                        <span className="font-medium text-gray-900">{option.optionText}</span>
                       </div>
                     </button>
                   );
                 })}
               </div>
 
-              {hasError && (
-                <p className="text-sm text-red-600">{errors[question.id]}</p>
-              )}
+              {hasError && <p className="text-sm text-red-600">{errors[question.id]}</p>}
             </div>
           );
         }
 
-        // Default select styling for other questions
         return (
           <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
               {question.questionText}
               {question.isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
@@ -1960,8 +2034,26 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
               onChange={(e) => handleAnswerChange(question.id, e.target.value)}
               className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
                 ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-gray-300 focus:border-emerald-500 focus:bg-emerald-50'
+                : 'border-gray-200 bg-white hover:border-gray-300'
                 } outline-none`}
+              style={hasError ? undefined : {
+                borderColor: theme.primaryLight,
+                color: '#111827'
+              }}
+              onFocus={(e) => {
+                if (!hasError) {
+                  e.currentTarget.style.borderColor = theme.primary;
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
+                  e.currentTarget.style.backgroundColor = theme.primaryLighter;
+                }
+              }}
+              onBlur={(e) => {
+                if (!hasError) {
+                  e.currentTarget.style.borderColor = theme.primaryLight;
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                }
+              }}
             >
               <option value="">{question.placeholder || "Select an option"}</option>
               {question.options?.map((option) => (
@@ -1970,19 +2062,16 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 </option>
               ))}
             </select>
-            {question.helpText && (
-              <p className="text-sm text-gray-600">{question.helpText}</p>
-            )}
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
+            {question.helpText && <p className="text-sm text-gray-600">{question.helpText}</p>}
+            {hasError && <p className="text-sm text-red-600">{errors[question.id]}</p>}
           </div>
         );
+      }
 
       case 'height':
         return (
           <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
               {question.questionText}
               {question.isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
@@ -1995,8 +2084,26 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                   onChange={(e) => handleAnswerChange(question.id, { ...value, feet: e.target.value })}
                   className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
                     ? 'border-red-300 bg-red-50'
-                    : 'border-gray-200 bg-white hover:border-gray-300 focus:border-emerald-500 focus:bg-emerald-50'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
                     } outline-none`}
+                  style={hasError ? undefined : {
+                    borderColor: theme.primaryLight,
+                    color: '#111827'
+                  }}
+                  onFocus={(e) => {
+                    if (!hasError) {
+                      e.currentTarget.style.borderColor = theme.primary;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
+                      e.currentTarget.style.backgroundColor = theme.primaryLighter;
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (!hasError) {
+                      e.currentTarget.style.borderColor = theme.primaryLight;
+                      e.currentTarget.style.boxShadow = 'none';
+                      e.currentTarget.style.backgroundColor = '#FFFFFF';
+                    }
+                  }}
                 />
                 <label className="block text-xs text-gray-500 mt-1 ml-1">Feet</label>
               </div>
@@ -2008,8 +2115,26 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                   onChange={(e) => handleAnswerChange(question.id, { ...value, inches: e.target.value })}
                   className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
                     ? 'border-red-300 bg-red-50'
-                    : 'border-gray-200 bg-white hover:border-gray-300 focus:border-emerald-500 focus:bg-emerald-50'
+                    : 'border-gray-200 bg-white hover-border-gray-300'
                     } outline-none`}
+                  style={hasError ? undefined : {
+                    borderColor: theme.primaryLight,
+                    color: '#111827'
+                  }}
+                  onFocus={(e) => {
+                    if (!hasError) {
+                      e.currentTarget.style.borderColor = theme.primary;
+                      e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
+                      e.currentTarget.style.backgroundColor = theme.primaryLighter;
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (!hasError) {
+                      e.currentTarget.style.borderColor = theme.primaryLight;
+                      e.currentTarget.style.boxShadow = 'none';
+                      e.currentTarget.style.backgroundColor = '#FFFFFF';
+                    }
+                  }}
                 />
                 <label className="block text-xs text-gray-500 mt-1 ml-1">Inches</label>
               </div>
@@ -2026,7 +2151,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       case 'weight':
         return (
           <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
               {question.questionText}
               {question.isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
@@ -2037,8 +2162,26 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
               onChange={(e) => handleAnswerChange(question.id, e.target.value)}
               className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
                 ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-gray-300 focus:border-emerald-500 focus:bg-emerald-50'
+                : 'border-gray-200 bg-white hover-border-gray-300'
                 } outline-none`}
+              style={hasError ? undefined : {
+                borderColor: theme.primaryLight,
+                color: '#111827'
+              }}
+              onFocus={(e) => {
+                if (!hasError) {
+                  e.currentTarget.style.borderColor = theme.primary;
+                  e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
+                  e.currentTarget.style.backgroundColor = theme.primaryLighter;
+                }
+              }}
+              onBlur={(e) => {
+                if (!hasError) {
+                  e.currentTarget.style.borderColor = theme.primaryLight;
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                }
+              }}
             />
             {question.helpText && (
               <p className="text-sm text-gray-600">{question.helpText}</p>
@@ -2052,7 +2195,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       default:
         return (
           <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
               {question.questionText}
               {question.isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
@@ -2063,7 +2206,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
               onChange={(e) => handleAnswerChange(question.id, e.target.value)}
               className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
                 ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-gray-300 focus:border-emerald-500 focus:bg-emerald-50'
+                : `border-gray-200 bg-white hover:border-gray-300 focus:border-[${theme.primary}] focus:bg-[${theme.primaryLight}]`
                 } outline-none`}
             />
             {question.helpText && (
@@ -2076,6 +2219,26 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         );
     }
   };
+
+  const theme = useMemo(() => createTheme(questionnaire?.color), [questionnaire?.color]);
+  const themeVars = useMemo(
+    () => ({
+      "--q-primary": theme.primary,
+      "--q-primary-dark": theme.primaryDark,
+      "--q-primary-darker": theme.primaryDarker,
+      "--q-primary-light": theme.primaryLight,
+      "--q-primary-lighter": theme.primaryLighter,
+      "--q-primary-text": theme.text,
+    } as React.CSSProperties),
+    [theme]
+  );
+
+  useEffect(() => {
+    console.log("[QuestionnaireModal] theme", {
+      questionnaireColor: questionnaire?.color,
+      theme,
+    });
+  }, [questionnaire?.color, theme]);
 
   if (loading || !questionnaire || !questionnaire.steps) {
     return (
@@ -2139,7 +2302,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       }}
       hideCloseButton
     >
-      <ModalContent className="h-full bg-gray-50">
+      <ModalContent className="h-full bg-gray-50 questionnaire-theme" style={themeVars}>
         <ModalBody className="p-0 h-full flex flex-col">
           {/* Header with close button */}
           <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
@@ -2177,10 +2340,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                     // Checkout step with custom layout
                     <>
                       {/* Progress Bar */}
-                      <div className="w-full bg-gray-200 rounded-full h-2 mb-8">
+                      <div className="w-full rounded-full h-2 mb-8" style={{ backgroundColor: 'rgba(0,0,0,0.08)' }}>
                         <div
-                          className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progressPercent}%` }}
+                          className="h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${progressPercent}%`, backgroundColor: theme.primary }}
                         />
                       </div>
 
@@ -2211,10 +2374,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                     // Product selection step
                     <>
                       {/* Progress Bar */}
-                      <div className="w-full bg-gray-200 rounded-full h-2 mb-8">
+                      <div className="w-full rounded-full h-2 mb-8" style={{ backgroundColor: 'rgba(0,0,0,0.08)' }}>
                         <div
-                          className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progressPercent}%` }}
+                          className="h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${progressPercent}%`, backgroundColor: theme.primary }}
                         />
                       </div>
 
@@ -2226,7 +2389,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           <button
                             onClick={handleNext}
                             disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
-                            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
+                            className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            style={{
+                              backgroundColor: theme.primary,
+                              ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
+                            }}
                           >
                             {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
                               (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
@@ -2243,8 +2410,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                       {/* Progress Bar */}
                       <div className="w-full bg-gray-200 rounded-full h-2 mb-8">
                         <div
-                          className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progressPercent}%` }}
+                          className="h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${progressPercent}%`, backgroundColor: theme.primary }}
                         />
                       </div>
 
@@ -2317,190 +2484,189 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               icon: "heyfeels",
                             },
                           ];
-                          
+
                           return (
                             <>
                               <div className="space-y-4">
-                          <div>
-                            <h3 className="text-2xl font-medium text-gray-900 mb-3">Recommended Treatment</h3>
-                            <p className="text-gray-600 text-base">Based on your assessment, our providers recommend this treatment</p>
-                          </div>
-                          
-                          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-                            <div className="flex items-center gap-2 text-emerald-600 mb-4">
-                              <Icon icon="lucide:check" className="w-4 h-4" />
-                              <span className="text-sm font-medium">Provider Recommended</span>
-                            </div>
-                            <div className="flex items-start gap-4 mb-4">
-                              <div className="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
-                                <div className="text-white text-xs font-bold">
-                                  <div>hey</div>
-                                  <div>feels</div>
+                                <div>
+                                  <h3 className="text-2xl font-medium text-gray-900 mb-3">Recommended Treatment</h3>
+                                  <p className="text-gray-600 text-base">Based on your assessment, our providers recommend this treatment</p>
                                 </div>
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <h3 className="text-xl font-medium text-gray-900">Semaglutide Orals</h3>
-                                </div>
-                                <div className="flex items-center gap-2 mb-3">
-                                  <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-medium">
-                                    Most Popular
-                                  </span>
-                                  <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">Oral</span>
-                                </div>
-                                <p className="text-gray-900 font-medium mb-1">Daily Oral Option</p>
-                                <p className="text-gray-600 text-sm mb-4">Needle-free alternative with flexible dosing</p>
 
-                                <div className="space-y-2 mb-6">
-                                  <div className="flex items-center gap-2">
-                                    <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                    <span className="text-gray-700 text-sm">Oral dissolvable tablet</span>
+                                <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+                                  <div className="flex items-center gap-2 text-emerald-600 mb-4">
+                                    <Icon icon="lucide:check" className="w-4 h-4" />
+                                    <span className="text-sm font-medium">Provider Recommended</span>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                    <span className="text-gray-700 text-sm">Same active ingredient as Rybelsus®</span>
+                                  <div className="flex items-start gap-4 mb-4">
+                                    <div className="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
+                                      <div className="text-white text-xs font-bold">
+                                        <div>hey</div>
+                                        <div>feels</div>
+                                      </div>
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <h3 className="text-xl font-medium text-gray-900">Semaglutide Orals</h3>
+                                      </div>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-medium">
+                                          Most Popular
+                                        </span>
+                                        <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">Oral</span>
+                                      </div>
+                                      <p className="text-gray-900 font-medium mb-1">Daily Oral Option</p>
+                                      <p className="text-gray-600 text-sm mb-4">Needle-free alternative with flexible dosing</p>
+
+                                      <div className="space-y-2 mb-6">
+                                        <div className="flex items-center gap-2">
+                                          <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                          <span className="text-gray-700 text-sm">Oral dissolvable tablet</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                          <span className="text-gray-700 text-sm">Same active ingredient as Rybelsus®</span>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        onClick={() => {
+                                          // Handle treatment selection
+                                          handleAnswerChange('selectedTreatment', 'Semaglutide Orals');
+                                          handleNext();
+                                        }}
+                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-6 rounded-2xl text-base h-auto flex items-center justify-center gap-2 transition-colors"
+                                      >
+                                        Select This Treatment
+                                        <Icon icon="lucide:chevron-right" className="w-4 h-4" />
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
 
                                 <button
-                                  onClick={() => {
-                                    // Handle treatment selection
-                                    handleAnswerChange('selectedTreatment', 'Semaglutide Orals');
-                                    handleNext();
-                                  }}
-                                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-6 rounded-2xl text-base h-auto flex items-center justify-center gap-2 transition-colors"
+                                  onClick={() => setShowMedicationModal(true)}
+                                  className="w-full bg-white rounded-2xl border border-gray-200 p-4 mb-6 flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition-colors"
                                 >
-                                  Select This Treatment
-                                  <Icon icon="lucide:chevron-right" className="w-4 h-4" />
+                                  <Icon icon="lucide:plus" className="w-4 h-4" />
+                                  <span className="font-medium">View Other Treatment Options</span>
                                 </button>
-                              </div>
-                            </div>
-                          </div>
 
-                          <button 
-                            onClick={() => setShowMedicationModal(true)}
-                            className="w-full bg-white rounded-2xl border border-gray-200 p-4 mb-6 flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <Icon icon="lucide:plus" className="w-4 h-4" />
-                            <span className="font-medium">View Other Treatment Options</span>
-                          </button>
+                                <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <Icon icon="lucide:lock" className="w-4 h-4 text-gray-600" />
+                                    <h3 className="font-medium text-gray-900">About Compounded Medications</h3>
+                                  </div>
 
-                          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-                            <div className="flex items-center gap-2 mb-4">
-                              <Icon icon="lucide:lock" className="w-4 h-4 text-gray-600" />
-                              <h3 className="font-medium text-gray-900">About Compounded Medications</h3>
-                            </div>
-
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                <span className="text-gray-700 text-sm">Same active ingredients as brand-name medications</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                <span className="text-gray-700 text-sm">Custom formulated by licensed US pharmacies</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                <span className="text-gray-700 text-sm">Physician oversight with personalized dosing</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-center gap-2 text-gray-600 text-sm">
-                            <Icon icon="lucide:dollar-sign" className="w-4 h-4" />
-                            <span>Special pricing available • $0 due today • Only pay if prescribed</span>
-                          </div>
-                        </div>
-
-                        {/* Medication Selection Modal */}
-                        {showMedicationModal && (
-                          <div className="fixed inset-0 flex items-start justify-center p-4 z-50" style={{backgroundColor: 'rgba(0, 0, 0, 0.5)', margin: 0}}>
-                            <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                              <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl z-10">
-                                <div className="flex items-center justify-between">
-                                  <h2 className="text-xl font-medium text-gray-900">Choose Preferred Medication</h2>
-                                  <button
-                                    onClick={() => setShowMedicationModal(false)}
-                                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                                  >
-                                    <Icon icon="lucide:x" className="w-5 h-5" />
-                                  </button>
-                                </div>
-                                <p className="text-gray-600 text-sm mt-2">
-                                  Your provider will take this into consideration when creating your treatment plan.
-                                </p>
-                              </div>
-
-                              <div className="p-6 space-y-4">
-                                {medications.map((medication) => (
-                                  <div
-                                    key={medication.id}
-                                    className={`relative border rounded-2xl p-4 cursor-pointer transition-all ${
-                                      selectedMedication === medication.id
-                                        ? "border-emerald-500 bg-emerald-50"
-                                        : "border-gray-200 hover:border-gray-300"
-                                    }`}
-                                    onClick={() => setSelectedMedication(medication.id)}
-                                  >
-                                    {selectedMedication === medication.id && (
-                                      <div className="absolute top-4 right-4 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
-                                        <Icon icon="lucide:check" className="w-4 h-4 text-white" />
-                                      </div>
-                                    )}
-
-                                    <div className="flex items-start gap-4">
-                                      <div className="w-12 h-12 flex items-center justify-center">
-                                        {medication.icon === "heyfeels" ? (
-                                          <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
-                                            <div className="text-white text-xs font-bold">
-                                              <div>hey</div>
-                                              <div>feels</div>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-lg">
-                                            {medication.icon}
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <h3 className="font-medium text-gray-900">{medication.name}</h3>
-                                          {medication.badge && (
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${medication.badgeColor}`}>
-                                              {medication.badge}
-                                            </span>
-                                          )}
-                                          <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">
-                                            {medication.type}
-                                          </span>
-                                        </div>
-
-                                        <p className="text-emerald-600 font-medium text-sm mb-1">{medication.subtitle}</p>
-                                        <p className="text-gray-600 text-sm mb-3">{medication.description}</p>
-
-                                        <div className="space-y-1">
-                                          {medication.benefits.map((benefit, index) => (
-                                            <div key={index} className="flex items-center gap-2">
-                                              <Icon icon="lucide:check" className="w-3 h-3 text-emerald-600" />
-                                              <span className="text-gray-700 text-sm">{benefit}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                      <span className="text-gray-700 text-sm">Same active ingredients as brand-name medications</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                      <span className="text-gray-700 text-sm">Custom formulated by licensed US pharmacies</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                      <span className="text-gray-700 text-sm">Physician oversight with personalized dosing</span>
                                     </div>
                                   </div>
-                                ))}
+                                </div>
+
+                                <div className="flex items-center justify-center gap-2 text-gray-600 text-sm">
+                                  <Icon icon="lucide:dollar-sign" className="w-4 h-4" />
+                                  <span>Special pricing available • $0 due today • Only pay if prescribed</span>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()
-                ) : currentStep?.title === 'Body Measurements' ? (
+
+                              {/* Medication Selection Modal */}
+                              {showMedicationModal && (
+                                <div className="fixed inset-0 flex items-start justify-center p-4 z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', margin: 0 }}>
+                                  <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                                    <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl z-10">
+                                      <div className="flex items-center justify-between">
+                                        <h2 className="text-xl font-medium text-gray-900">Choose Preferred Medication</h2>
+                                        <button
+                                          onClick={() => setShowMedicationModal(false)}
+                                          className="text-gray-400 hover:text-gray-600 transition-colors"
+                                        >
+                                          <Icon icon="lucide:x" className="w-5 h-5" />
+                                        </button>
+                                      </div>
+                                      <p className="text-gray-600 text-sm mt-2">
+                                        Your provider will take this into consideration when creating your treatment plan.
+                                      </p>
+                                    </div>
+
+                                    <div className="p-6 space-y-4">
+                                      {medications.map((medication) => (
+                                        <div
+                                          key={medication.id}
+                                          className={`relative border rounded-2xl p-4 cursor-pointer transition-all ${selectedMedication === medication.id
+                                            ? "border-emerald-500 bg-emerald-50"
+                                            : "border-gray-200 hover:border-gray-300"
+                                            }`}
+                                          onClick={() => setSelectedMedication(medication.id)}
+                                        >
+                                          {selectedMedication === medication.id && (
+                                            <div className="absolute top-4 right-4 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
+                                              <Icon icon="lucide:check" className="w-4 h-4 text-white" />
+                                            </div>
+                                          )}
+
+                                          <div className="flex items-start gap-4">
+                                            <div className="w-12 h-12 flex items-center justify-center">
+                                              {medication.icon === "heyfeels" ? (
+                                                <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
+                                                  <div className="text-white text-xs font-bold">
+                                                    <div>hey</div>
+                                                    <div>feels</div>
+                                                  </div>
+                                                </div>
+                                              ) : (
+                                                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-lg">
+                                                  {medication.icon}
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            <div className="flex-1">
+                                              <div className="flex items-center gap-2 mb-2">
+                                                <h3 className="font-medium text-gray-900">{medication.name}</h3>
+                                                {medication.badge && (
+                                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${medication.badgeColor}`}>
+                                                    {medication.badge}
+                                                  </span>
+                                                )}
+                                                <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">
+                                                  {medication.type}
+                                                </span>
+                                              </div>
+
+                                              <p className="text-emerald-600 font-medium text-sm mb-1">{medication.subtitle}</p>
+                                              <p className="text-gray-600 text-sm mb-3">{medication.description}</p>
+
+                                              <div className="space-y-1">
+                                                {medication.benefits.map((benefit, index) => (
+                                                  <div key={index} className="flex items-center gap-2">
+                                                    <Icon icon="lucide:check" className="w-3 h-3 text-emerald-600" />
+                                                    <span className="text-gray-700 text-sm">{benefit}</span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()
+                      ) : currentStep?.title === 'Body Measurements' ? (
                         // Custom BMI calculator
                         <div className="space-y-4">
                           <div>
@@ -2602,18 +2768,6 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                         </div>
                                       </div>
 
-                                      <style jsx>{`
-                                        @keyframes bmi-expand {
-                                          0% {
-                                            transform: scaleX(0);
-                                            opacity: 0.7;
-                                          }
-                                          100% {
-                                            transform: scaleX(1);
-                                            opacity: 1;
-                                          }
-                                        }
-                                      `}</style>
 
                                       <div className="grid grid-cols-4 gap-2 text-sm">
                                         <div className="text-center">
@@ -2893,7 +3047,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               // Check if question has conditional logic
                               const conditionalLogic = (question as any).conditionalLogic;
                               if (!conditionalLogic) return true;
-                              
+
                               // Parse conditional logic (format: "questionOrder:1,answer:Yes")
                               try {
                                 const parts = conditionalLogic.split(',');
@@ -2901,7 +3055,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                 // Join all parts after the first comma and remove "answer:" prefix
                                 const answerPart = parts.slice(1).join(',');
                                 const requiredAnswer = answerPart.substring(answerPart.indexOf(':') + 1);
-                                
+
                                 const targetQuestion = currentStep.questions.find(q => q.questionOrder === targetQuestionOrder);
                                 if (targetQuestion) {
                                   const targetAnswer = answers[targetQuestion.id];
@@ -2920,24 +3074,24 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               const bSubOrder = (b as any).subQuestionOrder;
                               const aConditional = (a as any).conditionalLogic;
                               const bConditional = (b as any).conditionalLogic;
-                              
+
                               // First sort by conditional level (0 = main questions, 1 = first level nested, etc.)
                               if (aLevel !== bLevel) {
                                 return aLevel - bLevel;
                               }
-                              
+
                               // Within the same level, check if they're in the same conditional group
-                              const sameConditionalGroup = aConditional && bConditional && 
+                              const sameConditionalGroup = aConditional && bConditional &&
                                 aConditional.split(',')[0] === bConditional.split(',')[0] &&
                                 aConditional.split(',')[1] === bConditional.split(',')[1];
-                              
+
                               // If same level and same conditional group, sort by subQuestionOrder
-                              if (sameConditionalGroup && 
-                                  aSubOrder !== null && aSubOrder !== undefined && 
-                                  bSubOrder !== null && bSubOrder !== undefined) {
+                              if (sameConditionalGroup &&
+                                aSubOrder !== null && aSubOrder !== undefined &&
+                                bSubOrder !== null && bSubOrder !== undefined) {
                                 return aSubOrder - bSubOrder;
                               }
-                              
+
                               // Otherwise, sort by questionOrder
                               return a.questionOrder - b.questionOrder;
                             })
@@ -2962,7 +3116,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                         <button
                           onClick={handleNext}
                           disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
+                          className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                          style={{
+                            backgroundColor: theme.primary,
+                            ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
+                          }}
                         >
                           {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
                             (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :

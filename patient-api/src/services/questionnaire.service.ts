@@ -429,8 +429,7 @@ class QuestionnaireService {
     }
 
     async getQuestionnaireByTreatment(treatmentId: string) {
-        const questionnaire = await Questionnaire.findOne({
-            where: { treatmentId },
+        const baseQuery = {
             include: [
                 {
                     model: QuestionnaireStep,
@@ -453,14 +452,36 @@ class QuestionnaireService {
                 [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
                 [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
                 [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC']
+            ] as any
+        };
+
+        const nonTemplate = await Questionnaire.findOne({
+            where: { treatmentId, isTemplate: false },
+            ...baseQuery,
+            order: [
+                ['updatedAt', 'DESC'],
+                ...baseQuery.order,
             ]
         });
 
-        if (!questionnaire) {
+        if (nonTemplate) {
+            return nonTemplate;
+        }
+
+        const template = await Questionnaire.findOne({
+            where: { treatmentId },
+            ...baseQuery,
+            order: [
+                ['updatedAt', 'DESC'],
+                ...baseQuery.order,
+            ]
+        });
+
+        if (!template) {
             throw new Error('Questionnaire not found for this treatment');
         }
 
-        return questionnaire;
+        return template;
     }
 }
 
