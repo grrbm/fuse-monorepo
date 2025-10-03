@@ -1,5 +1,8 @@
 import axios, { AxiosResponse } from 'axios';
 import { config, PharmacyApiConfig, PharmacyApiResponse } from './config';
+import Order from '../../models/Order';
+import PatientService from './patient';
+import ShippingOrder, { OrderShippingStatus } from '../../models/ShippingOrder';
 
 interface PharmacyProduct {
   sku: number;
@@ -36,12 +39,14 @@ interface UpdatePatientAddressRequest {
 
 class OrderService {
   private config: PharmacyApiConfig;
+  private patientService: PatientService;
 
   constructor() {
     this.config = config
+    this.patientService = new PatientService();
   }
 
-  async createOrder(orderData: CreateOrderRequest): Promise<PharmacyApiResponse> {
+  async postOrder(orderData: CreateOrderRequest): Promise<PharmacyApiResponse> {
     try {
       const response: AxiosResponse = await axios.post(
         `${this.config.baseUrl}/api/clinics/orders`,
@@ -190,6 +195,67 @@ class OrderService {
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
+  }
+  async createOrder(order: Order) {
+
+
+    const pharmacyPatientId = await this.patientService.syncPatientFromUser(order.user.id, order.shippingAddressId);
+
+
+    // Map order items to pharmacy products
+    const products = order.orderItems.map(item => ({
+      sku: parseInt(item.pharmacyProductId), // Use pharmacy product ID or default
+      quantity: item.quantity,
+      refills: 2, // Default refills - could be made configurable
+      days_supply: 30, // Default days supply - could be made configurable
+      sig: item.dosage || item.product.dosage || "Use as directed",
+      medical_necessity: item.notes || "Prescribed treatment as part of patient care plan."
+    }));
+
+
+    const pharmacyPhysicianId = order?.physician?.pharmacyPhysicianId
+
+
+    if (!pharmacyPhysicianId) {
+      return {
+        success: false,
+        message: "No physician associated with order",
+        error: "No physician associated with order",
+      };
+    }
+
+
+
+    // Create pharmacy order
+    const pharmacyResult = await this.postOrder({
+      patient_id: parseInt(pharmacyPatientId),
+      physician_id: parseInt(pharmacyPhysicianId),
+      ship_to_clinic: 0, // Ship to patient
+      service_type: "two_day",
+      signature_required: 1,
+      memo: order.notes || "Order approved",
+      external_id: order.id,
+      test_order: process.env.NODE_ENV === 'production' ? 0 : 1,
+      products: products
+    });
+
+    if (!pharmacyResult.success) {
+      return {
+        success: false,
+        message: "Failed to create pharmacy order",
+        error: pharmacyResult.error || "Unknown pharmacy error"
+      };
+    }
+
+    const pharmacyOrderId = pharmacyResult.data?.id?.toString();
+
+    // Create shipping order with proper address reference
+    await ShippingOrder.create({
+      orderId: order.id,
+      shippingAddressId: order.shippingAddressId,
+      status: OrderShippingStatus.PROCESSING,
+      pharmacyOrderId: pharmacyOrderId
+    });
   }
 }
 
