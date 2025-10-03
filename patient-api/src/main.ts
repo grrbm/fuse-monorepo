@@ -1767,6 +1767,21 @@ app.get("/treatments/by-clinic-id/:clinicId", authenticateJWT, async (req, res) 
       ]
     });
 
+    const treatmentIds = treatments.map((treatment) => treatment.id);
+
+    const brandTreatments = treatmentIds.length
+      ? await BrandTreatment.findAll({
+        where: {
+          userId: currentUser.id,
+          treatmentId: treatmentIds,
+        },
+      })
+      : [];
+
+    const brandTreatmentByTreatmentId = new Map(
+      brandTreatments.map((selection) => [selection.treatmentId, selection])
+    );
+
     console.log(`✅ Found ${treatments?.length || 0} treatments for clinic ID "${clinicId}"`);
 
     // Recalculate productsPrice for each treatment
@@ -1789,9 +1804,13 @@ app.get("/treatments/by-clinic-id/:clinicId", authenticateJWT, async (req, res) 
           }
         }
 
-        // Return the treatment data without the full products array to keep response size reasonable
         const treatmentData = treatment.toJSON();
         delete treatmentData.products; // Remove the full products array to reduce response size
+
+        const selection = brandTreatmentByTreatmentId.get(treatment.id);
+        treatmentData.selected = Boolean(selection);
+        treatmentData.brandColor = selection?.brandColor ?? null;
+        treatmentData.brandLogo = selection?.brandLogo ?? null;
 
         return treatmentData;
       })

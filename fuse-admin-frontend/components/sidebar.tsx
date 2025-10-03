@@ -28,7 +28,7 @@ const navigation = [
 
 const operations = [
   { name: "Treatments", icon: Stethoscope, current: false, href: "/treatments" },
-  { name: "Offerings", icon: Gift, current: false, href: "/offerings" },
+  // { name: "Offerings", icon: Gift, current: false, href: "/offerings" },
   { name: "Products", icon: Package, current: false, href: "/products" },
   { name: "Orders", icon: ShoppingCart, current: false, href: "/orders", hasSubmenu: true },
 ]

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { useAuth } from '@/contexts/AuthContext'
@@ -16,7 +16,13 @@ import {
     Package,
     CheckCircle,
     XCircle,
-    Clock
+    Clock,
+    Sparkles,
+    RefreshCcw,
+    Palette,
+    Copy,
+    Check,
+    Loader2,
 } from 'lucide-react'
 
 interface Treatment {
@@ -40,136 +46,83 @@ interface Treatment {
         name: string
         slug: string
     }
+    selected?: boolean
+    brandColor?: string | null
+    brandLogo?: string | null
+    slug?: string | null
 }
 
 export default function Treatments() {
     const [treatments, setTreatments] = useState<Treatment[]>([])
-    const [loading, setLoading] = useState(false)  // Start with false, set to true when fetching
+    const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [status, setStatus] = useState<'idle' | 'saving'>('idle')
+    const [pendingSelection, setPendingSelection] = useState<Record<string, boolean>>({})
+    const [copiedId, setCopiedId] = useState<string | null>(null)
+    const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
     const { user, token } = useAuth()
     const router = useRouter()
 
-    // Cast user to include clinicId property
     const userWithClinic = user as any
 
-    const fetchTreatments = useCallback(async () => {
-        console.log('🔍 🔄 STARTING TREATMENTS FETCH PROCESS')
-        console.log('🔍 User data:', user)
-        console.log('🔍 Token:', token)
-        console.log('🔍 Clinic ID:', userWithClinic?.clinicId)
-
-        // Set loading to true at the start of the fetch process
+    const fetchTreatments = useMemo(() => async () => {
         setLoading(true)
         setError(null)
 
         if (!token) {
-            console.log('❌ No token available, skipping fetch')
             setError('No authentication token found')
             setLoading(false)
             return
         }
 
         if (!userWithClinic?.clinicId) {
-            console.log('❌ No clinicId in user data, skipping fetch')
-            setError('❌ Clinic Access Required: Your account is not assigned to any clinic. Please contact support to get access to clinic data, or try logging out and back in if you recently joined a clinic.')
+            setError('Your account is not assigned to any clinic. Please contact support.')
             setLoading(false)
             return
         }
 
-        console.log('✅ Authentication passed, proceeding with fetch')
-        console.log('🔍 🚀 STARTING ACTUAL TREATMENTS FETCH')
-        console.log('🔍 Target clinic ID:', userWithClinic.clinicId)
-        console.log('🔍 API URL:', `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/treatments/by-clinic-id/${userWithClinic.clinicId}`)
-
         try {
-            setLoading(true)
-            console.log('🔍 Setting loading to true')
-
-            // Fetch treatments for the clinic with timeout
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => {
-                console.log('⏰ Request timed out after 30 seconds')
-                controller.abort()
-            }, 30000) // 30 second timeout
-
-            console.log('🔍 Making fetch request...')
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/treatments/by-clinic-id/${userWithClinic.clinicId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
-                },
-                signal: controller.signal
-            })
-            clearTimeout(timeoutId)
-
-            console.log('🔍 📡 Response received!')
-            console.log('🔍 Response status:', response.status)
-            console.log('🔍 Response headers:', Object.fromEntries(response.headers.entries()))
-
-            if (response.ok) {
-                console.log('✅ Response OK, parsing JSON...')
-                const data = await response.json()
-                console.log('🔍 ✅ Response data received:', data)
-
-                if (data.success) {
-                    console.log('✅ API call successful!')
-                    const treatments = data.data || []
-                    console.log('🔍 Treatments count:', treatments.length)
-                    console.log('🔍 Setting treatments state with:', treatments.length, 'treatments')
-
-                    setTreatments(treatments)
-
-                    if (treatments.length === 0) {
-                        console.log('ℹ️ No treatments found for this clinic')
-                        setError('No treatments found for your clinic')
-                    } else {
-                        console.log('✅ Treatments loaded successfully:', treatments.length, 'treatments')
-                    }
-                } else {
-                    console.error('❌ API returned success=false:', data.message)
-                    setError(data.message || 'Failed to load treatments')
                 }
-            } else {
+            })
+
+            if (!response.ok) {
                 const errorText = await response.text()
-                console.error('❌ HTTP error response:', response.status, response.statusText)
-                console.error('❌ Error body:', errorText)
                 setError(`Failed to load treatments: ${response.status} ${response.statusText}`)
+                console.error('❌ Error fetching treatments:', errorText)
+                return
             }
 
-        } catch (err) {
-            console.error('❌ Exception during fetch:', err)
-            if (err instanceof Error && err.name === 'AbortError') {
-                console.error('⏰ Request was aborted due to timeout')
-                setError('Request timed out. Please try again.')
-            } else {
-                console.error('❌ Other error type:', err)
-                setError('Failed to load treatments')
+            const data = await response.json()
+
+            if (!data.success) {
+                setError(data.message || 'Failed to load treatments')
+                return
             }
+
+            setTreatments(Array.isArray(data.data) ? data.data : [])
+        } catch (err) {
+            console.error('Error fetching treatments:', err)
+            setError('Failed to load treatments')
         } finally {
-            console.log('🔍 Setting loading to false')
             setLoading(false)
         }
     }, [token, userWithClinic?.clinicId])
 
     useEffect(() => {
-        console.log('🔍 Treatments useEffect running')
         fetchTreatments()
     }, [fetchTreatments])
 
-    // Debug: Check if component is working at all
     useEffect(() => {
-        console.log('🔍 Treatments page loaded!')
-        console.log('🔍 User object:', user)
-        console.log('🔍 Token object:', token)
-
-        // Check after a short delay to see if auth state changes
-        const timer = setTimeout(() => {
-            console.log('🔍 Treatments - After delay - User object:', user)
-            console.log('🔍 Treatments - After delay - Token object:', token)
-            console.log('🔍 Treatments - After delay - User clinicId:', (user as any)?.clinicId)
-        }, 1000)
-
-        return () => clearTimeout(timer)
+        return () => {
+            if (copyTimeoutRef.current) {
+                clearTimeout(copyTimeoutRef.current)
+            }
+        }
     }, [])
 
     const getStatusBadge = (active: boolean) => {
@@ -188,6 +141,88 @@ export default function Treatments() {
         }).format(price)
     }
 
+    const handleCopyUrl = (url: string, id: string) => {
+        if (typeof navigator === 'undefined' || !navigator.clipboard) {
+            console.error('Clipboard API not available')
+            return
+        }
+
+        navigator.clipboard
+            .writeText(url)
+            .then(() => {
+                setCopiedId(id)
+                if (copyTimeoutRef.current) {
+                    clearTimeout(copyTimeoutRef.current)
+                }
+                copyTimeoutRef.current = setTimeout(() => {
+                    setCopiedId(null)
+                    copyTimeoutRef.current = null
+                }, 2000)
+            })
+            .catch((err) => {
+                console.error('Failed to copy preview URL:', err)
+            })
+    }
+
+    const handleToggleOffering = async (treatment: Treatment) => {
+        if (!token) return
+
+        setStatus('saving')
+        setPendingSelection((prev) => ({ ...prev, [treatment.id]: !treatment.selected }))
+
+        setTreatments((prev) =>
+            prev.map((item) =>
+                item.id === treatment.id
+                    ? {
+                        ...item,
+                        selected: !item.selected,
+                    }
+                    : item,
+            ),
+        )
+
+        try {
+            const method = treatment.selected ? 'DELETE' : 'POST'
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/brand-treatments`, {
+                method,
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ treatmentId: treatment.id })
+            })
+
+            if (!response.ok) {
+                const text = await response.text()
+                throw new Error(text || 'Failed to update offering')
+            }
+
+            setPendingSelection((prev) => {
+                const clone = { ...prev }
+                delete clone[treatment.id]
+                return clone
+            })
+        } catch (err) {
+            console.error('❌ Error updating offering status:', err)
+            setError('Failed to update offering status. Reverting change.')
+            setTreatments((prev) =>
+                prev.map((item) =>
+                    item.id === treatment.id
+                        ? {
+                            ...item,
+                            selected: treatment.selected,
+                        }
+                        : item,
+                ),
+            )
+        } finally {
+            setStatus('idle')
+        }
+    }
+
+    const selectedCount = useMemo(() => treatments.filter((t) => t.selected).length, [treatments])
+    const hasPending = useMemo(() => Object.keys(pendingSelection).length > 0, [pendingSelection])
+
     if (loading) {
         return (
             <Layout>
@@ -205,165 +240,211 @@ export default function Treatments() {
         <Layout>
             <Head>
                 <title>Treatments - Fuse Admin</title>
-                <meta name="description" content="Manage your clinic treatments" />
+                <meta name="description" content="Manage treatments and offerings" />
             </Head>
 
             <div className="min-h-screen bg-background p-6">
-                {/* Debug Panel */}
-                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <h3 className="text-sm font-semibold text-green-800 mb-2">🔍 Debug Panel</h3>
-                    <div className="flex gap-2">
-                        <Button
-                            size="sm"
-                            onClick={() => {
-                                console.log('🔍 Manual trigger of fetchTreatments')
-                                fetchTreatments()
-                            }}
-                        >
-                            🔄 Reload Treatments
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                                console.log('🔍 Current state:')
-                                console.log('- User:', user)
-                                console.log('- Token exists:', !!token)
-                                console.log('- Clinic ID:', (user as any)?.clinicId)
-                                console.log('- Loading:', loading)
-                                console.log('- Error:', error)
-
-                                const clinicId = (user as any)?.clinicId || 'null'
-                                const hasClinic = !!clinicId && clinicId !== 'null'
-
-                                if (!hasClinic) {
-                                    alert(`❌ Clinic ID Issue\n\nCurrent Clinic ID: ${clinicId}\n\n💡 Solutions:\n1. Log out and back in\n2. Clear browser cache\n3. Check if SQL update worked\n4. Contact support if persists`)
-                                } else {
-                                    alert(`✅ Clinic Access\n\nClinic ID: ${clinicId}\nLoading: ${loading}\nError: ${error || 'none'}`)
-                                }
-                            }}
-                        >
-                            📊 Show State
-                        </Button>
-                    </div>
-                </div>
-
-                <div className="max-w-7xl mx-auto">
-                    {/* Header */}
-                    <div className="flex justify-between items-center mb-8">
+                <div className="max-w-7xl mx-auto space-y-6">
+                    <div className="flex items-start justify-between flex-wrap gap-4">
                         <div>
-                            <h1 className="text-3xl font-bold text-foreground mb-2">Treatments</h1>
-                            <p className="text-muted-foreground">Manage and monitor your clinic's treatment offerings</p>
+                            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+                                <Stethoscope className="h-7 w-7 text-primary" /> Treatments
+                            </h1>
+                            <p className="text-muted-foreground max-w-2xl">
+                                Review your treatments and enable offerings that power checkout flows, onboarding, and marketing experiences.
+                            </p>
                         </div>
-                        <Button onClick={() => router.push('/treatments/new')}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Treatment
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => fetchTreatments()}>
+                                <RefreshCcw className="h-4 w-4 mr-2" /> Refresh
+                            </Button>
+                            <Button variant="outline" disabled>
+                                Selected: {selectedCount}
+                            </Button>
+                            <Button onClick={() => router.push('/treatments/new')}>
+                                <Plus className="h-4 w-4 mr-2" /> New Treatment
+                            </Button>
+                        </div>
                     </div>
 
-                    {/* Error Message */}
                     {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-                            <div className="flex">
-                                <XCircle className="h-5 w-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
-                                <p className="text-red-700">{error}</p>
-                            </div>
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                            <p className="text-sm text-red-700">{error}</p>
                         </div>
                     )}
 
-                    {/* Treatments Grid */}
-                    {treatments.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {treatments.map((treatment) => (
-                                <Card key={treatment.id} className="hover:shadow-lg transition-shadow">
-                                    <CardHeader>
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-primary/10 rounded-lg">
-                                                    <Stethoscope className="h-6 w-6 text-primary" />
-                                                </div>
-                                                <div>
-                                                    <CardTitle className="text-lg">{treatment.name}</CardTitle>
-                                                    <p className="text-sm text-muted-foreground">{treatment.clinic?.name}</p>
-                                                </div>
-                                            </div>
-                                            {getStatusBadge(treatment.active)}
-                                        </div>
-                                    </CardHeader>
-
-                                    <CardContent>
-                                        <div className="space-y-4">
-                                            {/* Price Information */}
-                                            <div className="flex justify-between items-center">
-                                                <div className="flex items-center gap-2">
-                                                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                                                    <span className="text-sm text-muted-foreground">Products Value</span>
-                                                </div>
-                                                <span className="font-semibold">{formatPrice(treatment.productsPrice)}</span>
-                                            </div>
-
-                                            {/* Products Count */}
-                                            {treatment.products && (treatment.products || []).length > 0 && (
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex items-center gap-2">
-                                                        <Package className="h-4 w-4 text-muted-foreground" />
-                                                        <span className="text-sm text-muted-foreground">Products</span>
-                                                    </div>
-                                                    <span className="font-semibold">{(treatment.products || []).length}</span>
-                                                </div>
-                                            )}
-
-                                            {/* Treatment Logo */}
-                                            {treatment.treatmentLogo && (
-                                                <div className="mt-4">
-                                                    <img
-                                                        src={treatment.treatmentLogo}
-                                                        alt={treatment.name}
-                                                        className="w-full h-32 object-cover rounded-lg"
-                                                    />
-                                                </div>
-                                            )}
-
-                                            {/* Actions */}
-                                            <div className="flex gap-2 pt-4">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1"
-                                                    onClick={() => router.push(`/treatments/${treatment.id}`)}
-                                                >
-                                                    <Eye className="h-4 w-4 mr-1" />
-                                                    View
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1"
-                                                    onClick={() => router.push(`/treatments/${treatment.id}/edit`)}
-                                                >
-                                                    <Edit className="h-4 w-4 mr-1" />
-                                                    Edit
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : (
+                    {treatments.length === 0 ? (
                         <Card className="p-12 text-center">
                             <div className="flex flex-col items-center gap-4">
-                                <Stethoscope className="h-12 w-12 text-muted-foreground" />
+                                <Sparkles className="h-12 w-12 text-muted-foreground" />
                                 <div>
                                     <h3 className="text-lg font-semibold text-foreground mb-2">No treatments found</h3>
-                                    <p className="text-muted-foreground mb-4">Get started by creating your first treatment.</p>
-                                    <Button onClick={() => router.push('/treatments/new')}>
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Add Treatment
-                                    </Button>
+                                    <p className="text-muted-foreground">
+                                        Once treatments are created, they will appear here for you to configure and enable as offerings.
+                                    </p>
                                 </div>
                             </div>
                         </Card>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {treatments.map((treatment) => {
+                                const clinicSlug = treatment.clinic?.slug || 'limitless.health'
+                                const slug = treatment.slug || treatment.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                                const devUrl = `http://${clinicSlug}.localhost:3000/my-treatments/${slug}`
+                                const prodDisplay = `${clinicSlug}.fuse.health/my-treatments/${slug}`
+                                const previewDisplay = process.env.NODE_ENV === 'production' ? prodDisplay : devUrl
+                                const previewHref = process.env.NODE_ENV === 'production' ? `https://${prodDisplay}` : devUrl
+                                const isCopied = copiedId === treatment.id
+                                const isSavingThis = pendingSelection[treatment.id] !== undefined
+                                return (
+                                    <Card key={treatment.id} className="border border-border transition-shadow hover:shadow-lg">
+                                        <CardHeader>
+                                            <div className="flex justify-between items-start gap-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-primary/10 rounded-lg">
+                                                        <Stethoscope className="h-6 w-6 text-primary" />
+                                                    </div>
+                                                    <div>
+                                                        <CardTitle className="text-lg">{treatment.name}</CardTitle>
+                                                        <p className="text-xs text-muted-foreground flex items-center gap-2">
+                                                            Created {new Date(treatment.createdAt).toLocaleDateString()}
+                                                            {treatment.products && treatment.products.length > 0 && (
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    <Package className="h-3 w-3" /> {treatment.products.length} products
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {getStatusBadge(treatment.active)}
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {treatment.treatmentLogo ? (
+                                                <div className="relative">
+                                                    <img
+                                                        src={treatment.treatmentLogo}
+                                                        alt={`${treatment.name} logo`}
+                                                        className="w-full h-36 object-cover rounded-lg border"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="w-full h-36 border rounded-lg flex items-center justify-center bg-muted/30 text-muted-foreground text-sm">
+                                                    No imagery configured
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-2 text-sm text-muted-foreground">
+                                                <div className="flex items-center gap-2">
+                                                    <DollarSign className="h-4 w-4" />
+                                                    <span>Products Value:</span>
+                                                    <span className="font-medium text-foreground">{formatPrice(treatment.productsPrice)}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Palette className="h-4 w-4" />
+                                                    <span>Brand Color:</span>
+                                                    <span className="font-medium text-foreground">{treatment.brandColor || 'Default Theme'}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-xs">
+                                                    <span className="text-muted-foreground">Preview URL:</span>
+                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                        <code
+                                                            className="px-2 py-1 bg-muted/30 rounded border text-xs font-mono overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+                                                            title={previewDisplay}
+                                                        >
+                                                            {previewDisplay}
+                                                        </code>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className={`h-7 w-7 shrink-0 transition-colors ${isCopied ? 'text-green-600' : 'text-muted-foreground'}`}
+                                                            onClick={() => handleCopyUrl(previewHref, treatment.id)}
+                                                            aria-label={isCopied ? 'Preview URL copied' : 'Copy preview URL'}
+                                                        >
+                                                            {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-2">
+                                                <Button
+                                                    variant={treatment.selected ? 'outline' : 'default'}
+                                                    disabled={status === 'saving' && isSavingThis}
+                                                    onClick={() => handleToggleOffering(treatment)}
+                                                >
+                                                    {status === 'saving' && isSavingThis ? (
+                                                        <>
+                                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                            Updating...
+                                                        </>
+                                                    ) : treatment.selected ? 'Disable Offering' : 'Enable Offering'}
+                                                </Button>
+                                                <a href={previewHref} target="_blank" rel="noopener noreferrer">
+                                                    <Button variant="ghost" className="w-full">
+                                                        Preview
+                                                    </Button>
+                                                </a>
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        className="flex-1"
+                                                        onClick={() => router.push(`/treatments/${treatment.id}`)}
+                                                    >
+                                                        <Eye className="h-4 w-4 mr-2" /> View Details
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="flex-1"
+                                                        onClick={() => router.push(`/treatments/${treatment.id}/edit`)}
+                                                    >
+                                                        <Edit className="h-4 w-4 mr-2" /> Edit
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                                                <div className="flex items-center gap-1">
+                                                    <Activity className="h-3 w-3" />
+                                                    {treatment.active ? 'Active' : 'Inactive'}
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    Updated {new Date(treatment.updatedAt).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )
+                            })}
+                        </div>
+                    )}
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Treatment Stats</CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
+                            <div>
+                                <p className="uppercase text-xs">Total Treatments</p>
+                                <p className="text-foreground text-2xl font-semibold">{treatments.length}</p>
+                            </div>
+                            <div>
+                                <p className="uppercase text-xs">Active Offerings</p>
+                                <p className="text-foreground text-2xl font-semibold">{selectedCount}</p>
+                            </div>
+                            <div>
+                                <p className="uppercase text-xs">Last Refreshed</p>
+                                <p className="text-foreground text-2xl font-semibold">{new Date().toLocaleTimeString()}</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {status === 'saving' && hasPending && (
+                        <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm text-amber-700">
+                            Saving changes...
+                        </div>
                     )}
                 </div>
             </div>
