@@ -2,7 +2,7 @@ import { Table, Column, DataType, HasMany, ForeignKey, BelongsTo, BelongsToMany 
 import Entity from './Entity';
 import User from './User';
 import Clinic from './Clinic';
-import Product from './Product';
+import Product, { PharmacyProvider } from './Product';
 import TreatmentProducts from './TreatmentProducts';
 import TreatmentPlan from './TreatmentPlan';
 import Questionnaire from './Questionnaire';
@@ -57,6 +57,14 @@ export default class Treatment extends Entity {
         allowNull: true,
     })
     declare mdCaseId?: string;
+
+
+    @Column({
+        type: DataType.ENUM(...Object.values(PharmacyProvider)),
+        allowNull: false,
+        defaultValue: PharmacyProvider.ABSOLUTERX
+    })
+    declare pharmacyProvider: PharmacyProvider;
 
 
 
