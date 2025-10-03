@@ -1780,6 +1780,10 @@ app.get("/treatments/by-clinic-id/:clinicId", authenticateJWT, async (req, res) 
           model: Product,
           as: 'products',
           through: { attributes: [] }
+        },
+        {
+          model: Clinic,
+          as: 'clinic',
         }
       ]
     });
@@ -1825,9 +1829,12 @@ app.get("/treatments/by-clinic-id/:clinicId", authenticateJWT, async (req, res) 
         delete treatmentData.products; // Remove the full products array to reduce response size
 
         const selection = brandTreatmentByTreatmentId.get(treatment.id);
+        const clinicData = treatment.clinic ? treatment.clinic.toJSON ? treatment.clinic.toJSON() : treatment.clinic : null;
         treatmentData.selected = Boolean(selection);
         treatmentData.brandColor = selection?.brandColor ?? null;
         treatmentData.brandLogo = selection?.brandLogo ?? null;
+        treatmentData.clinicSlug = clinicData?.slug ?? null;
+        treatmentData.slug = treatmentData.slug || treatmentData.name?.toLowerCase?.()?.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
         return treatmentData;
       })
