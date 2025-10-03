@@ -74,6 +74,36 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     country: "brazil"
   });
 
+  // Calculate BMI width for animation
+  const bmiWidth = React.useMemo(() => {
+    const weight = parseFloat(answers['weight'] || '0');
+    const feet = parseFloat(answers['heightFeet'] || '0');
+    const inches = parseFloat(answers['heightInches'] || '0');
+    if (weight && feet >= 0 && inches >= 0) {
+      const totalInches = feet * 12 + inches;
+      const heightInMeters = totalInches * 0.0254;
+      const weightInKg = weight * 0.453592;
+      const bmi = weightInKg / (heightInMeters * heightInMeters);
+      return Math.min((bmi / 40) * 100, 100);
+    }
+    return 0;
+  }, [answers['weight'], answers['heightFeet'], answers['heightInches']]);
+
+  // Add CSS animation dynamically
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes bmi-expand {
+        from { width: 0%; }
+        to { width: ${bmiWidth}%; }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, [bmiWidth]);
+
   // Use real treatment plans from the backend
   const plans = useMemo(() => {
     if (!questionnaire?.treatment?.treatmentPlans || questionnaire.treatment.treatmentPlans.length === 0) {
@@ -1500,9 +1530,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                           key={`${weight}-${feet}-${inches}`}
                                           className={`absolute top-0 left-0 h-full rounded-full ${colorClass}`}
                                           style={{
-                                            animation: 'bmi-expand 1s ease-out forwards',
-                                            transformOrigin: 'left center',
-                                            width: `${Math.min((bmi / 40) * 100, 100)}%`
+                                            width: '0%',
+                                            animation: `bmi-expand 1s ease-out forwards`,
+                                            animationFillMode: 'forwards'
                                           }}
                                         />
 
