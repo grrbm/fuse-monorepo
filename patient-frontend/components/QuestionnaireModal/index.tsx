@@ -20,136 +20,22 @@ import {
   Divider
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { apiCall } from "../lib/api";
+import { apiCall } from "../../lib/api";
 import { Elements } from "@stripe/react-stripe-js";
-import { stripePromise } from "../lib/stripe";
-import { StripePaymentForm } from "./StripePaymentForm";
-
-const DEFAULT_THEME_COLOR = "#047857";
-
-type ThemePalette = {
-  primary: string;
-  primaryDark: string;
-  primaryDarker: string;
-  primaryLight: string;
-  primaryLighter: string;
-  text: string;
-};
-
-const isValidHex = (value?: string | null): value is string => {
-  if (!value) return false;
-  return /^#?([0-9A-F]{3}){1,2}$/i.test(value.trim());
-};
-
-const normalizeHex = (hex: string): string => {
-  const cleaned = hex.trim().replace(/^#/, "");
-  if (cleaned.length === 3) {
-    return `#${cleaned[0]}${cleaned[0]}${cleaned[1]}${cleaned[1]}${cleaned[2]}${cleaned[2]}`.toUpperCase();
-  }
-  return `#${cleaned.toUpperCase()}`;
-};
-
-const hexToRgb = (hex: string) => {
-  const normalized = normalizeHex(hex).replace("#", "");
-  const bigint = parseInt(normalized, 16);
-  return {
-    r: (bigint >> 16) & 255,
-    g: (bigint >> 8) & 255,
-    b: bigint & 255,
-  };
-};
-
-const rgbToHex = (r: number, g: number, b: number) => {
-  return `#${[r, g, b]
-    .map((x) => {
-      const clamped = Math.max(0, Math.min(255, Math.round(x)));
-      const hex = clamped.toString(16);
-      return hex.length === 1 ? `0${hex}` : hex;
-    })
-    .join("")}`.toUpperCase();
-};
-
-const lighten = (hex: string, amount: number) => {
-  const { r, g, b } = hexToRgb(hex);
-  return rgbToHex(
-    r + (255 - r) * amount,
-    g + (255 - g) * amount,
-    b + (255 - b) * amount
-  );
-};
-
-const darken = (hex: string, amount: number) => {
-  const { r, g, b } = hexToRgb(hex);
-  return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
-};
-
-const createTheme = (color?: string | null): ThemePalette => {
-  const base = isValidHex(color) ? normalizeHex(color) : DEFAULT_THEME_COLOR;
-  return {
-    primary: base,
-    primaryDark: darken(base, 0.15),
-    primaryDarker: darken(base, 0.3),
-    primaryLight: lighten(base, 0.65),
-    primaryLighter: lighten(base, 0.85),
-    text: darken(base, 0.2),
-  };
-};
-
-// Types
-interface QuestionOption {
-  id: string;
-  optionText: string;
-  optionValue: string;
-  optionOrder: number;
-}
-
-interface Question {
-  id: string;
-  questionText: string;
-  answerType: string;
-  isRequired: boolean;
-  questionOrder: number;
-  placeholder?: string;
-  helpText?: string;
-  options?: QuestionOption[];
-}
-
-interface QuestionnaireStep {
-  id: string;
-  title: string;
-  description?: string;
-  stepOrder: number;
-  questions?: Question[];
-}
-
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  dosage: string;
-  imageUrl: string;
-}
-
-interface QuestionnaireData {
-  id: string;
-  title: string;
-  description?: string;
-  checkoutStepPosition: number;
-  color?: string | null;
-  steps: QuestionnaireStep[];
-  treatment?: {
-    products: Product[];
-    treatmentPlans?: any[];
-  };
-}
-
-interface QuestionnaireModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  treatmentId: string;
-  treatmentName: string;
-}
+import { stripePromise } from "../../lib/stripe";
+import { StripePaymentForm } from "../StripePaymentForm";
+import {
+  QuestionnaireModalProps,
+  QuestionnaireData,
+  QuestionnaireStep,
+  PlanOption,
+} from "./types";
+import { createTheme, buildThemeVars } from "./theme";
+import { ProgressBar } from "./components/ProgressBar";
+import { StepHeader } from "./components/StepHeader";
+import { QuestionRenderer } from "./components/QuestionRenderer";
+import { CheckoutView } from "./components/CheckoutView";
+import { ProductSelection } from "./components/ProductSelection";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
@@ -898,13 +784,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const handlePlanSelection = async (planId: string) => {
     setSelectedPlan(planId);
 
-    // Clear any existing client secret to show loading state
     setClientSecret(null);
 
-    // Create subscription for the newly selected plan
     setTimeout(async () => {
       await createSubscriptionForPlan(planId);
-    }, 100); // Small delay to ensure state update
+    }, 100);
   };
 
   // Create subscription for a specific plan
@@ -1094,1132 +978,6 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   };
 
-  // Render product selection step
-  const renderProductSelection = () => {
-    if (!questionnaire?.treatment?.products) return null;
-
-    return (
-      <div className="space-y-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-semibold">Select Your Products</h2>
-          <p className="text-gray-600">Choose the NAD+ products you'd like to order</p>
-        </div>
-
-        <div className="space-y-4">
-          {questionnaire.treatment.products.map((product) => {
-            const quantity = selectedProducts[product.id] || 0;
-            const totalPrice = product.price * quantity;
-
-            return (
-              <Card key={product.id} className="p-4">
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-lg">{product.name}</h3>
-                    <p className="text-gray-600 text-sm mb-2">{product.description}</p>
-                    <p className="text-sm text-gray-500">
-                      <span className="font-medium">Dosage:</span> {product.dosage}
-                    </p>
-                    <p className="text-lg font-bold text-primary">${product.price}</p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      size="sm"
-                      isDisabled={quantity <= 0}
-                      onPress={() => handleProductQuantityChange(product.id, Math.max(0, quantity - 1))}
-                    >
-                      <Icon icon="lucide:minus" />
-                    </Button>
-
-                    <div className="min-w-[60px] text-center">
-                      <span className="text-lg font-semibold">{quantity}</span>
-                      {quantity > 0 && (
-                        <p className="text-sm text-primary font-medium">
-                          ${totalPrice.toFixed(2)}
-                        </p>
-                      )}
-                    </div>
-
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      size="sm"
-                      onPress={() => handleProductQuantityChange(product.id, quantity + 1)}
-                    >
-                      <Icon icon="lucide:plus" />
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Total */}
-        <Card className="bg-primary-50 border border-primary-200">
-          <CardBody className="p-4">
-            <div className="flex justify-between items-center">
-              <span className="text-lg font-semibold">Total:</span>
-              <span className="text-2xl font-bold text-primary">
-                ${Object.entries(selectedProducts).reduce((total, [productId, quantity]) => {
-                  const product = questionnaire.treatment?.products.find(p => p.id === productId);
-                  return total + (product ? product.price * quantity : 0);
-                }, 0).toFixed(2)}
-              </span>
-            </div>
-          </CardBody>
-        </Card>
-      </div>
-    );
-  };
-
-  // Render checkout step
-  const renderCheckout = () => {
-    const selectedPlanData = plans.find(plan => plan.id === selectedPlan);
-
-    return (
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Order Header */}
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Complete Your Subscription</h2>
-            <p className="text-gray-600">Secure checkout for your {treatmentName} subscription</p>
-          </div>
-
-          {(
-            <>
-              {/* Choose Your Plan */}
-              <Card>
-                <CardBody className="p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-6">Choose Your Plan</h3>
-                  <RadioGroup
-                    value={selectedPlan}
-                    onValueChange={setSelectedPlan}
-                    className="space-y-4"
-                    isDisabled={paymentStatus === 'processing' || !!clientSecret}
-                  >
-                    {plans.map((plan) => (
-                      <div
-                        key={plan.id}
-                        className={`relative rounded-lg border-2 p-4 transition-all ${paymentStatus === 'processing' || !!clientSecret
-                          ? 'opacity-60 cursor-not-allowed bg-gray-50'
-                          : ''
-                          } ${selectedPlan === plan.id
-                            ? "border-success-500 bg-success-50"
-                            : "border-gray-200 bg-white hover:border-gray-300"
-                          }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <Radio value={plan.id} className="mt-1" />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <label className="font-medium text-gray-900 cursor-pointer">
-                                {plan.name}
-                              </label>
-                              {plan.badge && (
-                                <Chip
-                                  color={plan.badgeColor}
-                                  size="sm"
-                                  variant="flat"
-                                >
-                                  {plan.badge}
-                                </Chip>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-600 mb-2">{plan.description}</div>
-                            <div className="flex items-baseline gap-2 mb-3">
-                              <span className="text-xl font-semibold text-success-600">
-                                ${plan.price.toFixed(2)}/mo
-                              </span>
-                            </div>
-                            <div className="space-y-1 text-sm text-gray-600">
-                              <div className="font-medium">Includes:</div>
-                              {plan.features.map((feature, index) => (
-                                <div key={index} className="flex items-center gap-2">
-                                  <Icon icon="lucide:check" className="w-3 h-3 text-success-500" />
-                                  <span>{feature}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </CardBody>
-              </Card>
-
-              {/* Shipping Information */}
-              <Card>
-                <CardBody className="p-6">
-                  <div className="flex items-center gap-2 mb-6">
-                    <div className="w-6 h-6 rounded-full bg-success-500 flex items-center justify-center">
-                      <Icon icon="lucide:check" className="w-4 h-4 text-white" />
-                    </div>
-                    <h3 className="text-lg font-medium text-gray-900">Shipping Information</h3>
-                  </div>
-
-                  <div className="space-y-4">
-                    <Input
-                      label="Street Address"
-                      placeholder="Enter address"
-                      value={shippingInfo.address}
-                      onValueChange={(value) => setShippingInfo(prev => ({ ...prev, address: value }))}
-                      variant="bordered"
-                      isRequired
-                    />
-
-                    <Input
-                      label="Apartment / Suite / Unit (optional)"
-                      value={shippingInfo.apartment}
-                      onValueChange={(value) => setShippingInfo(prev => ({ ...prev, apartment: value }))}
-                      variant="bordered"
-                    />
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <Input
-                        label="City"
-                        value={shippingInfo.city}
-                        onValueChange={(value) => setShippingInfo(prev => ({ ...prev, city: value }))}
-                        variant="bordered"
-                        isRequired
-                      />
-                      {shippingInfo.country === "us" ? (
-                        <Select
-                          label="State"
-                          placeholder="Select State"
-                          selectedKeys={shippingInfo.state ? [shippingInfo.state] : []}
-                          onSelectionChange={(keys) => {
-                            const selectedKey = Array.from(keys)[0] as string;
-                            setShippingInfo(prev => ({ ...prev, state: selectedKey }));
-                          }}
-                          variant="bordered"
-                          isRequired
-                        >
-                          {usStates.map((state) => (
-                            <SelectItem key={state.key}>
-                              {state.name}
-                            </SelectItem>
-                          ))}
-                        </Select>
-                      ) : (
-                        <Input
-                          label="State/Province"
-                          placeholder="Enter state or province"
-                          value={shippingInfo.state}
-                          onValueChange={(value) => setShippingInfo(prev => ({ ...prev, state: value }))}
-                          variant="bordered"
-                          isRequired
-                        />
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <Input
-                        label="Zip Code"
-                        value={shippingInfo.zipCode}
-                        onValueChange={(value) => setShippingInfo(prev => ({ ...prev, zipCode: value }))}
-                        variant="bordered"
-                        isRequired
-                      />
-                      <Select
-                        label="Country"
-                        selectedKeys={[shippingInfo.country]}
-                        onSelectionChange={(keys) => {
-                          const selectedKey = Array.from(keys)[0] as string;
-                          setShippingInfo(prev => ({ ...prev, country: selectedKey }));
-                        }}
-                        variant="bordered"
-                      >
-                        <SelectItem key="us">🇺🇸 United States</SelectItem>
-                      </Select>
-                    </div>
-                  </div>
-                </CardBody>
-              </Card>
-
-              {/* Payment Information */}
-              <Card>
-                <CardBody className="p-6">
-                  <div className="flex items-center gap-2 mb-6">
-                    <Icon icon="lucide:shield" className="w-5 h-5 text-success-500" />
-                    <h3 className="text-lg font-medium text-gray-900">Payment Information</h3>
-                    <Icon icon="lucide:shield" className="w-4 h-4 text-gray-400" />
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Icon icon="lucide:credit-card" className="w-4 h-4 text-primary-500" />
-                      <span className="font-medium">Card</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm text-primary-600">
-                      <Icon icon="lucide:shield" className="w-4 h-4" />
-                      <span>Secure, fast checkout with Link</span>
-                    </div>
-
-                    {/* Processing state */}
-                    {paymentStatus === 'processing' && (
-                      <div className="bg-blue-50 border border-blue-200 p-6 rounded-lg text-center">
-                        <Icon icon="lucide:loader-2" className="text-4xl text-blue-500 mx-auto mb-3 animate-spin" />
-                        <h4 className="text-lg font-semibold text-blue-800 mb-2">Initializing Payment</h4>
-                        <p className="text-blue-600">Setting up secure payment processing...</p>
-                        <div className="mt-3 flex justify-center">
-                          <div className="flex space-x-1">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Failed state */}
-                    {paymentStatus === 'failed' && (
-                      <div className="bg-red-50 border border-red-200 p-6 rounded-lg text-center">
-                        <Icon icon="lucide:alert-circle" className="text-4xl text-red-500 mx-auto mb-3" />
-                        <h4 className="text-lg font-semibold text-red-800 mb-2">Payment Setup Failed</h4>
-                        <p className="text-red-600 mb-4">Unable to initialize payment processing</p>
-                        <Button
-                          color="danger"
-                          variant="light"
-                          onPress={() => {
-                            console.log('💳 Retrying payment initialization...');
-                            setPaymentStatus('idle');
-                            setClientSecret(null);
-                            setPaymentIntentId(null);
-                          }}
-                          startContent={<Icon icon="lucide:refresh-cw" />}
-                        >
-                          Try Again
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Loading state while creating subscription */}
-                    {!clientSecret && paymentStatus === 'processing' && (
-                      <div className="text-center py-8 bg-blue-50 rounded-lg border border-blue-200">
-                        <Icon icon="lucide:loader-2" className="text-3xl text-blue-500 mx-auto mb-2 animate-spin" />
-                        <p className="text-lg font-medium text-blue-900 mb-1">Setting up your subscription...</p>
-                        <p className="text-sm text-blue-700">Please wait while we prepare your payment</p>
-                      </div>
-                    )}
-
-                    {/* Plan confirmation */}
-                    {!clientSecret && paymentStatus === 'idle' && selectedPlan && (
-                      <div className="space-y-4">
-                        <div className="text-center py-6 bg-blue-50 rounded-lg border border-blue-200">
-                          <Icon icon="lucide:check-circle" className="text-3xl text-blue-500 mx-auto mb-2" />
-                          <p className="text-lg font-medium text-blue-900 mb-1">Plan Selected</p>
-                          <p className="text-sm text-blue-700">
-                            {selectedPlanData?.name} - ${selectedPlanData?.price}/mo
-                          </p>
-                        </div>
-                        <Button
-                          color="primary"
-                          size="lg"
-                          className="w-full"
-                          onPress={() => createSubscriptionForPlan(selectedPlan)}
-                        >
-                          Continue with {selectedPlanData?.name} - ${selectedPlanData?.price}/mo
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Waiting for plan selection */}
-                    {!clientSecret && paymentStatus === 'idle' && !selectedPlan && (
-                      <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
-                        <Icon icon="lucide:mouse-pointer-click" className="text-3xl text-gray-400 mx-auto mb-2" />
-                        <p className="text-lg font-medium text-gray-700 mb-1">Select a Plan Above</p>
-                        <p className="text-sm text-gray-500">Choose your preferred billing cycle to continue</p>
-                      </div>
-                    )}
-
-                    {/* Success state - Stripe Payment form */}
-                    {clientSecret && paymentStatus === 'idle' && (
-                      <div className="space-y-4">
-                        <div className="bg-green-50 border border-green-200 p-3 rounded-lg text-center">
-                          <Icon icon="lucide:shield-check" className="text-2xl text-green-500 mx-auto mb-1" />
-                          <p className="text-sm text-green-700 font-medium">Secure Payment Ready</p>
-                        </div>
-                        <Elements stripe={stripePromise} options={{ clientSecret }}>
-                          <StripePaymentForm
-                            amount={selectedPlanData?.price || 0}
-                            onSuccess={handlePaymentSuccess}
-                            onError={handlePaymentError}
-                            loading={false}
-                          />
-                        </Elements>
-                      </div>
-                    )}
-
-                    {/* Completed state */}
-                    {paymentStatus === 'succeeded' && (
-                      <div className="bg-green-50 border border-green-200 p-6 rounded-lg text-center">
-                        <Icon icon="lucide:check-circle" className="text-4xl text-green-500 mx-auto mb-3" />
-                        <h4 className="text-lg font-semibold text-green-800 mb-2">Payment Successful!</h4>
-                        <p className="text-green-600 mb-4">Your order has been processed successfully</p>
-                        <div className="flex items-center justify-center gap-2 text-sm text-green-600 mb-4">
-                          <Icon icon="lucide:shield-check" />
-                          <span>Secure payment completed</span>
-                        </div>
-                      </div>
-                    )}
-
-
-                    <p className="text-xs text-gray-500">
-                      By providing your card information, you allow the clinic to charge your card for future payments in
-                      accordance with their terms.
-                    </p>
-                  </div>
-                </CardBody>
-              </Card>
-
-              {/* Legal Disclaimers and Terms */}
-              <Card>
-                <CardBody className="p-6">
-                  <div className="space-y-4 text-xs text-gray-500 leading-relaxed">
-                    <p>
-                      By completing checkout, you agree to our{" "}
-                      <a href="/terms" className="text-success-600 hover:underline">
-                        Terms of Service
-                      </a>{" "}
-                      and{" "}
-                      <a href="/privacy" className="text-success-600 hover:underline">
-                        Privacy Policy
-                      </a>
-                      .
-                    </p>
-
-                    <p>
-                      <strong>Payment Authorization:</strong> We'll securely pre-authorize your payment method for the amount
-                      shown. You'll only be charged if a licensed physician prescribes your medication after reviewing your
-                      medical information.
-                    </p>
-
-                    <p>
-                      <strong>Medical Disclaimer:</strong> By submitting this form, I confirm that all information provided is
-                      accurate and complete to the best of my knowledge. I understand that providing incomplete and/or
-                      inaccurate information is essential for safe treatment.
-                    </p>
-
-                    <p>
-                      *Product packaging may vary. California residents: prescriptions may contain only semaglutide as the
-                      active ingredient.
-                    </p>
-                  </div>
-                </CardBody>
-              </Card>
-            </>
-          )}
-        </div>
-
-        {/* Order Summary Sidebar */}
-        <div className="lg:col-span-1">
-          <Card className="sticky top-8">
-            <CardBody className="p-6">
-              {/* Status */}
-              <div className="flex items-center gap-2 mb-6 p-3 bg-success-50 rounded-lg">
-                <div className="w-5 h-5 rounded-full bg-success-500 flex items-center justify-center">
-                  <Icon icon="lucide:check" className="w-3 h-3 text-white" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-success-800">Your medication is reserved</div>
-                  <div className="text-xs text-success-600">Complete checkout to secure your prescription</div>
-                </div>
-                <div className="text-sm font-mono text-success-700">14:39</div>
-              </div>
-
-              <h3 className="font-medium text-gray-900 mb-4">Order Summary</h3>
-
-              {/* Selected Products */}
-              <div className="space-y-3 mb-4">
-                {questionnaire?.treatment?.products &&
-                  questionnaire.treatment.products
-                    .filter((product: any) => selectedProducts[product.id] > 0)
-                    .map((product: any) => (
-                      <div key={product.id} className="flex gap-3 p-3 bg-gray-50 rounded-lg">
-                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
-                          <Icon icon="lucide:pill" className="w-5 h-5 text-gray-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 text-sm">{product.name}</div>
-                          <div className="text-xs text-gray-600 mb-1">{product.description}</div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">Qty: {selectedProducts[product.id]}</span>
-                            <span className="text-sm font-medium text-gray-900">
-                              ${(product.price * selectedProducts[product.id]).toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                }
-              </div>
-
-              <Divider className="my-4" />
-
-              {/* Plan Pricing */}
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Selected Plan: {plans.find(p => p.id === selectedPlan)?.name}</span>
-                  <span className="font-medium">${plans.find(p => p.id === selectedPlan)?.price.toFixed(2)}/mo</span>
-                </div>
-              </div>
-
-              <Divider className="my-4" />
-
-              {/* Total Due Today */}
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between items-center">
-                  <span className="font-medium text-gray-900">Total Due Today</span>
-                  <span className="text-xl font-semibold">
-                    ${plans.find(p => p.id === selectedPlan)?.price.toFixed(2) || '0.00'}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Only charged if prescribed by a licensed physician. We'll securely hold your payment method. No
-                  charge until prescribed.
-                </p>
-              </div>
-
-              {/* What's Included */}
-              <Divider className="my-4" />
-              <div className="space-y-3">
-                <h4 className="font-medium text-gray-900">What's Included</h4>
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-success-100 flex items-center justify-center mt-0.5">
-                      <div className="w-2 h-2 rounded-full bg-success-500"></div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">Free medical consultation</div>
-                      <div className="text-xs text-gray-500">Board-certified physicians licensed in your state</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-success-100 flex items-center justify-center mt-0.5">
-                      <div className="w-2 h-2 rounded-full bg-success-500"></div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">Free expedited shipping</div>
-                      <div className="text-xs text-gray-500">2-day delivery included with every order</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-success-100 flex items-center justify-center mt-0.5">
-                      <div className="w-2 h-2 rounded-full bg-success-500"></div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">Money-back guarantee</div>
-                      <div className="text-xs text-gray-500">100% satisfaction or full refund</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-success-100 flex items-center justify-center mt-0.5">
-                      <div className="w-2 h-2 rounded-full bg-success-500"></div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">Secure payment processing</div>
-                      <div className="text-xs text-gray-500">Bank-level encryption & security</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-        </div>
-      </div>
-    );
-  };
-
-  // Render question based on type
-  const renderQuestion = (question: Question) => {
-    const value = answers[question.id] || '';
-    const hasError = !!errors[question.id];
-
-    switch (question.answerType) {
-      case 'text':
-      case 'email':
-      case 'phone':
-        return (
-          <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
-              {question.questionText}
-              {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-            </label>
-            <input
-              type={question.answerType === 'email' ? 'email' : question.answerType === 'phone' ? 'tel' : 'text'}
-              placeholder={question.placeholder}
-              value={value}
-              onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-              className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'}`}
-              style={hasError ? undefined : {
-                borderColor: theme.primaryLight,
-                color: '#111827'
-              }}
-              onFocus={(e) => {
-                if (!hasError) {
-                  e.currentTarget.style.borderColor = theme.primary;
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
-                  e.currentTarget.style.backgroundColor = theme.primaryLighter;
-                }
-              }}
-              onBlur={(e) => {
-                if (!hasError) {
-                  e.currentTarget.style.borderColor = theme.primaryLight;
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                }
-              }}
-            />
-            {question.helpText && (
-              <p className="text-sm text-gray-600">{question.helpText}</p>
-            )}
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
-          </div>
-        );
-
-      case 'number':
-        const hasSubtype = (question as any).questionSubtype;
-        return (
-          <div key={question.id} className="space-y-4">
-            <div>
-              <h3 className="text-2xl font-medium text-gray-900 mb-3">
-                {question.questionText}
-                {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-              </h3>
-              {question.helpText && (
-                <p className="text-gray-600">{question.helpText}</p>
-              )}
-            </div>
-            <div className="relative">
-              <input
-                type="number"
-                placeholder={question.placeholder}
-                value={value}
-                onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
-                  ? 'border-red-300 bg-red-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
-                  } outline-none ${hasSubtype ? 'pr-16' : ''}`}
-                style={hasError ? undefined : {
-                  borderColor: theme.primaryLight,
-                  color: '#111827'
-                }}
-                onFocus={(e) => {
-                  if (!hasError) {
-                    e.currentTarget.style.borderColor = theme.primary;
-                    e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
-                    e.currentTarget.style.backgroundColor = theme.primaryLighter;
-                  }
-                }}
-                onBlur={(e) => {
-                  if (!hasError) {
-                    e.currentTarget.style.borderColor = theme.primaryLight;
-                    e.currentTarget.style.boxShadow = 'none';
-                    e.currentTarget.style.backgroundColor = '#FFFFFF';
-                  }
-                }}
-                onWheel={(e) => hasSubtype && e.currentTarget.blur()}
-              />
-              {hasSubtype && (
-                <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm font-medium">
-                  {(question as any).questionSubtype}
-                </div>
-              )}
-            </div>
-            {(question as any).footerNote && (
-              <div className="bg-gray-100 mt-8 rounded-xl p-4">
-                <p
-                  className="text-gray-600 text-sm"
-                  dangerouslySetInnerHTML={{ __html: (question as any).footerNote }}
-                />
-              </div>
-            )}
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
-          </div>
-        );
-
-      case 'date':
-        return (
-          <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
-              {question.questionText}
-              {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-            </label>
-            <input
-              type="date"
-              value={value}
-              onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-              className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
-                ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-gray-300 focus:border-primary focus:bg-primary-light'
-                } outline-none`}
-            />
-            {question.helpText && (
-              <p className="text-sm text-gray-600">{question.helpText}</p>
-            )}
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
-          </div>
-        );
-
-      case 'textarea':
-        return (
-          <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
-              {question.questionText}
-              {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-            </label>
-            <textarea
-              placeholder={question.placeholder}
-              value={value}
-              onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-              rows={4}
-              className={`w-full p-4 rounded-2xl border-2 transition-all resize-none ${hasError
-                ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-gray-300'
-                } outline-none`}
-              style={hasError ? undefined : {
-                borderColor: theme.primaryLight,
-                color: '#111827'
-              }}
-              onFocus={(e) => {
-                if (!hasError) {
-                  e.currentTarget.style.borderColor = theme.primary;
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
-                  e.currentTarget.style.backgroundColor = theme.primaryLighter;
-                }
-              }}
-              onBlur={(e) => {
-                if (!hasError) {
-                  e.currentTarget.style.borderColor = theme.primaryLight;
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                }
-              }}
-            />
-            {question.helpText && (
-              <p className="text-sm text-gray-600">{question.helpText}</p>
-            )}
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
-          </div>
-        );
-
-      case 'radio': {
-        const renderGenericRadio = () => (
-          <div key={question.id} className="space-y-4">
-            <div>
-              <h3 className="text-2xl font-medium text-gray-900 mb-3">
-                {question.questionText}
-                {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-              </h3>
-              {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
-            </div>
-
-            <div className="space-y-3">
-              {question.options?.map((option) => {
-                const isSelected = value === option.optionValue;
-                return (
-                  <label
-                    key={option.id}
-                    className={`block w-full p-4 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? '' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                    style={isSelected ? { backgroundColor: theme.primaryLight, borderColor: theme.primary } : undefined}
-                  >
-                    <div className="flex items-center">
-                      <div className="relative">
-                        <input
-                          type="radio"
-                          name={question.id}
-                          value={option.optionValue}
-                          checked={isSelected}
-                          onChange={(e) => handleRadioChange(question.id, e.target.value)}
-                          className="sr-only"
-                        />
-                        <div
-                          className="w-5 h-5 rounded-full border-2 flex items-center justify-center"
-                          style={isSelected ? { borderColor: theme.primary, backgroundColor: theme.primary } : undefined}
-                        >
-                          {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
-                        </div>
-                      </div>
-                      <span className="ml-3 text-gray-900 font-medium">{option.optionText}</span>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            {hasError && <p className="text-sm text-red-600">{errors[question.id]}</p>}
-          </div>
-        );
-
-        if (question.questionText === "What's your gender at birth?") {
-          const genderOptions = [
-            { value: 'Male', label: 'Male', emoji: '🧑' },
-            { value: 'Female', label: 'Female', emoji: '👩' }
-          ];
-
-          return (
-            <div key={question.id} className="space-y-4">
-              <div>
-                <h3 className="text-2xl font-medium text-gray-900 mb-3">
-                  {question.questionText}
-                  {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-                </h3>
-                {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {genderOptions.map((option) => {
-                  const isSelected = value === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`p-6 rounded-2xl border-2 text-center transition-all ${isSelected ? '' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                      style={isSelected ? { backgroundColor: theme.primaryLight, borderColor: theme.primary } : undefined}
-                      onClick={() => handleRadioChange(question.id, option.value)}
-                    >
-                      <div className="text-4xl mb-3">{option.emoji}</div>
-                      <span
-                        className={`font-medium text-lg ${isSelected ? '' : 'text-gray-900'}`}
-                        style={{ color: isSelected ? theme.primary : undefined }}
-                      >
-                        {option.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        }
-
-        return renderGenericRadio();
-      }
-
-      case 'checkbox': {
-        return (
-          <div key={question.id} className="space-y-4">
-            <div>
-              <h3 className="text-2xl font-medium text-gray-900 mb-3">
-                {question.questionText}
-                {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-              </h3>
-              {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
-            </div>
-
-            <div className="space-y-3">
-              {question.options?.map((option) => {
-                const isChecked = (value || []).includes(option.optionValue);
-                return (
-                  <label
-                    key={option.id}
-                    className={`block w-full p-4 rounded-2xl border-2 cursor-pointer transition-all ${isChecked ? '' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                    style={isChecked ? { backgroundColor: theme.primaryLight, borderColor: theme.primary } : undefined}
-                  >
-                    <div className="flex items-center">
-                      <div className="relative">
-                        <input
-                          type="checkbox"
-                          value={option.optionValue}
-                          checked={isChecked}
-                          onChange={(e) => handleCheckboxChange(question.id, option.optionValue, e.target.checked)}
-                          className="sr-only"
-                        />
-                        <div
-                          className="w-5 h-5 rounded-full border-2 flex items-center justify-center"
-                          style={isChecked ? { borderColor: theme.primary, backgroundColor: theme.primary } : undefined}
-                        >
-                          {isChecked && <Icon icon="lucide:check" className="w-3 h-3 text-white" />}
-                        </div>
-                      </div>
-                      <span className="ml-3 text-gray-900 font-medium">{option.optionText}</span>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            {hasError && <p className="text-sm text-red-600">{errors[question.id]}</p>}
-          </div>
-        );
-      }
-
-      case 'select': {
-        if (question.questionText === 'What state do you live in?') {
-          const stateAbbreviations: Record<string, string> = {
-            'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR',
-            'California': 'CA', 'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE',
-            'Florida': 'FL', 'Georgia': 'GA', 'Hawaii': 'HI', 'Idaho': 'ID',
-            'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA', 'Kansas': 'KS',
-            'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
-            'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS',
-            'Missouri': 'MO', 'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV',
-            'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY',
-            'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH', 'Oklahoma': 'OK',
-            'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-            'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT',
-            'Vermont': 'VT', 'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV',
-            'Wisconsin': 'WI', 'Wyoming': 'WY', 'District of Columbia': 'DC'
-          };
-
-          return (
-            <div key={question.id} className="space-y-4">
-              <div>
-                <h3 className="text-2xl font-medium text-gray-900 mb-3">
-                  {question.questionText}
-                  {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-                </h3>
-                {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
-              </div>
-
-              <div className="space-y-3">
-                {question.options?.map((option) => {
-                  const stateAbbr = stateAbbreviations[option.optionText];
-                  const isSelected = value === option.optionValue;
-
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={`block w-full p-4 rounded-2xl border-2 text-left transition-all ${isSelected ? '' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                      style={isSelected ? { backgroundColor: theme.primaryLight, borderColor: theme.primary } : undefined}
-                      onClick={() => handleRadioChange(question.id, option.optionValue)}
-                    >
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mr-3 overflow-hidden">
-                          {stateAbbr ? (
-                            <img
-                              src={`/images/${stateAbbr}.svg`}
-                              alt={`${option.optionText} flag`}
-                              className="w-6 h-4 object-cover rounded-sm"
-                            />
-                          ) : (
-                            <div className="w-6 h-4 bg-gradient-to-r from-blue-500 to-red-500 rounded-sm"></div>
-                          )}
-                        </div>
-                        <span className="font-medium text-gray-900">{option.optionText}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {hasError && <p className="text-sm text-red-600">{errors[question.id]}</p>}
-            </div>
-          );
-        }
-
-        return (
-          <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
-              {question.questionText}
-              {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-            </label>
-            <select
-              value={value}
-              onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-              className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
-                ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-gray-300'
-                } outline-none`}
-              style={hasError ? undefined : {
-                borderColor: theme.primaryLight,
-                color: '#111827'
-              }}
-              onFocus={(e) => {
-                if (!hasError) {
-                  e.currentTarget.style.borderColor = theme.primary;
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
-                  e.currentTarget.style.backgroundColor = theme.primaryLighter;
-                }
-              }}
-              onBlur={(e) => {
-                if (!hasError) {
-                  e.currentTarget.style.borderColor = theme.primaryLight;
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                }
-              }}
-            >
-              <option value="">{question.placeholder || "Select an option"}</option>
-              {question.options?.map((option) => (
-                <option key={option.id} value={option.optionValue}>
-                  {option.optionText}
-                </option>
-              ))}
-            </select>
-            {question.helpText && <p className="text-sm text-gray-600">{question.helpText}</p>}
-            {hasError && <p className="text-sm text-red-600">{errors[question.id]}</p>}
-          </div>
-        );
-      }
-
-      case 'height':
-        return (
-          <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
-              {question.questionText}
-              {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-            </label>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <input
-                  type="number"
-                  placeholder="5"
-                  value={value.feet || ''}
-                  onChange={(e) => handleAnswerChange(question.id, { ...value, feet: e.target.value })}
-                  className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
-                    ? 'border-red-300 bg-red-50'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                    } outline-none`}
-                  style={hasError ? undefined : {
-                    borderColor: theme.primaryLight,
-                    color: '#111827'
-                  }}
-                  onFocus={(e) => {
-                    if (!hasError) {
-                      e.currentTarget.style.borderColor = theme.primary;
-                      e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
-                      e.currentTarget.style.backgroundColor = theme.primaryLighter;
-                    }
-                  }}
-                  onBlur={(e) => {
-                    if (!hasError) {
-                      e.currentTarget.style.borderColor = theme.primaryLight;
-                      e.currentTarget.style.boxShadow = 'none';
-                      e.currentTarget.style.backgroundColor = '#FFFFFF';
-                    }
-                  }}
-                />
-                <label className="block text-xs text-gray-500 mt-1 ml-1">Feet</label>
-              </div>
-              <div className="flex-1">
-                <input
-                  type="number"
-                  placeholder="10"
-                  value={value.inches || ''}
-                  onChange={(e) => handleAnswerChange(question.id, { ...value, inches: e.target.value })}
-                  className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
-                    ? 'border-red-300 bg-red-50'
-                    : 'border-gray-200 bg-white hover-border-gray-300'
-                    } outline-none`}
-                  style={hasError ? undefined : {
-                    borderColor: theme.primaryLight,
-                    color: '#111827'
-                  }}
-                  onFocus={(e) => {
-                    if (!hasError) {
-                      e.currentTarget.style.borderColor = theme.primary;
-                      e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
-                      e.currentTarget.style.backgroundColor = theme.primaryLighter;
-                    }
-                  }}
-                  onBlur={(e) => {
-                    if (!hasError) {
-                      e.currentTarget.style.borderColor = theme.primaryLight;
-                      e.currentTarget.style.boxShadow = 'none';
-                      e.currentTarget.style.backgroundColor = '#FFFFFF';
-                    }
-                  }}
-                />
-                <label className="block text-xs text-gray-500 mt-1 ml-1">Inches</label>
-              </div>
-            </div>
-            {question.helpText && (
-              <p className="text-sm text-gray-600">{question.helpText}</p>
-            )}
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
-          </div>
-        );
-
-      case 'weight':
-        return (
-          <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
-              {question.questionText}
-              {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-            </label>
-            <input
-              type="number"
-              placeholder={question.placeholder}
-              value={value}
-              onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-              className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
-                ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 bg-white hover-border-gray-300'
-                } outline-none`}
-              style={hasError ? undefined : {
-                borderColor: theme.primaryLight,
-                color: '#111827'
-              }}
-              onFocus={(e) => {
-                if (!hasError) {
-                  e.currentTarget.style.borderColor = theme.primary;
-                  e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
-                  e.currentTarget.style.backgroundColor = theme.primaryLighter;
-                }
-              }}
-              onBlur={(e) => {
-                if (!hasError) {
-                  e.currentTarget.style.borderColor = theme.primaryLight;
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                }
-              }}
-            />
-            {question.helpText && (
-              <p className="text-sm text-gray-600">{question.helpText}</p>
-            )}
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
-          </div>
-        );
-
-      default:
-        return (
-          <div key={question.id} className="space-y-3">
-            <label className="block text-sm font-medium" style={{ color: 'var(--q-primary-text)' }}>
-              {question.questionText}
-              {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-            </label>
-            <input
-              type="text"
-              placeholder={question.placeholder}
-              value={value}
-              onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-              className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
-                ? 'border-red-300 bg-red-50'
-                : `border-gray-200 bg-white hover:border-gray-300 focus:border-[${theme.primary}] focus:bg-[${theme.primaryLight}]`
-                } outline-none`}
-            />
-            {question.helpText && (
-              <p className="text-sm text-gray-600">{question.helpText}</p>
-            )}
-            {hasError && (
-              <p className="text-sm text-red-600">{errors[question.id]}</p>
-            )}
-          </div>
-        );
-    }
-  };
-
   const theme = useMemo(() => createTheme(questionnaire?.color), [questionnaire?.color]);
   const themeVars = useMemo(
     () => ({
@@ -2340,49 +1098,53 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                     // Checkout step with custom layout
                     <>
                       {/* Progress Bar */}
-                      <div className="w-full rounded-full h-2 mb-8" style={{ backgroundColor: 'rgba(0,0,0,0.08)' }}>
-                        <div
-                          className="h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progressPercent}%`, backgroundColor: theme.primary }}
-                        />
-                      </div>
+                      <ProgressBar progressPercent={progressPercent} color={theme.primary} />
 
                       {/* Brand and Previous button for checkout */}
-                      <div className="flex items-center justify-between mb-8">
-                        <div>
-                          <h1 className="text-2xl font-normal text-gray-900">fuse.health</h1>
-                        </div>
-
-                        <div>
-                          {currentStepIndex > 0 && (
-                            <button
-                              onClick={handlePrevious}
-                              className="flex items-center text-gray-600 hover:text-gray-800 text-sm"
-                            >
-                              <Icon icon="lucide:arrow-left" className="w-4 h-4 mr-1" />
-                              Back
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      <StepHeader
+                        onPrevious={handlePrevious}
+                        canGoBack={currentStepIndex > 0}
+                      />
 
                       <div className="bg-white rounded-2xl p-6 space-y-6">
-                        {renderCheckout()}
+                        <CheckoutView
+                          plans={plans}
+                          selectedPlan={selectedPlan}
+                          onPlanChange={handlePlanSelection}
+                          paymentStatus={paymentStatus}
+                          clientSecret={clientSecret}
+                          shippingInfo={shippingInfo}
+                          onShippingInfoChange={(field, value) =>
+                            setShippingInfo((prev) => ({ ...prev, [field]: value }))
+                          }
+                          onRetryPaymentSetup={() => {
+                            setPaymentStatus('idle');
+                            setClientSecret(null);
+                            setPaymentIntentId(null);
+                          }}
+                          onCreateSubscription={createSubscriptionForPlan}
+                          onPaymentSuccess={handlePaymentSuccess}
+                          onPaymentError={handlePaymentError}
+                          stripePromise={stripePromise}
+                          theme={theme}
+                          questionnaireProducts={questionnaire.treatment?.products}
+                          selectedProducts={selectedProducts}
+                          treatmentName={treatmentName}
+                        />
                       </div>
                     </>
                   ) : isProductSelectionStep() ? (
                     // Product selection step
                     <>
                       {/* Progress Bar */}
-                      <div className="w-full rounded-full h-2 mb-8" style={{ backgroundColor: 'rgba(0,0,0,0.08)' }}>
-                        <div
-                          className="h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progressPercent}%`, backgroundColor: theme.primary }}
-                        />
-                      </div>
+                      <ProgressBar progressPercent={progressPercent} color={theme.primary} />
 
                       <div className="bg-white rounded-2xl p-6 space-y-6">
-                        {renderProductSelection()}
+                        <ProductSelection
+                          products={questionnaire.treatment?.products}
+                          selectedProducts={selectedProducts}
+                          onProductQuantityChange={handleProductQuantityChange}
+                        />
 
                         {/* Continue button for product selection */}
                         {!(isCheckoutStep() && paymentStatus !== 'succeeded') && (
@@ -2408,31 +1170,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                     // Regular questionnaire steps with v0 styling
                     <>
                       {/* Progress Bar */}
-                      <div className="w-full bg-gray-200 rounded-full h-2 mb-8">
-                        <div
-                          className="h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progressPercent}%`, backgroundColor: theme.primary }}
-                        />
-                      </div>
+                      <ProgressBar progressPercent={progressPercent} color={theme.primary} backgroundColor="#E5E7EB" />
 
                       {/* Brand and Previous button */}
-                      <div className="flex items-center justify-between mb-8">
-                        <div>
-                          <h1 className="text-2xl font-normal text-gray-900">fuse.health</h1>
-                        </div>
-
-                        <div>
-                          {currentStepIndex > 0 && (
-                            <button
-                              onClick={handlePrevious}
-                              className="flex items-center text-gray-600 hover:text-gray-800 text-sm"
-                            >
-                              <Icon icon="lucide:arrow-left" className="w-4 h-4 mr-1" />
-                              Back
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      <StepHeader
+                        onPrevious={handlePrevious}
+                        canGoBack={currentStepIndex > 0}
+                      />
 
                       {/* Questions */}
                       {currentStep?.title === 'Recommended Treatment' ? (
@@ -3044,15 +1788,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                         <div className="space-y-6">
                           {currentStep.questions
                             .filter((question) => {
-                              // Check if question has conditional logic
                               const conditionalLogic = (question as any).conditionalLogic;
                               if (!conditionalLogic) return true;
 
-                              // Parse conditional logic (format: "questionOrder:1,answer:Yes")
                               try {
                                 const parts = conditionalLogic.split(',');
                                 const targetQuestionOrder = parseInt(parts[0].split(':')[1]);
-                                // Join all parts after the first comma and remove "answer:" prefix
                                 const answerPart = parts.slice(1).join(',');
                                 const requiredAnswer = answerPart.substring(answerPart.indexOf(':') + 1);
 
@@ -3075,27 +1816,34 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               const aConditional = (a as any).conditionalLogic;
                               const bConditional = (b as any).conditionalLogic;
 
-                              // First sort by conditional level (0 = main questions, 1 = first level nested, etc.)
                               if (aLevel !== bLevel) {
                                 return aLevel - bLevel;
                               }
 
-                              // Within the same level, check if they're in the same conditional group
                               const sameConditionalGroup = aConditional && bConditional &&
                                 aConditional.split(',')[0] === bConditional.split(',')[0] &&
                                 aConditional.split(',')[1] === bConditional.split(',')[1];
 
-                              // If same level and same conditional group, sort by subQuestionOrder
                               if (sameConditionalGroup &&
                                 aSubOrder !== null && aSubOrder !== undefined &&
                                 bSubOrder !== null && bSubOrder !== undefined) {
                                 return aSubOrder - bSubOrder;
                               }
 
-                              // Otherwise, sort by questionOrder
                               return a.questionOrder - b.questionOrder;
                             })
-                            .map(renderQuestion)}
+                            .map((question) => (
+                              <QuestionRenderer
+                                key={question.id}
+                                question={question}
+                                answers={answers}
+                                errors={errors}
+                                theme={theme}
+                                onAnswerChange={handleAnswerChange}
+                                onRadioChange={handleRadioChange}
+                                onCheckboxChange={handleCheckboxChange}
+                              />
+                            ))}
                         </div>
                       ) : (
                         // Informational steps (like Welcome)
