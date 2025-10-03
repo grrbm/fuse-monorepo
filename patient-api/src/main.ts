@@ -1957,7 +1957,7 @@ app.put(["/treatments/:treatmentId", "/treatments"], authenticateJWT, async (req
 });
 
 // Get single treatment with products
-app.get("/treatments/:id", async (req, res) => {
+app.get("/treatments/:id", authenticateJWT, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1986,6 +1986,10 @@ app.get("/treatments/:id", async (req, res) => {
         {
           model: Clinic,
           as: 'clinic',
+        },
+        {
+          model: Questionnaire,
+          as: 'questionnaires',
         }
       ]
     });

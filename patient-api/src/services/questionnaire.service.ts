@@ -169,6 +169,7 @@ class QuestionnaireService {
                     treatmentId: treatment ? treatment.id : template.treatmentId,
                     isTemplate: false,
                     userId,
+                    color: template.color,
                 },
                 { transaction }
             );

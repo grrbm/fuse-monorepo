@@ -61,6 +61,12 @@ export default class Questionnaire extends Entity {
     })
     declare isTemplate: boolean;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare color: string | null;
+
     @HasMany(() => QuestionnaireStep)
     declare steps: QuestionnaireStep[];
 }
