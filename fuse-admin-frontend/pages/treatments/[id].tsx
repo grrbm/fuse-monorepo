@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { useAuth } from '@/contexts/AuthContext'
@@ -18,7 +18,9 @@ import {
     Calendar,
     Building2,
     User,
-    Image as ImageIcon
+    Image as ImageIcon,
+    Copy,
+    Check,
 } from 'lucide-react'
 
 interface Product {
@@ -57,6 +59,7 @@ interface Questionnaire {
 interface Treatment {
     id: string
     name: string
+    slug?: string | null
     treatmentLogo?: string
     productsPrice: number
     active: boolean
@@ -81,6 +84,8 @@ export default function TreatmentDetail() {
     const [error, setError] = useState<string | null>(null)
     const [savingColors, setSavingColors] = useState<Record<string, boolean>>({})
     const [colorErrors, setColorErrors] = useState<Record<string, string | null>>({})
+    const [copiedQuestionnaireId, setCopiedQuestionnaireId] = useState<string | null>(null)
+    const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const { user, token } = useAuth()
     const router = useRouter()
     const { id } = router.query
@@ -132,6 +137,14 @@ export default function TreatmentDetail() {
         fetchTreatment()
     }, [token, id])
 
+    useEffect(() => {
+        return () => {
+            if (copyTimeoutRef.current) {
+                clearTimeout(copyTimeoutRef.current)
+            }
+        }
+    }, [])
+
     const getStatusBadge = (active: boolean) => {
         return active
             ? <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="h-3 w-3 mr-1" /> Active</Badge>
@@ -146,6 +159,29 @@ export default function TreatmentDetail() {
             style: 'currency',
             currency: 'USD'
         }).format(price)
+    }
+
+    const handleCopyPreview = (url: string, questionnaireId: string) => {
+        if (typeof navigator === 'undefined' || !navigator.clipboard) {
+            console.error('Clipboard API not available')
+            return
+        }
+
+        navigator.clipboard
+            .writeText(url)
+            .then(() => {
+                setCopiedQuestionnaireId(questionnaireId)
+                if (copyTimeoutRef.current) {
+                    clearTimeout(copyTimeoutRef.current)
+                }
+                copyTimeoutRef.current = setTimeout(() => {
+                    setCopiedQuestionnaireId(null)
+                    copyTimeoutRef.current = null
+                }, 2000)
+            })
+            .catch((err) => {
+                console.error('Failed to copy preview URL:', err)
+            })
     }
 
     const handleColorChange = (questionnaireId: string, color: string) => {
@@ -475,6 +511,13 @@ export default function TreatmentDetail() {
                                             {(treatment?.questionnaires || []).map((questionnaire) => {
                                                 const colorValue = questionnaire.color || ''
                                                 const isSaving = savingColors[questionnaire.id]
+                                                const clinicSlug = treatment?.clinic?.slug || 'limitless'
+                                                const slug = treatment?.slug || treatment?.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                                                const devUrl = `http://${clinicSlug}.localhost:3000/my-treatments/${slug}`
+                                                const prodDisplay = `${clinicSlug}.fuse.health/my-treatments/${slug}`
+                                                const previewDisplay = process.env.NODE_ENV === 'production' ? prodDisplay : devUrl
+                                                const previewHref = process.env.NODE_ENV === 'production' ? `https://${prodDisplay}` : devUrl
+                                                const isCopied = copiedQuestionnaireId === questionnaire.id
                                                 return (
                                                     <div key={questionnaire.id} className="p-4 border rounded-lg space-y-3">
                                                         <div className="flex justify-between items-start gap-4">
@@ -486,7 +529,7 @@ export default function TreatmentDetail() {
                                                             </div>
                                                         </div>
 
-                                                        <div className="flex items-center gap-3">
+                                                        <div className="flex flex-wrap items-center gap-3">
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-xs text-muted-foreground uppercase">Color</span>
                                                                 <Input
@@ -513,6 +556,38 @@ export default function TreatmentDetail() {
                                                         {colorErrors[questionnaire.id] && (
                                                             <p className="text-xs text-destructive">{colorErrors[questionnaire.id]}</p>
                                                         )}
+
+                                                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                                                            <span className="text-muted-foreground">Preview URL:</span>
+                                                            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                                                                <code
+                                                                    className="px-2 py-1 bg-muted/30 rounded border text-xs font-mono overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+                                                                    title={previewDisplay}
+                                                                >
+                                                                    {previewDisplay}
+                                                                </code>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className={`h-7 w-7 shrink-0 transition-colors ${isCopied ? 'text-green-600' : 'text-muted-foreground'}`}
+                                                                    onClick={() => handleCopyPreview(previewHref, questionnaire.id)}
+                                                                    aria-label={isCopied ? 'Preview URL copied' : 'Copy preview URL'}
+                                                                >
+                                                                    {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                                                </Button>
+                                                            </div>
+                                                            <a
+                                                                href={previewHref}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex"
+                                                            >
+                                                                <Button variant="ghost" size="sm">
+                                                                    Preview
+                                                                </Button>
+                                                            </a>
+                                                        </div>
                                                     </div>
                                                 )
                                             })}
