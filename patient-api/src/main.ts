@@ -15,7 +15,7 @@ import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
 import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
-import { createJWTToken, authenticateJWT, getCurrentUser } from "./config/jwt";
+import { createJWTToken, authenticateJWT, getCurrentUser, extractTokenFromHeader, verifyJWTToken } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
 import OrderService from "./services/order.service";
@@ -1097,20 +1097,37 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 });
 
 // Single product endpoint
-app.get("/products/:id", authenticateJWT, async (req, res) => {
+app.get("/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const currentUser = getCurrentUser(req);
 
-    if (!currentUser) {
+    // Support special virtual id "new" so the admin UI can preload defaults without hitting the DB
+    if (id === "new") {
+      return res.status(200).json({
+        success: true,
+        data: null,
+      });
+    }
+
+    const token = extractTokenFromHeader(req.headers.authorization);
+    if (!token) {
       return res.status(401).json({
         success: false,
         message: "Not authenticated"
       });
     }
 
+    const payload = verifyJWTToken(token);
+
+    if (!payload) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired token"
+      });
+    }
+
     // Fetch full user data from database to get role
-    const user = await User.findByPk(currentUser.id);
+    const user = await User.findByPk(payload.userId);
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -1977,11 +1994,10 @@ app.put(["/treatments/:treatmentId", "/treatments"], authenticateJWT, async (req
 });
 
 // Get single treatment with products
-app.get("/treatments/:id", authenticateJWT, async (req, res) => {
+app.get("/treatments/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Support special virtual id "new" so the admin UI can preload defaults without hitting the DB
     if (id === "new") {
       return res.status(200).json({
         success: true,
@@ -1989,27 +2005,7 @@ app.get("/treatments/:id", authenticateJWT, async (req, res) => {
       });
     }
 
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({ success: false, message: "Not authenticated" });
-    }
-
-    const userRecord = await User.findByPk(currentUser.id);
-
-    if (!userRecord) {
-      return res.status(401).json({ success: false, message: "User not found" });
-    }
-
-    if (!userRecord.clinicId) {
-      return res.status(403).json({ success: false, message: "User is not associated with a clinic" });
-    }
-
-    const treatment = await Treatment.findOne({
-      where: {
-        id,
-        clinicId: userRecord.clinicId,
-      },
+    const treatment = await Treatment.findByPk(id, {
       include: [
         {
           model: TreatmentProducts,
@@ -2026,7 +2022,7 @@ app.get("/treatments/:id", authenticateJWT, async (req, res) => {
         {
           model: Clinic,
           as: 'clinic',
-        }
+        },
       ]
     });
 
@@ -2034,23 +2030,34 @@ app.get("/treatments/:id", authenticateJWT, async (req, res) => {
       return res.status(404).json({ success: false, message: "Treatment not found" });
     }
 
-    const questionnaires = await questionnaireService.listForTreatment(id, currentUser.id);
-    const treatmentData = treatment.toJSON ? treatment.toJSON() : treatment;
-    treatmentData.questionnaires = questionnaires;
+    let questionnaires: any[] | undefined;
+
+    const token = extractTokenFromHeader(req.headers.authorization);
+    if (token) {
+      const payload = verifyJWTToken(token);
+      if (payload) {
+        try {
+          const userRecord = await User.findByPk(payload.userId);
+          if (userRecord?.clinicId && treatment.clinicId === userRecord.clinicId) {
+            questionnaires = await questionnaireService.listForTreatment(id, userRecord.id);
+          }
+        } catch (authError) {
+          console.warn('⚠️ Optional auth failed for /treatments/:id', authError);
+        }
+      }
+    }
 
     console.log('💊 Treatment fetched:', { id: treatment.id, name: treatment.name, productsCount: treatment.products?.length || 0 });
 
-    // Recalculate productsPrice to ensure it's correct
     if (treatment.products && treatment.products.length > 0) {
       const totalProductsPrice = treatment.products.reduce((sum, product) => {
         const price = parseFloat(String(product.price || 0)) || 0;
         return sum + price;
       }, 0);
 
-      const markupAmount = (totalProductsPrice * 10) / 100; // 10% markup
+      const markupAmount = (totalProductsPrice * 10) / 100;
       const finalProductsPrice = totalProductsPrice + markupAmount;
 
-      // Update the stored value if it's different or NaN
       if (isNaN(treatment.productsPrice) || Math.abs(treatment.productsPrice - finalProductsPrice) > 0.01) {
         console.log('💊 Updating productsPrice from', treatment.productsPrice, 'to', finalProductsPrice);
         await treatment.update({ productsPrice: finalProductsPrice });
@@ -2058,11 +2065,15 @@ app.get("/treatments/:id", authenticateJWT, async (req, res) => {
       }
     }
 
+    const treatmentData = treatment.toJSON ? treatment.toJSON() : treatment;
+    if (questionnaires) {
+      treatmentData.questionnaires = questionnaires;
+    }
+
     res.status(200).json({
       success: true,
       data: treatmentData
     });
-
   } catch (error) {
     console.error('Error fetching treatment:', error);
     res.status(500).json({
