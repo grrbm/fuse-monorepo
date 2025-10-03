@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import Layout from '@/components/Layout'
 import {
     ArrowLeft,
@@ -50,7 +51,7 @@ interface Questionnaire {
     id: string
     title: string
     description?: string
-    active: boolean
+    color: string | null
 }
 
 interface Treatment {
@@ -78,6 +79,8 @@ export default function TreatmentDetail() {
     const [treatment, setTreatment] = useState<Treatment | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [savingColors, setSavingColors] = useState<Record<string, boolean>>({})
+    const [colorErrors, setColorErrors] = useState<Record<string, string | null>>({})
     const { user, token } = useAuth()
     const router = useRouter()
     const { id } = router.query
@@ -143,6 +146,65 @@ export default function TreatmentDetail() {
             style: 'currency',
             currency: 'USD'
         }).format(price)
+    }
+
+    const handleColorChange = (questionnaireId: string, color: string) => {
+        setColorErrors((prev) => ({ ...prev, [questionnaireId]: null }))
+        setTreatment((prev) => {
+            if (!prev) return prev
+            return {
+                ...prev,
+                questionnaires: prev.questionnaires.map((q) =>
+                    q.id === questionnaireId ? { ...q, color } : q
+                )
+            }
+        })
+    }
+
+    const handleColorSave = async (questionnaireId: string, color: string | null) => {
+        if (!token) return
+
+        const hexColor = color?.trim() || null
+        if (hexColor && !/^#([0-9a-fA-F]{6})$/.test(hexColor)) {
+            setColorErrors((prev) => ({ ...prev, [questionnaireId]: 'Use a valid hex color like #1A2B3C' }))
+            return
+        }
+
+        setSavingColors((prev) => ({ ...prev, [questionnaireId]: true }))
+        setColorErrors((prev) => ({ ...prev, [questionnaireId]: null }))
+
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/${questionnaireId}/color`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ color: hexColor })
+            })
+
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}))
+                throw new Error(data.message || 'Failed to update color')
+            }
+
+            const data = await response.json()
+            if (data?.data) {
+                setTreatment((prev) => {
+                    if (!prev) return prev
+                    return {
+                        ...prev,
+                        questionnaires: prev.questionnaires.map((q) =>
+                            q.id === questionnaireId ? { ...q, color: data.data.color } : q
+                        )
+                    }
+                })
+            }
+        } catch (err: any) {
+            setColorErrors((prev) => ({ ...prev, [questionnaireId]: err.message || 'Unable to save color' }))
+        } finally {
+            setSavingColors((prev) => ({ ...prev, [questionnaireId]: false }))
+        }
     }
 
     const formatDate = (dateString: string) => {
@@ -409,20 +471,51 @@ export default function TreatmentDetail() {
                                         <CardTitle>Questionnaires</CardTitle>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="space-y-3">
-                                            {(treatment?.questionnaires || []).map((questionnaire) => (
-                                                <div key={questionnaire.id} className="p-3 border rounded-lg">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h4 className="font-semibold">{questionnaire.title || 'N/A'}</h4>
-                                                        <Badge variant={questionnaire.active ? "default" : "secondary"}>
-                                                            {questionnaire.active ? 'Active' : 'Inactive'}
-                                                        </Badge>
+                                        <div className="space-y-4">
+                                            {(treatment?.questionnaires || []).map((questionnaire) => {
+                                                const colorValue = questionnaire.color || ''
+                                                const isSaving = savingColors[questionnaire.id]
+                                                return (
+                                                    <div key={questionnaire.id} className="p-4 border rounded-lg space-y-3">
+                                                        <div className="flex justify-between items-start gap-4">
+                                                            <div>
+                                                                <h4 className="font-semibold text-foreground">{questionnaire.title || 'Untitled questionnaire'}</h4>
+                                                                {questionnaire.description && (
+                                                                    <p className="text-sm text-muted-foreground mt-1">{questionnaire.description}</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs text-muted-foreground uppercase">Color</span>
+                                                                <Input
+                                                                    type="color"
+                                                                    value={colorValue || '#ffffff'}
+                                                                    className="h-9 w-12 cursor-pointer"
+                                                                    onChange={(event) => handleColorChange(questionnaire.id, event.target.value)}
+                                                                />
+                                                            </div>
+                                                            <Input
+                                                                value={colorValue || ''}
+                                                                onChange={(event) => handleColorChange(questionnaire.id, event.target.value)}
+                                                                placeholder="#RRGGBB"
+                                                                className="w-32"
+                                                            />
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleColorSave(questionnaire.id, colorValue || null)}
+                                                                disabled={isSaving}
+                                                            >
+                                                                {isSaving ? 'Saving…' : 'Save'}
+                                                            </Button>
+                                                        </div>
+                                                        {colorErrors[questionnaire.id] && (
+                                                            <p className="text-xs text-destructive">{colorErrors[questionnaire.id]}</p>
+                                                        )}
                                                     </div>
-                                                    {questionnaire.description && (
-                                                        <p className="text-sm text-muted-foreground">{questionnaire.description}</p>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                )
+                                            })}
                                         </div>
                                     </CardContent>
                                 </Card>

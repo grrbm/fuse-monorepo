@@ -73,6 +73,7 @@ import BrandSubscriptionService from "./services/brandSubscription.service";
 import MessageService from "./services/Message.service";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
+import QuestionnaireStep from "./models/QuestionnaireStep";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -1969,7 +1970,27 @@ app.get("/treatments/:id", authenticateJWT, async (req, res) => {
       });
     }
 
-    const treatment = await Treatment.findByPk(id, {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const userRecord = await User.findByPk(currentUser.id);
+
+    if (!userRecord) {
+      return res.status(401).json({ success: false, message: "User not found" });
+    }
+
+    if (!userRecord.clinicId) {
+      return res.status(403).json({ success: false, message: "User is not associated with a clinic" });
+    }
+
+    const treatment = await Treatment.findOne({
+      where: {
+        id,
+        clinicId: userRecord.clinicId,
+      },
       include: [
         {
           model: TreatmentProducts,
@@ -1986,20 +2007,17 @@ app.get("/treatments/:id", authenticateJWT, async (req, res) => {
         {
           model: Clinic,
           as: 'clinic',
-        },
-        {
-          model: Questionnaire,
-          as: 'questionnaires',
         }
       ]
     });
 
     if (!treatment) {
-      return res.status(404).json({
-        success: false,
-        message: "Treatment not found"
-      });
+      return res.status(404).json({ success: false, message: "Treatment not found" });
     }
+
+    const questionnaires = await questionnaireService.listForTreatment(id, currentUser.id);
+    const treatmentData = treatment.toJSON ? treatment.toJSON() : treatment;
+    treatmentData.questionnaires = questionnaires;
 
     console.log('💊 Treatment fetched:', { id: treatment.id, name: treatment.name, productsCount: treatment.products?.length || 0 });
 
@@ -2023,7 +2041,7 @@ app.get("/treatments/:id", authenticateJWT, async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: treatment
+      data: treatmentData
     });
 
   } catch (error) {
@@ -3714,6 +3732,43 @@ app.get("/questionnaires/:id", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching questionnaire for user:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch questionnaire' });
+  }
+});
+
+app.put("/questionnaires/:id/color", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const questionnaireId = req.params.id;
+    const { color } = req.body ?? {};
+
+    if (color !== undefined && color !== null) {
+      if (typeof color !== 'string' || !/^#([0-9a-fA-F]{6})$/.test(color)) {
+        return res.status(400).json({ success: false, message: 'Color must be a valid hex code (e.g. #1A2B3C)' });
+      }
+    }
+
+    const updated = await questionnaireService.updateColor(questionnaireId, currentUser.id, color ?? null);
+
+    res.status(200).json({ success: true, data: updated });
+  } catch (error: any) {
+    console.error('❌ Error updating questionnaire color:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+
+      if (error.message.includes('does not belong')) {
+        return res.status(403).json({ success: false, message: error.message });
+      }
+    }
+
+    res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update questionnaire color' });
   }
 });
 

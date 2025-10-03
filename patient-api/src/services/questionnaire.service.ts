@@ -120,6 +120,33 @@ class QuestionnaireService {
         });
     }
 
+    async listForTreatment(treatmentId: string, userId: string) {
+        return Questionnaire.findAll({
+            where: {
+                treatmentId,
+                userId,
+                isTemplate: false,
+            },
+            order: [['createdAt', 'DESC']],
+        });
+    }
+
+    async updateColor(questionnaireId: string, userId: string, color: string | null) {
+        const questionnaire = await Questionnaire.findByPk(questionnaireId);
+
+        if (!questionnaire) {
+            throw new Error('Questionnaire not found');
+        }
+
+        if (questionnaire.userId !== userId) {
+            throw new Error('Questionnaire does not belong to your account');
+        }
+
+        await questionnaire.update({ color: color ?? null });
+
+        return questionnaire;
+    }
+
     async duplicateTemplate(questionnaireId: string, userId: string) {
         const template = await Questionnaire.findByPk(questionnaireId, {
             include: [
