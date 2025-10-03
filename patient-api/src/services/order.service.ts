@@ -6,13 +6,13 @@ import User from '../models/User';
 import OrderItem from '../models/OrderItem';
 import Product from '../models/Product';
 import { OrderStatus } from '../models/Order';
-import ShippingOrder, { OrderShippingStatus } from '../models/ShippingOrder';
 import ShippingAddress from '../models/ShippingAddress';
-import UserService from "./user.service";
 import { StripeService } from '@fuse/stripe';
 import Subscription, { PaymentStatus } from "../models/Subscription";
 import TreatmentPlan from "../models/TreatmentPlan";
 import Physician from "../models/Physician";
+import PharmacyService from "./pharmacy.service";
+import Treatment from "../models/Treatment";
 
 
 interface ListOrdersByClinicResult {
@@ -210,6 +210,11 @@ class OrderService {
                         attributes: ['stripePriceId']
                     },
                     {
+                        model: Treatment,
+                        as: 'treatment',
+                        attributes: ['pharmacyProvider']
+                    },
+                    {
                         model: Physician,
                         as: 'physician',
                         attributes: ['pharmacyPhysicianId']
@@ -226,8 +231,6 @@ class OrderService {
                 };
             }
 
-            await order.update({ physicianId: physicianId });
-            await order.reload();
 
 
             // Check if order can be approved (pending orders with payment intent can be captured)
@@ -293,12 +296,10 @@ class OrderService {
             }
 
 
-            // Create pharmacy order using the new method
-            const pharmacyOrderResult = await this.createPharmacyOrder(order);
-
-            if (!pharmacyOrderResult.success) {
-                return pharmacyOrderResult;
-            }
+            // First time creating order 
+            const pharmacyService = new PharmacyService()
+            const pharmacyOrder = await pharmacyService.createPharmacyOrder(order)
+            console.log("Pharmacy order", pharmacyOrder)
 
             return {
                 success: true,
@@ -315,81 +316,7 @@ class OrderService {
         }
     }
 
-    async createPharmacyOrder(order: Order) {
-        // Sync address before creating order
-        const userService = new UserService();
-        const user = await userService.syncPatientFromUser(order.user.id, order.shippingAddressId);
 
-        const pharmacyPatientId = user?.pharmacyPatientId
-
-        if (!pharmacyPatientId) {
-            return {
-                success: false,
-                message: "No patient associated with user",
-                error: "No patient associated with user"
-            };
-        }
-
-        // Map order items to pharmacy products
-        const products = order.orderItems.map(item => ({
-            sku: parseInt(item.pharmacyProductId), // Use pharmacy product ID or default
-            quantity: item.quantity,
-            refills: 2, // Default refills - could be made configurable
-            days_supply: 30, // Default days supply - could be made configurable
-            sig: item.dosage || item.product.dosage || "Use as directed",
-            medical_necessity: item.notes || "Prescribed treatment as part of patient care plan."
-        }));
-
-
-        const pharmacyPhysicianId = order?.physician?.pharmacyPhysicianId
-
-
-        if (!pharmacyPhysicianId) {
-            return {
-                success: false,
-                message: "No physician associated with order",
-                error: "No physician associated with order",
-            };
-        }
-        // Create pharmacy order
-        const pharmacyResult = await this.pharmacyOrderService.createOrder({
-            patient_id: parseInt(pharmacyPatientId),
-            physician_id: parseInt(pharmacyPhysicianId),
-            ship_to_clinic: 0, // Ship to patient
-            service_type: "two_day",
-            signature_required: 1,
-            memo: order.notes || "Order approved",
-            external_id: order.id,
-            test_order: process.env.NODE_ENV === 'production' ? 0 : 1,
-            products: products
-        });
-
-        if (!pharmacyResult.success) {
-            return {
-                success: false,
-                message: "Failed to create pharmacy order",
-                error: pharmacyResult.error || "Unknown pharmacy error"
-            };
-        }
-
-        const pharmacyOrderId = pharmacyResult.data?.id?.toString();
-
-        // Create shipping order with proper address reference
-        await ShippingOrder.create({
-            orderId: order.id,
-            shippingAddressId: order.shippingAddressId,
-            status: OrderShippingStatus.PROCESSING,
-            pharmacyOrderId: pharmacyOrderId
-        });
-
-        return {
-            success: true,
-            message: "Pharmacy order created successfully",
-            data: {
-                pharmacyOrderId: pharmacyOrderId
-            }
-        };
-    }
 }
 
 

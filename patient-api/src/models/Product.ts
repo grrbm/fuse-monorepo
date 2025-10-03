@@ -5,6 +5,15 @@ import PrescriptionProducts from './PrescriptionProducts';
 import Treatment from './Treatment';
 import TreatmentProducts from './TreatmentProducts';
 
+export enum PharmacyProvider {
+    ABSOLUTERX = 'absoluterx',
+    TRUEPILL = 'truepill',
+    PILLPACK = 'pillpack',
+}
+
+
+
+
 @Table({
     freezeTableName: true,
 })
@@ -51,11 +60,13 @@ export default class Product extends Entity {
     })
     declare pharmacyProductId?: string;
 
+
     @Column({
-        type: DataType.UUID,
-        allowNull: true,
+        type: DataType.ENUM(...Object.values(PharmacyProvider)),
+        allowNull: false,
+        defaultValue: PharmacyProvider.ABSOLUTERX
     })
-    declare clinicId?: string;
+    declare pharmacyProvider: PharmacyProvider;
 
     @BelongsToMany(() => Prescription, () => PrescriptionProducts)
     declare prescriptions: Prescription[];
