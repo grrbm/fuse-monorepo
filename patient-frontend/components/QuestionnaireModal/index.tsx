@@ -1143,7 +1143,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                         <ProductSelection
                           products={questionnaire.treatment?.products}
                           selectedProducts={selectedProducts}
-                          onProductQuantityChange={handleProductQuantityChange}
+                          onChange={handleProductQuantityChange}
                         />
 
                         {/* Continue button for product selection */}
