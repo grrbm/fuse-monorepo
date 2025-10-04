@@ -30,6 +30,7 @@ interface QuestionnaireQuestionTemplate {
   answerType: string
   questionOrder: number
   isRequired?: boolean
+  helpText?: string | null
   options?: QuestionnaireOptionTemplate[]
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { ChangeEvent, useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Edit, Save, X, Loader2 } from "lucide-react"
@@ -17,6 +17,7 @@ interface QuestionnaireQuestionTemplate {
     answerType: string
     questionOrder: number
     isRequired?: boolean
+    helpText?: string | null
     options?: QuestionnaireOptionTemplate[]
 }
 
@@ -46,6 +47,7 @@ export function QuestionEditor({
     const editable = stepCategory === 'normal' && Boolean(token)
     const [isEditing, setIsEditing] = useState(false)
     const [questionText, setQuestionText] = useState(question.questionText)
+    const [helpText, setHelpText] = useState(question.helpText || '')
     const [options, setOptions] = useState<EditableOption[]>(() =>
         (question.options ?? []).map((option, index) => ({
             id: option.id,
@@ -61,6 +63,7 @@ export function QuestionEditor({
     useEffect(() => {
         if (!isEditing) {
             setQuestionText(question.questionText)
+            setHelpText(question.helpText || '')
             setOptions(
                 (question.options ?? []).map((option, index) => ({
                     id: option.id,
@@ -73,11 +76,21 @@ export function QuestionEditor({
         }
     }, [question, isEditing])
 
-    const handleOptionChange = (localKey: string, field: 'optionText' | 'optionValue', value: string) => {
+    const handleOptionTextChange = (localKey: string, value: string) => {
         setOptions((prev) =>
             prev.map((option) =>
                 option.localKey === localKey
-                    ? { ...option, [field]: value }
+                    ? { ...option, optionText: value }
+                    : option
+            )
+        )
+    }
+
+    const handleOptionValueChange = (localKey: string, value: string) => {
+        setOptions((prev) =>
+            prev.map((option) =>
+                option.localKey === localKey
+                    ? { ...option, optionValue: value }
                     : option
             )
         )
@@ -107,6 +120,7 @@ export function QuestionEditor({
         setIsEditing(false)
         setError(null)
         setQuestionText(question.questionText)
+        setHelpText(question.helpText || '')
         setOptions(
             (question.options ?? []).map((option, index) => ({
                 id: option.id,
@@ -128,12 +142,17 @@ export function QuestionEditor({
         }
 
         const cleanedOptions = options
-            .map((option, index) => ({
-                id: option.id,
-                optionText: option.optionText.trim(),
-                optionValue: (option.optionValue || option.optionText).trim(),
-                optionOrder: index + 1,
-            }))
+            .map((option, index) => {
+                const trimmedText = (option.optionText || '').trim()
+                const trimmedValue = (option.optionValue || '').trim()
+
+                return {
+                    id: option.id,
+                    optionText: trimmedText,
+                    optionValue: trimmedValue.length > 0 ? trimmedValue : trimmedText,
+                    optionOrder: index + 1,
+                }
+            })
             .filter((option) => option.optionText.length > 0)
 
         setIsSaving(true)
@@ -148,6 +167,7 @@ export function QuestionEditor({
                 },
                 body: JSON.stringify({
                     questionText: trimmedQuestionText,
+                    helpText: helpText.trim() || null,
                     options: cleanedOptions,
                 }),
             })
@@ -161,6 +181,7 @@ export function QuestionEditor({
             if (data?.data) {
                 onQuestionSaved(data.data)
                 setQuestionText(data.data.questionText ?? trimmedQuestionText)
+                setHelpText(data.data.helpText || '')
                 setOptions(
                     (data.data.options ?? cleanedOptions).map((option: any, index: number) => ({
                         id: option.id,
@@ -199,6 +220,19 @@ export function QuestionEditor({
                             <span className="font-medium text-foreground">{question.questionText}</span>
                         )}
                     </div>
+                    {isEditing ? (
+                        <textarea
+                            value={helpText}
+                            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setHelpText(e.target.value)}
+                            placeholder="Help text (optional)"
+                            className="w-full px-3 py-2 text-xs border border-input bg-background rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                            rows={2}
+                        />
+                    ) : (
+                        question.helpText && (
+                            <p className="text-xs text-muted-foreground italic">{question.helpText}</p>
+                        )
+                    )}
                     <div className="text-xs uppercase tracking-wide text-muted-foreground">
                         Type: {question.answerType}
                     </div>
@@ -281,7 +315,7 @@ export function QuestionEditor({
                                     </span>
                                     <Input
                                         value={option.optionText}
-                                        onChange={(event) => handleOptionChange(option.localKey, 'optionText', event.target.value)}
+                                        onChange={(event: ChangeEvent<HTMLInputElement>) => handleOptionTextChange(option.localKey, event.target.value)}
                                         placeholder="Option text"
                                         className="text-xs"
                                     />
@@ -292,7 +326,7 @@ export function QuestionEditor({
                                     </span>
                                     <Input
                                         value={option.optionValue}
-                                        onChange={(event) => handleOptionChange(option.localKey, 'optionValue', event.target.value)}
+                                        onChange={(event: ChangeEvent<HTMLInputElement>) => handleOptionValueChange(option.localKey, event.target.value)}
                                         placeholder="Option value"
                                         className="text-xs"
                                     />

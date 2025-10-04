@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { ChangeEvent, useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Edit, Save, X, Loader2 } from "lucide-react"
@@ -139,7 +139,7 @@ export function StepEditor({ step, token, baseUrl, onStepSaved }: StepEditorProp
                     {isEditing ? (
                         <textarea
                             value={description}
-                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
                             placeholder="Step description (optional)"
                             className="w-full px-3 py-2 text-sm border border-input bg-background rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                             rows={2}
@@ -155,7 +155,7 @@ export function StepEditor({ step, token, baseUrl, onStepSaved }: StepEditorProp
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2 ml-4">
+                {/* <div className="flex items-center gap-2 ml-4">
                     {isEditing ? (
                         <>
                             <Button
@@ -187,7 +187,7 @@ export function StepEditor({ step, token, baseUrl, onStepSaved }: StepEditorProp
                             Edit
                         </Button>
                     )}
-                </div>
+                </div> */}
             </div>
 
             {error && (
