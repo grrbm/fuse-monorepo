@@ -193,7 +193,7 @@ class QuestionnaireService {
                     title: template.title,
                     description: template.description,
                     checkoutStepPosition: template.checkoutStepPosition,
-                    treatmentId: treatment ? treatment.id : template.treatmentId,
+                    treatmentId: template.treatmentId,
                     isTemplate: false,
                     userId,
                     color: template.color,
@@ -206,6 +206,7 @@ class QuestionnaireService {
                     {
                         title: step.title,
                         description: step.description,
+                        category: step.category,
                         stepOrder: step.stepOrder,
                         questionnaireId: clone.id,
                     },
@@ -217,8 +218,15 @@ class QuestionnaireService {
                         {
                             questionText: question.questionText,
                             answerType: question.answerType,
+                            questionSubtype: question.questionSubtype,
                             isRequired: question.isRequired,
                             questionOrder: question.questionOrder,
+                            subQuestionOrder: question.subQuestionOrder,
+                            conditionalLevel: question.conditionalLevel,
+                            placeholder: question.placeholder,
+                            helpText: question.helpText,
+                            footerNote: question.footerNote,
+                            conditionalLogic: question.conditionalLogic,
                             stepId: clonedStep.id,
                         },
                         { transaction }

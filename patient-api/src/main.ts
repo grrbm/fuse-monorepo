@@ -2045,8 +2045,15 @@ app.get("/treatments/:id", async (req, res) => {
       if (payload) {
         try {
           const userRecord = await User.findByPk(payload.userId);
-          if (userRecord?.clinicId && treatment.clinicId === userRecord.clinicId) {
+          if (userRecord) {
+            // Always fetch user's questionnaires for this treatment, regardless of clinic association
+            // This allows users to see their cloned questionnaires for any treatment template
             questionnaires = await questionnaireService.listForTreatment(id, userRecord.id);
+            console.log('📋 Fetched user questionnaires for treatment:', {
+              treatmentId: id,
+              userId: userRecord.id,
+              questionnaireCount: questionnaires?.length || 0
+            });
           }
         } catch (authError) {
           console.warn('⚠️ Optional auth failed for /treatments/:id', authError);
