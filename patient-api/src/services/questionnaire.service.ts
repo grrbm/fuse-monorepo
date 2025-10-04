@@ -542,22 +542,12 @@ class QuestionnaireService {
                 questionOptions: [] as string[]
             };
 
-            console.log('🗑️ Starting deletion of questionnaire:', questionnaireId);
-            console.log('🗑️ Questionnaire has', questionnaire.steps?.length || 0, 'steps');
-
             // Delete in reverse order due to foreign key constraints
             for (const step of questionnaire.steps || []) {
-                console.log('🗑️ Processing step:', step.id, '-', step.title);
-                console.log('🗑️ Step has', step.questions?.length || 0, 'questions');
-
                 for (const question of step.questions || []) {
-                    console.log('🗑️ Processing question:', question.id, '-', question.questionText);
-                    console.log('🗑️ Question has', question.options?.length || 0, 'options');
-
                     // Delete question options first (hard delete)
                     if (question.options && question.options.length > 0) {
                         const optionIds = question.options.map(opt => opt.id);
-                        console.log('🗑️ Deleting question options:', optionIds);
 
                         await QuestionOption.destroy({
                             where: { questionId: question.id },
@@ -569,7 +559,6 @@ class QuestionnaireService {
                     }
 
                     // Then delete the question (hard delete)
-                    console.log('🗑️ Deleting question:', question.id);
                     await Question.destroy({
                         where: { id: question.id },
                         transaction,
@@ -580,7 +569,6 @@ class QuestionnaireService {
                 }
 
                 // Delete the step (hard delete)
-                console.log('🗑️ Deleting step:', step.id);
                 await QuestionnaireStep.destroy({
                     where: { id: step.id },
                     transaction,
@@ -591,7 +579,6 @@ class QuestionnaireService {
             }
 
             // Finally delete the questionnaire (hard delete)
-            console.log('🗑️ Deleting questionnaire:', questionnaireId);
             await Questionnaire.destroy({
                 where: { id: questionnaireId },
                 transaction,
@@ -600,12 +587,12 @@ class QuestionnaireService {
 
             await transaction.commit();
 
-            console.log('✅ Deletion completed successfully!');
-            console.log('📊 Deletion Summary:');
-            console.log('  - Questionnaire ID:', deletedIds.questionnaireId);
-            console.log('  - Steps deleted:', deletedIds.steps.length, deletedIds.steps);
-            console.log('  - Questions deleted:', deletedIds.questions.length, deletedIds.questions);
-            console.log('  - Question Options deleted:', deletedIds.questionOptions.length, deletedIds.questionOptions);
+            console.log('✅ Questionnaire deleted:', deletedIds.questionnaireId);
+            console.log('📈 Total Quantities:');
+            console.log('  - Total Questionnaires: 1');
+            console.log('  - Total Steps:', deletedIds.steps.length);
+            console.log('  - Total Questions:', deletedIds.questions.length);
+            console.log('  - Total Question Options:', deletedIds.questionOptions.length);
 
             return {
                 deleted: true,
@@ -614,7 +601,6 @@ class QuestionnaireService {
             };
         } catch (error) {
             await transaction.rollback();
-            console.error('❌ Deletion failed, transaction rolled back:', error);
             throw error;
         }
     }
