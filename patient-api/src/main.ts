@@ -5,8 +5,7 @@ import cors from "cors";
 import multer from "multer";
 import { initializeDatabase } from "./config/database";
 import { MailsSender } from "./services/mailsSender";
-import User from "./models/User";
-import Clinic from "./models/Clinic";
+// duplicate imports removed
 import Treatment from "./models/Treatment";
 import Product from "./models/Product";
 import Order from "./models/Order";
@@ -27,6 +26,9 @@ import TreatmentProducts from "./models/TreatmentProducts";
 import TreatmentPlan, { BillingInterval } from "./models/TreatmentPlan";
 import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
+import User from "./models/User";
+import Clinic from "./models/Clinic";
+import { Op } from "sequelize";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
 import QuestionService from "./services/question.service";
 import { StripeService } from "@fuse/stripe";
@@ -3562,6 +3564,67 @@ app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
 // Questionnaire routes
 // Add questionnaire step
 const questionnaireService = new QuestionnaireService();
+
+// Admin routes: list tenants (users with clinic) and questionnaires by tenant
+app.get("/admin/tenants", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Only admins can list tenants
+    const user = await User.findByPk(currentUser.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    const tenants = await User.findAll({
+      where: {
+        clinicId: { [Op.ne]: null }
+      },
+      attributes: [
+        'id',
+        'firstName',
+        'lastName',
+        'email',
+        'clinicId'
+      ],
+      include: [{
+        model: Clinic,
+        attributes: ['id', 'name', 'slug']
+      }],
+      order: [[Clinic, 'name', 'ASC'], ['lastName', 'ASC']]
+    });
+
+    res.status(200).json({ success: true, data: tenants });
+  } catch (error) {
+    console.error('❌ Error listing tenants:', error);
+    res.status(500).json({ success: false, message: 'Failed to list tenants' });
+  }
+});
+
+app.get("/admin/tenants/:userId/questionnaires", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Only admins can view questionnaires for a tenant
+    const user = await User.findByPk(currentUser.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    const { userId } = req.params;
+    const questionnaires = await questionnaireService.listForUser(userId);
+    res.status(200).json({ success: true, data: questionnaires });
+  } catch (error) {
+    console.error('❌ Error fetching questionnaires for tenant:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch questionnaires for tenant' });
+  }
+});
 
 app.get("/questionnaires/templates", authenticateJWT, async (req, res) => {
   try {
