@@ -353,3 +353,5 @@ export function QuestionEditor({
         </div>
     )
 }
+
+export default QuestionEditor

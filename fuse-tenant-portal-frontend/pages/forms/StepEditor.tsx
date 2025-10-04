@@ -227,3 +227,5 @@ export function StepEditor({ step, token, baseUrl, onStepSaved, onStepReordered,
         </div>
     )
 }
+
+export default StepEditor

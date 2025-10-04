@@ -263,3 +263,5 @@ export function QuestionnaireEditor({
         </div>
     )
 }
+
+export default QuestionnaireEditor
