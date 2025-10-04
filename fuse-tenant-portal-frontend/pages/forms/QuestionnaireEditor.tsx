@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Eye } from "lucide-react"
+import { Eye, Copy, Check } from "lucide-react"
 import { StepEditor } from "./StepEditor"
 import { QuestionEditor } from "./QuestionEditor"
+import { useState, useRef } from "react"
 
 interface QuestionnaireOptionTemplate {
     id: string
@@ -38,6 +39,16 @@ interface QuestionnaireTemplate {
     treatmentId: string | null
     isTemplate?: boolean
     steps?: QuestionnaireStepTemplate[]
+    treatment?: {
+        id: string
+        name: string
+        slug?: string | null
+        clinic?: {
+            id: string
+            name: string
+            slug: string
+        }
+    }
 }
 
 interface QuestionnaireEditorProps {
@@ -60,6 +71,8 @@ export function QuestionnaireEditor({
     onStepReordered,
 }: QuestionnaireEditorProps) {
     const steps = questionnaire?.steps ?? []
+    const [copiedQuestionnaireId, setCopiedQuestionnaireId] = useState<string | null>(null)
+    const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // Group steps by category for reordering logic
     const normalSteps = steps.filter(step => step.category === 'normal')
@@ -82,6 +95,25 @@ export function QuestionnaireEditor({
         }
     }
 
+    const handleCopyPreview = async (url: string, questionnaireId: string) => {
+        try {
+            await navigator.clipboard.writeText(url)
+            setCopiedQuestionnaireId(questionnaireId)
+
+            // Clear any existing timeout
+            if (copyTimeoutRef.current) {
+                clearTimeout(copyTimeoutRef.current)
+            }
+
+            // Reset the copied state after 2 seconds
+            copyTimeoutRef.current = setTimeout(() => {
+                setCopiedQuestionnaireId(null)
+            }, 2000)
+        } catch (err) {
+            console.error('Failed to copy URL:', err)
+        }
+    }
+
     return (
         <div className="space-y-6">
             {/* Editor Header */}
@@ -92,6 +124,60 @@ export function QuestionnaireEditor({
                     </Button>
                     <h2 className="text-2xl font-semibold text-foreground mb-2">{questionnaire?.title || 'Questionnaire'} - Editor</h2>
                     <p className="text-muted-foreground">Review and manage questionnaire steps</p>
+
+                    {/* Preview URL */}
+                    {questionnaire?.treatment && (
+                        <div className="mt-4 p-3 bg-muted/30 rounded-lg border">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium text-foreground">Preview URL:</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <code className="px-2 py-1 bg-background rounded border text-xs font-mono overflow-hidden text-ellipsis whitespace-nowrap flex-1">
+                                    {(() => {
+                                        const clinicSlug = questionnaire.treatment?.clinic?.slug || 'limitless'
+                                        const slug = questionnaire.treatment?.slug || questionnaire.treatment?.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                                        const devUrl = `http://${clinicSlug}.localhost:3000/my-treatments/${slug}`
+                                        const prodDisplay = `${clinicSlug}.fuse.health/my-treatments/${slug}`
+                                        return process.env.NODE_ENV === 'production' ? prodDisplay : devUrl
+                                    })()}
+                                </code>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                                    onClick={() => {
+                                        const clinicSlug = questionnaire.treatment?.clinic?.slug || 'limitless'
+                                        const slug = questionnaire.treatment?.slug || questionnaire.treatment?.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                                        const devUrl = `http://${clinicSlug}.localhost:3000/my-treatments/${slug}`
+                                        const prodDisplay = `${clinicSlug}.fuse.health/my-treatments/${slug}`
+                                        const previewHref = process.env.NODE_ENV === 'production' ? `https://${prodDisplay}` : devUrl
+                                        window.open(previewHref, '_blank', 'noopener,noreferrer')
+                                    }}
+                                    aria-label="Open preview in new tab"
+                                >
+                                    <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className={`h-8 w-8 shrink-0 transition-colors ${copiedQuestionnaireId === questionnaire.id ? 'text-green-600' : 'text-muted-foreground'}`}
+                                    onClick={() => {
+                                        const clinicSlug = questionnaire.treatment?.clinic?.slug || 'limitless'
+                                        const slug = questionnaire.treatment?.slug || questionnaire.treatment?.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                                        const devUrl = `http://${clinicSlug}.localhost:3000/my-treatments/${slug}`
+                                        const prodDisplay = `${clinicSlug}.fuse.health/my-treatments/${slug}`
+                                        const previewHref = process.env.NODE_ENV === 'production' ? `https://${prodDisplay}` : devUrl
+                                        handleCopyPreview(previewHref, questionnaire.id)
+                                    }}
+                                    aria-label={copiedQuestionnaireId === questionnaire.id ? 'Preview URL copied' : 'Copy preview URL'}
+                                >
+                                    {copiedQuestionnaireId === questionnaire.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <div className="flex space-x-2">
                     <Button variant="outline" disabled>

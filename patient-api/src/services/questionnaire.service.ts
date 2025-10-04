@@ -4,6 +4,7 @@ import Question from '../models/Question';
 import QuestionOption from '../models/QuestionOption';
 import Treatment from '../models/Treatment';
 import User from '../models/User';
+import Clinic from '../models/Clinic';
 import { Transaction } from 'sequelize';
 
 class QuestionnaireService {
@@ -102,6 +103,16 @@ class QuestionnaireService {
                                     as: 'options',
                                 },
                             ],
+                        },
+                    ],
+                },
+                {
+                    model: Treatment,
+                    as: 'treatment',
+                    include: [
+                        {
+                            model: Clinic,
+                            as: 'clinic',
                         },
                     ],
                 },
