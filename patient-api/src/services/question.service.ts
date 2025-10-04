@@ -254,6 +254,73 @@ class QuestionService {
 
         return updatedQuestions;
     }
+
+    async reorderQuestion(questionId: string, direction: 'up' | 'down', stepId: string, userId: string) {
+        // Validate question operation permission
+        await this.validateQuestionOperation(stepId, userId);
+
+        const question = await Question.findByPk(questionId);
+        if (!question) {
+            throw new Error('Question not found');
+        }
+
+        if (question.stepId !== stepId) {
+            throw new Error('Question does not belong to the specified step');
+        }
+
+        // Get all questions in the same step
+        const allQuestions = await Question.findAll({
+            where: { stepId },
+            order: [['questionOrder', 'ASC']]
+        });
+
+        const currentIndex = allQuestions.findIndex(q => q.id === questionId);
+        if (currentIndex === -1) {
+            throw new Error('Question not found in step');
+        }
+
+        // Determine target index
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        if (targetIndex < 0 || targetIndex >= allQuestions.length) {
+            throw new Error(`Cannot move question ${direction}`);
+        }
+
+        // Swap question orders
+        const currentQuestion = allQuestions[currentIndex];
+        const targetQuestion = allQuestions[targetIndex];
+
+        if (!currentQuestion || !targetQuestion) {
+            throw new Error('Question not found');
+        }
+
+        const tempOrder = currentQuestion.questionOrder;
+        currentQuestion.questionOrder = targetQuestion.questionOrder;
+        targetQuestion.questionOrder = tempOrder;
+
+        // Update both questions in database
+        await Question.update(
+            { questionOrder: currentQuestion.questionOrder },
+            { where: { id: currentQuestion.id } }
+        );
+
+        await Question.update(
+            { questionOrder: targetQuestion.questionOrder },
+            { where: { id: targetQuestion.id } }
+        );
+
+        // Return updated questions
+        return await Question.findAll({
+            where: { stepId },
+            include: [
+                {
+                    model: QuestionOption,
+                    as: 'options',
+                    order: [['optionOrder', 'ASC']]
+                }
+            ],
+            order: [['questionOrder', 'ASC']]
+        });
+    }
 }
 
 export default QuestionService;

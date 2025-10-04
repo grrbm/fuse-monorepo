@@ -1,7 +1,7 @@
 import { ChangeEvent, useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Edit, Save, X, Loader2 } from "lucide-react"
+import { Edit, Save, X, Loader2, ChevronUp, ChevronDown } from "lucide-react"
 
 interface QuestionnaireStepTemplate {
     id: string
@@ -16,9 +16,12 @@ interface StepEditorProps {
     token: string | null
     baseUrl: string
     onStepSaved: (updatedStep: QuestionnaireStepTemplate) => void
+    onStepReordered?: (stepId: string, direction: 'up' | 'down') => void
+    canMoveUp?: boolean
+    canMoveDown?: boolean
 }
 
-export function StepEditor({ step, token, baseUrl, onStepSaved }: StepEditorProps) {
+export function StepEditor({ step, token, baseUrl, onStepSaved, onStepReordered, canMoveUp = false, canMoveDown = false }: StepEditorProps) {
     const [isEditing, setIsEditing] = useState(false)
     const [title, setTitle] = useState(step.title)
     const [description, setDescription] = useState(step.description || '')
@@ -155,39 +158,65 @@ export function StepEditor({ step, token, baseUrl, onStepSaved }: StepEditorProp
                     </div>
                 </div>
 
-                {/* <div className="flex items-center gap-2 ml-4">
-                    {isEditing ? (
-                        <>
+                <div className="flex items-center gap-2 ml-4">
+                    {/* Reorder buttons - only show for normal category steps */}
+                    {step.category === 'normal' && onStepReordered && (
+                        <div className="flex flex-col gap-1">
                             <Button
-                                size="sm"
-                                onClick={handleSave}
-                                disabled={isSaving}
-                            >
-                                {isSaving ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Save className="mr-2 h-4 w-4" />
-                                )}
-                                Save
-                            </Button>
-                            <Button
-                                type="button"
                                 size="sm"
                                 variant="ghost"
-                                onClick={resetEditingState}
-                                disabled={isSaving}
+                                onClick={() => onStepReordered(step.id, 'up')}
+                                disabled={!canMoveUp}
+                                className="h-6 w-6 p-0"
                             >
-                                <X className="mr-2 h-4 w-4" />
-                                Cancel
+                                <ChevronUp className="h-3 w-3" />
                             </Button>
-                        </>
-                    ) : (
-                        <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit
-                        </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => onStepReordered(step.id, 'down')}
+                                disabled={!canMoveDown}
+                                className="h-6 w-6 p-0"
+                            >
+                                <ChevronDown className="h-3 w-3" />
+                            </Button>
+                        </div>
                     )}
-                </div> */}
+
+                    {/* <div className="flex items-center gap-2">
+                        {isEditing ? (
+                            <>
+                                <Button
+                                    size="sm"
+                                    onClick={handleSave}
+                                    disabled={isSaving}
+                                >
+                                    {isSaving ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Save className="mr-2 h-4 w-4" />
+                                    )}
+                                    Save
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={resetEditingState}
+                                    disabled={isSaving}
+                                >
+                                    <X className="mr-2 h-4 w-4" />
+                                    Cancel
+                                </Button>
+                            </>
+                        ) : (
+                            <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                            </Button>
+                        )}
+                    </div> */}
+                </div>
             </div>
 
             {error && (

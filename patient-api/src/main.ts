@@ -4250,6 +4250,74 @@ app.delete("/questions", authenticateJWT, async (req, res) => {
   }
 });
 
+// Reorder step
+app.put("/questionnaires/step/reorder", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const { stepId, direction } = req.body;
+
+    // Validate required fields
+    if (!stepId || !direction) {
+      return res.status(400).json({
+        success: false,
+        message: "stepId and direction are required"
+      });
+    }
+
+    if (!['up', 'down'].includes(direction)) {
+      return res.status(400).json({
+        success: false,
+        message: "direction must be 'up' or 'down'"
+      });
+    }
+
+    // Create questionnaire service instance
+    const questionnaireService = new QuestionnaireService();
+
+    // Reorder step
+    const result = await questionnaireService.reorderStep(stepId, direction, currentUser.id);
+
+    console.log('✅ Step reordered:', {
+      stepId,
+      direction,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Step reordered successfully",
+      data: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error reordering step:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+        error.message.includes('does not belong to your clinic') ||
+        error.message.includes('cannot move')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to reorder step"
+    });
+  }
+});
+
 // Delete questionnaire
 app.delete("/questionnaires/:id", authenticateJWT, async (req, res) => {
   try {

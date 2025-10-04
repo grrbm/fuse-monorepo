@@ -210,6 +210,91 @@ export default function Forms() {
     })
   }
 
+  const handleStepReordered = async (stepId: string, direction: 'up' | 'down') => {
+    if (!token || !editorQuestionnaire) return
+
+    try {
+      // Get all steps with the same category (normal)
+      const normalSteps = (editorQuestionnaire.steps || [])
+        .filter(step => step.category === 'normal')
+        .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+
+      const currentIndex = normalSteps.findIndex(step => step.id === stepId)
+      if (currentIndex === -1) return
+
+      // Determine target index
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+      if (targetIndex < 0 || targetIndex >= normalSteps.length) return
+
+      // Swap step orders
+      const currentStep = normalSteps[currentIndex]
+      const targetStep = normalSteps[targetIndex]
+
+      const tempOrder = currentStep.stepOrder
+      currentStep.stepOrder = targetStep.stepOrder
+      targetStep.stepOrder = tempOrder
+
+      // Update local state immediately for better UX
+      setEditorQuestionnaire((prev) => {
+        if (!prev?.steps) return prev
+
+        const updatedSteps = prev.steps.map((step) => {
+          if (step.id === currentStep.id) {
+            return { ...step, stepOrder: currentStep.stepOrder }
+          }
+          if (step.id === targetStep.id) {
+            return { ...step, stepOrder: targetStep.stepOrder }
+          }
+          return step
+        })
+
+        return { ...prev, steps: updatedSteps }
+      })
+
+      // Update in database
+      const response = await fetch(`${baseUrl}/questionnaires/step/reorder`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          stepId,
+          direction
+        }),
+      })
+
+      if (!response.ok) {
+        // Revert on error
+        const tempOrder = currentStep.stepOrder
+        currentStep.stepOrder = targetStep.stepOrder
+        targetStep.stepOrder = tempOrder
+
+        setEditorQuestionnaire((prev) => {
+          if (!prev?.steps) return prev
+
+          const updatedSteps = prev.steps.map((step) => {
+            if (step.id === currentStep.id) {
+              return { ...step, stepOrder: currentStep.stepOrder }
+            }
+            if (step.id === targetStep.id) {
+              return { ...step, stepOrder: targetStep.stepOrder }
+            }
+            return step
+          })
+
+          return { ...prev, steps: updatedSteps }
+        })
+
+        throw new Error('Failed to reorder step')
+      }
+
+    } catch (err: any) {
+      console.error('❌ Error reordering step:', err)
+      setError(err.message || 'Unable to reorder step')
+    }
+  }
+
   const handleImportTemplate = async (templateId: string) => {
     if (!token) return
     setIsImporting(true)
@@ -335,6 +420,7 @@ export default function Forms() {
               baseUrl={baseUrl}
               onQuestionSaved={handleQuestionSaved}
               onStepSaved={handleStepSaved}
+              onStepReordered={handleStepReordered}
             />
           ) : (
             <>

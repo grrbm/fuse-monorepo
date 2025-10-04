@@ -604,6 +604,73 @@ class QuestionnaireService {
             throw error;
         }
     }
+
+    async reorderStep(stepId: string, direction: 'up' | 'down', userId: string): Promise<QuestionnaireStep[]> {
+        // Validate user permissions
+        const step = await QuestionnaireStep.findByPk(stepId, {
+            include: [{
+                model: Questionnaire,
+                where: { userId }
+            }]
+        });
+
+        if (!step) {
+            throw new Error('Step not found or does not belong to your clinic');
+        }
+
+        // Get all steps in the same questionnaire with the same category
+        const questionnaire = await Questionnaire.findByPk(step.questionnaireId);
+        if (!questionnaire) {
+            throw new Error('Questionnaire not found');
+        }
+
+        const allSteps = await QuestionnaireStep.findAll({
+            where: {
+                questionnaireId: questionnaire.id,
+                category: step.category // Only reorder within the same category
+            },
+            order: [['stepOrder', 'ASC']]
+        });
+
+        const currentIndex = allSteps.findIndex(s => s.id === stepId);
+        if (currentIndex === -1) {
+            throw new Error('Step not found in questionnaire');
+        }
+
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        if (targetIndex < 0 || targetIndex >= allSteps.length) {
+            throw new Error(`Cannot move step ${direction}`);
+        }
+
+        // Swap step orders
+        const currentStep = allSteps[currentIndex];
+        const targetStep = allSteps[targetIndex];
+
+        if (!currentStep || !targetStep) {
+            throw new Error('Step not found');
+        }
+
+        const tempOrder = currentStep.stepOrder;
+        currentStep.stepOrder = targetStep.stepOrder;
+        targetStep.stepOrder = tempOrder;
+
+        // Update both steps in database
+        await QuestionnaireStep.update(
+            { stepOrder: currentStep.stepOrder },
+            { where: { id: currentStep.id } }
+        );
+
+        await QuestionnaireStep.update(
+            { stepOrder: targetStep.stepOrder },
+            { where: { id: targetStep.id } }
+        );
+
+        // Return updated steps
+        return await QuestionnaireStep.findAll({
+            where: { questionnaireId: questionnaire.id },
+            order: [['stepOrder', 'ASC']]
+        });
+    }
 }
 
 export default QuestionnaireService;

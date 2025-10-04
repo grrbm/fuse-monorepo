@@ -47,6 +47,7 @@ interface QuestionnaireEditorProps {
     baseUrl: string
     onQuestionSaved: (question: QuestionnaireQuestionTemplate) => void
     onStepSaved: (step: QuestionnaireStepTemplate) => void
+    onStepReordered: (stepId: string, direction: 'up' | 'down') => void
 }
 
 export function QuestionnaireEditor({
@@ -56,8 +57,30 @@ export function QuestionnaireEditor({
     baseUrl,
     onQuestionSaved,
     onStepSaved,
+    onStepReordered,
 }: QuestionnaireEditorProps) {
     const steps = questionnaire?.steps ?? []
+
+    // Group steps by category for reordering logic
+    const normalSteps = steps.filter(step => step.category === 'normal')
+    const otherSteps = steps.filter(step => step.category !== 'normal')
+
+    // Create a map to determine if a step can move up/down within its category
+    const getStepMovementFlags = (stepId: string) => {
+        if (normalSteps.length <= 1) {
+            return { canMoveUp: false, canMoveDown: false }
+        }
+
+        const stepIndex = normalSteps.findIndex(step => step.id === stepId)
+        if (stepIndex === -1) {
+            return { canMoveUp: false, canMoveDown: false }
+        }
+
+        return {
+            canMoveUp: stepIndex > 0,
+            canMoveDown: stepIndex < normalSteps.length - 1
+        }
+    }
 
     return (
         <div className="space-y-6">
@@ -94,34 +117,59 @@ export function QuestionnaireEditor({
                             steps
                                 .slice()
                                 .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
-                                .map((step) => (
-                                    <div key={step.id} className="space-y-3">
-                                        <StepEditor
-                                            step={step}
-                                            token={token}
-                                            baseUrl={baseUrl}
-                                            onStepSaved={onStepSaved}
-                                        />
+                                .map((step) => {
+                                    const { canMoveUp, canMoveDown } = getStepMovementFlags(step.id)
+                                    return (
+                                        <div key={step.id} className="space-y-3">
+                                            <StepEditor
+                                                step={step}
+                                                token={token}
+                                                baseUrl={baseUrl}
+                                                onStepSaved={onStepSaved}
+                                                onStepReordered={onStepReordered}
+                                                canMoveUp={canMoveUp}
+                                                canMoveDown={canMoveDown}
+                                            />
 
-                                        {step.questions && step.questions.length > 0 && (
-                                            <div className="ml-8 space-y-2 border-l-2 border-border/60 pl-4">
-                                                {step.questions
-                                                    .slice()
-                                                    .sort((a, b) => (a.questionOrder ?? 0) - (b.questionOrder ?? 0))
-                                                    .map((question) => (
-                                                        <QuestionEditor
-                                                            key={question.id}
-                                                            question={question}
-                                                            stepCategory={step.category}
-                                                            token={token}
-                                                            baseUrl={baseUrl}
-                                                            onQuestionSaved={onQuestionSaved}
-                                                        />
-                                                    ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))
+                                            {step.questions && step.questions.length > 0 && (
+                                                <div className="ml-8 space-y-2 border-l-2 border-border/60 pl-4">
+                                                    {(() => {
+                                                        // Group questions by category and sort by questionOrder
+                                                        const sortedQuestions = step.questions
+                                                            .slice()
+                                                            .sort((a, b) => (a.questionOrder ?? 0) - (b.questionOrder ?? 0))
+
+                                                        // Group by category
+                                                        const questionsByCategory: { [key: string]: QuestionnaireQuestionTemplate[] } = {}
+                                                        sortedQuestions.forEach(question => {
+                                                            const category = step.category || 'normal'
+                                                            if (!questionsByCategory[category]) {
+                                                                questionsByCategory[category] = []
+                                                            }
+                                                            questionsByCategory[category].push(question)
+                                                        })
+
+                                                        // Render questions grouped by category
+                                                        return Object.entries(questionsByCategory).map(([category, questions]) => (
+                                                            <div key={category} className="space-y-2">
+                                                                {questions.map((question) => (
+                                                                    <QuestionEditor
+                                                                        key={question.id}
+                                                                        question={question}
+                                                                        stepCategory={step.category}
+                                                                        token={token}
+                                                                        baseUrl={baseUrl}
+                                                                        onQuestionSaved={onQuestionSaved}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        ))
+                                                    })()}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })
                         )}
                     </div>
                 </CardContent>
