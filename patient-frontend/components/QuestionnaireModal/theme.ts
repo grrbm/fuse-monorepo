@@ -61,7 +61,7 @@ export const createTheme = (color?: string | null): ThemePalette => {
     };
 };
 
-export const buildThemeVars = (theme: ThemePalette): CSSProperties => ({
+export const buildThemeVars = (theme: ThemePalette): CSSProperties & Record<`--${string}`, string> => ({
     "--q-primary": theme.primary,
     "--q-primary-dark": theme.primaryDark,
     "--q-primary-darker": theme.primaryDarker,
