@@ -483,6 +483,91 @@ class QuestionnaireService {
 
         return template;
     }
+
+    async deleteQuestionnaire(questionnaireId: string, userId: string) {
+        const questionnaire = await Questionnaire.findByPk(questionnaireId, {
+            include: [
+                {
+                    model: QuestionnaireStep,
+                    as: 'steps',
+                    include: [
+                        {
+                            model: Question,
+                            as: 'questions',
+                            include: [
+                                {
+                                    model: QuestionOption,
+                                    as: 'options',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        });
+
+        if (!questionnaire) {
+            throw new Error('Questionnaire not found');
+        }
+
+        // Ensure user owns this questionnaire and it's not a template
+        if (questionnaire.userId !== userId) {
+            throw new Error('Questionnaire does not belong to your account');
+        }
+
+        if (questionnaire.isTemplate) {
+            throw new Error('Cannot delete template questionnaires');
+        }
+
+        const sequelize = Questionnaire.sequelize;
+        if (!sequelize) {
+            throw new Error('Database connection not available');
+        }
+
+        const transaction: Transaction = await sequelize.transaction();
+
+        try {
+            // Delete in reverse order due to foreign key constraints
+            for (const step of questionnaire.steps || []) {
+                for (const question of step.questions || []) {
+                    // Delete question options first (hard delete)
+                    await QuestionOption.destroy({
+                        where: { questionId: question.id },
+                        transaction,
+                        force: true
+                    });
+
+                    // Then delete the question (hard delete)
+                    await Question.destroy({
+                        where: { id: question.id },
+                        transaction,
+                        force: true
+                    });
+                }
+
+                // Delete the step (hard delete)
+                await QuestionnaireStep.destroy({
+                    where: { id: step.id },
+                    transaction,
+                    force: true
+                });
+            }
+
+            // Finally delete the questionnaire (hard delete)
+            await Questionnaire.destroy({
+                where: { id: questionnaireId },
+                transaction,
+                force: true
+            });
+
+            await transaction.commit();
+
+            return { deleted: true, questionnaireId };
+        } catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    }
 }
 
 export default QuestionnaireService;

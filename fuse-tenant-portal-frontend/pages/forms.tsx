@@ -68,6 +68,9 @@ export default function Forms() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [templateError, setTemplateError] = useState<string | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [questionnaireToDelete, setQuestionnaireToDelete] = useState<QuestionnaireTemplate | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', [])
 
@@ -219,6 +222,40 @@ export default function Forms() {
     }
   }
 
+  const handleDeleteQuestionnaire = async () => {
+    if (!token || !questionnaireToDelete) return
+    setIsDeleting(true)
+
+    try {
+      const response = await fetch(`${baseUrl}/questionnaires/${questionnaireToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.message || 'Failed to delete questionnaire')
+      }
+
+      // Remove from local state
+      setQuestionnaires((prev) => prev.filter(q => q.id !== questionnaireToDelete.id))
+      setShowDeleteModal(false)
+      setQuestionnaireToDelete(null)
+    } catch (err: any) {
+      console.error('❌ Error deleting questionnaire:', err)
+      setError(err.message || 'Unable to delete questionnaire')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const confirmDelete = (questionnaire: QuestionnaireTemplate) => {
+    setQuestionnaireToDelete(questionnaire)
+    setShowDeleteModal(true)
+  }
+
   return (
     <div className="flex h-screen bg-background dark">
       <Sidebar />
@@ -299,8 +336,13 @@ export default function Forms() {
                           <Button variant="ghost" size="sm">
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => confirmDelete(questionnaire)}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
@@ -410,6 +452,59 @@ export default function Forms() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && questionnaireToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <Card className="max-w-md w-full">
+            <CardHeader>
+              <CardTitle className="text-destructive">Delete Questionnaire</CardTitle>
+              <CardDescription>
+                Are you sure you want to delete "{questionnaireToDelete.title}"? This action cannot be undone and will permanently remove:
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                <ul className="text-sm text-destructive space-y-1">
+                  <li>• The questionnaire and all its steps</li>
+                  <li>• All questions within each step</li>
+                  <li>• All question options</li>
+                </ul>
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDeleteModal(false)
+                    setQuestionnaireToDelete(null)
+                  }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteQuestionnaire}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

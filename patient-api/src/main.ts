@@ -3304,7 +3304,7 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       stripePriceId: selectedPlan.stripePriceId,
       monthlyPrice: selectedPlan.monthlyPrice,
       currentPeriodStart: new Date(),
-      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), 
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
 
     // Create payment record
@@ -4239,6 +4239,66 @@ app.delete("/questions", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete question"
+    });
+  }
+});
+
+// Delete questionnaire
+app.delete("/questionnaires/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id: questionnaireId } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate required fields
+    if (!questionnaireId) {
+      return res.status(400).json({
+        success: false,
+        message: "questionnaireId is required"
+      });
+    }
+
+    // Create questionnaire service instance
+    const questionnaireService = new QuestionnaireService();
+
+    // Delete questionnaire
+    const result = await questionnaireService.deleteQuestionnaire(questionnaireId, currentUser.id);
+
+    console.log('✅ Questionnaire deleted:', {
+      questionnaireId: result.questionnaireId,
+      deleted: result.deleted,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Questionnaire deleted successfully",
+      data: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting questionnaire:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found') ||
+        error.message.includes('does not belong to your account') ||
+        error.message.includes('Cannot delete template questionnaires')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete questionnaire"
     });
   }
 });
