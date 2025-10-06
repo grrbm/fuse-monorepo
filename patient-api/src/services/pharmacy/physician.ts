@@ -13,7 +13,8 @@ interface CreatePhysicianRequest {
   city: string;
   state: string;
   zip: string;
-  licenses: PhysicianLicense[];
+  // licenses: PhysicianLicense[];
+  npi_number: number;
 }
 
 interface UpdatePhysicianRequest {
