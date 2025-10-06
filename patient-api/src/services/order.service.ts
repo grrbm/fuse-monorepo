@@ -173,7 +173,7 @@ class OrderService {
         }
     }
 
-    async approveOrder(orderId: string, physicianId: string) {
+    async approveOrder(orderId: string) {
         // TODO: this method might need to be expanded to create Order items depending on the information approved in the prescription
         try {
             // Get order with all related data including shipping address

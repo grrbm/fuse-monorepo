@@ -141,79 +141,9 @@ class MDWebhookService {
 
       console.log('✅ Processing offering submitted for order:', order.orderNumber);
 
-      // Get MD Integration access token and fetch case details
-      const tokenResponse = await MDAuthService.generateToken();
-      const caseDetails = await MDCaseService.getCase(eventData.case_id, tokenResponse.access_token);
-
-      // Extract clinician information from case
-      const clinician = caseDetails.case_assignment.clinician;
-
-      // Fetch detailed clinician information using the clinician service
-      const clinicianDetails = await MDClinicianService.getClinician(
-        clinician.clinician_id,
-        tokenResponse.access_token
-      );
-
-      // Check if physician already exists by mdPhysicianId
-      let physician = await Physician.findOne({
-        where: { mdPhysicianId: clinicianDetails.clinician_id }
-      });
-
-      // Create physician if not exists
-      if (!physician) {
-
-        const npiLicenses = clinicianDetails.licenses
-          .filter(license => license.type === 'npi');
-
-        const npiNumber = npiLicenses[0]?.value
-
-        if (!npiNumber) {
-          throw Error("No Npi number found ini Clinician")
-        }
-
-        // Create physician in pharmacy system
-        const pharmacyPhysicianService = new PharmacyPhysicianService();
-        const pharmacyResponse = await pharmacyPhysicianService.createPhysician({
-          first_name: clinicianDetails.first_name,
-          middle_name: '', // Not provided by MD Integration
-          last_name: clinicianDetails.last_name,
-          phone_number: clinicianDetails.phone_number.replace(/[^0-9]/g, ''),
-          email: clinicianDetails.email,
-          // Approved address for  all MDI clinicians
-          street: '100 Powell Place #1859',
-          city: 'Nashville',
-          state: 'TN',
-          zip: '37204',
-          npi_number: +npiNumber
-        });
-
-
-        physician = await Physician.create({
-          firstName: clinicianDetails.first_name,
-          lastName: clinicianDetails.last_name,
-          middleName: '', // Not provided by MD Integration
-          email: clinicianDetails.email,
-          phoneNumber: clinicianDetails.phone_number.replace(/[^0-9]/g, ''), // Remove formatting
-          street: '100 Powell Place #1859',
-          city: 'Nashville',
-          state: 'TN',
-          zip: '37204',
-          active: clinicianDetails.active && !clinicianDetails.is_out_of_office,
-          mdPhysicianId: clinicianDetails.clinician_id,
-          pharmacyPhysicianId: pharmacyResponse.data.id
-        });
-
-        console.log('✅ Created new physician:', physician.id, physician.fullName);
-      } else {
-        // Link physician to order
-        await order.update({ physicianId: physician.id });
-      }
-
-
-
       // Approve the order with the assigned physician
       const orderService = new OrderService();
-      await orderService.approveOrder(order.id, physician.id);
+      await orderService.approveOrder(order.id);
       console.log('✅ Order approved with physician:', order.orderNumber);
 
     } catch (error) {

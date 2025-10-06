@@ -197,8 +197,6 @@ class OrderService {
     }
   }
   async createOrder(order: Order) {
-
-
     const pharmacyPatientId = await this.patientService.syncPatientFromUser(order.user.id, order.shippingAddressId);
 
 
