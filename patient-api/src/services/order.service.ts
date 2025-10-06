@@ -298,8 +298,7 @@ class OrderService {
 
             // First time creating order 
             const pharmacyService = new PharmacyService()
-            const pharmacyOrder = await pharmacyService.createPharmacyOrder(order)
-            console.log("Pharmacy order", pharmacyOrder)
+            await pharmacyService.createPharmacyOrder(order)
 
             return {
                 success: true,
