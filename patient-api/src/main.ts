@@ -56,15 +56,12 @@ import {
   questionCreateSchema,
   questionUpdateSchema,
   questionOrderSchema,
-  physicianCreateSchema,
-  physicianUpdateSchema,
   messageCreateSchema,
   patientUpdateSchema,
   brandTreatmentSchema,
   organizationUpdateSchema
 } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
-import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
 import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
 import MDFilesService from "./services/mdIntegration/MDFiles.service";
@@ -4297,7 +4294,6 @@ app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
   }
 });
 
-// TODO: Add security
 app.post("/webhook/orders", async (req, res) => {
   try {
 
@@ -4396,94 +4392,6 @@ app.post("/webhook/pharmacy", async (req, res) => {
   }
 });
 
-// Physicians endpoints
-app.post("/physicians", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    // Validate request body using physicianCreateSchema
-    const validation = physicianCreateSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
-      });
-    }
-
-    const physicianService = new PhysicianService();
-
-    const physician = await physicianService.createPhysician(validation.data, currentUser.id);
-
-    res.status(201).json({
-      success: true,
-      message: "Physician created successfully",
-      data: {
-        id: physician.id,
-        fullName: physician.fullName,
-        email: physician.email,
-      }
-    });
-  } catch (error) {
-    console.error('Error creating physician:', error);
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : "Failed to create physician"
-    });
-  }
-});
-
-app.put("/physicians", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    // Validate request body using physicianUpdateSchema
-    const validation = physicianUpdateSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
-      });
-    }
-
-    const { physicianId, ...updateData } = validation.data;
-
-    const physicianService = new PhysicianService();
-
-    const physician = await physicianService.updatePhysician(physicianId, updateData, currentUser.id);
-
-    res.json({
-      success: true,
-      message: "Physician updated successfully",
-      data: {
-        id: physician.id,
-        fullName: physician.fullName,
-        email: physician.email,
-      }
-    });
-  } catch (error) {
-    console.error('Error updating physician:', error);
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : "Failed to update physician"
-    });
-  }
-});
 
 // Message endpoints
 app.get("/messages", authenticateJWT, async (req, res) => {
