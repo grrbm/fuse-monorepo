@@ -24,6 +24,16 @@
     },
     "//#clean": {
       "cache": false
+    },
+    "pm2:stop": {
+      "cache": false
+    },
+    "pm2:reload": {
+      "cache": false,
+      "dependsOn": [
+        "build",
+        "pm2:stop"
+      ]
     }
   },
   "globalDependencies": [
