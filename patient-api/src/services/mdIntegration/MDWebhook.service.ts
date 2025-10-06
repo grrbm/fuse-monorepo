@@ -161,25 +161,32 @@ class MDWebhookService {
 
       // Create physician if not exists
       if (!physician) {
-        // Convert practice areas to license format
-        const convertedLicenses = clinicianDetails.practice_areas.map(practiceArea => ({
-          state: practiceArea.state.abbreviation,
-          number: practiceArea.license_number,
-          type: 'medical_license',
-          expires_on: practiceArea.expires_at
-        }));
 
-        // Add NPI licenses
         const npiLicenses = clinicianDetails.licenses
-          .filter(license => license.type === 'npi')
-          .map(license => ({
-            state: 'NATIONAL',
-            number: license.value,
-            type: 'npi',
-            expires_on: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-          }));
+          .filter(license => license.type === 'npi');
 
-        const allLicenses = [...convertedLicenses, ...npiLicenses];
+        const npiNumber = npiLicenses[0]?.value
+
+        if (!npiNumber) {
+          throw Error("No Npi number found ini Clinician")
+        }
+
+        // Create physician in pharmacy system
+        const pharmacyPhysicianService = new PharmacyPhysicianService();
+        const pharmacyResponse = await pharmacyPhysicianService.createPhysician({
+          first_name: clinicianDetails.first_name,
+          middle_name: '', // Not provided by MD Integration
+          last_name: clinicianDetails.last_name,
+          phone_number: clinicianDetails.phone_number.replace(/[^0-9]/g, ''),
+          email: clinicianDetails.email,
+          // Approved address for  all MDI clinicians
+          street: '100 Powell Place #1859',
+          city: 'Nashville',
+          state: 'TN',
+          zip: '37204',
+          npi_number: +npiNumber
+        });
+
 
         physician = await Physician.create({
           firstName: clinicianDetails.first_name,
@@ -187,52 +194,22 @@ class MDWebhookService {
           middleName: '', // Not provided by MD Integration
           email: clinicianDetails.email,
           phoneNumber: clinicianDetails.phone_number.replace(/[^0-9]/g, ''), // Remove formatting
-          street: 'MD Integration Provider', // Placeholder - address not in API
-          city: 'Remote',
-          state: 'CA', // Default state
-          zip: '00000', // Placeholder
-          licenses: allLicenses,
+          street: '100 Powell Place #1859',
+          city: 'Nashville',
+          state: 'TN',
+          zip: '37204',
           active: clinicianDetails.active && !clinicianDetails.is_out_of_office,
-          mdPhysicianId: clinicianDetails.clinician_id
+          mdPhysicianId: clinicianDetails.clinician_id,
+          pharmacyPhysicianId: pharmacyResponse.data.id
         });
 
         console.log('✅ Created new physician:', physician.id, physician.fullName);
-
-        // Create physician in pharmacy system
-        try {
-          const pharmacyPhysicianService = new PharmacyPhysicianService();
-          const pharmacyResponse = await pharmacyPhysicianService.createPhysician({
-            first_name: clinicianDetails.first_name,
-            middle_name: '', // Not provided by MD Integration
-            last_name: clinicianDetails.last_name,
-            phone_number: clinicianDetails.phone_number.replace(/[^0-9]/g, ''),
-            email: clinicianDetails.email,
-            // Approved address for  all MDI clinicians
-            street: '100 Powell Place #1859r',
-            city: 'Nashville',
-            state: 'TN',
-            zip: '37204',
-            licenses: allLicenses
-          });
-
-          if (pharmacyResponse.success && pharmacyResponse.data?.physician_id) {
-            // Update physician with pharmacy ID
-            await physician.update({
-              pharmacyPhysicianId: pharmacyResponse.data.physician_id
-            });
-            console.log('✅ Created physician in pharmacy system:', pharmacyResponse.data.physician_id);
-          } else {
-            console.log('⚠️ Failed to create physician in pharmacy system:', pharmacyResponse.message);
-          }
-        } catch (pharmacyError) {
-          console.error('❌ Error creating physician in pharmacy system:', pharmacyError);
-        }
       } else {
-        console.log('ℹ️ Using existing physician:', physician.id, physician.fullName);
+        // Link physician to order
+        await order.update({ physicianId: physician.id });
       }
 
-      // Link physician to order
-      await order.update({ physicianId: physician.id });
+
 
       // Approve the order with the assigned physician
       const orderService = new OrderService();
@@ -304,8 +281,6 @@ class MDWebhookService {
       });
 
       // TODO: Send notification to user about drivers license request
-      // TODO: Store access link for future reference if needed
-      // TODO: Update user verification status or create verification record
 
     } catch (error) {
       console.error('❌ Error processing drivers license request:', error);
