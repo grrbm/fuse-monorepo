@@ -70,7 +70,7 @@ class PatientService {
 
       return {
         success: true,
-        data: response.data
+        data: response.data.data
       };
     } catch (error) {
       console.error('Error creating patient:', error);
