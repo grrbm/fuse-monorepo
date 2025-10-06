@@ -980,8 +980,6 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
     });
 
     console.log(`📊 Total products in database: ${allProducts.length}`);
-    console.log(`📊 Products with clinicId: ${allProducts.filter(p => p.clinicId).length}`);
-    console.log(`📊 Products with null/undefined clinicId: ${allProducts.filter(p => !p.clinicId).length}`);
 
     // Fetch products that belong to this clinic (both with matching clinicId and legacy products)
     let products = [];
@@ -1070,7 +1068,6 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       pharmacyProductId: product.pharmacyProductId,
       dosage: product.dosage,
       imageUrl: product.imageUrl,
-      clinicId: product.clinicId, // Include clinicId for debugging
       active: true, // Default to active since Product model doesn't have active field
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
@@ -2564,21 +2561,6 @@ app.post("/payments/treatment/sub", async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!treatmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "Treatment ID is required"
-      });
-    }
-
-    // Validate stripe price ID
-    if (!stripePriceId) {
-      return res.status(400).json({
-        success: false,
-        message: "Stripe price ID is required"
-      });
-    }
 
     // Look up the treatment plan to get the billing interval
     const treatmentPlan = await TreatmentPlan.findOne({
@@ -3242,7 +3224,7 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       stripePriceId: selectedPlan.stripePriceId,
       monthlyPrice: selectedPlan.monthlyPrice,
       currentPeriodStart: new Date(),
-      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), 
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
 
     // Create payment record
