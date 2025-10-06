@@ -177,7 +177,6 @@ class PharmacyPhysicianService {
           city: 'Nashville',
           state: 'TN',
           zip: '37204',
-          active: clinicianDetails.active && !clinicianDetails.is_out_of_office,
           mdPhysicianId: clinicianDetails.clinician_id,
           pharmacyPhysicianId: pharmacyResponse.data.id
         });
