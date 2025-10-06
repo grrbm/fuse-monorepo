@@ -14,6 +14,7 @@ export * from './question.schema';
 export * from './message.schema';
 export * from './brandTreatment.schema';
 export * from './organization.schema';
+export * from './tenantProduct.schema';
 
 /**
  * Validation helper function
