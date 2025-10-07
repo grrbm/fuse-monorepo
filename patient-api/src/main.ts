@@ -61,7 +61,10 @@ import {
   messageCreateSchema,
   patientUpdateSchema,
   brandTreatmentSchema,
-  organizationUpdateSchema
+  organizationUpdateSchema,
+  updateSelectionSchema,
+  paginationSchema,
+  productGetSchema
 } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import SubscriptionService from "./services/subscription.service";
@@ -73,6 +76,8 @@ import MessageService from "./services/Message.service";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
 import QuestionnaireStep from "./models/QuestionnaireStep";
+import TenantProductService from "./services/tenantProduct.service";
+import ProductService from "./services/product.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -5696,5 +5701,342 @@ app.get("/public/brand-treatments/:clinicSlug/:slug", async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching public brand treatment:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch treatment' });
+  }
+});
+
+// ========================================
+// Tenant Product Endpoints
+// ========================================
+
+// Update product selection for a clinic
+app.post("/tenant-products/update-selection", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate request body using updateSelectionSchema
+    const validation = updateSelectionSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    // Create tenant product service instance
+    const tenantProductService = new TenantProductService();
+
+    // Update product selection
+    const tenantProducts = await tenantProductService.updateSelection(
+      validation.data,
+      currentUser.id
+    );
+
+    console.log('✅ Tenant products updated:', {
+      count: tenantProducts.length,
+      userId: currentUser.id,
+      // clinicId: currentUser.clinicId
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully updated ${tenantProducts.length} product(s)`,
+      data: tenantProducts
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating tenant product selection:', error);
+
+    if (error instanceof Error) {
+      // Handle specific error types
+      if (error.message.includes('not found')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      if (error.message.includes('Unauthorized') ||
+        error.message.includes('does not belong to')) {
+        return res.status(403).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      if (error.message.includes('Duplicate')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update tenant product selection"
+    });
+  }
+});
+
+// Get all tenant products for a clinic
+app.get("/tenant-products", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const tenantProductService = new TenantProductService();
+    const tenantProducts = await tenantProductService.listByClinic(currentUser.id);
+
+    res.status(200).json({
+      success: true,
+      message: `Retrieved ${tenantProducts.length} tenant product(s)`,
+      data: tenantProducts
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching tenant products:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('Unauthorized')) {
+        return res.status(403).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch tenant products"
+    });
+  }
+});
+
+// Delete a tenant product
+app.delete("/tenant-products/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Tenant product ID is required"
+      });
+    }
+
+    const tenantProductService = new TenantProductService();
+    const result = await tenantProductService.delete(id, currentUser.id);
+
+    console.log('✅ Tenant product deleted:', {
+      tenantProductId: id,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Tenant product deleted successfully",
+      data: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting tenant product:', error);
+
+    if (error instanceof Error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      if (error.message.includes('Unauthorized') ||
+        error.message.includes('does not belong to')) {
+        return res.status(403).json({
+          success: false,
+          message: error.message
+        });
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete tenant product"
+    });
+  }
+});
+
+// ========================================
+// Catalog/Product Endpoints
+// ========================================
+
+// Get product catalog with pagination
+app.get("/catalog", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate query parameters using paginationSchema
+    const validation = paginationSchema.safeParse({
+      page: req.query.page,
+      limit: req.query.limit
+    });
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { page, limit } = validation.data;
+
+    // Create product service instance
+    const productService = new ProductService();
+
+    // List products with pagination
+    const result = await productService.listProducts(currentUser.id, { page, limit });
+
+    if (!result.success) {
+      if (result.error?.includes('Access denied')) {
+        return res.status(403).json({
+          success: false,
+          message: result.message,
+          error: result.error
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message: result.message,
+        error: result.error
+      });
+    }
+
+    console.log('✅ Products catalog retrieved:', {
+      count: result.data?.items.length || 0,
+      page,
+      limit,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result.data
+    });
+
+  } catch (error) {
+    console.error('❌ Error retrieving product catalog:', error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve product catalog"
+    });
+  }
+});
+
+// Get single product with questionnaires
+app.get("/catalog/product", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate productId query parameter using uuidSchema
+    const validation = productGetSchema.safeParse(req.query);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const productId = validation.data.id;
+
+    // Create product service instance
+    const productService = new ProductService();
+
+    // Get product with questionnaires
+    const result = await productService.getProduct(productId, currentUser.id);
+
+    if (!result.success) {
+      if (result.error?.includes('Access denied')) {
+        return res.status(403).json({
+          success: false,
+          message: result.message,
+          error: result.error
+        });
+      }
+
+      if (result.error?.includes('not found')) {
+        return res.status(404).json({
+          success: false,
+          message: result.message,
+          error: result.error
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message: result.message,
+        error: result.error
+      });
+    }
+
+    console.log('✅ Product retrieved:', {
+      productId,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result.data
+    });
+
+  } catch (error) {
+    console.error('❌ Error retrieving product:', error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve product"
+    });
   }
 });

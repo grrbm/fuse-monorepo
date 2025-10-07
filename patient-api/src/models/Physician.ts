@@ -88,13 +88,6 @@ export default class Physician extends Entity {
     declare pharmacyPhysicianId: string;
 
     @Column({
-        type: DataType.BOOLEAN,
-        allowNull: false,
-        defaultValue: true,
-    })
-    declare active: boolean;
-
-    @Column({
         type: DataType.STRING,
         allowNull: true,
       })

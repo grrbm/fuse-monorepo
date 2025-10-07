@@ -24,6 +24,7 @@ import TreatmentPlan from '../models/TreatmentPlan';
 import Physician from '../models/Physician';
 import BrandTreatment from '../models/BrandTreatment';
 import UserPatient from '../models/UserPatient';
+import TenantProduct from '../models/TenantProduct';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -73,7 +74,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     Order, OrderItem, Payment,
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
-    UserPatient
+    UserPatient, TenantProduct
   ],
 });
 

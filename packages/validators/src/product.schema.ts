@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { uuidSchema } from './common.schema';
 
 /**
  * Product validation schemas
@@ -24,9 +25,14 @@ export const productUpdateSchema = z.object({
   active: z.boolean().optional(),
 });
 
+export const productGetSchema = z.object({
+  id: uuidSchema
+})
+
 /**
  * Type exports
  */
 
 export type ProductCreateInput = z.infer<typeof productCreateSchema>;
 export type ProductUpdateInput = z.infer<typeof productUpdateSchema>;
+export type ProductGetInput = z.infer<typeof productGetSchema>;
