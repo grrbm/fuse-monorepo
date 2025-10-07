@@ -3,10 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "description": "Shared validation schemas using Zod",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./index.ts",
+  "types": "./index.ts",
   "scripts": {
-    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
     "type:check": "tsc --noEmit",
     "clean": "git clean -xdf .cache .turbo dist node_modules"
