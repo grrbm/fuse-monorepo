@@ -2,6 +2,7 @@ import { Table, Column, DataType, HasOne, HasMany } from 'sequelize-typescript';
 import Entity from './Entity';
 import Subscription from './Subscription';
 import Treatment from './Treatment';
+import TenantProduct from './TenantProduct';
 
 
 export enum PaymentStatus {
@@ -59,5 +60,8 @@ export default class Clinic extends Entity {
 
     @HasMany(() => Treatment)
     declare treatments: Treatment[];
+
+    @HasMany(() => TenantProduct)
+    declare tenantProducts: TenantProduct[];
 
 }

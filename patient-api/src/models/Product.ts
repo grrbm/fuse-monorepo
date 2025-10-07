@@ -4,6 +4,7 @@ import Prescription from './Prescription';
 import PrescriptionProducts from './PrescriptionProducts';
 import Treatment from './Treatment';
 import TreatmentProducts from './TreatmentProducts';
+import TenantProduct from './TenantProduct';
 
 export enum PharmacyProvider {
     ABSOLUTERX = 'absoluterx',
@@ -60,6 +61,13 @@ export default class Product extends Entity {
     })
     declare pharmacyProductId?: string;
 
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+    })
+    declare active: boolean;
+
 
     @Column({
         type: DataType.ENUM(...Object.values(PharmacyProvider)),
@@ -79,4 +87,7 @@ export default class Product extends Entity {
 
     @HasMany(() => TreatmentProducts)
     declare treatmentProducts: TreatmentProducts[];
+
+    @HasMany(() => TenantProduct)
+    declare tenantProducts: TenantProduct[];
 }

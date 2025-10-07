@@ -3,6 +3,7 @@ import Entity from './Entity';
 import Treatment from './Treatment';
 import QuestionnaireStep from './QuestionnaireStep';
 import User from './User';
+import TenantProduct from './TenantProduct';
 
 @Table({
     freezeTableName: true,
@@ -63,4 +64,7 @@ export default class Questionnaire extends Entity {
 
     @HasMany(() => QuestionnaireStep)
     declare steps: QuestionnaireStep[];
+
+    @HasMany(() => TenantProduct)
+    declare tenantProducts: TenantProduct[];
 }
