@@ -79,8 +79,8 @@ export const sequelize = new Sequelize(databaseUrl, {
     Order, OrderItem, Payment,
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
-    UserPatient, TenantProduct,
-    FormSectionTemplate, TenantProductForm,
+    UserPatient, TenantProduct, FormSectionTemplate,
+    TenantProductForm
   ],
 });
 
