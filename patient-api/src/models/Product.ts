@@ -76,6 +76,56 @@ export default class Product extends Entity {
     })
     declare pharmacyProvider: PharmacyProvider;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare pharmacyVendor?: string;
+
+    @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: true,
+    })
+    declare pharmacyWholesaleCost?: number;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare medicationSize?: string;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare category?: string;
+
+    @Column({
+        type: DataType.JSONB,
+        allowNull: true,
+        defaultValue: [],
+    })
+    declare requiredDoctorQuestions?: any[];
+
+    @Column({
+        type: DataType.JSONB,
+        allowNull: true,
+    })
+    declare pharmacyApiConfig?: Record<string, any>;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+    })
+    declare isActive: boolean;
+
+    @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: true,
+    })
+    declare suggestedRetailPrice?: number;
+
     @BelongsToMany(() => Prescription, () => PrescriptionProducts)
     declare prescriptions: Prescription[];
 

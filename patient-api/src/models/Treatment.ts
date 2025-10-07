@@ -94,6 +94,12 @@ export default class Treatment extends Entity {
     @HasMany(() => TreatmentProducts)
     declare treatmentProducts: TreatmentProducts[];
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare category?: string | null;
+
     @HasMany(() => TreatmentPlan)
     declare treatmentPlans: TreatmentPlan[];
 

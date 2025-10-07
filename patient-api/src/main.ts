@@ -7,6 +7,8 @@ import { initializeDatabase } from "./config/database";
 import { MailsSender } from "./services/mailsSender";
 // duplicate imports removed
 import Treatment from "./models/Treatment";
+import FormSectionTemplate from "./models/FormSectionTemplate";
+import TenantProductForm from "./models/TenantProductForm";
 import Product from "./models/Product";
 import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
@@ -73,11 +75,13 @@ import MDFilesService from "./services/mdIntegration/MDFiles.service";
 import PharmacyWebhookService from "./services/pharmacy/webhook";
 import BrandSubscriptionService from "./services/brandSubscription.service";
 import MessageService from "./services/Message.service";
+import formTemplateService from "./services/formTemplate.service";
+import ProductService from "./services/product.service";
+import { listTemplatesQuerySchema, assignTemplatesSchema } from "./validators/formTemplates";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
 import QuestionnaireStep from "./models/QuestionnaireStep";
 import TenantProductService from "./services/tenantProduct.service";
-import ProductService from "./services/product.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -1564,6 +1568,158 @@ app.post("/products/:id/upload-image", authenticateJWT, upload.single('image'), 
     });
   }
 });
+
+// ============================================
+// NEW PRODUCT MANAGEMENT ENDPOINTS
+// ============================================
+
+// List all products with enhanced pharmacy metadata
+app.get("/products-management", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const productService = new ProductService();
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const category = req.query.category as string;
+    const isActive = req.query.isActive === 'true' ? true : req.query.isActive === 'false' ? false : undefined;
+
+    const result = await productService.listProducts(currentUser.id, { page, limit, category, isActive });
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error('❌ Error listing products:', error);
+    res.status(500).json({ success: false, message: error.message || "Failed to list products" });
+  }
+});
+
+// Get single product with full details
+app.get("/products-management/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const productService = new ProductService();
+    const result = await productService.getProduct(req.params.id, currentUser.id);
+    
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error('❌ Error fetching product:', error);
+    res.status(500).json({ success: false, message: error.message || "Failed to fetch product" });
+  }
+});
+
+// Create new product with pharmacy metadata
+app.post("/products-management", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const productService = new ProductService();
+    const result = await productService.createProduct(req.body, currentUser.id);
+    
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.status(201).json(result);
+  } catch (error: any) {
+    console.error('❌ Error creating product:', error);
+    res.status(500).json({ success: false, message: error.message || "Failed to create product" });
+  }
+});
+
+// Update product with pharmacy metadata
+app.put("/products-management/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const productService = new ProductService();
+    const result = await productService.updateProduct({ ...req.body, id: req.params.id }, currentUser.id);
+    
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error('❌ Error updating product:', error);
+    res.status(500).json({ success: false, message: error.message || "Failed to update product" });
+  }
+});
+
+// Deactivate product (soft delete)
+app.delete("/products-management/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const productService = new ProductService();
+    const result = await productService.deleteProduct(req.params.id, currentUser.id);
+    
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error('❌ Error deleting product:', error);
+    res.status(500).json({ success: false, message: error.message || "Failed to delete product" });
+  }
+});
+
+// List available product categories
+app.get("/products-management/categories/list", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const productService = new ProductService();
+    const result = await productService.listCategories(currentUser.id);
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error('❌ Error listing categories:', error);
+    res.status(500).json({ success: false, message: error.message || "Failed to list categories" });
+  }
+});
+
+// List available pharmacy vendors
+app.get("/products-management/vendors/list", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const productService = new ProductService();
+    const result = await productService.listPharmacyVendors(currentUser.id);
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error('❌ Error listing pharmacy vendors:', error);
+    res.status(500).json({ success: false, message: error.message || "Failed to list pharmacy vendors" });
+  }
+});
+
+// ============================================
+// END NEW PRODUCT MANAGEMENT ENDPOINTS
+// ============================================
 
 // Treatment logo upload endpoint
 app.post("/treatment/:id/upload-logo", authenticateJWT, upload.single('logo'), async (req, res) => {
@@ -3139,8 +3295,8 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
 
     // Create or retrieve Stripe customer
     let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
-      userId: currentUser.id,
-      role: currentUser.role
+            userId: currentUser.id,
+            role: currentUser.role
     });
 
 
@@ -3215,19 +3371,19 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
     console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
 
     if (!upgrade) {
-      const existingSubscription = await BrandSubscription.findOne({
-        where: {
-          userId: currentUser.id,
-          status: ['active', 'processing', 'past_due']
-        }
+    const existingSubscription = await BrandSubscription.findOne({
+      where: {
+        userId: currentUser.id,
+        status: ['active', 'processing', 'past_due']
+      }
+    });
+
+
+    if (existingSubscription) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
       });
-
-
-      if (existingSubscription) {
-        return res.status(400).json({
-          success: false,
-          message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
-        });
 
       }
     }
@@ -3261,9 +3417,9 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
 
     // Create or retrieve Stripe customer
     let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
-      userId: user.id,
-      role: user.role,
-      planType: planType
+            userId: user.id,
+            role: user.role,
+            planType: planType
     });
 
 
@@ -3364,7 +3520,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('❌ Error confirming payment intent:', error);
     res.status(500).json({
-      success: false,
+        success: false,
       message: "Failed to confirm payment intent"
     });
   }
@@ -3401,7 +3557,7 @@ app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
     if (subscription.stripeSubscriptionId) {
       try {
         await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
-      } catch (stripeError) {
+    } catch (stripeError) {
         console.error('Error canceling Stripe subscription:', stripeError);
         // Continue with local cancellation even if Stripe fails
       }
@@ -3452,14 +3608,14 @@ app.post("/brand-subscriptions/change", authenticateJWT, async (req, res) => {
 
     if (result.success) {
       res.status(200).json(result);
-    } else {
+      } else {
       res.status(400).json(result);
     }
 
   } catch (error) {
     console.error('❌ Error changing brand subscription:', error);
     res.status(500).json({
-      success: false,
+        success: false,
       message: "Internal server error"
     });
   }
@@ -3539,7 +3695,7 @@ app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('Error cancelling subscriptions:', error);
     res.status(500).json({
-      success: false,
+        success: false,
       message: error instanceof Error ? error.message : "Failed to cancel subscriptions"
     });
   }
@@ -3618,11 +3774,147 @@ app.get("/questionnaires/templates", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const templates = await questionnaireService.listTemplates();
+    const validation = listTemplatesQuerySchema.safeParse(req.query);
+
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Invalid query parameters', errors: validation.error.flatten() });
+    }
+
+    const templates = await formTemplateService.listTemplates(validation.data);
+
     res.status(200).json({ success: true, data: templates });
   } catch (error) {
     console.error('❌ Error fetching questionnaire templates:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch questionnaire templates' });
+  }
+});
+
+app.get("/questionnaires/templates/assigned", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req)
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" })
+    }
+
+    const treatmentId = typeof req.query.treatmentId === 'string' ? req.query.treatmentId : undefined
+
+    if (!treatmentId) {
+      return res.status(400).json({ success: false, message: 'treatmentId is required' })
+    }
+
+    const assignment = await formTemplateService.getTenantProductForm(currentUser.id, treatmentId)
+
+    res.status(200).json({ success: true, data: assignment })
+  } catch (error: any) {
+    console.error('❌ Error fetching tenant product form assignment:', error)
+    res.status(500).json({ success: false, message: error.message || 'Failed to fetch assignment' })
+  }
+})
+
+app.get("/questionnaires/templates/assignments", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req)
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" })
+    }
+
+    const assignments = await formTemplateService.listTenantProductForms(currentUser.id)
+
+    res.status(200).json({ success: true, data: assignments })
+  } catch (error: any) {
+    console.error('❌ Error listing tenant product form assignments:', error)
+    res.status(500).json({ success: false, message: error.message || 'Failed to list assignments' })
+  }
+})
+
+app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { name, description, sectionType, category, schema } = req.body;
+
+    if (!name || !sectionType) {
+      return res.status(400).json({ success: false, message: 'Name and sectionType are required' });
+    }
+
+    if (!['personalization', 'account', 'doctor'].includes(sectionType)) {
+      return res.status(400).json({ success: false, message: 'Invalid sectionType' });
+    }
+
+    const template = await formTemplateService.createTemplate({
+      name,
+      description,
+      sectionType,
+      category,
+      schema,
+    });
+
+    res.status(201).json({ success: true, data: template });
+  } catch (error) {
+    console.error('❌ Error creating questionnaire template:', error);
+    res.status(500).json({ success: false, message: 'Failed to create questionnaire template' });
+  }
+});
+
+// IMPORTANT: This route must come AFTER all specific /questionnaires/templates/* routes
+app.get("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Template ID is required' });
+    }
+
+    const template = await formTemplateService.getTemplateById(id);
+
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+
+    res.status(200).json({ success: true, data: template });
+  } catch (error) {
+    console.error('❌ Error fetching questionnaire template:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch questionnaire template' });
+  }
+});
+
+app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id } = req.params;
+    const { name, description, schema } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Template ID is required' });
+    }
+
+    const template = await formTemplateService.updateTemplate(id, {
+      name,
+      description,
+      schema,
+    });
+
+    res.status(200).json({ success: true, data: template });
+  } catch (error: any) {
+    console.error('❌ Error updating questionnaire template:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to update questionnaire template' });
   }
 });
 
@@ -3710,17 +4002,21 @@ app.post("/questionnaires/import", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const { templateId } = req.body;
+    const validation = assignTemplatesSchema.safeParse(req.body);
 
-    if (!templateId) {
-      return res.status(400).json({ success: false, message: 'templateId is required' });
+    if (!validation.success) {
+      return res.status(400).json({ success: false, message: 'Invalid request body', errors: validation.error.flatten() });
     }
 
-    const clone = await questionnaireService.duplicateTemplate(templateId, currentUser.id);
-    res.status(201).json({ success: true, data: clone });
+    const assignment = await formTemplateService.assignTemplates({
+      tenantId: currentUser.id,
+      ...validation.data,
+    });
+
+    res.status(201).json({ success: true, data: assignment });
   } catch (error: any) {
-    console.error('❌ Error importing questionnaire template:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to import template' });
+    console.error('❌ Error assigning questionnaire templates:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to assign templates' });
   }
 });
 
@@ -4380,8 +4676,8 @@ app.delete("/questionnaires/:id", authenticateJWT, async (req, res) => {
 
     // Validate required fields
     if (!questionnaireId) {
-      return res.status(400).json({
-        success: false,
+        return res.status(400).json({
+          success: false,
         message: "questionnaireId is required"
       });
     }
@@ -5927,23 +6223,21 @@ app.get("/catalog", authenticateJWT, async (req, res) => {
     const result = await productService.listProducts(currentUser.id, { page, limit });
 
     if (!result.success) {
-      if (result.error?.includes('Access denied')) {
+      if (result.message?.includes('Access denied')) {
         return res.status(403).json({
           success: false,
-          message: result.message,
-          error: result.error
+          message: result.message
         });
       }
 
       return res.status(500).json({
         success: false,
-        message: result.message,
-        error: result.error
+        message: result.message
       });
     }
 
     console.log('✅ Products catalog retrieved:', {
-      count: result.data?.items.length || 0,
+      count: result.data?.products.length || 0,
       page,
       limit,
       userId: currentUser.id
@@ -5997,26 +6291,23 @@ app.get("/catalog/product", authenticateJWT, async (req, res) => {
     const result = await productService.getProduct(productId, currentUser.id);
 
     if (!result.success) {
-      if (result.error?.includes('Access denied')) {
+      if (result.message?.includes('Access denied')) {
         return res.status(403).json({
           success: false,
-          message: result.message,
-          error: result.error
+          message: result.message
         });
       }
 
-      if (result.error?.includes('not found')) {
+      if (result.message?.includes('not found')) {
         return res.status(404).json({
           success: false,
-          message: result.message,
-          error: result.error
+          message: result.message
         });
       }
 
       return res.status(500).json({
         success: false,
-        message: result.message,
-        error: result.error
+        message: result.message
       });
     }
 
