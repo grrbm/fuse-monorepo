@@ -27,8 +27,7 @@ export const productUpdateSchema = z.object({
 
 export const productGetSchema = z.object({
   id: uuidSchema
-})
-
+});
 /**
  * Type exports
  */

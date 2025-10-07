@@ -1,6 +1,6 @@
 import Product from "../../models/Product";
-import TenantProduct from "../../models/TenantProduct";
 import Questionnaire from "../../models/Questionnaire";
+import TenantProduct from "../../models/TenantProduct";
 import { normalizePagination, calculateTotalPages, type PaginationParams } from "../../utils/pagination";
 
 export const getProduct = async (productId: string): Promise<Product | null> => {
@@ -11,15 +11,9 @@ export const getProductWithQuestionnaires = async (productId: string): Promise<P
     return Product.findByPk(productId, {
         include: [
             {
-                model: TenantProduct,
-                as: 'tenantProducts',
-                include: [
-                    {
-                        model: Questionnaire,
-                        as: 'questionnaire',
-                        attributes: ['id', 'title']
-                    }
-                ]
+                model: Questionnaire,
+                as: 'questionnaires',
+                attributes: ['id', 'title']
             }
         ]
     });
@@ -29,7 +23,7 @@ export const listProducts = async (
     params: PaginationParams = {}
 ): Promise<{
     items: Product[],
-    pagination:{
+    pagination: {
         page: number,
         limit: number,
         total: number,
@@ -49,34 +43,40 @@ export const listProducts = async (
 
     return {
         items,
-        pagination:{
+        pagination: {
             total,
             totalPages: calculateTotalPages(total, limit),
             page,
             limit
         }
-       
+
     };
 }
 
+/**
+ * Lists products associated with a clinic through TenantProduct junction table
+ */
 export const listProductsByClinic = async (
     clinicId: string,
-    params: PaginationParams = {}
-): Promise<{ products: Product[], total: number, totalPages: number }> => {
-    const { limit, offset } = normalizePagination(params);
+): Promise<
+    Product[]
+> => {
 
-    // Products are not directly associated with clinics in the current schema
-    // This will be filtered through TenantProduct junction table
-    const { rows: products, count: total } = await Product.findAndCountAll({
-        order: [['name', 'ASC']],
-        limit,
-        offset,
-        distinct: true
+
+    // Query TenantProduct to get products for this clinic
+    const tenantProducts = await TenantProduct.findAll({
+        where: { clinicId },
+        include: [
+            {
+                model: Product,
+                as: 'product',
+            },
+        ],
+
+        order: [[{ model: Product, as: 'product' }, 'name', 'ASC']]
     });
 
-    return {
-        products,
-        total,
-        totalPages: calculateTotalPages(total, limit)
-    };
+    // Extract products from tenant products
+    return tenantProducts.map(tp => tp.product);
 }
+

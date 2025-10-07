@@ -943,7 +943,6 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
 // Products by clinic endpoint
 app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
   try {
-    const { clinicId } = req.params;
     const currentUser = getCurrentUser(req);
 
     if (!currentUser) {
@@ -953,136 +952,31 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Fetch full user data from database to get role
-    const user = await User.findByPk(currentUser.id);
-    if (!user) {
-      return res.status(401).json({
+
+    const clinicId = req.params.clinicId;
+
+    const productService = new ProductService();
+    const result = await productService.getProductsByClinic(clinicId, currentUser.id);
+
+    if (!result.success) {
+      const statusCode = result.message === "Access denied" ? 403 :
+        result.message === "User not found" ? 401 : 500;
+      return res.status(statusCode).json({
         success: false,
-        message: "User not found"
+        message: result.message,
+        error: result.error
       });
     }
-
-    // Only allow doctors and brand users to access products for their own clinic
-    if (user.role !== 'doctor' && user.role !== 'brand') {
-      return res.status(403).json({
-        success: false,
-        message: `Access denied. Only doctors and brand users can access products. Your role: ${user.role}`
-      });
-    }
-
-    // Verify the user has access to this clinic
-    if (user.clinicId !== clinicId) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. You can only access products for your own clinic."
-      });
-    }
-
-    console.log(`🛍️ Fetching products for clinic: ${clinicId}, user role: ${user.role}, user clinicId: ${user.clinicId}`);
-
-    // First, let's see all products in the database for debugging
-    const allProducts = await Product.findAll({
-      include: [
-        {
-          model: Treatment,
-          as: 'treatments',
-          through: { attributes: [] },
-          attributes: ['id', 'name'],
-        }
-      ],
-      order: [['name', 'ASC']]
-    });
-
-    console.log(`📊 Total products in database: ${allProducts.length}`);
-
-    // Fetch products that belong to this clinic (both with matching clinicId and legacy products)
-    let products = [];
-
-    // First, get products with matching clinicId
-    const directProducts = await Product.findAll({
-      where: { clinicId },
-      include: [
-        {
-          model: Treatment,
-          as: 'treatments',
-          through: { attributes: [] },
-          attributes: ['id', 'name'],
-        }
-      ],
-      order: [['name', 'ASC']]
-    });
-
-    console.log(`✅ Found ${directProducts.length} products with matching clinicId ${clinicId}`);
-    products.push(...directProducts);
-
-    // Also get legacy products (without clinicId) that are associated with treatments from this clinic
-    if (user.clinicId) {
-      const legacyProducts = await Product.findAll({
-        where: { clinicId: null },
-        include: [
-          {
-            model: Treatment,
-            as: 'treatments',
-            where: { clinicId: user.clinicId }, // Only treatments from user's clinic
-            through: { attributes: [] },
-            attributes: ['id', 'name'],
-          }
-        ],
-        order: [['name', 'ASC']]
-      });
-
-      // Filter out products that don't have treatments from this clinic
-      const filteredLegacyProducts = legacyProducts.filter(product =>
-        product.treatments && product.treatments.length > 0
-      );
-
-      if (filteredLegacyProducts.length > 0) {
-        console.log(`🔄 Found ${filteredLegacyProducts.length} legacy products (without clinicId) associated with treatments from clinic ${user.clinicId}`);
-        products.push(...filteredLegacyProducts);
-      }
-
-      // As a comprehensive fallback, also get any products that have treatments from this clinic
-      // (this catches products that might have clinicId set to something else or null)
-      const allClinicProducts = await Product.findAll({
-        include: [
-          {
-            model: Treatment,
-            as: 'treatments',
-            where: { clinicId: user.clinicId },
-            through: { attributes: [] },
-            attributes: ['id', 'name'],
-          }
-        ],
-        order: [['name', 'ASC']]
-      });
-
-      const comprehensiveFilteredProducts = allClinicProducts.filter(product =>
-        product.treatments && product.treatments.length > 0 &&
-        !products.some(p => p.id === product.id) // Don't duplicate products already found
-      );
-
-      if (comprehensiveFilteredProducts.length > 0) {
-        console.log(`🔄 Found ${comprehensiveFilteredProducts.length} additional products through comprehensive treatments search`);
-        products.push(...comprehensiveFilteredProducts);
-      }
-    }
-
-    // Remove duplicates based on product ID
-    const uniqueProducts = products.filter((product, index, self) =>
-      index === self.findIndex(p => p.id === product.id)
-    );
-
-    console.log(`📊 Total unique products found: ${uniqueProducts.length} (from ${products.length} before deduplication)`);
 
     // Transform data to match frontend expectations
-    const transformedProducts = uniqueProducts.map(product => ({
+    const transformedProducts = result.items?.map(product => ({
       id: product.id,
       name: product.name,
       price: product.price,
       pharmacyProductId: product.pharmacyProductId,
       dosage: product.dosage,
       imageUrl: product.imageUrl,
-      active: true, // Default to active since Product model doesn't have active field
+      active: product.active,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
       treatments: product.treatments || []
@@ -1090,7 +984,7 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Products retrieved successfully",
+      message: result.message,
       data: transformedProducts
     });
 
