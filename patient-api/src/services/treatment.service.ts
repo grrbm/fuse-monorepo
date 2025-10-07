@@ -1,8 +1,9 @@
-import Product from '../models/Product';
-import User from '../models/User';
-import TreatmentProducts from '../models/TreatmentProducts';
-import { getTreatment } from './db/treatment';
-import { StripeService } from '@fuse/stripe';
+import Product from '../models/Product'
+import User from '../models/User'
+import TreatmentProducts from '../models/TreatmentProducts'
+import { getTreatment } from './db/treatment'
+import { StripeService } from '@fuse/stripe'
+import Treatment from '../models/Treatment'
 
 interface TreatmentProductData {
     productId: string;
@@ -20,6 +21,7 @@ interface UpdateTreatmentData {
     active?: boolean;
     price?: number;
     products?: TreatmentProductData[];
+    category?: string | null;
 }
 
 interface UpdateTreatmentResult {
@@ -229,11 +231,15 @@ class TreatmentService {
                 updateFields.name = updateData.name.trim();
             }
             if (updateData.price !== undefined) {
-                updateFields.price = updateData.price;
+                updateFields.price = updateData.price
             }
 
             if (updateData.active !== undefined) {
-                updateFields.active = updateData.active;
+                updateFields.active = updateData.active
+            }
+
+            if (updateData.category !== undefined) {
+                updateFields.category = updateData.category
             }
 
             if (Object.keys(updateFields).length > 0) {
@@ -280,9 +286,7 @@ class TreatmentService {
             };
         }
     }
-
-
 }
 
-export default TreatmentService;
-export type { TreatmentProductAssociationResult, TreatmentProductData, UpdateTreatmentData, UpdateTreatmentResult };
+export default TreatmentService
+export type { TreatmentProductAssociationResult, TreatmentProductData, UpdateTreatmentData, UpdateTreatmentResult }

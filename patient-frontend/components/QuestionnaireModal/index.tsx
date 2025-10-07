@@ -36,6 +36,7 @@ import { StepHeader } from "./components/StepHeader";
 import { QuestionRenderer } from "./components/QuestionRenderer";
 import { CheckoutView } from "./components/CheckoutView";
 import { ProductSelection } from "./components/ProductSelection";
+import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVariables";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
@@ -229,6 +230,24 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           if (!Array.isArray(questionnaireData.steps)) {
             console.log('⚠️ No steps array found, initializing empty array for checkout-only questionnaire');
             questionnaireData.steps = [];
+          }
+
+          // Get template variables from clinic/treatment data
+          const variables = getVariablesFromClinic(treatmentData.clinic || {});
+
+          // Replace variables in all step titles, descriptions, and questions
+          if (questionnaireData.steps && questionnaireData.steps.length > 0) {
+            questionnaireData.steps = questionnaireData.steps.map((step: any) => ({
+              ...step,
+              title: replaceVariables(step.title || '', variables),
+              description: replaceVariables(step.description || '', variables),
+              questions: step.questions?.map((question: any) => ({
+                ...question,
+                questionText: replaceVariables(question.questionText || '', variables),
+                placeholder: replaceVariables(question.placeholder || '', variables),
+                options: question.options?.map((option: string) => replaceVariables(option, variables)),
+              })),
+            }));
           }
 
           // Combine questionnaire with treatment products

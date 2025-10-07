@@ -4,6 +4,8 @@ ssh -fNv -i ~/.ssh/FuseHealth-Pem-Key.pem \
  -L 127.0.0.1:55432:database-1.cv8g82kya3xt.us-east-2.rds.amazonaws.com:5432 \
 ec2-user@3.146.121.203
 
+chmod 400 /Users/danielmeursing/.ssh/FuseHealth-Pem-Key.pem
+
 # OR WITH AUTOSSH:
 
 AUTOSSH_GATETIME=0 \

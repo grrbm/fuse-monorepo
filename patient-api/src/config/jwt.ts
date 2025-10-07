@@ -39,15 +39,31 @@ export const createJWTToken = (user: any): string => {
 // Verify JWT token
 export const verifyJWTToken = (token: string): JWTPayload | null => {
   try {
+    // First try with issuer/audience validation
     const decoded = jwt.verify(token, JWT_SECRET, {
       issuer: 'patient-portal-api',
       audience: 'patient-portal-frontend',
     }) as JWTPayload;
 
     return decoded;
-  } catch (error) {
-    console.error('JWT verification failed');
-    return null;
+  } catch (error: any) {
+    // Fallback: try without issuer/audience for backwards compatibility with old tokens
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      
+      // Map old token format to new format if needed
+      return {
+        userId: decoded.userId,
+        userEmail: decoded.email || decoded.userEmail,
+        userRole: decoded.role || decoded.userRole,
+        loginTime: decoded.loginTime || decoded.iat * 1000,
+        iat: decoded.iat,
+        exp: decoded.exp,
+      };
+    } catch (fallbackError) {
+      console.error('JWT verification failed:', error.message);
+      return null;
+    }
   }
 };
 
