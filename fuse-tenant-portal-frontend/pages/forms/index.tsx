@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useAuth } from "@/contexts/AuthContext"
+import { useTenant } from "@/contexts/TenantContext"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -55,6 +56,7 @@ interface QuestionnaireTemplate {
 
 export default function Forms() {
   const { token } = useAuth()
+  const { selectedTenant } = useTenant()
   const [questionnaires, setQuestionnaires] = useState<QuestionnaireTemplate[]>([])
   const [templates, setTemplates] = useState<QuestionnaireTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -297,6 +299,13 @@ export default function Forms() {
 
   const handleImportTemplate = async (templateId: string) => {
     if (!token) return
+    
+    // Check if a tenant is selected
+    if (!selectedTenant) {
+      setTemplateError('Please select a tenant first before importing a template.')
+      return
+    }
+    
     setIsImporting(true)
     setTemplateError(null)
 
@@ -307,13 +316,13 @@ export default function Forms() {
         throw new Error('Template not found')
       }
 
-      // Check if user already has a questionnaire for this treatment
+      // Check if the selected tenant already has a questionnaire for this treatment
       const existingQuestionnaire = questionnaires.find(q =>
         q.treatmentId === template.treatmentId && !q.isTemplate
       )
 
       if (existingQuestionnaire) {
-        throw new Error(`You already have a questionnaire for this treatment. Please delete "${existingQuestionnaire.title}" first before importing again.`)
+        throw new Error(`This tenant already has a questionnaire for this treatment. Please delete "${existingQuestionnaire.title}" first before importing again.`)
       }
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/import`, {
@@ -322,7 +331,10 @@ export default function Forms() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ templateId }),
+        body: JSON.stringify({ 
+          templateId,
+          clinicId: selectedTenant.id 
+        }),
       })
 
       if (!response.ok) {
@@ -527,7 +539,9 @@ export default function Forms() {
             <CardHeader className="flex flex-row items-start justify-between">
               <div>
                 <CardTitle>Import Template</CardTitle>
-                <CardDescription>Select a template to duplicate into your clinic.</CardDescription>
+                <CardDescription>
+                  Select a template to duplicate into {selectedTenant ? `"${selectedTenant.name}"` : 'the selected clinic'}.
+                </CardDescription>
               </div>
               <Button variant="ghost" onClick={() => setShowTemplateModal(false)}>
                 Close

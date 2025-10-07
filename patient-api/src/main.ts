@@ -3763,13 +3763,13 @@ app.post("/questionnaires/import", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const { templateId } = req.body;
+    const { templateId, clinicId } = req.body;
 
     if (!templateId) {
       return res.status(400).json({ success: false, message: 'templateId is required' });
     }
 
-    const clone = await questionnaireService.duplicateTemplate(templateId, currentUser.id);
+    const clone = await questionnaireService.duplicateTemplate(templateId, currentUser.id, clinicId);
     res.status(201).json({ success: true, data: clone });
   } catch (error: any) {
     console.error('❌ Error importing questionnaire template:', error);

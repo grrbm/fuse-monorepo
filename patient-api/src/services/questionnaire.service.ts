@@ -158,7 +158,7 @@ class QuestionnaireService {
         return questionnaire;
     }
 
-    async duplicateTemplate(questionnaireId: string, userId: string) {
+    async duplicateTemplate(questionnaireId: string, userId: string, clinicId?: string) {
         const template = await Questionnaire.findByPk(questionnaireId, {
             include: [
                 {
@@ -189,7 +189,13 @@ class QuestionnaireService {
             throw new Error('User not found');
         }
 
-        const treatment = await Treatment.findOne({ where: { clinicId: user.clinicId } });
+        // Use provided clinicId or fall back to user's clinic
+        const targetClinicId = clinicId || user.clinicId;
+        if (!targetClinicId) {
+            throw new Error('No clinic specified for template import');
+        }
+
+        const treatment = await Treatment.findOne({ where: { clinicId: targetClinicId } });
 
         const sequelize = Questionnaire.sequelize;
         if (!sequelize) {
