@@ -1067,8 +1067,18 @@ app.post("/products-management", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
+    // Validate request body using productCreateSchema
+    const validation = productCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
     const productService = new ProductService();
-    const result = await productService.createProduct(req.body, currentUser.id);
+    const result = await productService.createProduct(validation.data, currentUser.id);
 
     if (!result.success) {
       return res.status(400).json(result);
@@ -1089,8 +1099,18 @@ app.put("/products-management/:id", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
+    // Validate request body using productUpdateSchema
+    const validation = productUpdateSchema.safeParse({ ...req.body, id: req.params.id });
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
     const productService = new ProductService();
-    const result = await productService.updateProduct({ ...req.body, id: req.params.id }, currentUser.id);
+    const result = await productService.updateProduct(validation.data, currentUser.id);
 
     if (!result.success) {
       return res.status(400).json(result);
