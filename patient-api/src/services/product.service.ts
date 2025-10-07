@@ -3,6 +3,7 @@ import FormSectionTemplate from '../models/FormSectionTemplate'
 import { Op } from 'sequelize'
 import { getProductWithQuestionnaires, listProductsByClinic } from './db/product'
 import { getUser } from './db/user'
+import type { ProductCreateInput, ProductUpdateInput } from '@fuse/validators'
 
 /**
  * Helper function to serialize product data, converting DECIMAL fields from strings to numbers
@@ -15,28 +16,6 @@ function serializeProduct(product: Product): Product {
         suggestedRetailPrice: plain.suggestedRetailPrice ? parseFloat(plain.suggestedRetailPrice as any) : undefined,
         price: plain.price ? parseFloat(plain.price as any) : plain.price,
     }
-}
-
-interface CreateProductInput {
-    name: string
-    description: string
-    price: number
-    activeIngredients: string[]
-    dosage: string
-    imageUrl?: string
-    pharmacyVendor?: string
-    pharmacyWholesaleCost?: number
-    pharmacyProductId?: string
-    medicationSize?: string
-    category?: string
-    requiredDoctorQuestions?: any[]
-    pharmacyApiConfig?: Record<string, any>
-    suggestedRetailPrice?: number
-    isActive?: boolean
-}
-
-interface UpdateProductInput extends Partial<CreateProductInput> {
-    id: string
 }
 
 class ProductService {
@@ -93,22 +72,32 @@ class ProductService {
         }
     }
 
-    async createProduct(input: CreateProductInput, userId: string) {
+    async createProduct(input: ProductCreateInput, userId: string) {
         try {
-            // Validate required fields
-            if (!input.name || !input.description || input.price === undefined || !input.activeIngredients || !input.dosage) {
+            // Get user and validate they have permission
+            const user = await getUser(userId);
+            if (!user) {
                 return {
                     success: false,
-                    message: 'Missing required fields',
-                    missingFields: [],
-                }
+                    message: "User not found",
+                    error: "User with the provided ID does not exist"
+                };
             }
 
-            // Create the product
+            // Check user role - only admin users can create products
+            if (user.role !== 'admin') {
+                return {
+                    success: false,
+                    message: "Access denied",
+                    error: "Only admin users can create products"
+                };
+            }
+
+            // Create the product (validation is handled by Zod schema at endpoint layer)
             const product = await Product.create({
                 ...input,
                 isActive: input.isActive ?? true,
-            } as any)
+            })
 
             // If there are requiredDoctorQuestions, create a FormSectionTemplate
             if (input.requiredDoctorQuestions && input.requiredDoctorQuestions.length > 0) {
@@ -140,8 +129,27 @@ class ProductService {
         }
     }
 
-    async updateProduct(input: UpdateProductInput, userId: string) {
+    async updateProduct(input: ProductUpdateInput, userId: string) {
         try {
+            // Get user and validate they have permission
+            const user = await getUser(userId);
+            if (!user) {
+                return {
+                    success: false,
+                    message: "User not found",
+                    error: "User with the provided ID does not exist"
+                };
+            }
+
+            // Check user role - only admin users can create products
+            if (user.role !== 'admin') {
+                return {
+                    success: false,
+                    message: "Access denied",
+                    error: "Only admin users can create products"
+                };
+            }
+
             const product = await Product.findByPk(input.id)
 
             if (!product) {
