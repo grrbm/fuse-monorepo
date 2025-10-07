@@ -16,6 +16,26 @@ export enum BrandSubscriptionPlanType {
   ENTERPRISE = 'enterprise',
 }
 
+
+type BrandSubscriptionFeatures = {
+  apiAccess?: boolean;
+  whiteLabel?: boolean;
+  maxProducts?: number;
+  maxCampaigns?: number;
+  customBranding?: boolean;
+  analyticsAccess?: boolean;
+  customerSupport?: string;
+  customIntegrations?: boolean;
+  subscriptionSchedule?: {
+    id?: string;
+    currentPhasePriceId?: string;
+    introductoryPlanType?: string;
+    currentPhaseLookupKey?: string;
+    currentPeriodEnd?: string;
+  }
+}
+
+
 @Table({
   freezeTableName: true,
   tableName: 'BrandSubscription',
@@ -118,7 +138,7 @@ export default class BrandSubscription extends Entity {
     type: DataType.JSONB,
     allowNull: true,
   })
-  declare features?: Record<string, any>;
+  declare features?: BrandSubscriptionFeatures;
 
   @BelongsTo(() => User)
   declare user?: User;
