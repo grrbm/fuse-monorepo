@@ -5,10 +5,7 @@ import cors from "cors";
 import multer from "multer";
 import { initializeDatabase } from "./config/database";
 import { MailsSender } from "./services/mailsSender";
-// duplicate imports removed
 import Treatment from "./models/Treatment";
-import FormSectionTemplate from "./models/FormSectionTemplate";
-import TenantProductForm from "./models/TenantProductForm";
 import Product from "./models/Product";
 import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
@@ -66,8 +63,8 @@ import {
   patientUpdateSchema,
   brandTreatmentSchema,
   organizationUpdateSchema,
-  paginationSchema,
-  productGetSchema,
+  updateSelectionSchema,
+  listProductsSchema,
 } from "@fuse/validators";
 import * as Validators from "@fuse/validators";
 const updateSelectionSchema: any = (Validators as any).updateSelectionSchema;
@@ -84,7 +81,6 @@ import ProductService from "./services/product.service";
 import { listTemplatesQuerySchema, assignTemplatesSchema } from "./validators/formTemplates";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
-import QuestionnaireStep from "./models/QuestionnaireStep";
 import TenantProductService from "./services/tenantProduct.service";
 
 // Helper function to generate unique clinic slug
@@ -1480,10 +1476,26 @@ app.get("/products-management", authenticateJWT, async (req, res) => {
     }
 
     const productService = new ProductService();
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
-    const category = req.query.category as string;
-    const isActive = req.query.isActive === 'true' ? true : req.query.isActive === 'false' ? false : undefined;
+
+
+    // Validate query parameters using paginationSchema
+    const validation = listProductsSchema.safeParse({
+      page: req.query.page,
+      limit: req.query.limit
+    });
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { page, limit, category,
+      isActive } = validation.data;
+
+
 
     const result = await productService.listProducts(currentUser.id, { page, limit, category, isActive });
     res.status(200).json(result);
@@ -6131,154 +6143,6 @@ app.delete("/tenant-products/:id", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete tenant product"
-    });
-  }
-});
-
-// ========================================
-// Catalog/Product Endpoints
-// ========================================
-
-// Get product catalog with pagination
-app.get("/catalog", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    // Validate query parameters using paginationSchema
-    const validation = paginationSchema.safeParse({
-      page: req.query.page,
-      limit: req.query.limit
-    });
-
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
-      });
-    }
-
-    const { page, limit } = validation.data;
-
-    // Create product service instance
-    const productService = new ProductService();
-
-    // List products with pagination
-    const result = await productService.listProducts(currentUser.id, { page, limit });
-
-    if (!result.success) {
-      if (result.message?.includes('Access denied')) {
-        return res.status(403).json({
-          success: false,
-          message: result.message
-        });
-      }
-
-      return res.status(500).json({
-        success: false,
-        message: result.message
-      });
-    }
-
-    console.log('✅ Products catalog retrieved:', {
-      count: result.data?.products.length || 0,
-      page,
-      limit,
-      userId: currentUser.id
-    });
-
-    res.status(200).json({
-      success: true,
-      message: result.message,
-      ...result
-    });
-
-  } catch (error) {
-    console.error('❌ Error retrieving product catalog:', error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve product catalog"
-    });
-  }
-});
-
-// Get single product with questionnaires
-app.get("/catalog/product", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    // Validate productId query parameter using uuidSchema
-    const validation = productGetSchema.safeParse(req.query);
-
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
-      });
-    }
-
-    const productId = validation.data.id;
-
-    // Create product service instance
-    const productService = new ProductService();
-
-    // Get product with questionnaires
-    const result = await productService.getProduct(productId, currentUser.id);
-
-    if (!result.success) {
-      if (result.message?.includes('Access denied')) {
-        return res.status(403).json({
-          success: false,
-          message: result.message
-        });
-      }
-
-      if (result.message?.includes('not found')) {
-        return res.status(404).json({
-          success: false,
-          message: result.message
-        });
-      }
-
-      return res.status(500).json({
-        success: false,
-        message: result.message
-      });
-    }
-
-    console.log('✅ Product retrieved:', {
-      productId,
-      userId: currentUser.id
-    });
-
-    res.status(200).json({
-      success: true,
-      message: result.message,
-      data: result.data
-    });
-
-  } catch (error) {
-    console.error('❌ Error retrieving product:', error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve product"
     });
   }
 });

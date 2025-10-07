@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { uuidSchema } from './common.schema';
+import { paginationSchema, uuidSchema } from './common.schema';
 
 /**
  * Product validation schemas
@@ -28,6 +28,11 @@ export const productUpdateSchema = z.object({
 export const productGetSchema = z.object({
   id: uuidSchema
 });
+
+export const listProductsSchema = paginationSchema.extend({
+  category: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
 /**
  * Type exports
  */
@@ -35,3 +40,4 @@ export const productGetSchema = z.object({
 export type ProductCreateInput = z.infer<typeof productCreateSchema>;
 export type ProductUpdateInput = z.infer<typeof productUpdateSchema>;
 export type ProductGetInput = z.infer<typeof productGetSchema>;
+export type ListProductsInput = z.infer<typeof listProductsSchema>;
