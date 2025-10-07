@@ -55,6 +55,7 @@ import {
   brandConfirmPaymentSchema,
   upgradeSubscriptionSchema,
   cancelSubscriptionSchema,
+  createQuestionnaireSchema,
   questionnaireStepCreateSchema,
   questionnaireStepUpdateSchema,
   questionnaireStepOrderSchema,
@@ -66,6 +67,7 @@ import {
   brandTreatmentSchema,
   organizationUpdateSchema,
   paginationSchema,
+  productGetSchema,
 } from "@fuse/validators";
 import * as Validators from "@fuse/validators";
 const updateSelectionSchema: any = (Validators as any).updateSelectionSchema;
@@ -6195,7 +6197,7 @@ app.get("/catalog", authenticateJWT, async (req, res) => {
     res.status(200).json({
       success: true,
       message: result.message,
-      data: result.data
+      data: result
     });
 
   } catch (error) {

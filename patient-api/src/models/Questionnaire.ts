@@ -1,9 +1,10 @@
-import { Table, Column, DataType, BelongsTo, ForeignKey, HasMany, Index } from 'sequelize-typescript';
+import { Table, Column, DataType, BelongsTo, ForeignKey, HasMany } from 'sequelize-typescript';
 import Entity from './Entity';
 import Treatment from './Treatment';
 import QuestionnaireStep from './QuestionnaireStep';
 import User from './User';
 import TenantProduct from './TenantProduct';
+import Product from './Product';
 
 @Table({
     freezeTableName: true,
@@ -40,7 +41,7 @@ export default class Questionnaire extends Entity {
         type: DataType.UUID,
         allowNull: true,
     })
-    declare treatmentId: string | null;
+    declare treatmentId?: string | null;
 
     @BelongsTo(() => Treatment)
     declare treatment?: Treatment | null;
@@ -67,6 +68,16 @@ export default class Questionnaire extends Entity {
         allowNull: true,
     })
     declare color: string | null;
+
+    @ForeignKey(() => Product)
+    @Column({
+        type: DataType.UUID,
+        allowNull: true,
+    })
+    declare productId?: string | null;
+
+    @BelongsTo(() => Product)
+    declare product?: Product | null;
 
     @HasMany(() => QuestionnaireStep)
     declare steps: QuestionnaireStep[];

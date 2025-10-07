@@ -1,6 +1,20 @@
 import { z } from 'zod';
 
 /**
+ * Questionnaire validation schemas
+ */
+
+export const createQuestionnaireSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(255, 'Title must be less than 255 characters'),
+  description: z.string().optional(),
+  treatmentId: z.string().uuid('Invalid treatment ID').optional(),
+  checkoutStepPosition: z.number().int().optional(),
+  isTemplate: z.boolean().optional(),
+  color: z.string().max(50).optional(),
+  productId: z.string().uuid('Invalid product ID').optional(),
+});
+
+/**
  * Questionnaire Step validation schemas
  */
 
@@ -28,6 +42,7 @@ export const questionnaireStepOrderSchema = z.object({
  * Type exports
  */
 
+export type CreateQuestionnaireInput = z.infer<typeof createQuestionnaireSchema>;
 export type QuestionnaireStepCreateInput = z.infer<typeof questionnaireStepCreateSchema>;
 export type QuestionnaireStepUpdateInput = z.infer<typeof questionnaireStepUpdateSchema>;
 export type QuestionnaireStepOrderInput = z.infer<typeof questionnaireStepOrderSchema>;

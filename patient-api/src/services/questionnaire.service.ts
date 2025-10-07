@@ -5,7 +5,9 @@ import QuestionOption from '../models/QuestionOption';
 import Treatment from '../models/Treatment';
 import User from '../models/User';
 import Clinic from '../models/Clinic';
+import Product from '../models/Product';
 import { Transaction } from 'sequelize';
+import { CreateQuestionnaireInput } from '@fuse/validators';
 
 class QuestionnaireService {
 
@@ -687,6 +689,54 @@ class QuestionnaireService {
             where: { questionnaireId: questionnaire.id },
             order: [['stepOrder', 'ASC']]
         });
+    }
+
+    async createQuestionnaire(
+        userId: string,
+        data: CreateQuestionnaireInput,
+    ) {
+        const { productId } = data
+        // Validate user is admin
+        const user = await User.findByPk(userId);
+        if (!user || user.role !== 'admin') {
+            return {
+                success: false,
+                error: 'Only admins can create questionnaires'
+            };
+        }
+
+
+        // Validate product if provided
+        let product = null;
+        if (productId) {
+            product = await Product.findByPk(productId);
+            if (!product) {
+                return {
+                    success: false,
+                    error: 'Product not found'
+                };
+            }
+        }
+
+        // Create questionnaire
+        const questionnaire = await Questionnaire.create({
+            title: data.title,
+            description: data.description || null,
+            checkoutStepPosition: data.checkoutStepPosition ?? -1,
+            isTemplate: data.isTemplate ?? false,
+            userId,
+            color: data.color || null,
+            productId: productId
+        });
+
+        return {
+            success: true,
+            message: 'Questionnaire created successfully',
+            data: {
+                questionnaire,
+                product,
+            }
+        };
     }
 }
 

@@ -66,8 +66,7 @@ class TenantProductService {
      * Validates that questionnaires exist and belong to the clinic
      */
     async validateQuestionnaires(
-        questionnaireIds: any[],
-        clinicId: string
+        questionnaireIds: string[]
     ): Promise<Map<string, Questionnaire>> {
         const questionnaires = await Questionnaire.findAll({
             where: {
@@ -81,15 +80,7 @@ class TenantProductService {
             throw new Error(`Questionnaires not found: ${missingIds.join(', ')}`);
         }
 
-        // Validate that questionnaires belong to the clinic or are templates
-        const invalidQuestionnaires = questionnaires.filter((q: any) => {
-            return !q.isTemplate && q.userId !== null && q.userId !== clinicId;
-        });
 
-        if (invalidQuestionnaires.length > 0) {
-            const invalidIds = invalidQuestionnaires.map(q => q.id).join(', ');
-            throw new Error(`Questionnaires do not belong to your clinic: ${invalidIds}`);
-        }
 
         const questionnaireMap = new Map<string, Questionnaire>();
         questionnaires.forEach((questionnaire: any) => {
@@ -112,10 +103,10 @@ class TenantProductService {
         const questionnaireIds = [...new Set((data as any).products.map((p: any) => p.questionnaireId))] as any[];
 
         // 3. Validate products exist
-        const productMap = await this.validateProducts(productIds);
+        await this.validateProducts(productIds);
 
         // 4. Validate questionnaires exist and belong to clinic
-        const questionnaireMap = await this.validateQuestionnaires(questionnaireIds, clinicId);
+        await this.validateQuestionnaires(questionnaireIds);
 
         // 5. Check for duplicate product entries in the input
         const productIdCounts = new Map<string, number>();

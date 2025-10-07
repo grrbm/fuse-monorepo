@@ -5,6 +5,7 @@ import PrescriptionProducts from './PrescriptionProducts';
 import Treatment from './Treatment';
 import TreatmentProducts from './TreatmentProducts';
 import TenantProduct from './TenantProduct';
+import Questionnaire from './Questionnaire';
 
 export enum PharmacyProvider {
     ABSOLUTERX = 'absoluterx',
@@ -140,4 +141,7 @@ export default class Product extends Entity {
 
     @HasMany(() => TenantProduct)
     declare tenantProducts: TenantProduct[];
+
+    @HasMany(() => Questionnaire)
+    declare questionnaires: Questionnaire[];
 }
