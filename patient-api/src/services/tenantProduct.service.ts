@@ -2,6 +2,7 @@ import TenantProduct from '../models/TenantProduct';
 import Product from '../models/Product';
 import Questionnaire from '../models/Questionnaire';
 import User from '../models/User';
+import BrandSubscription from '../models/BrandSubscription';
 import {
     bulkUpsertTenantProducts,
     getTenantProductsByClinic,
@@ -91,6 +92,37 @@ class TenantProductService {
     }
 
     /**
+     * Validates that the number of products doesn't exceed subscription limits
+     */
+    async validateSubscriptionLimits(userId: string, productCount: number): Promise<void> {
+        // Get user's active subscription
+        const subscription = await BrandSubscription.findOne({
+            where: { userId },
+            order: [['createdAt', 'DESC']]
+        });
+
+        if (!subscription) {
+            throw new Error('No active subscription found. Please subscribe to a plan to manage products.');
+        }
+
+        // Check if subscription is active
+        if (!subscription.isActive()) {
+            throw new Error(`Subscription is not active. Current status: ${subscription.status}`);
+        }
+
+        // Check maxProducts limit from features
+        const maxProducts = subscription.features?.maxProducts;
+
+        if (maxProducts !== undefined && productCount > maxProducts) {
+            throw new Error(
+                `Product limit exceeded. Your plan allows ${maxProducts} product(s), but you are trying to add ${productCount}. Please upgrade your subscription to add more products.`
+            );
+        }
+
+        console.log(`✅ Subscription validation passed: ${productCount} products (limit: ${maxProducts ?? 'unlimited'})`);
+    }
+
+    /**
      * Updates the product selection for a clinic
      * This method will validate products and questionnaires, then upsert the tenant products
      */
@@ -102,13 +134,16 @@ class TenantProductService {
         const productIds = [...new Set((data as any).products.map((p: any) => p.productId))] as any[];
         const questionnaireIds = [...new Set((data as any).products.map((p: any) => p.questionnaireId))] as any[];
 
-        // 3. Validate products exist
+        // 3. Validate subscription limits based on number of products
+        await this.validateSubscriptionLimits(userId, productIds.length);
+
+        // 4. Validate products exist
         await this.validateProducts(productIds);
 
-        // 4. Validate questionnaires exist and belong to clinic
+        // 5. Validate questionnaires exist and belong to clinic
         await this.validateQuestionnaires(questionnaireIds);
 
-        // 5. Check for duplicate product entries in the input
+        // 6. Check for duplicate product entries in the input
         const productIdCounts = new Map<string, number>();
         (data as any).products.forEach((item: any) => {
             const count = productIdCounts.get(item.productId as string) || 0;
@@ -123,16 +158,16 @@ class TenantProductService {
             throw new Error(`Duplicate products in selection: ${duplicates.join(', ')}`);
         }
 
-        // 6. Prepare data for bulk upsert
-        const productsToUpsert = (data as any).products.map((item: any) => ({
-            productId: item.productId as string,
-            questionnaireId: item.questionnaireId as string,
+        // 7. Prepare data for bulk upsert
+        const productsToUpsert = data.products.map(item => ({
+            productId: item.productId,
+            questionnaireId: item.questionnaireId,
         }));
 
-        // 7. Bulk upsert tenant products
+        // 8. Bulk upsert tenant products
         const tenantProducts = await bulkUpsertTenantProducts(clinicId, productsToUpsert);
 
-        // 8. Return the created/updated tenant products with full relations
+        // 9. Return the created/updated tenant products with full relations
         const result = await Promise.all(
             tenantProducts.map(tp => getTenantProduct(tp.id))
         );
