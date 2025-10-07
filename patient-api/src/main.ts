@@ -6197,7 +6197,7 @@ app.get("/catalog", authenticateJWT, async (req, res) => {
     res.status(200).json({
       success: true,
       message: result.message,
-      data: result
+      ...result
     });
 
   } catch (error) {
