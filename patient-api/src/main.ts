@@ -53,6 +53,7 @@ import {
   upgradeSubscriptionSchema,
   cancelSubscriptionSchema,
   createQuestionnaireSchema,
+  updateQuestionnaireSchema,
   questionnaireStepCreateSchema,
   questionnaireStepUpdateSchema,
   questionnaireStepOrderSchema,
@@ -3445,6 +3446,92 @@ app.get("/questionnaires", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching questionnaires for user:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch questionnaires' });
+  }
+});
+
+// Create questionnaire
+app.post("/questionnaires", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Validate request body using createQuestionnaireSchema
+    const validation = createQuestionnaireSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const result = await questionnaireService.createQuestionnaire(
+      currentUser.id,
+      validation.data
+    );
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error || "Failed to create questionnaire"
+      });
+    }
+
+    res.status(201).json(result);
+  } catch (error: any) {
+    console.error('❌ Error creating questionnaire:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create questionnaire'
+    });
+  }
+});
+
+// Update questionnaire
+app.put("/questionnaires/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Validate request body using updateQuestionnaireSchema
+    const validation = updateQuestionnaireSchema.safeParse({
+      ...req.body,
+      id: req.params.id
+    });
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const result = await questionnaireService.updateQuestionnaire(
+      currentUser.id,
+      validation.data
+    );
+
+    if (!result.success) {
+      const statusCode = result.error === 'Questionnaire not found' ? 404 : 400;
+      return res.status(statusCode).json({
+        success: false,
+        message: result.error || "Failed to update questionnaire"
+      });
+    }
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error('❌ Error updating questionnaire:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update questionnaire'
+    });
   }
 });
 

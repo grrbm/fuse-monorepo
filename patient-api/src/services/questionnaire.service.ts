@@ -7,7 +7,7 @@ import User from '../models/User';
 import Clinic from '../models/Clinic';
 import Product from '../models/Product';
 import { Transaction } from 'sequelize';
-import { CreateQuestionnaireInput } from '@fuse/validators';
+import { CreateQuestionnaireInput, UpdateQuestionnaireInput } from '@fuse/validators';
 
 class QuestionnaireService {
 
@@ -732,6 +732,67 @@ class QuestionnaireService {
         return {
             success: true,
             message: 'Questionnaire created successfully',
+            data: {
+                questionnaire,
+                product,
+            }
+        };
+    }
+
+    async updateQuestionnaire(
+        userId: string,
+        data: UpdateQuestionnaireInput,
+    ) {
+        const { id, productId, ...updateData } = data;
+
+        // Validate user is admin
+        const user = await User.findByPk(userId);
+        if (!user || user.role !== 'admin') {
+            return {
+                success: false,
+                error: 'Only admins can update questionnaires'
+            };
+        }
+
+        // Find the questionnaire
+        const questionnaire = await Questionnaire.findByPk(id);
+        if (!questionnaire) {
+            return {
+                success: false,
+                error: 'Questionnaire not found'
+            };
+        }
+
+        // Validate product if provided
+        let product = null;
+        if (productId !== undefined) {
+            if (productId) {
+                product = await Product.findByPk(productId);
+                if (!product) {
+                    return {
+                        success: false,
+                        error: 'Product not found'
+                    };
+                }
+            }
+            // Update productId (can be set to null if productId is explicitly null)
+            await questionnaire.update({ ...updateData, productId });
+        } else {
+            // Update without changing productId
+            await questionnaire.update(updateData);
+        }
+
+        // Reload to get updated data
+        await questionnaire.reload();
+
+        // Get product if questionnaire has one
+        if (questionnaire.productId) {
+            product = await Product.findByPk(questionnaire.productId);
+        }
+
+        return {
+            success: true,
+            message: 'Questionnaire updated successfully',
             data: {
                 questionnaire,
                 product,
