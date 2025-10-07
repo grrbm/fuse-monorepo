@@ -78,12 +78,6 @@ export default class Product extends Entity {
     declare pharmacyProvider: PharmacyProvider;
 
     @Column({
-        type: DataType.STRING,
-        allowNull: true,
-    })
-    declare pharmacyVendor?: string;
-
-    @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: true,
     })
@@ -108,11 +102,6 @@ export default class Product extends Entity {
     })
     declare requiredDoctorQuestions?: any[];
 
-    @Column({
-        type: DataType.JSONB,
-        allowNull: true,
-    })
-    declare pharmacyApiConfig?: Record<string, any>;
 
     @Column({
         type: DataType.BOOLEAN,

@@ -1,4 +1,4 @@
-import Product from '../models/Product'
+import Product, { PharmacyProvider } from '../models/Product'
 import FormSectionTemplate from '../models/FormSectionTemplate'
 import { Op } from 'sequelize'
 import { getProductWithQuestionnaires, listProductsByClinic } from './db/product'
@@ -265,19 +265,19 @@ class ProductService {
         // Return available pharmacy vendors from config
         const vendors = [
             {
-                id: 'absoluterx',
+                id: PharmacyProvider.ABSOLUTERX,
                 name: 'AbsoluteRx',
                 baseUrl: 'https://portal.absoluterx.com',
                 description: 'Primary fulfillment partner for compounded medications',
             },
             {
-                id: 'pharmacy_a',
+                id: PharmacyProvider.PILLPACK,
                 name: 'Pharmacy A',
                 baseUrl: 'https://api.pharmacya.com',
                 description: 'Alternative pharmacy vendor',
             },
             {
-                id: 'pharmacy_b',
+                id: PharmacyProvider.TRUEPILL,
                 name: 'Pharmacy B',
                 baseUrl: 'https://api.pharmacyb.com',
                 description: 'Specialty pharmacy for specific medications',

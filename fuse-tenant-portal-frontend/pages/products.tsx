@@ -17,7 +17,7 @@ interface Product {
   activeIngredients: string[]
   category?: string
   medicationSize?: string
-  pharmacyVendor?: string
+  pharmacyProvider?: string
   pharmacyWholesaleCost?: number
   suggestedRetailPrice?: number
   pharmacyProductId?: string
@@ -49,7 +49,7 @@ export default function Products() {
 
   const [loading, setLoading] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
-  const [pharmacyVendors, setPharmacyVendors] = useState<PharmacyVendor[]>([])
+  const [pharmacyProviders, setPharmacyVendors] = useState<PharmacyVendor[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [showActiveOnly, setShowActiveOnly] = useState(true)
@@ -66,11 +66,10 @@ export default function Products() {
     activeIngredients: [] as string[],
     category: "",
     medicationSize: "",
-    pharmacyVendor: "",
+    pharmacyProvider: "",
     pharmacyWholesaleCost: 0,
     suggestedRetailPrice: 0,
     pharmacyProductId: "",
-    pharmacyApiConfig: {},
     requiredDoctorQuestions: [] as any[],
     isActive: true,
   })
@@ -150,11 +149,10 @@ export default function Products() {
       activeIngredients: [],
       category: "",
       medicationSize: "",
-      pharmacyVendor: "",
+      pharmacyProvider: "",
       pharmacyWholesaleCost: 0,
       suggestedRetailPrice: 0,
       pharmacyProductId: "",
-      pharmacyApiConfig: {},
       requiredDoctorQuestions: [],
       isActive: true,
     })
@@ -171,11 +169,10 @@ export default function Products() {
       activeIngredients: product.activeIngredients || [],
       category: product.category || "",
       medicationSize: product.medicationSize || "",
-      pharmacyVendor: product.pharmacyVendor || "",
+      pharmacyProvider: product.pharmacyProvider || "",
       pharmacyWholesaleCost: product.pharmacyWholesaleCost || 0,
       suggestedRetailPrice: product.suggestedRetailPrice || 0,
       pharmacyProductId: product.pharmacyProductId || "",
-      pharmacyApiConfig: {},
       requiredDoctorQuestions: product.requiredDoctorQuestions || [],
       isActive: product.isActive,
     })
@@ -346,11 +343,11 @@ export default function Products() {
                         </div>
                       )}
 
-                      {product.pharmacyVendor && (
+                      {product.pharmacyProvider && (
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">Pharmacy:</span>
                           <span className="font-medium">
-                            {pharmacyVendors.find(v => v.id === product.pharmacyVendor)?.name || product.pharmacyVendor}
+                            {pharmacyProviders.find(v => v.id === product.pharmacyProvider)?.name || product.pharmacyProvider}
                           </span>
                         </div>
                       )}
@@ -473,12 +470,12 @@ export default function Products() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Pharmacy Vendor</label>
                   <select
-                    value={formData.pharmacyVendor}
-                    onChange={(e) => setFormData({ ...formData, pharmacyVendor: e.target.value })}
+                    value={formData.pharmacyProvider}
+                    onChange={(e) => setFormData({ ...formData, pharmacyProvider: e.target.value })}
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   >
                     <option value="">Select vendor...</option>
-                    {pharmacyVendors.map((vendor) => (
+                    {pharmacyProviders.map((vendor) => (
                       <option key={vendor.id} value={vendor.id}>
                         {vendor.name}
                       </option>
