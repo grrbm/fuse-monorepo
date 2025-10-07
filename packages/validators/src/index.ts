@@ -11,7 +11,6 @@ export * from './payment.schema';
 export * from './subscription.schema';
 export * from './questionnaire.schema';
 export * from './question.schema';
-export * from './physician.schema';
 export * from './message.schema';
 export * from './brandTreatment.schema';
 export * from './organization.schema';

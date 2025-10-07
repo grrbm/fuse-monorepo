@@ -7,11 +7,11 @@ import Clinic, { PaymentStatus } from '../../models/Clinic';
 import BrandSubscription, { BrandSubscriptionStatus } from '../../models/BrandSubscription';
 import User from '../../models/User';
 import BrandSubscriptionPlans from '../../models/BrandSubscriptionPlans';
-import OrderService from '../order.service';
 import BrandSubscriptionService from '../brandSubscription.service';
 import MDAuthService from '../mdIntegration/MDAuth.service';
 import MDCaseService from '../mdIntegration/MDCase.service';
 import Treatment from '../../models/Treatment';
+import PharmacyService from '../pharmacy.service';
 
 
 export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
@@ -300,9 +300,9 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
                     })
                     console.log("Sending new order ", order.shippingOrders.length)
 
-                    const orderService = new OrderService()
-
-                    const pharmacyOrder = orderService.createPharmacyOrder(order)
+                    // Order Renewal
+                    const pharmacyService = new PharmacyService()
+                    const pharmacyOrder = await pharmacyService.createPharmacyOrder(order)
                     console.log("Pharmacy order", pharmacyOrder)
                 }
             }

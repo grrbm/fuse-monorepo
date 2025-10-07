@@ -58,15 +58,12 @@ import {
   questionCreateSchema,
   questionUpdateSchema,
   questionOrderSchema,
-  physicianCreateSchema,
-  physicianUpdateSchema,
   messageCreateSchema,
   patientUpdateSchema,
   brandTreatmentSchema,
   organizationUpdateSchema
 } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
-import PhysicianService from "./services/physician.service";
 import SubscriptionService from "./services/subscription.service";
 import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
 import MDFilesService from "./services/mdIntegration/MDFiles.service";
@@ -986,8 +983,6 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
     });
 
     console.log(`📊 Total products in database: ${allProducts.length}`);
-    console.log(`📊 Products with clinicId: ${allProducts.filter(p => p.clinicId).length}`);
-    console.log(`📊 Products with null/undefined clinicId: ${allProducts.filter(p => !p.clinicId).length}`);
 
     // Fetch products that belong to this clinic (both with matching clinicId and legacy products)
     let products = [];
@@ -1076,7 +1071,6 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       pharmacyProductId: product.pharmacyProductId,
       dosage: product.dosage,
       imageUrl: product.imageUrl,
-      clinicId: product.clinicId, // Include clinicId for debugging
       active: true, // Default to active since Product model doesn't have active field
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
@@ -2635,21 +2629,6 @@ app.post("/payments/treatment/sub", async (req, res) => {
       });
     }
 
-    // Validate required fields
-    if (!treatmentId) {
-      return res.status(400).json({
-        success: false,
-        message: "Treatment ID is required"
-      });
-    }
-
-    // Validate stripe price ID
-    if (!stripePriceId) {
-      return res.status(400).json({
-        success: false,
-        message: "Stripe price ID is required"
-      });
-    }
 
     // Look up the treatment plan to get the billing interval
     const treatmentPlan = await TreatmentPlan.findOne({
@@ -4591,7 +4570,6 @@ app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
   }
 });
 
-// TODO: Add security
 app.post("/webhook/orders", async (req, res) => {
   try {
 
@@ -4690,94 +4668,6 @@ app.post("/webhook/pharmacy", async (req, res) => {
   }
 });
 
-// Physicians endpoints
-app.post("/physicians", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    // Validate request body using physicianCreateSchema
-    const validation = physicianCreateSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
-      });
-    }
-
-    const physicianService = new PhysicianService();
-
-    const physician = await physicianService.createPhysician(validation.data, currentUser.id);
-
-    res.status(201).json({
-      success: true,
-      message: "Physician created successfully",
-      data: {
-        id: physician.id,
-        fullName: physician.fullName,
-        email: physician.email,
-      }
-    });
-  } catch (error) {
-    console.error('Error creating physician:', error);
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : "Failed to create physician"
-    });
-  }
-});
-
-app.put("/physicians", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-
-    // Validate request body using physicianUpdateSchema
-    const validation = physicianUpdateSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
-      });
-    }
-
-    const { physicianId, ...updateData } = validation.data;
-
-    const physicianService = new PhysicianService();
-
-    const physician = await physicianService.updatePhysician(physicianId, updateData, currentUser.id);
-
-    res.json({
-      success: true,
-      message: "Physician updated successfully",
-      data: {
-        id: physician.id,
-        fullName: physician.fullName,
-        email: physician.email,
-      }
-    });
-  } catch (error) {
-    console.error('Error updating physician:', error);
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : "Failed to update physician"
-    });
-  }
-});
 
 // Message endpoints
 app.get("/messages", authenticateJWT, async (req, res) => {

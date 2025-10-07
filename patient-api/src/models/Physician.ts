@@ -3,7 +3,7 @@ import Entity from './Entity';
 
 export interface PhysicianLicense {
     state: string;
-    number: string;
+    number: number;
     type: string;
     expires_on: string;
 }

@@ -57,7 +57,7 @@ class TreatmentService {
                 };
             }
 
-            if (user.role !== 'doctor') {
+            if (user.role !== 'doctor' && user.role !== 'brand' ) {
                 return {
                     success: false,
                     message: "Access denied",
