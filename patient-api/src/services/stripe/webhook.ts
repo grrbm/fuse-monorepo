@@ -495,10 +495,10 @@ export const handleSubscriptionCreated = async (subscription: Stripe.Subscriptio
 
             features.subscriptionSchedule = {
                 ...scheduleFeature,
-                id: subscription.schedule,
+                id: subscription.schedule as string,
                 currentPhasePriceId: price?.id ?? scheduleFeature.currentPhasePriceId,
                 currentPhaseLookupKey: price?.lookup_key ?? scheduleFeature.currentPhaseLookupKey,
-                currentPeriodEnd: periodEnd ? periodEnd.toISOString() : scheduleFeature.currentPeriodEnd
+                currentPeriodEnd: periodEnd ? periodEnd.toISOString() : scheduleFeature.currentPeriodEnd?.toString()
             };
 
             updates.features = features;
