@@ -1,9 +1,12 @@
-import { Search, MoreHorizontal, ChevronDown, LogOut } from "lucide-react"
+import { Search, MoreHorizontal, LogOut, Sun, Moon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
+import { useTheme } from "@/contexts/ThemeContext"
+import { TenantSelector } from "@/components/tenant-selector"
 
 export function Header() {
   const { user, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const initials = (user?.name || user?.email || "Tenant Admin")
     .split(/\s+/)
     .filter(Boolean)
@@ -30,9 +33,21 @@ export function Header() {
 
         {/* Right side */}
         <div className="flex items-center space-x-4">
-          <Button variant="outline" size="sm" className="text-muted-foreground bg-transparent">
-            All Tenants
-            <ChevronDown className="ml-2 h-4 w-4" />
+          <TenantSelector />
+
+          {/* Theme Toggle */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleTheme}
+            className="p-2"
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          >
+            {theme === 'light' ? (
+              <Moon className="h-4 w-4" />
+            ) : (
+              <Sun className="h-4 w-4" />
+            )}
           </Button>
 
           <Button variant="ghost" size="sm">

@@ -21,6 +21,7 @@ import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
 import TreatmentService from "./services/treatment.service";
 import PaymentService from "./services/payment.service";
+import ClinicService from "./services/clinic.service";
 import { processStripeWebhook } from "./services/stripe/webhook";
 import TreatmentProducts from "./models/TreatmentProducts";
 import TreatmentPlan, { BillingInterval } from "./models/TreatmentPlan";
@@ -930,6 +931,58 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
     res.status(500).json({
       success: false,
       message: "Failed to upload logo"
+    });
+  }
+});
+
+// Get tenants (clinics) with their owners
+app.get("/tenants", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    const result = await clinicService.listTenants({ page, limit });
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    console.error('Error fetching tenants:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
+  }
+});
+
+// Get single tenant by ID
+app.get("/tenants/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id } = req.params;
+    const result = await clinicService.getTenantById(id);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(404).json(result);
+    }
+  } catch (error) {
+    console.error('Error fetching tenant:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
     });
   }
 });
@@ -4493,6 +4546,7 @@ app.post("/questions/order", authenticateJWT, async (req, res) => {
 const userService = new UserService();
 const treatmentService = new TreatmentService();
 const orderService = new OrderService();
+const clinicService = new ClinicService();
 
 
 app.put("/patient", authenticateJWT, async (req, res) => {
