@@ -39,6 +39,21 @@ export const cancelSubscriptionSchema = z.object({
   treatmentId: z.string().uuid('Invalid treatment ID'),
 });
 
+// Update brand subscription features schema
+export const updateBrandSubscriptionFeaturesSchema = z.object({
+  userId: z.string().uuid('Invalid user ID'),
+  features: z.object({
+    apiAccess: z.boolean().optional(),
+    whiteLabel: z.boolean().optional(),
+    maxProducts: z.number().int().nonnegative('Max products must be non-negative').optional(),
+    maxCampaigns: z.number().int().nonnegative('Max campaigns must be non-negative').optional(),
+    customBranding: z.boolean().optional(),
+    analyticsAccess: z.boolean().optional(),
+    customerSupport: z.string().optional(),
+    customIntegrations: z.boolean().optional(),
+  }),
+});
+
 /**
  * Type exports
  */
@@ -48,3 +63,4 @@ export type BrandPaymentIntentInput = z.infer<typeof brandPaymentIntentSchema>;
 export type BrandConfirmPaymentInput = z.infer<typeof brandConfirmPaymentSchema>;
 export type UpgradeSubscriptionInput = z.infer<typeof upgradeSubscriptionSchema>;
 export type CancelSubscriptionInput = z.infer<typeof cancelSubscriptionSchema>;
+export type UpdateBrandSubscriptionFeaturesInput = z.infer<typeof updateBrandSubscriptionFeaturesSchema>;

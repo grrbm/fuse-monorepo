@@ -52,6 +52,7 @@ import {
   brandConfirmPaymentSchema,
   upgradeSubscriptionSchema,
   cancelSubscriptionSchema,
+  updateBrandSubscriptionFeaturesSchema,
   createQuestionnaireSchema,
   updateQuestionnaireSchema,
   questionnaireStepCreateSchema,
@@ -2687,6 +2688,57 @@ app.get("/brand-subscriptions/current", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch subscription"
+    });
+  }
+});
+
+// Update brand subscription features (admin only)
+app.put("/brand-subscriptions/features", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate request body using updateBrandSubscriptionFeaturesSchema
+    const validation = updateBrandSubscriptionFeaturesSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { userId, features } = validation.data;
+
+    const brandSubscriptionService = new BrandSubscriptionService();
+    const result = await brandSubscriptionService.updateFeatures(
+      currentUser.id,
+      userId,
+      features
+    );
+
+    if (!result.success) {
+      const statusCode = result.message === 'Access denied' ? 403 :
+                        result.message === 'Subscription not found' ? 404 : 400;
+      return res.status(statusCode).json({
+        success: false,
+        message: result.message,
+        error: result.error
+      });
+    }
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error('❌ Error updating subscription features:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update subscription features'
     });
   }
 });

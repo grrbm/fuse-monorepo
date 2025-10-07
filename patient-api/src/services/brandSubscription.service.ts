@@ -423,6 +423,76 @@ class BrandSubscriptionService {
       return [];
     }
   }
+
+  /**
+   * Update brand subscription features (admin only)
+   */
+  async updateFeatures(
+    adminUserId: string,
+    targetUserId: string,
+    features: Partial<{
+      apiAccess?: boolean;
+      whiteLabel?: boolean;
+      maxProducts?: number;
+      maxCampaigns?: number;
+      customBranding?: boolean;
+      analyticsAccess?: boolean;
+      customerSupport?: string;
+      customIntegrations?: boolean;
+    }>
+  ) {
+    try {
+      // Validate admin user
+      const adminUser = await User.findByPk(adminUserId);
+      if (!adminUser || adminUser.role !== 'admin') {
+        return {
+          success: false,
+          message: 'Access denied',
+          error: 'Only admin users can update subscription features'
+        };
+      }
+
+      // Find the target user's subscription
+      const subscription = await BrandSubscription.findOne({
+        where: { userId: targetUserId, status: 'active' },
+        order: [['createdAt', 'DESC']]
+      });
+
+      if (!subscription) {
+        return {
+          success: false,
+          message: 'Subscription not found',
+          error: 'No subscription found for the specified user'
+        };
+      }
+
+      // Merge existing features with new features
+      const updatedFeatures = {
+        ...subscription.features,
+        ...features
+      };
+
+      // Update subscription features
+      await subscription.update({ features: updatedFeatures });
+
+
+      return {
+        success: true,
+        message: 'Subscription features updated successfully',
+        data: {
+          subscription: await subscription.reload()
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Error updating subscription features:', error);
+      return {
+        success: false,
+        message: 'Failed to update subscription features',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
 }
 
 export default BrandSubscriptionService;
