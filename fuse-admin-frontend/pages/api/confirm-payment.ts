@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
+// @deprecated This can be removed
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         console.log('❌ Wrong method:', req.method)
@@ -20,10 +21,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(401).json({ message: 'No authorization token provided' })
         }
 
-        if (!paymentMethodId || !planType || !amount) {
-            console.error('❌ Missing required fields:', { paymentMethodId: !!paymentMethodId, planType: !!planType, amount: !!amount })
-            return res.status(400).json({ message: 'Missing required fields: paymentMethodId, planType, amount' })
-        }
 
         const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/confirm-payment-intent`
         console.log('🔍 Backend URL:', backendUrl)

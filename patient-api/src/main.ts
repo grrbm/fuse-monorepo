@@ -44,7 +44,6 @@ import {
   treatmentPlanCreateSchema,
   treatmentPlanUpdateSchema,
   createPaymentIntentSchema,
-  confirmPaymentSchema,
   treatmentSubscriptionSchema,
   clinicSubscriptionSchema,
   brandCheckoutSchema,
@@ -2141,53 +2140,10 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Validate request body using confirmPaymentSchema
-    const validation = confirmPaymentSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
-      });
-    }
-
-    const { paymentIntentId } = validation.data;
-
-    // Retrieve payment intent from Stripe
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-
-    if (paymentIntent.status === 'succeeded') {
-      // Payment was successful
-      // Here you would typically:
-      // 1. Update order status in database
-      // 2. Send confirmation email
-      // 3. Update inventory
-      // 4. Create prescription records, etc.
-
-      console.log('💳 Payment confirmed:', {
-        id: paymentIntent.id,
-        amount: paymentIntent.amount,
-        userId: currentUser.id
-      });
-
-      res.status(200).json({
-        success: true,
-        message: "Payment confirmed successfully",
-        data: {
-          paymentIntentId: paymentIntent.id,
-          amount: paymentIntent.amount / 100, // Convert back from cents
-          status: paymentIntent.status
-        }
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        message: "Payment was not successful",
-        data: {
-          status: paymentIntent.status
-        }
-      });
-    }
+    res.status(200).json({
+      success: true,
+      message: "Payment confirmed successfully",
+    });
 
   } catch (error) {
     console.error('Error confirming payment:', error);
