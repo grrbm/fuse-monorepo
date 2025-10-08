@@ -12,7 +12,27 @@ import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
-type SubscriptionPlanType = 'standard_build' | 'high-definition'
+interface PlanFeatures {
+  maxProducts: number
+  maxCampaigns: number
+  analyticsAccess: boolean
+  customerSupport: string
+  customBranding: boolean
+  apiAccess?: boolean
+  whiteLabel?: boolean
+  customIntegrations?: boolean
+}
+
+interface Plan {
+  id: string
+  name: string
+  price: number
+  planType: string
+  interval: string
+  features: PlanFeatures
+  stripePriceId: string
+  description?: string
+}
 
 const getAddressComponent = (
   components: google.maps.GeocoderAddressComponent[] | undefined,
@@ -50,33 +70,6 @@ const parsePlaceAddress = (place: google.maps.places.PlaceResult) => {
   }
 }
 
-const PLAN_DEFINITIONS: Record<SubscriptionPlanType, {
-  label: string
-  price: number
-  description: string
-  highlights: string[]
-}> = {
-  'standard_build': {
-    label: 'Standard',
-    price: 1500,
-    description: 'Ideal for wellness, aesthetics, weight-loss, and lifestyle telehealth brands that do not require controlled scripts.',
-    highlights: [
-      'Patient journey management & automation',
-      'Fuse telehealth physician network access',
-      'Pharmacy fulfillment pipelines',
-    ],
-  },
-  'high-definition': {
-    label: 'Controlled Substances',
-    price: 2500,
-    description: 'Everything in the standard package plus workflows for prescribing regulated therapies through Fuse doctors and pharmacies.',
-    highlights: [
-      'Schedule III therapy workflows (TRT, peptides, etc.)',
-      'Enhanced compliance & monitoring',
-      'Integrated pharmacy routing for regulated medications',
-    ],
-  },
-}
 
 const formatCurrency = (amount: number | null | undefined) => {
   if (!amount && amount !== 0) return '—'
@@ -131,7 +124,9 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
 
   const [subscriptionData, setSubscriptionData] = useState<any>(null)
   const [subscriptionLoading, setSubscriptionLoading] = useState(false)
-  const [creatingPlan, setCreatingPlan] = useState<'standard' | 'professional' | null>(null)
+  const [creatingPlan, setCreatingPlan] = useState<string | null>(null)
+  const [plans, setPlans] = useState<Plan[]>([])
+  const [plansLoading, setPlansLoading] = useState(false)
 
   const buildAuthHeaders = (additional: Record<string, string> = {}) => {
     const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null)
@@ -155,8 +150,38 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
       })
       fetchOrganizationData()
       fetchSubscriptionData()
+      fetchPlans()
     }
   }, [user])
+
+  const fetchPlans = async () => {
+    setPlansLoading(true)
+    try {
+      const response = await authenticatedFetch(`${API_URL}/plans`, {
+        method: 'GET',
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.plans) {
+          setPlans(data.plans.map((plan: any) => ({
+            id: plan.id,
+            name: plan.name,
+            price: plan.monthlyPrice,
+            planType: plan.planType,
+            interval: plan.interval,
+            features: plan.features,
+            stripePriceId: plan.stripePriceId,
+            description: plan.description
+          })))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching plans:', error)
+    } finally {
+      setPlansLoading(false)
+    }
+  }
 
   const fetchSubscriptionData = async () => {
     setSubscriptionLoading(true)
@@ -251,42 +276,29 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
     await refreshSubscription()
   }
 
-  const handlePlanSelect = async (planType: 'standard' | 'professional') => {
+  const handlePlanSelect = async (plan: Plan) => {
     if (!token) {
       alert('You need to be signed in to select a plan.')
       return
     }
 
-    const planTypeKey: SubscriptionPlanType = planType === 'professional' ? 'high-definition' : 'standard_build'
-    const planDefinition = PLAN_DEFINITIONS[planTypeKey]
-
-    const downpayment = planType === 'professional'
-      ? {
-          type: 'downpayment_professional',
-          name: 'Discounted Professional First Month',
-          amount: 2500,
-        }
-      : {
-          type: 'downpayment_standard',
-          name: 'Discounted First Month',
-          amount: 1500,
-        }
+    const downpaymentAmount = plan.price
 
     try {
-      setCreatingPlan(planType)
+      setCreatingPlan(plan.planType)
       const response = await authenticatedFetch(`${API_URL}/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          selectedPlanCategory: planType,
-          selectedPlanType: planTypeKey,
-          selectedPlanName: planDefinition.label,
-          selectedPlanPrice: downpayment.amount,
-          selectedDownpaymentType: downpayment.type,
-          selectedDownpaymentName: downpayment.name,
-          selectedDownpaymentPrice: downpayment.amount,
+          selectedPlanCategory: plan.planType,
+          selectedPlanType: plan.planType,
+          selectedPlanName: plan.name,
+          selectedPlanPrice: downpaymentAmount,
+          selectedDownpaymentType: `downpayment_${plan.planType}`,
+          selectedDownpaymentName: `${plan.name} First Month`,
+          selectedDownpaymentPrice: downpaymentAmount,
           planSelectionTimestamp: new Date().toISOString(),
         }),
       })
@@ -298,13 +310,15 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
       }
 
       const queryParams = new URLSearchParams({
-        planCategory: planType,
-        subscriptionPlanType: planTypeKey,
-        subscriptionPlanName: planDefinition.label,
-        subscriptionMonthlyPrice: planDefinition.price.toString(),
-        downpaymentPlanType: downpayment.type,
-        downpaymentName: downpayment.name,
-        downpaymentAmount: downpayment.amount.toString(),
+        planCategory: plan.planType,
+        subscriptionPlanType: plan.planType,
+        subscriptionPlanName: plan.name,
+        subscriptionMonthlyPrice: plan.price.toString(),
+        downpaymentPlanType: `downpayment_${plan.planType}`,
+        downpaymentName: `${plan.name} First Month`,
+        downpaymentAmount: downpaymentAmount.toString(),
+        brandSubscriptionPlanId: plan.id,
+        stripePriceId: plan.stripePriceId
       })
 
       router.push(`/checkout?${queryParams.toString()}`)
@@ -431,7 +445,7 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
     setLoading(true)
 
     try {
-      const response = await authenticatedFetch(`${API_URL}/subscriptions/cancel`, {
+      const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/cancel`, {
         method: 'POST',
       })
 
@@ -448,8 +462,8 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
     }
   }
 
-  const currentPlanType = subscriptionData?.plan?.type as SubscriptionPlanType | undefined
-  const currentPlanDefinition = currentPlanType ? PLAN_DEFINITIONS[currentPlanType] : null
+  const currentPlanType = subscriptionData?.plan?.type
+  const currentPlan = plans.find(p => p.planType === currentPlanType)
 
   return (
     <div className="flex h-screen bg-background">
@@ -773,10 +787,10 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                                 <span className="text-sm font-medium text-foreground">Current Plan</span>
                               </div>
                               <p className="text-lg font-semibold text-foreground">
-                                {currentPlanDefinition?.label || subscriptionData.plan?.name || '—'}
+                                {currentPlan?.name || subscriptionData.plan?.name || '—'}
                               </p>
                               <p className="text-sm text-muted-foreground">
-                                {currentPlanDefinition?.description || 'Active subscription'}
+                                {currentPlan?.description || 'Active subscription'}
                               </p>
                             </div>
 
@@ -788,7 +802,7 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                               <div className="grid gap-1 text-sm">
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Monthly price</span>
-                                  <span className="font-medium text-foreground">{formatCurrency(currentPlanDefinition?.price ?? subscriptionData.plan?.price)}</span>
+                                  <span className="font-medium text-foreground">{formatCurrency(currentPlan?.price ?? subscriptionData.plan?.price)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Status</span>
@@ -845,104 +859,162 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {(['standard', 'professional'] as const).map((planKey) => {
-                          const isStandard = planKey === 'standard'
-                          const planDefinition = PLAN_DEFINITIONS[isStandard ? 'standard_build' : 'high-definition']
-                          const isCurrentPlan = currentPlanType === (isStandard ? 'standard_build' : 'high-definition')
-                          const isActive = subscriptionData?.status === 'active'
-                          const Icon = isStandard ? Building2 : Shield
-                          const buttonLabel = isCurrentPlan
-                            ? isActive
-                              ? 'Current Plan'
-                              : 'Plan Selected'
-                            : isStandard
-                              ? 'Get started'
-                              : hasActiveSubscription
-                                ? 'Upgrade for $1,000 more'
-                                : 'Get started'
+                      {plansLoading ? (
+                        <div className="text-center py-8">
+                          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                          <p className="text-muted-foreground">Loading plans...</p>
+                        </div>
+                      ) : plans.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-muted-foreground">No plans available</p>
+                        </div>
+                      ) : (
+                        <div className={`grid grid-cols-1 ${plans.length === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-8`}>
+                          {plans.map((plan, index) => {
+                            const isCurrentPlan = currentPlanType === plan.planType
+                            const isActive = subscriptionData?.status === 'active'
+                            const isPopular = index === 0
+                            const Icon = index === 0 ? Building2 : Shield
+                            const buttonLabel = isCurrentPlan
+                              ? isActive
+                                ? 'Current Plan'
+                                : 'Plan Selected'
+                              : 'Get started'
 
-                          return (
-                            <Card
-                              key={planKey}
-                              className={`relative group transition-all duration-300 flex flex-col ${
-                                isStandard
-                                  ? 'border-primary shadow-lg hover:shadow-2xl hover:scale-[1.02]'
-                                  : 'border-border hover:border-primary/60 hover:shadow-xl hover:scale-[1.01]'
-                              } ${creatingPlan ? 'opacity-75' : ''}`}
-                            >
-                              {isStandard && (
-                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                                  <div className="bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
-                                    Most Popular
+                            return (
+                              <Card
+                                key={plan.id}
+                                className={`relative group transition-all duration-300 flex flex-col ${
+                                  isPopular
+                                    ? 'border-primary shadow-lg hover:shadow-2xl hover:scale-[1.02]'
+                                    : 'border-border hover:border-primary/60 hover:shadow-xl hover:scale-[1.01]'
+                                } ${creatingPlan ? 'opacity-75' : ''}`}
+                              >
+                                {isPopular && (
+                                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                                    <div className="bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
+                                      Most Popular
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="absolute top-4 left-4">
+                                  <div className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-md">
+                                    {plan.interval === 'month' ? 'Monthly' : plan.interval}
                                   </div>
                                 </div>
-                              )}
 
-                              <div className="absolute top-4 left-4">
-                                <div className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-md">
-                                  Monthly
-                                </div>
-                              </div>
+                                {isCurrentPlan && (
+                                  <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-full">
+                                    Active Plan
+                                  </div>
+                                )}
 
-                              {isCurrentPlan && (
-                                <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-full">
-                                  Active Plan
-                                </div>
-                              )}
-
-                              <CardHeader className="pt-12 pb-6">
-                                <div className="flex items-center gap-2 mb-3">
-                                  <Icon className="h-5 w-5" />
-                                  <CardTitle className="text-xl font-semibold">{planDefinition.label}</CardTitle>
-                                </div>
-                                <div className="mb-4">
-                                  <span className={`text-3xl font-bold ${isStandard ? 'text-[#825AD1]' : 'text-[#825AD1]'}`}>
-                                    {formatCurrency(planDefinition.price)}
-                                  </span>
-                                  <span className="text-muted-foreground"> / month</span>
-                                  <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
-                                </div>
-                                <p className="text-sm text-muted-foreground leading-relaxed">
-                                  {planDefinition.description}
-                                </p>
-                              </CardHeader>
-
-                              <CardContent className="flex flex-col h-full">
-                                <ul className="space-y-3 mb-8 flex-grow">
-                                  {planDefinition.highlights.map((highlight, index) => (
-                                    <li key={index} className="flex items-start gap-2 text-sm">
-                                      <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                      <span>{highlight}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-
-                                <Button
-                                  className={`w-full mt-auto ${
-                                    isCurrentPlan && isActive
-                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                      : isStandard
-                                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                        : 'bg-white border border-gray-300 text-foreground hover:bg-gray-50'
-                                  }`}
-                                  onClick={() => handlePlanSelect(planKey)}
-                                  disabled={
-                                    isCurrentPlan && isActive || creatingPlan === 'standard' || creatingPlan === 'professional'
-                                  }
-                                >
-                                  {creatingPlan === planKey
-                                    ? 'Preparing checkout...'
-                                    : buttonLabel}
-                                  {!isCurrentPlan && creatingPlan !== planKey && (
-                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                <CardHeader className="pt-12 pb-6">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <Icon className="h-5 w-5" />
+                                    <CardTitle className="text-xl font-semibold">{plan.name}</CardTitle>
+                                  </div>
+                                  <div className="mb-4">
+                                    <span className="text-3xl font-bold text-[#825AD1]">
+                                      {formatCurrency(plan.price)}
+                                    </span>
+                                    <span className="text-muted-foreground"> / {plan.interval}</span>
+                                    <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
+                                  </div>
+                                  {plan.description && (
+                                    <p className="text-sm text-muted-foreground leading-relaxed">
+                                      {plan.description}
+                                    </p>
                                   )}
-                                </Button>
-                              </CardContent>
-                            </Card>
-                          )
-                        })}
-                      </div>
+                                </CardHeader>
+
+                                <CardContent className="flex flex-col h-full">
+                                  <ul className="space-y-3 mb-8 flex-grow">
+                                    {plan.features.maxProducts !== undefined && (
+                                      <li className="flex items-start gap-2 text-sm">
+                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                        <span>
+                                          {plan.features.maxProducts === -1
+                                            ? 'Unlimited products'
+                                            : `Up to ${plan.features.maxProducts} product${plan.features.maxProducts !== 1 ? 's' : ''}`}
+                                        </span>
+                                      </li>
+                                    )}
+                                    {plan.features.maxCampaigns !== undefined && (
+                                      <li className="flex items-start gap-2 text-sm">
+                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                        <span>
+                                          {plan.features.maxCampaigns === -1
+                                            ? 'Unlimited campaigns'
+                                            : `Up to ${plan.features.maxCampaigns} campaign${plan.features.maxCampaigns !== 1 ? 's' : ''}`}
+                                        </span>
+                                      </li>
+                                    )}
+                                    {plan.features.analyticsAccess && (
+                                      <li className="flex items-start gap-2 text-sm">
+                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                        <span>Analytics & reporting</span>
+                                      </li>
+                                    )}
+                                    {plan.features.customerSupport && (
+                                      <li className="flex items-start gap-2 text-sm">
+                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                        <span>{plan.features.customerSupport} support</span>
+                                      </li>
+                                    )}
+                                    {plan.features.customBranding && (
+                                      <li className="flex items-start gap-2 text-sm">
+                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                        <span>Custom branding</span>
+                                      </li>
+                                    )}
+                                    {plan.features.apiAccess && (
+                                      <li className="flex items-start gap-2 text-sm">
+                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                        <span>API access</span>
+                                      </li>
+                                    )}
+                                    {plan.features.whiteLabel && (
+                                      <li className="flex items-start gap-2 text-sm">
+                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                        <span>White label solution</span>
+                                      </li>
+                                    )}
+                                    {plan.features.customIntegrations && (
+                                      <li className="flex items-start gap-2 text-sm">
+                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                        <span>Custom integrations</span>
+                                      </li>
+                                    )}
+                                  </ul>
+
+                                  <Button
+                                    className={`w-full mt-auto ${
+                                      isCurrentPlan && isActive
+                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                        : isPopular
+                                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                          : 'bg-white border border-gray-300 text-foreground hover:bg-gray-50'
+                                    }`}
+                                    onClick={() => handlePlanSelect(plan)}
+                                    disabled={
+                                      (isCurrentPlan && isActive) || !!creatingPlan
+                                    }
+                                  >
+                                    {creatingPlan === plan.planType
+                                      ? 'Preparing checkout...'
+                                      : buttonLabel}
+                                    {!isCurrentPlan && creatingPlan !== plan.planType && (
+                                      <ArrowRight className="ml-2 h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </CardContent>
+                              </Card>
+                            )
+                          })}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 
