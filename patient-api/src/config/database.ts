@@ -25,14 +25,19 @@ import Physician from '../models/Physician';
 import BrandTreatment from '../models/BrandTreatment';
 import UserPatient from '../models/UserPatient';
 import TenantProduct from '../models/TenantProduct';
+import FormSectionTemplate from '../models/FormSectionTemplate';
+import TenantProductForm from '../models/TenantProductForm';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
 
-const databaseUrl = process.env.DATABASE_URL;
+// Use DEV_DATABASE_URL for development environment, otherwise use DATABASE_URL
+const databaseUrl = process.env.NODE_ENV === 'development' 
+  ? process.env.DEV_DATABASE_URL || process.env.DATABASE_URL
+  : process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-  throw new Error('DATABASE_URL environment variable is required');
+  throw new Error('DATABASE_URL (or DEV_DATABASE_URL for development) environment variable is required');
 }
 
 // Check if we're connecting to localhost (Aptible tunnel)
@@ -44,14 +49,14 @@ const sequelizeConfig = {
   dialectOptions: {
     // SSL configuration: 
     // - Production (Aptible): require SSL with relaxed validation
-    // - Localhost tunnel: use SSL but don't require it
-    // - Development: no SSL
+    // - Development with localhost: no SSL
+    // - Localhost tunnel (non-development): use SSL but don't require it
     ssl: process.env.NODE_ENV === 'production' ? {
       require: true,
       rejectUnauthorized: false,
       ca: undefined, // Don't validate CA certificate
       checkServerIdentity: () => undefined, // Skip hostname verification
-    } : isLocalhost ? {
+    } : (process.env.NODE_ENV === 'development' && isLocalhost) ? false : isLocalhost ? {
       require: false, // Don't require SSL for localhost tunnel
       rejectUnauthorized: false,
     } : false,
@@ -74,7 +79,8 @@ export const sequelize = new Sequelize(databaseUrl, {
     Order, OrderItem, Payment,
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
-    UserPatient, TenantProduct
+    UserPatient, TenantProduct,
+    FormSectionTemplate, TenantProductForm,
   ],
 });
 

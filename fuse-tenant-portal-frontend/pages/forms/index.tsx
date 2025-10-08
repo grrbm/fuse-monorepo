@@ -41,7 +41,7 @@ export default function Forms() {
   const { loading, error, assignments, sections, refresh } = useTemplates(baseUrl)
   const { token } = useAuth()
 
-  const [activeTab, setActiveTab] = useState<"products" | "templates">("products")
+  const [activeTab, setActiveTab] = useState<"products" | "templates" | "account">("products")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("all")
@@ -81,7 +81,7 @@ export default function Forms() {
     filtered.sort((a, b) => {
       const nameA = a.treatment?.name || ""
       const nameB = b.treatment?.name || ""
-      
+
       switch (selectedSort) {
         case "name_asc":
           return nameA.localeCompare(nameB)
@@ -99,6 +99,10 @@ export default function Forms() {
     return filtered
   }, [assignments, searchQuery, selectedCategory, selectedStatus, selectedSort])
 
+  const accountTemplate = useMemo(() => {
+    return (sections?.account || []).find((t: any) => !t.category)
+  }, [sections])
+
   const handleEditForm = (assignmentId: string) => {
     router.push(`/forms/builder/${assignmentId}`)
   }
@@ -115,17 +119,17 @@ export default function Forms() {
     setCreating(true)
     try {
       const categoryLabel = CATEGORY_OPTIONS.find(c => c.value === category)?.label
-      const name = sectionType === "account" 
+      const name = sectionType === "account"
         ? "Universal Account Questions"
         : sectionType === "personalization"
-        ? `${categoryLabel} Personalization Questions`
-        : `${categoryLabel} Doctor Questions`
+          ? `${categoryLabel} Personalization Questions`
+          : `${categoryLabel} Doctor Questions`
 
       const description = sectionType === "account"
         ? "Standard account creation questions shown in all product forms"
         : sectionType === "personalization"
-        ? `Category-specific personalization questions for ${categoryLabel} products`
-        : `Doctor-required questions for ${categoryLabel} products`
+          ? `Category-specific personalization questions for ${categoryLabel} products`
+          : `Doctor-required questions for ${categoryLabel} products`
 
       const response = await fetch(`${baseUrl}/questionnaires/templates`, {
         method: "POST",
@@ -191,23 +195,30 @@ export default function Forms() {
             <div className="flex gap-6">
               <button
                 onClick={() => setActiveTab("products")}
-                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "products"
+                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "products"
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 Products
               </button>
               <button
                 onClick={() => setActiveTab("templates")}
-                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "templates"
+                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "templates"
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 Standardized Questions
+              </button>
+              <button
+                onClick={() => setActiveTab("account")}
+                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "account"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+              >
+                Account Questions
               </button>
             </div>
           </div>
@@ -223,230 +234,230 @@ export default function Forms() {
             <>
               {/* Filters */}
               <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Filter & Sort</CardTitle>
-              <CardDescription>Find the product form you want to configure</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-4">
-                {/* Search */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Search Products</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search by name..."
-                      className="pl-9"
-                    />
-                  </div>
-                </div>
-
-                {/* Category Filter */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Category</label>
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    {CATEGORY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Status Filter */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Status</label>
-                  <select
-                    value={selectedStatus}
-                    onChange={(e) => setSelectedStatus(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    {STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Sort */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Sort By</label>
-                  <select
-                    value={selectedSort}
-                    onChange={(e) => setSelectedSort(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    {SORT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Results Summary */}
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              Showing {filteredAndSortedAssignments.length} of {assignments.length} product forms
-            </span>
-            {(searchQuery || selectedCategory || selectedStatus !== "all") && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery("")
-                  setSelectedCategory("")
-                  setSelectedStatus("all")
-                }}
-              >
-                Clear Filters
-              </Button>
-            )}
-          </div>
-
-          {/* Product Forms List */}
-          {loading ? (
-            <div className="flex h-64 items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading forms...
-            </div>
-          ) : filteredAndSortedAssignments.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <Search className="h-12 w-12 mb-4" />
-                <p>No product forms found matching your filters.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredAndSortedAssignments.map((assignment) => {
-                const locked = isLocked(assignment)
-                const isLive = assignment.publishedUrl && assignment.lastPublishedAt
-                const categoryLabel = CATEGORY_OPTIONS.find(c => c.value === assignment.treatment?.category)?.label
-
-                return (
-                  <Card key={assignment.id} className="hover:border-primary/50 transition-colors">
                 <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg">{assignment.treatment?.name || "Untitled Product"}</CardTitle>
-                          <CardDescription className="mt-1">
-                            {categoryLabel && (
-                              <Badge variant="secondary" className="text-xs">
-                                {categoryLabel}
-                              </Badge>
-                            )}
-                          </CardDescription>
-                        </div>
-                      </div>
+                  <CardTitle className="text-lg">Filter & Sort</CardTitle>
+                  <CardDescription>Find the product form you want to configure</CardDescription>
                 </CardHeader>
-                    <CardContent className="space-y-4">
-                      {/* Status Badges */}
-                      <div className="flex flex-wrap gap-2">
-                        {!assignment.hasAssignment ? (
-                          <Badge variant="secondary" className="text-xs uppercase tracking-wide">
-                            Not Configured
-                          </Badge>
-                        ) : isLive ? (
-                          <Badge variant="info" className="text-xs uppercase tracking-wide">
-                            Live
-                          </Badge>
-                        ) : (
-                          <Badge variant="warning" className="text-xs uppercase tracking-wide">
-                            Pending
-                          </Badge>
-                        )}
-                        {locked && (
-                          <Badge variant="warning" className="text-xs uppercase tracking-wide">
-                            <Clock className="h-3 w-3 mr-1" />
-                            Locked
-                          </Badge>
-                        )}
-                        {assignment.hasAssignment && (
-                          <Badge variant="outline" className="text-xs uppercase tracking-wide">
-                            {assignment.layoutTemplate}
-                          </Badge>
-                        )}
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-4">
+                    {/* Search */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Search Products</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search by name..."
+                          className="pl-9"
+                        />
                       </div>
+                    </div>
 
-                      {/* Metadata */}
-                      <div className="space-y-2 text-sm text-muted-foreground">
-                        {assignment.lastPublishedAt && (
-                          <div className="flex items-center justify-between">
-                            <span>Last Updated:</span>
-                            <span className="font-medium">
-                              {new Date(assignment.lastPublishedAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                        )}
-                        {locked && (
-                          <div className="flex items-center justify-between">
-                            <span>Unlocks:</span>
-                            <span className="font-medium text-amber-600">
-                              {new Date(assignment.lockedUntil!).toLocaleDateString()}
-                              </span>
-                          </div>
-                        )}
-                      </div>
+                    {/* Category Filter */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Category</label>
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      >
+                        {CATEGORY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                      {/* Template Summary */}
-                      <div className="pt-3 border-t space-y-1 text-xs text-muted-foreground">
-                        <div className="flex justify-between">
-                          <span>Personalization:</span>
-                          <span className="font-medium">
-                            {assignment.personalizationTemplate?.name || "Not set"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Account:</span>
-                          <span className="font-medium">
-                            {assignment.accountTemplate?.name || "Not set"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Doctor Questions:</span>
-                          <span className="font-medium">
-                            {assignment.doctorTemplate?.name || "Not set"}
-                          </span>
-                        </div>
-                      </div>
+                    {/* Status Filter */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Status</label>
+                      <select
+                        value={selectedStatus}
+                        onChange={(e) => setSelectedStatus(e.target.value)}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      >
+                        {STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                      {/* Actions */}
-                      <div className="flex gap-2 pt-2">
-                          <Button
-                          className="flex-1"
-                          variant={assignment.hasAssignment ? "default" : "secondary"}
-                            size="sm"
-                          onClick={() => handleEditForm(assignment.id)}
-                          >
-                          <Edit3 className="mr-2 h-4 w-4" />
-                          {!assignment.hasAssignment ? "Configure Form" : locked ? "View Form" : "Edit Form"}
-                          </Button>
-                        {isLive && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewLive(assignment)}
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Button>
-                        )}
+                    {/* Sort */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Sort By</label>
+                      <select
+                        value={selectedSort}
+                        onChange={(e) => setSelectedSort(e.target.value)}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      >
+                        {SORT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-                )
-              })}
+
+              {/* Results Summary */}
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>
+                  Showing {filteredAndSortedAssignments.length} of {assignments.length} product forms
+                </span>
+                {(searchQuery || selectedCategory || selectedStatus !== "all") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearchQuery("")
+                      setSelectedCategory("")
+                      setSelectedStatus("all")
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                )}
               </div>
-          )}
+
+              {/* Product Forms List */}
+              {loading ? (
+                <div className="flex h-64 items-center justify-center text-muted-foreground">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading forms...
+                </div>
+              ) : filteredAndSortedAssignments.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                    <Search className="h-12 w-12 mb-4" />
+                    <p>No product forms found matching your filters.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {filteredAndSortedAssignments.map((assignment) => {
+                    const locked = isLocked(assignment)
+                    const isLive = assignment.publishedUrl && assignment.lastPublishedAt
+                    const categoryLabel = CATEGORY_OPTIONS.find(c => c.value === assignment.treatment?.category)?.label
+
+                    return (
+                      <Card key={assignment.id} className="hover:border-primary/50 transition-colors">
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <CardTitle className="text-lg">{assignment.treatment?.name || "Untitled Product"}</CardTitle>
+                              <CardDescription className="mt-1">
+                                {categoryLabel && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {categoryLabel}
+                                  </Badge>
+                                )}
+                              </CardDescription>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {/* Status Badges */}
+                          <div className="flex flex-wrap gap-2">
+                            {!assignment.hasAssignment ? (
+                              <Badge variant="secondary" className="text-xs uppercase tracking-wide">
+                                Not Configured
+                              </Badge>
+                            ) : isLive ? (
+                              <Badge variant="info" className="text-xs uppercase tracking-wide">
+                                Live
+                              </Badge>
+                            ) : (
+                              <Badge variant="warning" className="text-xs uppercase tracking-wide">
+                                Pending
+                              </Badge>
+                            )}
+                            {locked && (
+                              <Badge variant="warning" className="text-xs uppercase tracking-wide">
+                                <Clock className="h-3 w-3 mr-1" />
+                                Locked
+                              </Badge>
+                            )}
+                            {assignment.hasAssignment && (
+                              <Badge variant="outline" className="text-xs uppercase tracking-wide">
+                                {assignment.layoutTemplate}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Metadata */}
+                          <div className="space-y-2 text-sm text-muted-foreground">
+                            {assignment.lastPublishedAt && (
+                              <div className="flex items-center justify-between">
+                                <span>Last Updated:</span>
+                                <span className="font-medium">
+                                  {new Date(assignment.lastPublishedAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                            {locked && (
+                              <div className="flex items-center justify-between">
+                                <span>Unlocks:</span>
+                                <span className="font-medium text-amber-600">
+                                  {new Date(assignment.lockedUntil!).toLocaleDateString()}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Template Summary */}
+                          <div className="pt-3 border-t space-y-1 text-xs text-muted-foreground">
+                            <div className="flex justify-between">
+                              <span>Personalization:</span>
+                              <span className="font-medium">
+                                {assignment.personalizationTemplate?.name || "Not set"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Account:</span>
+                              <span className="font-medium">
+                                {assignment.accountTemplate?.name || "Not set"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Doctor Questions:</span>
+                              <span className="font-medium">
+                                {assignment.doctorTemplate?.name || "Not set"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-2 pt-2">
+                            <Button
+                              className="flex-1"
+                              variant={assignment.hasAssignment ? "default" : "secondary"}
+                              size="sm"
+                              onClick={() => handleEditForm(assignment.id)}
+                            >
+                              <Edit3 className="mr-2 h-4 w-4" />
+                              {!assignment.hasAssignment ? "Configure Form" : locked ? "View Form" : "Edit Form"}
+                            </Button>
+                            {isLive && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewLive(assignment)}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
             </>
           )}
 
@@ -480,7 +491,7 @@ export default function Forms() {
                     </div>
 
                     {selectedCategory && (
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-4">
                         {/* Personalization Questions */}
                         <Card>
                           <CardHeader>
@@ -498,7 +509,7 @@ export default function Forms() {
                                 (t: any) => t.category === selectedCategory
                               )
                               return categoryTemplate ? (
-                                <Button 
+                                <Button
                                   onClick={() => router.push(`/forms/editor/${categoryTemplate.id}`)}
                                   className="w-full"
                                 >
@@ -506,7 +517,7 @@ export default function Forms() {
                                   Edit Personalization Questions
                                 </Button>
                               ) : (
-                                <Button 
+                                <Button
                                   onClick={() => handleCreateTemplate("personalization", selectedCategory)}
                                   variant="outline"
                                   className="w-full"
@@ -523,47 +534,6 @@ export default function Forms() {
                             })()}
                           </CardContent>
                         </Card>
-
-                        {/* Account Questions */}
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">Account Questions</CardTitle>
-                            <CardDescription>Universal (All Products)</CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <p className="text-sm text-muted-foreground mb-4">
-                              These questions are shown in ALL product forms across all categories.
-                            </p>
-                            {(() => {
-                              const accountTemplate = (sections?.account || []).find(
-                                (t: any) => !t.category // Universal template has no category
-                              )
-                              return accountTemplate ? (
-                                <Button 
-                                  onClick={() => router.push(`/forms/editor/${accountTemplate.id}`)}
-                                  className="w-full"
-                                >
-                                  <Edit3 className="mr-2 h-4 w-4" />
-                                  Edit Account Questions
-                                </Button>
-                              ) : (
-                                <Button 
-                                  onClick={() => handleCreateTemplate("account")}
-                                  variant="outline"
-                                  className="w-full"
-                                  disabled={creating}
-                                >
-                                  {creating ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Layers className="mr-2 h-4 w-4" />
-                                  )}
-                                  {creating ? "Creating..." : "Create Account Template"}
-                                </Button>
-                              )
-                            })()}
-                          </CardContent>
-                        </Card>
                       </div>
                     )}
 
@@ -574,6 +544,44 @@ export default function Forms() {
                       </div>
                     )}
                   </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {activeTab === "account" && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Manage Account Questions</CardTitle>
+                  <CardDescription>
+                    Configure the universal account questions shown in every product form across all categories.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    These questions are used globally. Changes will impact every product form.
+                  </p>
+                  {accountTemplate ? (
+                    <Button onClick={() => router.push(`/forms/editor/${accountTemplate.id}`)} className="w-full">
+                      <Edit3 className="mr-2 h-4 w-4" />
+                      Edit Account Questions
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => handleCreateTemplate("account")}
+                      variant="outline"
+                      className="w-full"
+                      disabled={creating}
+                    >
+                      {creating ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Layers className="mr-2 h-4 w-4" />
+                      )}
+                      {creating ? "Creating..." : "Create Account Template"}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             </>
