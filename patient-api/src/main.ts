@@ -2888,6 +2888,7 @@ app.post("/brand-subscriptions/create-payment-intent", authenticateJWT, async (r
       monthlyPrice: selectedPlan.monthlyPrice,
       currentPeriodStart: new Date(),
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      planType: selectedPlan.planType
     });
 
     // Create payment record
