@@ -7,8 +7,6 @@ import { initializeDatabase } from "./config/database";
 import { MailsSender } from "./services/mailsSender";
 // duplicate imports removed
 import Treatment from "./models/Treatment";
-import FormSectionTemplate from "./models/FormSectionTemplate";
-import TenantProductForm from "./models/TenantProductForm";
 import Product from "./models/Product";
 import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
@@ -29,6 +27,7 @@ import TreatmentProducts from "./models/TreatmentProducts";
 import TreatmentPlan, { BillingInterval } from "./models/TreatmentPlan";
 import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
+import formTemplateService from "./services/formTemplate.service";
 import User from "./models/User";
 import Clinic from "./models/Clinic";
 import { Op } from "sequelize";
@@ -76,9 +75,8 @@ import MDFilesService from "./services/mdIntegration/MDFiles.service";
 import PharmacyWebhookService from "./services/pharmacy/webhook";
 import BrandSubscriptionService from "./services/brandSubscription.service";
 import MessageService from "./services/Message.service";
-import formTemplateService from "./services/formTemplate.service";
 import ProductService from "./services/product.service";
-import { listTemplatesQuerySchema, assignTemplatesSchema } from "./validators/formTemplates";
+import { assignTemplatesSchema } from "./validators/formTemplates";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
 import QuestionnaireStep from "./models/QuestionnaireStep";
@@ -3726,9 +3724,9 @@ app.get("/tenants", authenticateJWT, async (req, res) => {
     }
   } catch (error) {
     console.error('Error fetching tenants:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });
@@ -3751,9 +3749,9 @@ app.get("/tenants/:id", authenticateJWT, async (req, res) => {
     }
   } catch (error) {
     console.error('Error fetching tenant:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });
@@ -3827,13 +3825,7 @@ app.get("/questionnaires/templates", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const validation = listTemplatesQuerySchema.safeParse(req.query);
-
-    if (!validation.success) {
-      return res.status(400).json({ success: false, message: 'Invalid query parameters', errors: validation.error.flatten() });
-    }
-
-    const templates = await formTemplateService.listTemplates(validation.data);
+    const templates = await questionnaireService.listTemplates();
 
     res.status(200).json({ success: true, data: templates });
   } catch (error) {
@@ -3890,22 +3882,17 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const { name, description, sectionType, category, schema } = req.body;
+    const { title, description, treatmentId, productId } = req.body;
 
-    if (!name || !sectionType) {
-      return res.status(400).json({ success: false, message: 'Name and sectionType are required' });
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Title is required' });
     }
 
-    if (!['personalization', 'account', 'doctor'].includes(sectionType)) {
-      return res.status(400).json({ success: false, message: 'Invalid sectionType' });
-    }
-
-    const template = await formTemplateService.createTemplate({
-      name,
+    const template = await questionnaireService.createTemplate({
+      title,
       description,
-      sectionType,
-      category,
-      schema,
+      treatmentId,
+      productId,
     });
 
     res.status(201).json({ success: true, data: template });
@@ -3930,7 +3917,7 @@ app.get("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Template ID is required' });
     }
 
-    const template = await formTemplateService.getTemplateById(id);
+    const template = await questionnaireService.getTemplateById(id);
 
     if (!template) {
       return res.status(404).json({ success: false, message: 'Template not found' });
@@ -3958,10 +3945,9 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Template ID is required' });
     }
 
-    const template = await formTemplateService.updateTemplate(id, {
-      name,
+    const template = await questionnaireService.updateTemplate(id, {
+      title: name,
       description,
-      schema,
     });
 
     res.status(200).json({ success: true, data: template });
@@ -3984,6 +3970,29 @@ app.get("/questionnaires", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching questionnaires for user:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch questionnaires' });
+  }
+});
+
+app.get("/questionnaires/product/:productId", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { productId } = req.params;
+
+    if (!productId) {
+      return res.status(400).json({ success: false, message: "productId is required" });
+    }
+
+    const templates = await questionnaireService.listTemplatesByProduct(productId);
+
+    res.status(200).json({ success: true, data: templates });
+  } catch (error) {
+    console.error('❌ Error fetching questionnaires for product:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch questionnaires for product' });
   }
 });
 

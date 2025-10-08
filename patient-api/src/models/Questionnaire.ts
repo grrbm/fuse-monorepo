@@ -4,6 +4,7 @@ import Treatment from './Treatment';
 import QuestionnaireStep from './QuestionnaireStep';
 import User from './User';
 import TenantProduct from './TenantProduct';
+import Product from './Product';
 
 @Table({
     freezeTableName: true,
@@ -29,6 +30,27 @@ export default class Questionnaire extends Entity {
     declare description: string;
 
     @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare personalizationQuestionsSetup: boolean;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare createAccountQuestionsSetup: boolean;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare doctorQuestionsSetup: boolean;
+
+    @Column({
         type: DataType.INTEGER,
         allowNull: false,
         defaultValue: -1,
@@ -44,6 +66,17 @@ export default class Questionnaire extends Entity {
 
     @BelongsTo(() => Treatment)
     declare treatment?: Treatment | null;
+
+
+    @ForeignKey(() => Product)
+    @Column({
+        type: DataType.UUID,
+        allowNull: true,
+    })
+    declare productId: string | null;
+
+    @BelongsTo(() => Product)
+    declare product?: Product | null;
 
     @ForeignKey(() => User)
     @Column({

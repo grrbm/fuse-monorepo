@@ -9,6 +9,26 @@ import { Transaction } from 'sequelize';
 
 class QuestionnaireService {
 
+    async createTemplate(input: {
+        title: string;
+        description?: string;
+        treatmentId?: string | null;
+        productId?: string | null;
+    }) {
+        return Questionnaire.create({
+            title: input.title,
+            description: input.description ?? null,
+            checkoutStepPosition: -1,
+            treatmentId: input.treatmentId ?? null,
+            productId: input.productId ?? null,
+            isTemplate: true,
+            userId: null,
+            personalizationQuestionsSetup: false,
+            createAccountQuestionsSetup: false,
+            doctorQuestionsSetup: false,
+        });
+    }
+
     async listTemplates() {
         return Questionnaire.findAll({
             where: { isTemplate: true },
@@ -42,6 +62,100 @@ class QuestionnaireService {
                 ],
             ],
         });
+    }
+
+    async listTemplatesByProduct(productId: string) {
+        return Questionnaire.findAll({
+            where: { isTemplate: true, productId },
+            include: [
+                {
+                    model: QuestionnaireStep,
+                    as: 'steps',
+                    include: [
+                        {
+                            model: Question,
+                            as: 'questions',
+                            include: [
+                                {
+                                    model: QuestionOption,
+                                    as: 'options',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+            order: [
+                [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+                [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+                [
+                    { model: QuestionnaireStep, as: 'steps' },
+                    { model: Question, as: 'questions' },
+                    { model: QuestionOption, as: 'options' },
+                    'optionOrder',
+                    'ASC',
+                ],
+            ],
+        });
+    }
+
+    async getTemplateById(id: string) {
+        return Questionnaire.findOne({
+            where: { id, isTemplate: true },
+            include: [
+                {
+                    model: QuestionnaireStep,
+                    as: 'steps',
+                    include: [
+                        {
+                            model: Question,
+                            as: 'questions',
+                            include: [
+                                {
+                                    model: QuestionOption,
+                                    as: 'options',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+            order: [
+                [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+                [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+                [
+                    { model: QuestionnaireStep, as: 'steps' },
+                    { model: Question, as: 'questions' },
+                    { model: QuestionOption, as: 'options' },
+                    'optionOrder',
+                    'ASC',
+                ],
+            ],
+        });
+    }
+
+    async updateTemplate(id: string, updates: {
+        title?: string;
+        description?: string | null;
+        personalizationQuestionsSetup?: boolean;
+        createAccountQuestionsSetup?: boolean;
+        doctorQuestionsSetup?: boolean;
+    }) {
+        const template = await Questionnaire.findOne({ where: { id, isTemplate: true } });
+
+        if (!template) {
+            throw new Error('Template not found');
+        }
+
+        await template.update({
+            title: updates.title ?? template.title,
+            description: updates.description ?? template.description,
+            personalizationQuestionsSetup: updates.personalizationQuestionsSetup ?? template.personalizationQuestionsSetup,
+            createAccountQuestionsSetup: updates.createAccountQuestionsSetup ?? template.createAccountQuestionsSetup,
+            doctorQuestionsSetup: updates.doctorQuestionsSetup ?? template.doctorQuestionsSetup,
+        });
+
+        return this.getTemplateById(id);
     }
 
     async listForUser(userId: string) {
