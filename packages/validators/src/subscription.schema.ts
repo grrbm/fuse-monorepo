@@ -24,13 +24,14 @@ export const updateBrandSubscriptionFeaturesSchema = z.object({
   features: z.object({
     apiAccess: z.boolean().optional(),
     whiteLabel: z.boolean().optional(),
-    maxProducts: z.number().int().nonnegative('Max products must be non-negative').optional(),
+    maxProducts: z.number().int().optional(),
     maxCampaigns: z.number().int().nonnegative('Max campaigns must be non-negative').optional(),
     customBranding: z.boolean().optional(),
     analyticsAccess: z.boolean().optional(),
     customerSupport: z.string().optional(),
     customIntegrations: z.boolean().optional(),
-  }),
+  }).optional(),
+  monthlyPrice: z.number().optional()
 });
 
 /**

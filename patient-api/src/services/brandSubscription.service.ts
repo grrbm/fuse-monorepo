@@ -4,6 +4,7 @@ import User from '../models/User';
 import Payment from '../models/Payment';
 import { BillingInterval, StripeService } from '@fuse/stripe';
 import UserService from './user.service';
+import { UpdateBrandSubscriptionFeaturesInput } from '@fuse/validators';
 
 interface CreateFromPaymentParams {
   paymentId: string;
@@ -365,21 +366,11 @@ class BrandSubscriptionService {
   }
 
   /**
-   * Update brand subscription features (admin only)
+   * Update brand subscription features and/or price (admin only)
    */
   async updateFeatures(
     adminUserId: string,
-    targetUserId: string,
-    features: Partial<{
-      apiAccess?: boolean;
-      whiteLabel?: boolean;
-      maxProducts?: number;
-      maxCampaigns?: number;
-      customBranding?: boolean;
-      analyticsAccess?: boolean;
-      customerSupport?: string;
-      customIntegrations?: boolean;
-    }>
+    updates: UpdateBrandSubscriptionFeaturesInput
   ) {
     try {
       // Validate admin user
@@ -391,6 +382,8 @@ class BrandSubscriptionService {
           error: 'Only admin users can update subscription features'
         };
       }
+
+      const targetUserId = updates.userId
 
       // Find the target user's subscription
       const subscription = await BrandSubscription.findOne({
@@ -406,29 +399,168 @@ class BrandSubscriptionService {
         };
       }
 
-      // Merge existing features with new features
-      const updatedFeatures = {
-        ...subscription.features,
-        ...features
-      };
+      const updateData: any = {};
 
-      // Update subscription features
-      await subscription.update({ features: updatedFeatures });
+      // Update features if provided
+      if (updates.features) {
+        const updatedFeatures = {
+          ...subscription.features,
+          ...updates.features
+        };
+        updateData.features = updatedFeatures;
+      }
 
+      // Update price if provided and different from current
+      if (updates.monthlyPrice !== undefined && updates.monthlyPrice !== subscription.monthlyPrice) {
+        updateData.monthlyPrice = updates.monthlyPrice;
+
+        // Look up a plan that matches the new price to get the stripePriceId
+        let matchingPlan = await BrandSubscriptionPlans.findOne({
+          where: {
+            monthlyPrice: updates.monthlyPrice,
+            planType: subscription.planType
+          }
+        });
+
+        let stripePriceId: string;
+
+        if (matchingPlan?.stripePriceId) {
+          stripePriceId = matchingPlan.stripePriceId;
+          console.log('✅ Found matching plan for price update:', {
+            planId: matchingPlan.id,
+            planType: matchingPlan.planType,
+            stripePriceId
+          });
+        } else {
+          // No matching plan found - create a custom price in Stripe and database
+          console.log('⚠️ No matching plan found for new price, creating custom price');
+
+          try {
+            // Get or create a Stripe product for brand subscriptions
+            const stripeProductId = process.env.STRIPE_BRAND_SUBSCRIPTION_PRODUCT_ID;
+
+            if (!stripeProductId) {
+              console.error('❌ STRIPE_BRAND_SUBSCRIPTION_PRODUCT_ID not configured');
+              return {
+                success: false,
+                message: 'Stripe product configuration missing',
+                error: 'STRIPE_BRAND_SUBSCRIPTION_PRODUCT_ID environment variable not set'
+              };
+            }
+
+            // Create new Stripe price
+            const stripePrice = await this.stripeService.createPrice({
+              product: stripeProductId,
+              unit_amount: Math.round(updates.monthlyPrice * 100), // Convert to cents
+              currency: 'usd',
+              recurring: {
+                interval: 'month',
+                interval_count: 1
+              },
+              metadata: {
+                customPrice: 'true',
+                planType: 'custom',
+                createdBy: 'admin',
+              }
+            });
+
+            stripePriceId = stripePrice.id;
+
+            // Create a custom plan record in the database (inactive by default)
+            const customPlan = await BrandSubscriptionPlans.create({
+              planType: 'custom',
+              name: `Custom Plan`,
+              description: `Custom pricing plan`,
+              monthlyPrice: updates.monthlyPrice,
+              stripePriceId: stripePriceId,
+              maxProducts: subscription.features?.maxProducts || -1,
+              maxCampaigns: subscription.features?.maxCampaigns || -1,
+              analyticsAccess: subscription.features?.analyticsAccess || true,
+              customerSupport: subscription.features?.customerSupport || 'email',
+              customBranding: subscription.features?.customBranding || false,
+              apiAccess: subscription.features?.apiAccess || false,
+              whiteLabel: subscription.features?.whiteLabel || false,
+              customIntegrations: subscription.features?.customIntegrations || false,
+              isActive: false, // Inactive by default
+              sortOrder: 999
+            });
+
+            console.log('✅ Created custom price plan:', {
+              planId: customPlan.id,
+              stripePriceId,
+              monthlyPrice: updates.monthlyPrice,
+              isActive: false
+            });
+          } catch (error) {
+            console.error('❌ Error creating custom price:', error);
+            return {
+              success: false,
+              message: 'Failed to create custom price',
+              error: error instanceof Error ? error.message : 'Unknown error'
+            };
+          }
+        }
+
+        // If subscription has a Stripe subscription ID, update the price in Stripe
+        if (subscription.stripeSubscriptionId) {
+          try {
+            // Get the subscription from Stripe to find the current subscription item
+            const stripeSubscription = await this.stripeService.getSubscription(
+              subscription.stripeSubscriptionId,
+              { expand: ['items'] }
+            );
+
+            if (stripeSubscription.items.data.length > 0) {
+              const currentItem = stripeSubscription.items.data[0];
+
+              // Update the subscription with the new price
+              await this.stripeService.upgradeSubscriptionStripe({
+                stripeSubscriptionId: subscription.stripeSubscriptionId,
+                stripeItemId: currentItem.id,
+                stripePriceId: stripePriceId
+              });
+
+              updateData.stripePriceId = stripePriceId;
+
+              console.log('✅ Updated Stripe subscription price:', {
+                subscriptionId: subscription.stripeSubscriptionId,
+                oldPrice: subscription.monthlyPrice,
+                newPrice: updates.monthlyPrice,
+                newPriceId: stripePriceId
+              });
+            }
+          } catch (stripeError) {
+            console.error('❌ Error updating Stripe subscription price:', stripeError);
+            return {
+              success: false,
+              message: 'Failed to update price in Stripe',
+              error: stripeError instanceof Error ? stripeError.message : 'Unknown Stripe error'
+            };
+          }
+        } else {
+          // Just update the price ID if no active Stripe subscription
+          updateData.stripePriceId = stripePriceId;
+        }
+      }
+
+      // Apply all updates
+      if (Object.keys(updateData).length > 0) {
+        await subscription.update(updateData);
+      }
 
       return {
         success: true,
-        message: 'Subscription features updated successfully',
+        message: 'Subscription updated successfully',
         data: {
           subscription: await subscription.reload()
         }
       };
 
     } catch (error) {
-      console.error('❌ Error updating subscription features:', error);
+      console.error('❌ Error updating subscription:', error);
       return {
         success: false,
-        message: 'Failed to update subscription features',
+        message: 'Failed to update subscription',
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }

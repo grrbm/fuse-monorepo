@@ -2660,13 +2660,11 @@ app.put("/brand-subscriptions/features", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { userId, features } = validation.data;
 
     const brandSubscriptionService = new BrandSubscriptionService();
     const result = await brandSubscriptionService.updateFeatures(
       currentUser.id,
-      userId,
-      features
+      validation.data
     );
 
     if (!result.success) {
