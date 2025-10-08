@@ -15,13 +15,8 @@ export const createPaymentIntentSchema = z.object({
   questionnaireAnswers: questionnaireAnswersSchema.optional(),
 });
 
-export const confirmPaymentSchema = z.object({
-  paymentIntentId: z.string().min(1, 'Payment intent ID is required'),
-});
-
 /**
  * Type exports
  */
 
 export type CreatePaymentIntentInput = z.infer<typeof createPaymentIntentSchema>;
-export type ConfirmPaymentInput = z.infer<typeof confirmPaymentSchema>;
