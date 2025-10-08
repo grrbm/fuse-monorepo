@@ -16,7 +16,6 @@ export const brandPaymentIntentSchema = z.object({
   brandSubscriptionPlanId: z.string()
 });
 
-
 // Treatment subscription management schemas
 export const upgradeSubscriptionSchema = z.object({
   treatmentId: z.string().uuid('Invalid treatment ID'),
@@ -47,7 +46,6 @@ export const updateBrandSubscriptionFeaturesSchema = z.object({
 
 export type BrandCheckoutInput = z.infer<typeof brandCheckoutSchema>;
 export type BrandPaymentIntentInput = z.infer<typeof brandPaymentIntentSchema>;
-export type BrandConfirmPaymentInput = z.infer<typeof brandConfirmPaymentSchema>;
 export type UpgradeSubscriptionInput = z.infer<typeof upgradeSubscriptionSchema>;
 export type CancelSubscriptionInput = z.infer<typeof cancelSubscriptionSchema>;
 export type UpdateBrandSubscriptionFeaturesInput = z.infer<typeof updateBrandSubscriptionFeaturesSchema>;
