@@ -141,7 +141,7 @@ class BrandSubscriptionService {
         currentPeriodStart: currentPeriodStartDate,
         currentPeriodEnd: currentPeriodEndDate,
         features: planFeatures,
-        plantType: brandSubPlan.planType
+        planType: brandSubPlan.planType
       });
 
       console.log('✅ SERVICE: BrandSubscription created and linked:', brandSubscription.id);
