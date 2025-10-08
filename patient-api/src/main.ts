@@ -48,7 +48,6 @@ import {
   clinicSubscriptionSchema,
   brandCheckoutSchema,
   brandPaymentIntentSchema,
-  brandConfirmPaymentSchema,
   upgradeSubscriptionSchema,
   cancelSubscriptionSchema,
   updateBrandSubscriptionFeaturesSchema,
@@ -2681,7 +2680,7 @@ app.put("/brand-subscriptions/features", authenticateJWT, async (req, res) => {
 
     if (!result.success) {
       const statusCode = result.message === 'Access denied' ? 403 :
-                        result.message === 'Subscription not found' ? 404 : 400;
+        result.message === 'Subscription not found' ? 404 : 400;
       return res.status(statusCode).json({
         success: false,
         message: result.message,
@@ -2811,10 +2810,8 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
 });
 
 // Create payment intent for direct card processing
-app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
+app.post("/brand/create-payment-intent", authenticateJWT, async (req, res) => {
   try {
-    console.log('🚀 BACKEND CREATE: Payment intent creation called')
-    console.log('🚀 BACKEND CREATE: Request body:', JSON.stringify(req.body, null, 2))
 
     const currentUser = getCurrentUser(req);
 
@@ -2836,43 +2833,15 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { planType, amount, currency, upgrade, planCategory, downpaymentPlanType } = validation.data;
+    const { brandSubscriptionPlanId } = validation.data;
 
-    console.log('🚀 BACKEND CREATE: Plan type received:', planType)
-    console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
+    const selectedPlan = await BrandSubscriptionPlans.findByPk(brandSubscriptionPlanId);
 
-    if (!upgrade) {
-      const existingSubscription = await BrandSubscription.findOne({
-        where: {
-          userId: currentUser.id,
-          status: ['active', 'processing', 'past_due']
-        }
-      });
-
-
-      if (existingSubscription) {
-        return res.status(400).json({
-          success: false,
-          message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
-        });
-
-      }
-    }
-
-    console.log('🚀 BACKEND CREATE: Looking up plan type:', planType)
-    const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
-    console.log('🚀 BACKEND CREATE: Plan found:', selectedPlan?.id, selectedPlan?.planType)
-
-    // Debug: List all available plans
-    const allPlans = await BrandSubscriptionPlans.findAll({ attributes: ['planType', 'name'] })
-    console.log('🚀 BACKEND CREATE: All available plans:', allPlans.map(p => ({ type: p.planType, name: p.name })))
 
     if (!selectedPlan) {
-      console.error('❌ BACKEND CREATE: Invalid plan type:', planType)
-      console.error('❌ BACKEND CREATE: Available types:', allPlans.map(p => p.planType))
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: "Invalid plan type"
+        message: "Plan not found"
       });
     }
 
@@ -2890,18 +2859,19 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
     let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
       userId: user.id,
       role: user.role,
-      planType: planType
+      brandSubscriptionPlanId
     });
 
+    const amount = selectedPlan.monthlyPrice
 
     // Create Payment Intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100), // Convert to cents
-      currency: currency || 'usd',
+      currency: 'usd',
       customer: stripeCustomerId,
       metadata: {
         userId: currentUser.id,
-        planType: planType,
+        brandSubscriptionPlanId,
         amount: amount.toString()
       },
       automatic_payment_methods: {
@@ -2910,15 +2880,13 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       },
       setup_future_usage: 'off_session',
       receipt_email: user.email || undefined,
-      description: `${selectedPlan.name} down payment`
+      description: `${selectedPlan.name}`
     });
 
 
 
     const brandSubscription = await BrandSubscription.create({
       userId: user.id,
-      planType: planType,
-      planCategory: planCategory,
       status: BrandSubscriptionStatus.PENDING,
       stripeCustomerId: user.stripeCustomerId,
       stripePriceId: selectedPlan.stripePriceId,
@@ -2936,10 +2904,7 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
       currency: 'usd',
       stripeMetadata: {
         userId: currentUser.id,
-        planType: planType,
         stripePriceId: selectedPlan.stripePriceId,
-        planCategory: planCategory,
-        downpaymentPlanType: downpaymentPlanType,
         amount: amount.toString()
       },
       brandSubscriptionId: brandSubscription.id
@@ -2970,16 +2935,6 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Access denied. Brand role required."
-      });
-    }
-
-    // Validate request body
-    const validation = brandConfirmPaymentSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
       });
     }
 

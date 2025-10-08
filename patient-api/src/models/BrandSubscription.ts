@@ -50,9 +50,9 @@ export default class BrandSubscription extends Entity {
 
   @Column({
     type: DataType.STRING,
-    allowNull: false,
+    allowNull: true,
   })
-  declare planType: string;
+  declare planType?: string;
 
   @Column({
     type: DataType.STRING,
@@ -181,12 +181,6 @@ export default class BrandSubscription extends Entity {
     const now = new Date();
     const diffTime = this.currentPeriodEnd.getTime() - now.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  }
-
-  public async getPlanDetails() {
-    // Import here to avoid circular dependency
-    const BrandSubscriptionPlans = await import('./BrandSubscriptionPlans');
-    return await BrandSubscriptionPlans.default.getPlanByType(this.planType);
   }
 
   public async updateProcessing(subscriptionId: string): Promise<void> {

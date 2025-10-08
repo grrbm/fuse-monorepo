@@ -35,6 +35,7 @@ interface Plan {
   planType?: string
   features: PlanFeatures
   stripePriceId: string
+  id?: string
 }
 
 interface PlansResponse {
@@ -111,7 +112,8 @@ export default function Plans() {
                 price: plan.monthlyPrice,
                 planType: plan.planType,
                 features: plan.features,
-                stripePriceId: plan.stripePriceId
+                stripePriceId: plan.stripePriceId,
+                id: plan.id
               }
               return acc
             }, {} as PlansResponse)
@@ -156,51 +158,30 @@ export default function Plans() {
     fetchData()
   }, [token, authenticatedFetch])
 
-  const handleSelectPlan = async (planCategory: string) => {
+  const handleSelectPlan = async (planType: string) => {
     if (!token) {
       alert('You need to be signed in to select a plan.')
       return
     }
 
-    const planMappings = {
-      standard: {
-        displayName: 'Standard',
-        planType: 'standard_build',
-        downpayment: {
-          type: 'downpayment_standard',
-          name: 'Discounted First Month',
-          amount: 1500
-        }
-      },
-      professional: {
-        displayName: 'Controlled Substances',
-        planType: 'high-definition',
-        downpayment: {
-          type: 'downpayment_professional',
-          name: 'Discounted Professional First Month',
-          amount: 2500
-        }
-      }
-    } as const
-
-    const mapping = planMappings[planCategory as keyof typeof planMappings]
-
-    if (!mapping) {
+    if (!plans || !plans[planType]) {
+      alert('Invalid plan selected.')
       return
     }
 
-    const downpaymentAmount = mapping.downpayment.amount
+    const selectedPlan = plans[planType]
+    const downpaymentAmount = selectedPlan.price
 
     try {
-      setCreatingCheckout(planCategory)
+      setCreatingCheckout(planType)
 
       const payload = {
-        selectedPlanCategory: planCategory,
-        selectedPlanType: mapping.planType,
-        selectedPlanName: mapping.displayName,
+        selectedPlanCategory: planType,
+        selectedPlanType: planType,
+        selectedPlanName: selectedPlan.name,
         selectedPlanPrice: downpaymentAmount,
-        selectedDownpaymentType: mapping.downpayment.type,
-        selectedDownpaymentName: mapping.downpayment.name,
+        selectedDownpaymentType: `downpayment_${planType}`,
+        selectedDownpaymentName: `${selectedPlan.name} First Month`,
         selectedDownpaymentPrice: downpaymentAmount,
         planSelectionTimestamp: new Date().toISOString()
       }
@@ -223,13 +204,15 @@ export default function Plans() {
       }
 
       const queryParams = new URLSearchParams({
-        planCategory,
-        subscriptionPlanType: mapping.planType,
-        subscriptionPlanName: mapping.displayName,
-        subscriptionMonthlyPrice: plans?.[mapping.planType]?.price?.toString() || String(mapping.downpayment.amount),
-        downpaymentPlanType: mapping.downpayment.type,
-        downpaymentName: mapping.downpayment.name,
-        downpaymentAmount: String(mapping.downpayment.amount)
+        planCategory: planType,
+        subscriptionPlanType: planType,
+        subscriptionPlanName: selectedPlan.name,
+        subscriptionMonthlyPrice: selectedPlan.price.toString(),
+        downpaymentPlanType: `downpayment_${planType}`,
+        downpaymentName: `${selectedPlan.name} First Month`,
+        downpaymentAmount: downpaymentAmount.toString(),
+        brandSubscriptionPlanId: selectedPlan.id || '',
+        stripePriceId: selectedPlan.stripePriceId || ''
       })
 
       router.push(`/checkout?${queryParams.toString()}`)
@@ -340,121 +323,136 @@ export default function Plans() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-12">
-            <Card className="relative group cursor-pointer transition-all duration-300 shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80 flex flex-col">
-              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                <Badge className="bg-primary text-primary-foreground font-medium">
-                  MOST POPULAR
-                </Badge>
-              </div>
-              <div className="absolute top-4 left-4">
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                  Monthly
-                </Badge>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto mb-12">
+            {plans && Object.entries(plans).map(([key, plan], index) => {
+              const isCurrentPlan = currentSubscription?.planType === plan.planType && currentSubscription?.status === 'active'
+              const isPopular = index === 0 // First plan is popular
+              const Icon = index === 0 ? Building2 : Shield
 
-              <CardHeader className="pt-12 pb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="h-5 w-5" />
-                  <CardTitle className="text-xl font-semibold">Standard</CardTitle>
-                </div>
-                <div className="mb-4">
-                  <span className="text-3xl font-bold text-[#825AD1]">$1,500</span>
-                  <span className="text-muted-foreground"> / month</span>
-                  <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Core software to manage patient journeys, connect with Fuse telehealth physicians, and automate pharmacy fulfillment.
-                </p>
-              </CardHeader>
-
-              <CardContent className="flex flex-col h-full">
-                <ul className="space-y-3 mb-8 flex-grow">
-                  <li className="flex items-start gap-2 text-sm">
-                    <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Ideal for wellness, aesthetics, weight-loss, and lifestyle telehealth brands that don't require controlled scripts.</span>
-                  </li>
-                </ul>
-
-                <Button
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors mt-auto"
-                  onClick={() => handleSelectPlan('standard')}
-                  disabled={
-                    !!creatingCheckout ||
-                    (currentSubscription?.planType === 'standard_build' && currentSubscription?.status === 'active')
-                  }
+              return (
+                <Card
+                  key={key}
+                  className={`relative group cursor-pointer transition-all duration-300 flex flex-col ${
+                    isPopular
+                      ? 'shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80'
+                      : 'hover:shadow-xl hover:scale-105 hover:border-primary border-muted'
+                  }`}
                 >
-                  {creatingCheckout === 'standard' ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
-                      Processing...
-                    </>
-                  ) : currentSubscription?.planType === 'standard_build' && currentSubscription?.status === 'active' ? (
-                    'Current Plan'
-                  ) : (
-                    <>
-                      Get started
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
+                  {isPopular && (
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <Badge className="bg-primary text-primary-foreground font-medium">
+                        MOST POPULAR
+                      </Badge>
+                    </div>
                   )}
-                </Button>
-              </CardContent>
-            </Card>
 
-            <Card className="relative group cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105 hover:border-primary flex flex-col border-muted">
-              <div className="absolute top-4 left-4">
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                  Monthly
-                </Badge>
-              </div>
+                  <div className="absolute top-4 left-4">
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                      Monthly
+                    </Badge>
+                  </div>
 
-              <CardHeader className="pt-12 pb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className="h-5 w-5" />
-                  <CardTitle className="text-xl font-semibold">Controlled Substances</CardTitle>
-                </div>
-                <div className="mb-4">
-                  <span className="text-3xl font-bold text-[#825AD1]">$2,500</span>
-                  <span className="text-muted-foreground"> / month</span>
-                  <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Everything in the standard package plus the workflows you need to prescribe regulated therapies through Fuse doctors and pharmacies.
-                </p>
-              </CardHeader>
+                  <CardHeader className="pt-12 pb-6">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon className="h-5 w-5" />
+                      <CardTitle className="text-xl font-semibold">{plan.name}</CardTitle>
+                    </div>
+                    <div className="mb-4">
+                      <span className="text-3xl font-bold text-[#825AD1]">
+                        ${plan.price.toLocaleString()}
+                      </span>
+                      <span className="text-muted-foreground"> / month</span>
+                      <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
+                    </div>
+                  </CardHeader>
 
-              <CardContent className="flex flex-col h-full">
-                <ul className="space-y-3 mb-8 flex-grow">
-                  <li className="flex items-start gap-2 text-sm">
-                    <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>Perfect for clinics offering TRT, growth hormone releasing peptides, and other Schedule III therapies that require licensed prescribers.</span>
-                  </li>
-                </ul>
+                  <CardContent className="flex flex-col h-full">
+                    <ul className="space-y-3 mb-8 flex-grow">
+                      {plan.features.maxProducts !== undefined && (
+                        <li className="flex items-start gap-2 text-sm">
+                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>
+                            {plan.features.maxProducts === -1
+                              ? 'Unlimited products'
+                              : `Up to ${plan.features.maxProducts} product${plan.features.maxProducts !== 1 ? 's' : ''}`}
+                          </span>
+                        </li>
+                      )}
+                      {plan.features.maxCampaigns !== undefined && (
+                        <li className="flex items-start gap-2 text-sm">
+                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>
+                            {plan.features.maxCampaigns === -1
+                              ? 'Unlimited campaigns'
+                              : `Up to ${plan.features.maxCampaigns} campaign${plan.features.maxCampaigns !== 1 ? 's' : ''}`}
+                          </span>
+                        </li>
+                      )}
+                      {plan.features.analyticsAccess && (
+                        <li className="flex items-start gap-2 text-sm">
+                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>Analytics & reporting</span>
+                        </li>
+                      )}
+                      {plan.features.customerSupport && (
+                        <li className="flex items-start gap-2 text-sm">
+                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>{plan.features.customerSupport} support</span>
+                        </li>
+                      )}
+                      {plan.features.customBranding && (
+                        <li className="flex items-start gap-2 text-sm">
+                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>Custom branding</span>
+                        </li>
+                      )}
+                      {plan.features.apiAccess && (
+                        <li className="flex items-start gap-2 text-sm">
+                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>API access</span>
+                        </li>
+                      )}
+                      {plan.features.whiteLabel && (
+                        <li className="flex items-start gap-2 text-sm">
+                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>White label solution</span>
+                        </li>
+                      )}
+                      {plan.features.customIntegrations && (
+                        <li className="flex items-start gap-2 text-sm">
+                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>Custom integrations</span>
+                        </li>
+                      )}
+                    </ul>
 
-                <Button
-                  className="w-full bg-white border border-gray-300 text-gray-900 hover:bg-gray-50 transition-colors mt-auto"
-                  onClick={() => handleSelectPlan('professional')}
-                  disabled={
-                    !!creatingCheckout ||
-                    (currentSubscription?.planType === 'high-definition' && currentSubscription?.status === 'active')
-                  }
-                >
-                  {creatingCheckout === 'professional' ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
-                      Processing...
-                    </>
-                  ) : currentSubscription?.planType === 'high-definition' && currentSubscription?.status === 'active' ? (
-                    'Current Plan'
-                  ) : (
-                    <>
-                      Get started
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
+                    <Button
+                      className={`w-full transition-colors mt-auto ${
+                        isPopular
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
+                      }`}
+                      onClick={() => handleSelectPlan(plan.planType || key)}
+                      disabled={!!creatingCheckout || isCurrentPlan}
+                    >
+                      {creatingCheckout === (plan.planType || key) ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Processing...
+                        </>
+                      ) : isCurrentPlan ? (
+                        'Current Plan'
+                      ) : (
+                        <>
+                          Get started
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
 
           <div className="max-w-5xl mx-auto mt-16">

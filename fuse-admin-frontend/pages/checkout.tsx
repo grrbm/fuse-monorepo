@@ -50,6 +50,8 @@ interface CheckoutData {
   downpaymentName?: string
   upgradeDelta?: number
   previousMonthlyPrice?: number
+  brandSubscriptionPlanId?: string
+  stripePriceId?: string
 }
 
 // Checkout form component that uses Stripe hooks
@@ -388,7 +390,9 @@ export default function CheckoutPage() {
       downpaymentAmount,
       subscriptionPlanType,
       subscriptionPlanName,
-      subscriptionMonthlyPrice
+      subscriptionMonthlyPrice,
+      brandSubscriptionPlanId,
+      stripePriceId
     } = router.query
 
     if (
@@ -422,12 +426,14 @@ export default function CheckoutPage() {
         downpaymentName: downpaymentName as string,
         upgradeDelta: isUpgrade ? delta : undefined,
         previousMonthlyPrice: existingMonthlyPrice ?? undefined,
+        brandSubscriptionPlanId: brandSubscriptionPlanId as string,
+        stripePriceId: stripePriceId as string
       })
 
       if (isUpgrade) {
         createUpgradePaymentIntent(subscriptionPlanType as string, delta)
       } else {
-        createPaymentIntent(subscriptionPlanType as string, downpaymentAmountNum)
+        createPaymentIntent(subscriptionPlanType as string, downpaymentAmountNum, brandSubscriptionPlanId as string)
       }
     } else {
       // Redirect back if missing data
@@ -435,7 +441,7 @@ export default function CheckoutPage() {
     }
   }, [router.query, user, isLoading, subscription])
 
-  const createPaymentIntent = async (planType: string, amount: number) => {
+  const createPaymentIntent = async (planType: string, amount: number, brandSubscriptionPlanId?: string) => {
     try {
       if (!token) {
         throw new Error('User not authenticated. Please log in again.')
@@ -450,7 +456,8 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           planType,
           amount,
-          currency: 'usd'
+          currency: 'usd',
+          brandSubscriptionPlanId
         })
       })
 

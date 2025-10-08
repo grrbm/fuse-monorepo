@@ -6,7 +6,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { planType, amount, currency } = req.body
+    const { planType, amount, currency, brandSubscriptionPlanId } = req.body
     const token = req.headers.authorization?.replace('Bearer ', '')
 
     if (!token) {
@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Forward to backend API
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/create-payment-intent`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/brand/create-payment-intent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -27,7 +27,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       body: JSON.stringify({
         planType,
         amount,
-        currency: currency || 'usd'
+        currency: currency || 'usd',
+        brandSubscriptionPlanId: brandSubscriptionPlanId
       })
     })
 

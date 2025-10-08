@@ -2,9 +2,8 @@ import BrandSubscription, { BrandSubscriptionStatus } from '../models/BrandSubsc
 import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
 import User from '../models/User';
 import Payment from '../models/Payment';
-import { StripeService } from '@fuse/stripe';
+import { BillingInterval, StripeService } from '@fuse/stripe';
 import UserService from './user.service';
-import Stripe from 'stripe';
 
 interface CreateFromPaymentParams {
   paymentId: string;
@@ -70,7 +69,7 @@ class BrandSubscriptionService {
       }
 
 
-      const { userId, planType } = brandSubscription;
+      const { userId } = brandSubscription;
 
       const metadata = payment.stripeMetadata;
 
@@ -80,7 +79,6 @@ class BrandSubscriptionService {
           error: 'Payment metadata incomplete'
         };
       }
-
       // 3. Verify user
       const user = await User.findByPk(userId);
       if (!user) {
@@ -90,76 +88,31 @@ class BrandSubscriptionService {
         };
       }
 
-      // 4. Check for existing active subscription
-      const existingSubscription = await BrandSubscription.findOne({
-        where: {
-          userId: userId,
-          status: [BrandSubscriptionStatus.ACTIVE, BrandSubscriptionStatus.PROCESSING]
-        }
-      });
-
-      if (existingSubscription) {
-        return {
-          success: false,
-          error: 'User already has an active subscription'
-        };
-      }
-
-      // 5. Get or verify subscription schedule exists
-
       console.log('⚠️ No subscription schedule ID in metadata, creating new schedule');
 
+      const { brandSubscriptionPlanId } = metadata
+
       // Get plan details
-      const selectedPlan = await BrandSubscriptionPlans.getPlanByType(planType as any);
-      if (!selectedPlan) {
+      const brandSubPlan = await BrandSubscriptionPlans.findByPk(brandSubscriptionPlanId)
+      if (!brandSubPlan) {
         return {
           success: false,
-          error: `Invalid plan type: ${planType}`
+          error: "Subscription plan not found"
         };
       }
-
-
-      // Get introductory plan
-      const introductoryPlanType = metadata.downpaymentPlanType ||
-        (metadata.planCategory === 'professional' ? 'downpayment_professional' : 'downpayment_standard');
-      const introductoryPlan = await BrandSubscriptionPlans.getPlanByType(introductoryPlanType as any);
-
-      if (!introductoryPlan) {
-        return {
-          success: false,
-          error: `Introductory plan not found: ${introductoryPlanType}`
-        };
-      }
-
       // Get or create Stripe customer
       const stripeCustomerId = await this.userService.getOrCreateCustomerId(user);
 
-      const subscriptionSchedule = await this.stripeService.createSchedule({
+      const subscription = await this.stripeService.createSubscriptionAfterPayment({
         customerId: stripeCustomerId,
+        priceId: brandSubPlan.stripePriceId,
         paymentMethodId: metadata.paymentMethodId,
+        billingInterval: BillingInterval.MONTHLY,
         metadata: {
-          userId: metadata.userId,
-          planType: metadata.planType,
-          planCategory: metadata.planCategory || 'standard',
-          introductoryPlanType: introductoryPlan.planType
-        },
-        phases: [
-          {
-            items: [{ price: introductoryPlan.stripePriceId, quantity: 1 }],
-            iterations: 1
-          },
-          {
-            items: [{ price: selectedPlan.stripePriceId, quantity: 1 }]
-          }
-        ]
+          brandSubscriptionPlanId: brandSubscriptionPlanId,
+          userId: userId
+        }
       });
-
-
-
-      const subscriptionScheduleId = subscriptionSchedule.id;
-      console.log('✅ SERVICE: Subscription schedule created:', subscriptionScheduleId);
-
-      const subscription = subscriptionSchedule.subscription as Stripe.Subscription;
 
       if (!subscription) {
         return {
@@ -169,18 +122,7 @@ class BrandSubscriptionService {
       }
 
       // 8. Build features object
-      const planFeatures = selectedPlan.getFeatures();
-      const features = {
-        ...planFeatures,
-        subscriptionSchedule: {
-          id: subscriptionScheduleId,
-          introductoryPlanType: metadata.downpaymentPlanType ||
-            (metadata.planCategory === 'professional' ? 'downpayment_professional' : 'downpayment_standard'),
-          // TODO: Review this variables
-          introductoryStripePriceId: metadata.introductoryStripePriceId,
-          introductoryMonthlyPrice: metadata.downpaymentAmount,
-        }
-      };
+      const planFeatures = brandSubPlan.getFeatures();
 
       // Derive current period timestamps if available
       const currentPeriodStartUnix = (subscription as any)?.current_period_start
@@ -191,17 +133,12 @@ class BrandSubscriptionService {
       // 9. Create BrandSubscription
       brandSubscription.update({
         userId: user.id,
-        planType: metadata.planType,
-        planCategory: metadata.planCategory || null,
         status: BrandSubscriptionStatus.ACTIVE,
         stripeSubscriptionId: subscription.id,
         stripeCustomerId: user.stripeCustomerId,
-        stripePriceId: selectedPlan.stripePriceId,
-        monthlyPrice: selectedPlan.monthlyPrice,
-        downpaymentAmount: introductoryPlan.monthlyPrice,
         currentPeriodStart: currentPeriodStartDate,
         currentPeriodEnd: currentPeriodEndDate,
-        features: features
+        features: planFeatures
       });
 
       console.log('✅ SERVICE: BrandSubscription created and linked:', brandSubscription.id);
