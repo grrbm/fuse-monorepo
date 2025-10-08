@@ -124,9 +124,11 @@ class BrandSubscriptionService {
       // 8. Build features object
       const planFeatures = brandSubPlan.getFeatures();
 
+      const subItem = subscription.items.data[0]
+
       // Derive current period timestamps if available
-      const currentPeriodStartUnix = (subscription as any)?.current_period_start
-      const currentPeriodEndUnix = (subscription as any)?.current_period_end
+      const currentPeriodStartUnix = subItem?.current_period_start
+      const currentPeriodEndUnix = subItem?.current_period_end
       const currentPeriodStartDate = currentPeriodStartUnix ? new Date(currentPeriodStartUnix * 1000) : null
       const currentPeriodEndDate = currentPeriodEndUnix ? new Date(currentPeriodEndUnix * 1000) : null
 
@@ -138,7 +140,8 @@ class BrandSubscriptionService {
         stripeCustomerId: user.stripeCustomerId,
         currentPeriodStart: currentPeriodStartDate,
         currentPeriodEnd: currentPeriodEndDate,
-        features: planFeatures
+        features: planFeatures,
+        plantType: brandSubPlan.planType
       });
 
       console.log('✅ SERVICE: BrandSubscription created and linked:', brandSubscription.id);
