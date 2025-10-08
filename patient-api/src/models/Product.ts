@@ -12,6 +12,16 @@ export enum PharmacyProvider {
     PILLPACK = 'pillpack',
 }
 
+export enum ProductCategory {
+    WEIGHT_LOSS = 'weight_loss',
+    HAIR_GROWTH = 'hair_growth',
+    PERFORMANCE = 'performance',
+    SEXUAL_HEALTH = 'sexual_health',
+    SKINCARE = 'skincare',
+    WELLNESS = 'wellness',
+    OTHER = 'other',
+}
+
 
 
 
@@ -95,10 +105,10 @@ export default class Product extends Entity {
     declare medicationSize?: string;
 
     @Column({
-        type: DataType.STRING,
+        type: DataType.ENUM(...Object.values(ProductCategory)),
         allowNull: true,
     })
-    declare category?: string;
+    declare category?: ProductCategory;
 
     @Column({
         type: DataType.JSONB,
