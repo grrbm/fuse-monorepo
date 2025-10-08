@@ -332,11 +332,10 @@ export default function Plans() {
               return (
                 <Card
                   key={key}
-                  className={`relative group cursor-pointer transition-all duration-300 flex flex-col ${
-                    isPopular
+                  className={`relative group cursor-pointer transition-all duration-300 flex flex-col ${isPopular
                       ? 'shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80'
                       : 'hover:shadow-xl hover:scale-105 hover:border-primary border-muted'
-                  }`}
+                    }`}
                 >
                   {isPopular && (
                     <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
@@ -368,70 +367,86 @@ export default function Plans() {
 
                   <CardContent className="flex flex-col h-full">
                     <ul className="space-y-3 mb-8 flex-grow">
-                      {plan.features.maxProducts !== undefined && (
-                        <li className="flex items-start gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>
-                            {plan.features.maxProducts === -1
-                              ? 'Unlimited products'
-                              : `Up to ${plan.features.maxProducts} product${plan.features.maxProducts !== 1 ? 's' : ''}`}
-                          </span>
-                        </li>
+                      {plan.planType == 'entry' && (
+                        <>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Up to 3 products
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Template forms (our branding)
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Instant setup
+                            </span>
+                          </li>
+                        </>
                       )}
-                      {plan.features.maxCampaigns !== undefined && (
-                        <li className="flex items-start gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>
-                            {plan.features.maxCampaigns === -1
-                              ? 'Unlimited campaigns'
-                              : `Up to ${plan.features.maxCampaigns} campaign${plan.features.maxCampaigns !== 1 ? 's' : ''}`}
-                          </span>
-                        </li>
+
+                      {plan.planType == 'standard' && (
+                        <>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Everything in Standard
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Template forms with customer branding
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Instant setup
+                            </span>
+                          </li>
+                        </>
                       )}
-                      {plan.features.analyticsAccess && (
-                        <li className="flex items-start gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>Analytics & reporting</span>
-                        </li>
-                      )}
-                      {plan.features.customerSupport && (
-                        <li className="flex items-start gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>{plan.features.customerSupport} support</span>
-                        </li>
-                      )}
-                      {plan.features.customBranding && (
-                        <li className="flex items-start gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>Custom branding</span>
-                        </li>
-                      )}
-                      {plan.features.apiAccess && (
-                        <li className="flex items-start gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>API access</span>
-                        </li>
-                      )}
-                      {plan.features.whiteLabel && (
-                        <li className="flex items-start gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>White label solution</span>
-                        </li>
-                      )}
-                      {plan.features.customIntegrations && (
-                        <li className="flex items-start gap-2 text-sm">
-                          <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>Custom integrations</span>
-                        </li>
+                      {plan.planType == 'premium' && (
+                        <>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Unlimited products
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Custom website
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Done-for-you setup
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              Custom forms
+                            </span>
+                          </li>
+                        </>
                       )}
                     </ul>
 
                     <Button
-                      className={`w-full transition-colors mt-auto ${
-                        isPopular
+                      className={`w-full transition-colors mt-auto ${isPopular
                           ? 'bg-blue-600 hover:bg-blue-700 text-white'
                           : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
-                      }`}
+                        }`}
                       onClick={() => handleSelectPlan(plan.planType || key)}
                       disabled={!!creatingCheckout || isCurrentPlan}
                     >
