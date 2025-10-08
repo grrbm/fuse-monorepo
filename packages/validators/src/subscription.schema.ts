@@ -5,13 +5,6 @@ import { brandPlanTypeSchema } from './common.schema';
  * Subscription validation schemas
  */
 
-// Brand subscription schemas
-export const brandCheckoutSchema = z.object({
-  planType: brandPlanTypeSchema,
-  successUrl: z.string().url('Invalid success URL'),
-  cancelUrl: z.string().url('Invalid cancel URL'),
-});
-
 export const brandPaymentIntentSchema = z.object({
   brandSubscriptionPlanId: z.string()
 });
@@ -44,7 +37,6 @@ export const updateBrandSubscriptionFeaturesSchema = z.object({
  * Type exports
  */
 
-export type BrandCheckoutInput = z.infer<typeof brandCheckoutSchema>;
 export type BrandPaymentIntentInput = z.infer<typeof brandPaymentIntentSchema>;
 export type UpgradeSubscriptionInput = z.infer<typeof upgradeSubscriptionSchema>;
 export type CancelSubscriptionInput = z.infer<typeof cancelSubscriptionSchema>;
