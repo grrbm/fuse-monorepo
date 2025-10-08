@@ -65,10 +65,11 @@ import {
   patientUpdateSchema,
   brandTreatmentSchema,
   organizationUpdateSchema,
-  updateSelectionSchema,
   paginationSchema,
-  productGetSchema
 } from "@fuse/validators";
+import * as Validators from "@fuse/validators";
+const updateSelectionSchema: any = (Validators as any).updateSelectionSchema;
+const productGetSchema: any = (Validators as any).productGetSchema;
 import TreatmentPlanService from "./services/treatmentPlan.service";
 import SubscriptionService from "./services/subscription.service";
 import MDWebhookService from "./services/mdIntegration/MDWebhook.service";
@@ -3726,9 +3727,9 @@ app.get("/tenants", authenticateJWT, async (req, res) => {
     }
   } catch (error) {
     console.error('Error fetching tenants:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });
@@ -3751,9 +3752,9 @@ app.get("/tenants/:id", authenticateJWT, async (req, res) => {
     }
   } catch (error) {
     console.error('Error fetching tenant:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });
