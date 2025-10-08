@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Loader2, RefreshCcw, Search, Edit3, ExternalLink, Clock, Edit, Layers } from "lucide-react"
 import { useTemplates } from "@/hooks/useTemplates"
 import { QuestionnaireEditor } from "./QuestionnaireEditor"
+import { useQuestionnaires } from "./hooks/useQuestionnaires"
 import { useAuth } from "@/contexts/AuthContext"
 
 const CATEGORY_OPTIONS = [
@@ -40,6 +41,7 @@ export default function Forms() {
   const router = useRouter()
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001", [])
   const { loading, error, assignments, sections, refresh } = useTemplates(baseUrl)
+  const { questionnaires, refresh: refreshQuestionnaires } = useQuestionnaires(baseUrl)
   const { token } = useAuth()
   const { selectedTenant } = useTenant()
 
@@ -54,6 +56,7 @@ export default function Forms() {
 
   useEffect(() => {
     refresh()
+    refreshQuestionnaires()
   }, [])
 
   // Filter and sort assignments
@@ -514,8 +517,8 @@ export default function Forms() {
                               These questions are shown in all {CATEGORY_OPTIONS.find(c => c.value === selectedCategory)?.label} product forms.
                             </p>
                             {(() => {
-                              const categoryTemplate = (sections?.personalization || []).find(
-                                (t: any) => t.category === selectedCategory
+                              const categoryTemplate = (questionnaires || []).find(
+                                (q: any) => q.category === selectedCategory
                               )
                               return categoryTemplate ? (
                                 <Button
