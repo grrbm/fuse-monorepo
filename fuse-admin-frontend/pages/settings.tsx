@@ -282,10 +282,48 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
       return
     }
 
+    const hasActiveSub = subscriptionData && subscriptionData.status === 'active'
+
+    // If user has active subscription, change tier instead of creating new
+    if (hasActiveSub) {
+      if (!confirm(`Are you sure you want to change your subscription to ${plan.name}?`)) {
+        return
+      }
+
+      try {
+        setCreatingPlan(plan.planType)
+        const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/change`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            newPlanId: plan.id
+          }),
+        })
+
+        if (response.ok) {
+          showToast('success', 'Subscription tier changed successfully')
+          await fetchSubscriptionData()
+          await refreshSubscription()
+        } else {
+          const errorData = await response.json().catch(() => ({}))
+          showToast('error', errorData.error || 'Failed to change subscription tier')
+        }
+      } catch (error) {
+        showToast('error', 'An error occurred while changing subscription')
+      } finally {
+        setCreatingPlan(null)
+      }
+      return
+    }
+
+    // No active subscription - go through checkout flow
     const downpaymentAmount = plan.price
 
     try {
       setCreatingPlan(plan.planType)
+      // @deprecated: Not used
       const response = await authenticatedFetch(`${API_URL}/auth/profile`, {
         method: 'PUT',
         headers: {
@@ -839,243 +877,207 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                       ) : (
                         <div className="text-center py-8">
                           <p className="text-muted-foreground mb-4">No active subscription found. Select a plan to get started.</p>
-                          <Button onClick={() => router.push('/plans')}>Browse Plans</Button>
+                          <Button asChild>
+                            <a href="/plans">Browse Plans</a>
+                          </Button>
                         </div>
                       )}
                     </CardContent>
                   </Card>
 
                   {/* Available Plans */}
-                  <Card>
-                    <CardHeader>
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div>
-                          <CardTitle>Subscriptions</CardTitle>
-                          <CardDescription>Choose the plan that best fits your needs.</CardDescription>
+                  {subscriptionData && (
+                    <Card>
+                      <CardHeader>
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                          <div>
+                            <CardTitle>Subscriptions</CardTitle>
+                            <CardDescription>Choose the plan that best fits your needs.</CardDescription>
+                          </div>
+                          {!hasActiveSubscription && (
+                            <Badge className="bg-primary text-primary-foreground">Action required</Badge>
+                          )}
                         </div>
-                        {!hasActiveSubscription && (
-                          <Badge className="bg-primary text-primary-foreground">Action required</Badge>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {plansLoading ? (
-                        <div className="text-center py-8">
-                          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                          <p className="text-muted-foreground">Loading plans...</p>
-                        </div>
-                      ) : plans.length === 0 ? (
-                        <div className="text-center py-8">
-                          <p className="text-muted-foreground">No plans available</p>
-                        </div>
-                      ) : (
-                        <div className={`grid grid-cols-1 ${plans.length === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-8`}>
-                          {plans.map((plan, index) => {
-                            const isCurrentPlan = currentPlanType === plan.planType
-                            const isActive = subscriptionData?.status === 'active'
-                            const isPopular = index === 0
-                            const Icon = index === 0 ? Building2 : Shield
-                            const buttonLabel = isCurrentPlan
-                              ? isActive
-                                ? 'Current Plan'
-                                : 'Plan Selected'
-                              : 'Get started'
+                      </CardHeader>
+                      <CardContent>
+                        {plansLoading ? (
+                          <div className="text-center py-8">
+                            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p className="text-muted-foreground">Loading plans...</p>
+                          </div>
+                        ) : plans.length === 0 ? (
+                          <div className="text-center py-8">
+                            <p className="text-muted-foreground">No plans available</p>
+                          </div>
+                        ) : (
+                          <div className={`grid grid-cols-1 ${plans.length === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-8`}>
+                            {plans.map((plan, index) => {
+                              const isCurrentPlan = currentPlanType === plan.planType
+                              const isActive = subscriptionData?.status === 'active'
+                              const isPopular = index === 0
+                              const Icon = index === 0 ? Building2 : Shield
 
-                            return (
-                              <Card
-                                key={plan.id}
-                                className={`relative group transition-all duration-300 flex flex-col ${
-                                  isPopular
+                              let buttonLabel = 'Get started'
+                              if (isCurrentPlan) {
+                                buttonLabel = isActive ? 'Current Plan' : 'Plan Selected'
+                              } else if (isActive && currentPlan) {
+                                // Show upgrade/downgrade for existing subscribers
+                                buttonLabel = plan.price > currentPlan.price ? 'Upgrade' : 'Change Plan'
+                              }
+
+                              return (
+                                <Card
+                                  key={plan.id}
+                                  className={`relative group transition-all duration-300 flex flex-col ${isPopular
                                     ? 'border-primary shadow-lg hover:shadow-2xl hover:scale-[1.02]'
                                     : 'border-border hover:border-primary/60 hover:shadow-xl hover:scale-[1.01]'
-                                } ${creatingPlan ? 'opacity-75' : ''}`}
-                              >
-                                {isPopular && (
-                                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                                    <div className="bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
-                                      Most Popular
+                                    } ${creatingPlan ? 'opacity-75' : ''}`}
+                                >
+                                  {isPopular && (
+                                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                                      <div className="bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
+                                        Most Popular
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="absolute top-4 left-4">
+                                    <div className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-md">
+                                      Monthly
                                     </div>
                                   </div>
-                                )}
 
-                                <div className="absolute top-4 left-4">
-                                  <div className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-md">
-                                    {plan.interval === 'month' ? 'Monthly' : plan.interval}
-                                  </div>
-                                </div>
-
-                                {isCurrentPlan && (
-                                  <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-full">
-                                    Active Plan
-                                  </div>
-                                )}
-
-                                <CardHeader className="pt-12 pb-6">
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <Icon className="h-5 w-5" />
-                                    <CardTitle className="text-xl font-semibold">{plan.name}</CardTitle>
-                                  </div>
-                                  <div className="mb-4">
-                                    <span className="text-3xl font-bold text-[#825AD1]">
-                                      {formatCurrency(plan.price)}
-                                    </span>
-                                    <span className="text-muted-foreground"> / {plan.interval}</span>
-                                    <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
-                                  </div>
-                                  {plan.description && (
-                                    <p className="text-sm text-muted-foreground leading-relaxed">
-                                      {plan.description}
-                                    </p>
+                                  {isCurrentPlan && (
+                                    <div className="absolute top-4 right-4 bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-full">
+                                      Active Plan
+                                    </div>
                                   )}
-                                </CardHeader>
 
-                                <CardContent className="flex flex-col h-full">
-                                  <ul className="space-y-3 mb-8 flex-grow">
-                                    {plan.features.maxProducts !== undefined && (
-                                      <li className="flex items-start gap-2 text-sm">
-                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                        <span>
-                                          {plan.features.maxProducts === -1
-                                            ? 'Unlimited products'
-                                            : `Up to ${plan.features.maxProducts} product${plan.features.maxProducts !== 1 ? 's' : ''}`}
-                                        </span>
-                                      </li>
+                                  <CardHeader className="pt-12 pb-6">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <Icon className="h-5 w-5" />
+                                      <CardTitle className="text-xl font-semibold">{plan.name}</CardTitle>
+                                    </div>
+                                    <div className="mb-4">
+                                      <span className="text-3xl font-bold text-[#825AD1]">
+                                        {formatCurrency(plan.price)}
+                                      </span>
+                                      <span className="text-muted-foreground"> / {plan.interval}</span>
+                                      <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
+                                    </div>
+                                    {plan.description && (
+                                      <p className="text-sm text-muted-foreground leading-relaxed">
+                                        {plan.description}
+                                      </p>
                                     )}
-                                    {plan.features.maxCampaigns !== undefined && (
-                                      <li className="flex items-start gap-2 text-sm">
-                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                        <span>
-                                          {plan.features.maxCampaigns === -1
-                                            ? 'Unlimited campaigns'
-                                            : `Up to ${plan.features.maxCampaigns} campaign${plan.features.maxCampaigns !== 1 ? 's' : ''}`}
-                                        </span>
-                                      </li>
-                                    )}
-                                    {plan.features.analyticsAccess && (
-                                      <li className="flex items-start gap-2 text-sm">
-                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                        <span>Analytics & reporting</span>
-                                      </li>
-                                    )}
-                                    {plan.features.customerSupport && (
-                                      <li className="flex items-start gap-2 text-sm">
-                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                        <span>{plan.features.customerSupport} support</span>
-                                      </li>
-                                    )}
-                                    {plan.features.customBranding && (
-                                      <li className="flex items-start gap-2 text-sm">
-                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                        <span>Custom branding</span>
-                                      </li>
-                                    )}
-                                    {plan.features.apiAccess && (
-                                      <li className="flex items-start gap-2 text-sm">
-                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                        <span>API access</span>
-                                      </li>
-                                    )}
-                                    {plan.features.whiteLabel && (
-                                      <li className="flex items-start gap-2 text-sm">
-                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                        <span>White label solution</span>
-                                      </li>
-                                    )}
-                                    {plan.features.customIntegrations && (
-                                      <li className="flex items-start gap-2 text-sm">
-                                        <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                        <span>Custom integrations</span>
-                                      </li>
-                                    )}
-                                  </ul>
+                                  </CardHeader>
 
-                                  <Button
-                                    className={`w-full mt-auto ${
-                                      isCurrentPlan && isActive
+                                  <CardContent className="flex flex-col h-full">
+                                    <ul className="space-y-3 mb-8 flex-grow">
+                                      {plan.planType == 'entry' && (
+                                        <>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Up to 3 products
+                                            </span>
+                                          </li>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Template forms (our branding)
+                                            </span>
+                                          </li>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Instant setup
+                                            </span>
+                                          </li>
+                                        </>
+                                      )}
+
+                                      {plan.planType == 'standard' && (
+                                        <>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Everything in Standard
+                                            </span>
+                                          </li>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Template forms with customer branding
+                                            </span>
+                                          </li>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Instant setup
+                                            </span>
+                                          </li>
+                                        </>
+                                      )}
+                                      {plan.planType == 'premium' && (
+                                        <>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Unlimited products
+                                            </span>
+                                          </li>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Custom website
+                                            </span>
+                                          </li>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Done-for-you setup
+                                            </span>
+                                          </li>
+                                          <li className="flex items-start gap-2 text-sm">
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>
+                                              Custom forms
+                                            </span>
+                                          </li>
+                                        </>
+                                      )}
+                                    </ul>
+
+                                    <Button
+                                      className={`w-full mt-auto ${isCurrentPlan && isActive
                                         ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                                         : isPopular
                                           ? 'bg-blue-600 hover:bg-blue-700 text-white'
                                           : 'bg-white border border-gray-300 text-foreground hover:bg-gray-50'
-                                    }`}
-                                    onClick={() => handlePlanSelect(plan)}
-                                    disabled={
-                                      (isCurrentPlan && isActive) || !!creatingPlan
-                                    }
-                                  >
-                                    {creatingPlan === plan.planType
-                                      ? 'Preparing checkout...'
-                                      : buttonLabel}
-                                    {!isCurrentPlan && creatingPlan !== plan.planType && (
-                                      <ArrowRight className="ml-2 h-4 w-4" />
-                                    )}
-                                  </Button>
-                                </CardContent>
-                              </Card>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                                        }`}
+                                      onClick={() => handlePlanSelect(plan)}
+                                      disabled={
+                                        (isCurrentPlan && isActive) || !!creatingPlan
+                                      }
+                                    >
+                                      {creatingPlan === plan.planType
+                                        ? 'Preparing checkout...'
+                                        : buttonLabel}
+                                      {!isCurrentPlan && creatingPlan !== plan.planType && (
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </CardContent>
+                                </Card>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
 
-                  {/* Onboarding Options - Configure later */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Onboarding Options</CardTitle>
-                      <CardDescription>Configure optional onboarding support packages</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <p className="text-sm text-muted-foreground">
-                          Choose an onboarding package that fits your launch needs. These offerings are optional and can be purchased at any time.
-                        </p>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <Card className="border-muted">
-                            <CardHeader>
-                              <CardTitle className="text-base">Standard Build</CardTitle>
-                              <CardDescription>$3,000 • Launch in under 30 days</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <ul className="text-sm text-muted-foreground space-y-2">
-                                <li>Platform + physician configuration</li>
-                                <li>Branded static site hand-off</li>
-                                <li>Initial data + provider import</li>
-                              </ul>
-                            </CardContent>
-                          </Card>
-
-                          <Card className="border-primary/50 shadow-sm">
-                            <CardHeader>
-                              <CardTitle className="text-base">High Definition</CardTitle>
-                              <CardDescription>$5,000 • Conversion optimized launch</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <ul className="text-sm text-muted-foreground space-y-2">
-                                <li>Everything in Standard</li>
-                                <li>Custom marketing site & automation</li>
-                                <li>60-day optimization support</li>
-                              </ul>
-                            </CardContent>
-                          </Card>
-
-                          <Card className="border-muted">
-                            <CardHeader>
-                              <CardTitle className="text-base">Custom Implementation</CardTitle>
-                              <CardDescription>$20,000 • Enterprise rollout</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <ul className="text-sm text-muted-foreground space-y-2">
-                                <li>LegitScript certification support</li>
-                                <li>Bespoke integrations & migrations</li>
-                                <li>Multi-brand deployment planning</li>
-                              </ul>
-                            </CardContent>
-                          </Card>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
                 </div>
               </TabsContent>
             </Tabs>
