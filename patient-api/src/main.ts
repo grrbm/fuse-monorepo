@@ -2805,7 +2805,7 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
 });
 
 // Create payment intent for direct card processing
-app.post("/brand/create-payment-intent", authenticateJWT, async (req, res) => {
+app.post("/brand-subscriptions/create-payment-intent", authenticateJWT, async (req, res) => {
   try {
 
     const currentUser = getCurrentUser(req);
