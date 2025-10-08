@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/router"
+import { useTenant } from "@/contexts/TenantContext"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -40,6 +41,7 @@ export default function Forms() {
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001", [])
   const { loading, error, assignments, sections, refresh } = useTemplates(baseUrl)
   const { token } = useAuth()
+  const { selectedTenant } = useTenant()
 
   const [activeTab, setActiveTab] = useState<"products" | "templates" | "account">("products")
   const [searchQuery, setSearchQuery] = useState("")
@@ -196,8 +198,8 @@ export default function Forms() {
               <button
                 onClick={() => setActiveTab("products")}
                 className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "products"
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
               >
                 Products
@@ -205,8 +207,8 @@ export default function Forms() {
               <button
                 onClick={() => setActiveTab("templates")}
                 className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "templates"
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
               >
                 Standardized Questions
@@ -214,8 +216,8 @@ export default function Forms() {
               <button
                 onClick={() => setActiveTab("account")}
                 className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "account"
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
               >
                 Account Questions

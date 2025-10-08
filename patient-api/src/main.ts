@@ -23,6 +23,7 @@ import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
 import TreatmentService from "./services/treatment.service";
 import PaymentService from "./services/payment.service";
+import ClinicService from "./services/clinic.service";
 import { processStripeWebhook } from "./services/stripe/webhook";
 import TreatmentProducts from "./models/TreatmentProducts";
 import TreatmentPlan, { BillingInterval } from "./models/TreatmentPlan";
@@ -1605,7 +1606,7 @@ app.get("/products-management/:id", authenticateJWT, async (req, res) => {
 
     const productService = new ProductService();
     const result = await productService.getProduct(req.params.id, currentUser.id);
-    
+
     if (!result.success) {
       return res.status(404).json(result);
     }
@@ -1627,7 +1628,7 @@ app.post("/products-management", authenticateJWT, async (req, res) => {
 
     const productService = new ProductService();
     const result = await productService.createProduct(req.body, currentUser.id);
-    
+
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -1649,7 +1650,7 @@ app.put("/products-management/:id", authenticateJWT, async (req, res) => {
 
     const productService = new ProductService();
     const result = await productService.updateProduct({ ...req.body, id: req.params.id }, currentUser.id);
-    
+
     if (!result.success) {
       return res.status(400).json(result);
     }
@@ -1671,7 +1672,7 @@ app.delete("/products-management/:id", authenticateJWT, async (req, res) => {
 
     const productService = new ProductService();
     const result = await productService.deleteProduct(req.params.id, currentUser.id);
-    
+
     if (!result.success) {
       return res.status(404).json(result);
     }
@@ -3295,8 +3296,8 @@ app.post("/brand-subscriptions/create-checkout-session", authenticateJWT, async 
 
     // Create or retrieve Stripe customer
     let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
-            userId: currentUser.id,
-            role: currentUser.role
+      userId: currentUser.id,
+      role: currentUser.role
     });
 
 
@@ -3371,19 +3372,19 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
     console.log('🚀 BACKEND CREATE: Current user:', currentUser?.id, currentUser?.role)
 
     if (!upgrade) {
-    const existingSubscription = await BrandSubscription.findOne({
-      where: {
-        userId: currentUser.id,
-        status: ['active', 'processing', 'past_due']
-      }
-    });
-
-
-    if (existingSubscription) {
-      return res.status(400).json({
-        success: false,
-        message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
+      const existingSubscription = await BrandSubscription.findOne({
+        where: {
+          userId: currentUser.id,
+          status: ['active', 'processing', 'past_due']
+        }
       });
+
+
+      if (existingSubscription) {
+        return res.status(400).json({
+          success: false,
+          message: "You already have an active subscription. Please cancel your current subscription before creating a new one."
+        });
 
       }
     }
@@ -3417,9 +3418,9 @@ app.post("/create-payment-intent", authenticateJWT, async (req, res) => {
 
     // Create or retrieve Stripe customer
     let stripeCustomerId = await userService.getOrCreateCustomerId(user, {
-            userId: user.id,
-            role: user.role,
-            planType: planType
+      userId: user.id,
+      role: user.role,
+      planType: planType
     });
 
 
@@ -3520,7 +3521,7 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('❌ Error confirming payment intent:', error);
     res.status(500).json({
-        success: false,
+      success: false,
       message: "Failed to confirm payment intent"
     });
   }
@@ -3557,7 +3558,7 @@ app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
     if (subscription.stripeSubscriptionId) {
       try {
         await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
-    } catch (stripeError) {
+      } catch (stripeError) {
         console.error('Error canceling Stripe subscription:', stripeError);
         // Continue with local cancellation even if Stripe fails
       }
@@ -3608,14 +3609,14 @@ app.post("/brand-subscriptions/change", authenticateJWT, async (req, res) => {
 
     if (result.success) {
       res.status(200).json(result);
-      } else {
+    } else {
       res.status(400).json(result);
     }
 
   } catch (error) {
     console.error('❌ Error changing brand subscription:', error);
     res.status(500).json({
-        success: false,
+      success: false,
       message: "Internal server error"
     });
   }
@@ -3695,7 +3696,7 @@ app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('Error cancelling subscriptions:', error);
     res.status(500).json({
-        success: false,
+      success: false,
       message: error instanceof Error ? error.message : "Failed to cancel subscriptions"
     });
   }
@@ -3704,6 +3705,58 @@ app.post("/subscriptions/cancel", authenticateJWT, async (req, res) => {
 // Questionnaire routes
 // Add questionnaire step
 const questionnaireService = new QuestionnaireService();
+
+// Get tenants (clinics) with their owners
+app.get("/tenants", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+
+    const result = await clinicService.listTenants({ page, limit });
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    console.error('Error fetching tenants:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
+  }
+});
+
+// Get single tenant by ID
+app.get("/tenants/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id } = req.params;
+    const result = await clinicService.getTenantById(id);
+
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(404).json(result);
+    }
+  } catch (error) {
+    console.error('Error fetching tenant:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
+  }
+});
 
 // Admin routes: list tenants (users with clinic) and questionnaires by tenant
 app.get("/admin/tenants", authenticateJWT, async (req, res) => {
@@ -4676,8 +4729,8 @@ app.delete("/questionnaires/:id", authenticateJWT, async (req, res) => {
 
     // Validate required fields
     if (!questionnaireId) {
-        return res.status(400).json({
-          success: false,
+      return res.status(400).json({
+        success: false,
         message: "questionnaireId is required"
       });
     }
@@ -4789,6 +4842,7 @@ app.post("/questions/order", authenticateJWT, async (req, res) => {
 const userService = new UserService();
 const treatmentService = new TreatmentService();
 const orderService = new OrderService();
+const clinicService = new ClinicService();
 
 
 app.put("/patient", authenticateJWT, async (req, res) => {

@@ -3,6 +3,7 @@ import Head from 'next/head'
 import { Analytics } from "@vercel/analytics/next"
 import { useRouter } from 'next/router'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { TenantProvider } from '@/contexts/TenantContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import "../styles/globals.css"
@@ -22,16 +23,18 @@ export default function App({ Component, pageProps }: AppProps) {
       </Head>
       <ThemeProvider>
         <AuthProvider>
-          <div className="font-sans">
-            {isPublicPage ? (
-              <Component {...pageProps} />
-            ) : (
-              <ProtectedRoute>
+          <TenantProvider>
+            <div className="font-sans">
+              {isPublicPage ? (
                 <Component {...pageProps} />
-              </ProtectedRoute>
-            )}
-            <Analytics />
-          </div>
+              ) : (
+                <ProtectedRoute>
+                  <Component {...pageProps} />
+                </ProtectedRoute>
+              )}
+              <Analytics />
+            </div>
+          </TenantProvider>
         </AuthProvider>
       </ThemeProvider>
     </>

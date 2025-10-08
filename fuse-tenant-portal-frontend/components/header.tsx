@@ -1,7 +1,8 @@
-import { Search, MoreHorizontal, ChevronDown, LogOut, Sun, Moon } from "lucide-react"
+import { Search, MoreHorizontal, LogOut, Sun, Moon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/AuthContext"
 import { useTheme } from "@/contexts/ThemeContext"
+import { TenantSelector } from "@/components/tenant-selector"
 
 export function Header() {
   const { user, logout } = useAuth()
@@ -32,10 +33,7 @@ export function Header() {
 
         {/* Right side */}
         <div className="flex items-center space-x-4">
-          <Button variant="outline" size="sm" className="text-muted-foreground bg-transparent">
-            All Tenants
-            <ChevronDown className="ml-2 h-4 w-4" />
-          </Button>
+          <TenantSelector />
 
           {/* Theme Toggle */}
           <Button
