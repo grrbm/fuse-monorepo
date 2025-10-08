@@ -113,6 +113,12 @@ class TenantProductService {
         // Check maxProducts limit from features
         const maxProducts = subscription.features?.maxProducts;
 
+        // -1 means unlimited products
+        if (maxProducts === -1) {
+            console.log(`✅ Subscription validation passed: ${productCount} products (limit: unlimited)`);
+            return;
+        }
+
         if (maxProducts !== undefined && productCount > maxProducts) {
             throw new Error(
                 `Product limit exceeded. Your plan allows ${maxProducts} product(s), but you are trying to add ${productCount}. Please upgrade your subscription to add more products.`
