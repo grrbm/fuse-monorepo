@@ -9,10 +9,7 @@ import {
     getTenantProduct,
     deleteTenantProduct
 } from './db/tenantProduct';
-// Using any to facilitate quick unblocking of build
-import type * as Validators from '@fuse/validators';
-type UpdateSelectionInput = any; // (Validators as any).UpdateSelectionInput
-type ProductSelectionItem = any; // (Validators as any).ProductSelectionItem
+import { UpdateSelectionInput } from '@fuse/validators';
 
 class TenantProductService {
     /**
