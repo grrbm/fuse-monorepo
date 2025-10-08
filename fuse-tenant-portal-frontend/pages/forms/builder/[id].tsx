@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, ArrowLeft, Settings, Save, RotateCcw, ChevronDown, ChevronUp, Eye, ExternalLink } from "lucide-react"
-import { useTemplates } from "../hooks/useTemplates"
+import { useTemplates } from "@/hooks/useTemplates"
 import NodeBuilder from "../components/NodeBuilder"
 import { listAvailablePalettes } from "@/lib/utils"
 import { CheckCircle2, CircleSlash2 } from "lucide-react"
@@ -254,7 +254,9 @@ export default function FormBuilder() {
     !selectedAccount ||
     !selectedDoctor
 
-  const lockedWarning = selectedAssignment?.lockedUntil && new Date(selectedAssignment.lockedUntil) > new Date()
+  const lockedWarning = Boolean(
+    selectedAssignment?.lockedUntil && new Date(selectedAssignment.lockedUntil) > new Date()
+  )
 
   const currentPersonalizationTemplate = personalizationTemplates.find(t => t.id === selectedPersonalization)
   const currentAccountTemplate = accountTemplates.find(t => t.id === selectedAccount)
@@ -321,9 +323,9 @@ export default function FormBuilder() {
                   {selectedAssignment?.publishedUrl && selectedAssignment?.lastPublishedAt && (
                     <Badge variant="info">Live</Badge>
                   )}
-                  {lockedWarning && (
+                  {lockedWarning && selectedAssignment?.lockedUntil && (
                     <Badge variant="warning">
-                      Locked until {new Date(selectedAssignment.lockedUntil!).toLocaleDateString()}
+                      Locked until {new Date(selectedAssignment.lockedUntil).toLocaleDateString()}
                     </Badge>
                   )}
                 </div>
@@ -463,11 +465,11 @@ export default function FormBuilder() {
                             <button
                               key={template.id}
                               onClick={() => handleSelectTemplate("personalization", template.id)}
-                              disabled={Boolean(lockedWarning)}
-                              className={`w-full text-left rounded-md border p-3 text-sm transition ${(template.id === selectedPersonalization)
+                              disabled={lockedWarning}
+                              className={`w-full text-left rounded-md border p-3 text-sm transition ${template.id === selectedPersonalization
                                 ? "border-primary bg-primary/10 text-primary"
                                 : "border-border hover:border-primary/50"
-                                } ${(lockedWarning ? true : false) ? "opacity-50 cursor-not-allowed" : ""}`}
+                                } ${lockedWarning ? "opacity-50 cursor-not-allowed" : ""}`}
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-medium">{template.name}</span>
@@ -587,11 +589,11 @@ export default function FormBuilder() {
                             <button
                               key={template.id}
                               onClick={() => handleSelectTemplate("doctor", template.id)}
-                              disabled={Boolean(lockedWarning)}
-                              className={`w-full text-left rounded-md border p-3 text-sm transition ${(template.id === selectedDoctor)
+                              disabled={lockedWarning}
+                              className={`w-full text-left rounded-md border p-3 text-sm transition ${template.id === selectedDoctor
                                 ? "border-primary bg-primary/10 text-primary"
                                 : "border-border hover:border-primary/50"
-                                } ${(lockedWarning ? true : false) ? "opacity-50 cursor-not-allowed" : ""}`}
+                                } ${lockedWarning ? "opacity-50 cursor-not-allowed" : ""}`}
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-medium">{template.name}</span>
