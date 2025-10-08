@@ -157,7 +157,7 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
   const fetchPlans = async () => {
     setPlansLoading(true)
     try {
-      const response = await authenticatedFetch(`${API_URL}/plans`, {
+      const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/plans`, {
         method: 'GET',
       })
 

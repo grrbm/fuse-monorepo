@@ -99,7 +99,7 @@ export default function Plans() {
         setLoading(true)
 
         const plansResponse = await authenticatedFetch(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/plans`,
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/brand-subscriptions/plans`,
           { method: 'GET' }
         )
 
