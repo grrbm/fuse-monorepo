@@ -31,7 +31,7 @@ export default function TemplateEditor() {
   const { id: templateId } = router.query
   const { token } = useAuth()
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001", [])
-  
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,8 +82,8 @@ export default function TemplateEditor() {
     const newStep: Step = {
       id: `step-${Date.now()}`,
       title: stepType === "question" ? "New Question" : "Information Title",
-      description: stepType === "question" 
-        ? "Please select an option below." 
+      description: stepType === "question"
+        ? "Please select an option below."
         : "Provide helpful information to the patient here.",
       stepOrder: steps.length + 1,
       category: stepType === "info" ? "info" : "normal",
@@ -210,7 +210,9 @@ export default function TemplateEditor() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          schema: { steps },
+          // Persist the steps in template schema field or via step APIs if needed.
+          // Backend updateTemplate currently updates title/description/flags; schema save is no-op here.
+          // Leaving request minimal to avoid backend mismatch during migration.
         }),
       })
 
@@ -376,8 +378,8 @@ export default function TemplateEditor() {
               <CardContent>
                 <div className="space-y-4">
                   {steps.map((step, index) => (
-                    <Card 
-                      key={step.id} 
+                    <Card
+                      key={step.id}
                       className={`
                         ${editingStepId === step.id ? "ring-2 ring-primary" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
@@ -426,7 +428,7 @@ export default function TemplateEditor() {
                                   {showVariables && (
                                     <div className="mb-2 p-2 bg-muted/50 rounded-md border text-xs space-y-1">
                                       <div className="flex items-center gap-2">
-                                        <code 
+                                        <code
                                           className="bg-background px-2 py-0.5 rounded border font-mono cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors relative group"
                                           onClick={() => handleCopyVariable('{{companyName}}')}
                                           title="Click to copy"
@@ -441,7 +443,7 @@ export default function TemplateEditor() {
                                         <span className="text-muted-foreground">Your company name</span>
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <code 
+                                        <code
                                           className="bg-background px-2 py-0.5 rounded border font-mono cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors relative group"
                                           onClick={() => handleCopyVariable('{{clinicName}}')}
                                           title="Click to copy"
@@ -456,7 +458,7 @@ export default function TemplateEditor() {
                                         <span className="text-muted-foreground">Your clinic name</span>
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <code 
+                                        <code
                                           className="bg-background px-2 py-0.5 rounded border font-mono cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors relative group"
                                           onClick={() => handleCopyVariable('{{patientName}}')}
                                           title="Click to copy"
@@ -585,7 +587,7 @@ export default function TemplateEditor() {
                 <strong>This is a master template used by ALL tenants across the entire platform.</strong>
               </p>
               <p>
-                {template.category 
+                {template.category
                   ? `All ${template.category} products from every tenant will use these questions.`
                   : 'All products from every tenant will use these questions.'}
               </p>

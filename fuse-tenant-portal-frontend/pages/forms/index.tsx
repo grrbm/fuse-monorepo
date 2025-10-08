@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Loader2, RefreshCcw, Search, Edit3, ExternalLink, Clock, Edit, Layers } from "lucide-react"
 import { useTemplates } from "./hooks/useTemplates"
+import { useQuestionnaires } from "./hooks/useQuestionnaires"
 import { QuestionnaireEditor } from "./QuestionnaireEditor"
 import { useAuth } from "@/contexts/AuthContext"
 
@@ -40,10 +41,11 @@ export default function Forms() {
   const router = useRouter()
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001", [])
   const { loading, error, assignments, sections, refresh } = useTemplates(baseUrl)
+  const { questionnaires, refresh: refreshQuestionnaires } = useQuestionnaires(baseUrl)
   const { token } = useAuth()
   const { selectedTenant } = useTenant()
 
-  const [activeTab, setActiveTab] = useState<"products" | "templates" | "account">("products")
+  const [activeTab, setActiveTab] = useState<"products" | "templates" | "account" | "tenant">("products")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("all")
@@ -54,6 +56,7 @@ export default function Forms() {
 
   useEffect(() => {
     refresh()
+    refreshQuestionnaires()
   }, [])
 
   // Filter and sort assignments
@@ -222,6 +225,15 @@ export default function Forms() {
               >
                 Account Questions
               </button>
+              {/* <button
+                onClick={() => setActiveTab("tenant")}
+                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "tenant"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+              >
+                Generate Form for Tenant
+              </button> */}
             </div>
           </div>
 
@@ -588,6 +600,78 @@ export default function Forms() {
               </Card>
             </>
           )}
+
+          {/* {activeTab === "tenant" && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Generate Form for Tenant</CardTitle>
+                  <CardDescription>
+                    Review the currently selected tenant before generating a tailored form experience.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedTenant ? (
+                    <div className="space-y-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="text-base font-semibold text-foreground">{selectedTenant.name}</h3>
+                          <p className="text-sm text-muted-foreground">Slug: {selectedTenant.slug}</p>
+                        </div>
+                        <Badge variant="secondary" className="uppercase tracking-wide text-xs">
+                          {selectedTenant.status.replace("_", " ")}
+                        </Badge>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Business Type</span>
+                          <p className="text-sm font-medium text-foreground">
+                            {selectedTenant.businessType || "Not specified"}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Activation Status</span>
+                          <p className="text-sm font-medium text-foreground">{selectedTenant.active ? "Active" : "Inactive"}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Created</span>
+                          <p className="text-sm font-medium text-foreground">
+                            {new Date(selectedTenant.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Last Updated</span>
+                          <p className="text-sm font-medium text-foreground">
+                            {new Date(selectedTenant.updatedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+
+                      {selectedTenant.owner && (
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-semibold text-foreground">Primary Contact</h4>
+                          <div className="grid gap-2 text-sm text-muted-foreground">
+                            <span>{selectedTenant.owner.firstName} {selectedTenant.owner.lastName}</span>
+                            <span>{selectedTenant.owner.email}</span>
+                            {selectedTenant.owner.phoneNumber && <span>{selectedTenant.owner.phoneNumber}</span>}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+                        Form generation actions will appear here. For now, review the tenant details above to confirm you have the correct tenant selected in the header.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      Select a tenant from the header to view tenant information and generate forms.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )} */}
         </main>
       </div>
     </div>
