@@ -2604,22 +2604,17 @@ app.get("/brand-subscriptions/plans", async (req, res) => {
   try {
     const plans = await BrandSubscriptionPlans.getActivePlans();
 
-    // Convert to the expected format for the frontend
-    const plansObject = plans.reduce((acc, plan) => {
-      acc[plan.planType] = {
-        name: plan.name,
-        price: parseFloat(plan.monthlyPrice.toString()),
-        features: plan.getFeatures(),
-        stripePriceId: plan.stripePriceId,
-        description: plan.description,
-      };
-      return acc;
-    }, {} as any);
+    const formattedPlans = plans.map(plan => ({
+      id: plan.id,
+      name: plan.name,
+      description: plan.description || '',
+      monthlyPrice: Number(plan.monthlyPrice),
+      planType: plan.planType,
+      stripePriceId: plan.stripePriceId,
+      features: plan.getFeatures()
+    }));
 
-    res.status(200).json({
-      success: true,
-      plans: plansObject
-    });
+    res.json({ success: true, plans: formattedPlans });
   } catch (error) {
     console.error('Error fetching subscription plans:', error);
     res.status(500).json({
@@ -4982,30 +4977,6 @@ app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
   }
 });
 
-// Get available plans
-app.get("/plans", authenticateJWT, async (req, res) => {
-  try {
-    const plans = await BrandSubscriptionPlans.findAll({
-      where: { isActive: true },
-      order: [["sortOrder", "ASC"]]
-    });
-
-    const formattedPlans = plans.map(plan => ({
-      id: plan.id,
-      name: plan.name,
-      description: plan.description || '',
-      monthlyPrice: Number(plan.monthlyPrice),
-      planType: plan.planType,
-      stripePriceId: plan.stripePriceId,
-      features: plan.getFeatures()
-    }));
-
-    res.json({ success: true, plans: formattedPlans });
-  } catch (error) {
-    console.error('Error fetching plans:', error);
-    res.status(500).json({ success: false, message: "Internal server error" });
-  }
-});
 
 // Update user profile
 app.put("/users/profile", authenticateJWT, async (req, res) => {

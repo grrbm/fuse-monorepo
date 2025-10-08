@@ -108,7 +108,7 @@ export default class BrandSubscriptionPlans extends Entity {
 
   // Static method to get all active plans
   static async getActivePlans() {
-    return await BrandSubscriptionPlans.findAll({
+    return BrandSubscriptionPlans.findAll({
       where: { isActive: true },
       order: [['sortOrder', 'ASC']],
     });
