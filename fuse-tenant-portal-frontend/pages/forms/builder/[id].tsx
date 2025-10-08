@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, ArrowLeft, Settings, Save, RotateCcw, ChevronDown, ChevronUp, Eye, ExternalLink } from "lucide-react"
-import { useTemplates } from "../hooks/useTemplates"
+import { useTemplates } from "@/hooks/useTemplates"
 import NodeBuilder from "../components/NodeBuilder"
 import { listAvailablePalettes } from "@/lib/utils"
 
@@ -63,7 +63,7 @@ export default function FormBuilder() {
 
   // Filter personalization templates by the product's category
   const productCategory = selectedAssignment?.treatment?.category
-  const personalizationTemplates = useMemo(() => 
+  const personalizationTemplates = useMemo(() =>
     (sections.personalization ?? []).filter((t: any) => t.category === productCategory),
     [sections.personalization, productCategory]
   )
@@ -157,51 +157,51 @@ export default function FormBuilder() {
 
   const activeSections = selectedAssignment
     ? [
-        {
-          key: "personalization",
-          label: "Personalization",
-          description:
-            "Category-specific slides, emoji selectors, and warm-up questions to tailor the experience.",
-          template:
-            personalizationTemplates.find((tpl) => tpl.id === selectedPersonalization) ??
-            selectedAssignment.personalizationTemplate ??
-            null,
-          selectedTemplateId: selectedPersonalization ?? selectedAssignment.personalizationTemplate?.id ?? null,
-          required: true,
-          availableTemplates: personalizationTemplates,
-          onSelectTemplate: handleSelectTemplate,
-          locked: Boolean(selectedAssignment.lockedUntil && new Date(selectedAssignment.lockedUntil) > new Date()),
-        },
-        {
-          key: "account",
-          label: "Create Account",
-          description:
-            "Standard account details, compliance notices, and payment prerequisites. Locked for compliance.",
-          template:
-            accountTemplates.find((tpl) => tpl.id === selectedAccount) ??
-            selectedAssignment.accountTemplate ??
-            null,
-          selectedTemplateId: selectedAccount ?? selectedAssignment.accountTemplate?.id ?? null,
-          required: true,
-          availableTemplates: accountTemplates,
-          onSelectTemplate: handleSelectTemplate,
-          locked: true,
-        },
-        {
-          key: "doctor",
-          label: "Doctor Questions",
-          description: "Product-specific medical intake, lab history, and provider disclosures.",
-          template:
-            doctorTemplates.find((tpl) => tpl.id === selectedDoctor) ??
-            selectedAssignment.doctorTemplate ??
-            null,
-          selectedTemplateId: selectedDoctor ?? selectedAssignment.doctorTemplate?.id ?? null,
-          required: true,
-          availableTemplates: doctorTemplates,
-          onSelectTemplate: handleSelectTemplate,
-          locked: Boolean(selectedAssignment.lockedUntil && new Date(selectedAssignment.lockedUntil) > new Date()),
-        },
-      ]
+      {
+        key: "personalization",
+        label: "Personalization",
+        description:
+          "Category-specific slides, emoji selectors, and warm-up questions to tailor the experience.",
+        template:
+          personalizationTemplates.find((tpl) => tpl.id === selectedPersonalization) ??
+          selectedAssignment.personalizationTemplate ??
+          null,
+        selectedTemplateId: selectedPersonalization ?? selectedAssignment.personalizationTemplate?.id ?? null,
+        required: true,
+        availableTemplates: personalizationTemplates,
+        onSelectTemplate: handleSelectTemplate,
+        locked: Boolean(selectedAssignment.lockedUntil && new Date(selectedAssignment.lockedUntil) > new Date()),
+      },
+      {
+        key: "account",
+        label: "Create Account",
+        description:
+          "Standard account details, compliance notices, and payment prerequisites. Locked for compliance.",
+        template:
+          accountTemplates.find((tpl) => tpl.id === selectedAccount) ??
+          selectedAssignment.accountTemplate ??
+          null,
+        selectedTemplateId: selectedAccount ?? selectedAssignment.accountTemplate?.id ?? null,
+        required: true,
+        availableTemplates: accountTemplates,
+        onSelectTemplate: handleSelectTemplate,
+        locked: true,
+      },
+      {
+        key: "doctor",
+        label: "Doctor Questions",
+        description: "Product-specific medical intake, lab history, and provider disclosures.",
+        template:
+          doctorTemplates.find((tpl) => tpl.id === selectedDoctor) ??
+          selectedAssignment.doctorTemplate ??
+          null,
+        selectedTemplateId: selectedDoctor ?? selectedAssignment.doctorTemplate?.id ?? null,
+        required: true,
+        availableTemplates: doctorTemplates,
+        onSelectTemplate: handleSelectTemplate,
+        locked: Boolean(selectedAssignment.lockedUntil && new Date(selectedAssignment.lockedUntil) > new Date()),
+      },
+    ]
     : []
 
   const saveDisabled =
@@ -211,7 +211,9 @@ export default function FormBuilder() {
     !selectedAccount ||
     !selectedDoctor
 
-  const lockedWarning = selectedAssignment?.lockedUntil && new Date(selectedAssignment.lockedUntil) > new Date()
+  const lockedWarning = Boolean(
+    selectedAssignment?.lockedUntil && new Date(selectedAssignment.lockedUntil) > new Date()
+  )
 
   const currentPersonalizationTemplate = personalizationTemplates.find(t => t.id === selectedPersonalization)
   const currentAccountTemplate = accountTemplates.find(t => t.id === selectedAccount)
@@ -278,9 +280,9 @@ export default function FormBuilder() {
                   {selectedAssignment?.publishedUrl && selectedAssignment?.lastPublishedAt && (
                     <Badge variant="info">Live</Badge>
                   )}
-                  {lockedWarning && (
+                  {lockedWarning && selectedAssignment?.lockedUntil && (
                     <Badge variant="warning">
-                      Locked until {new Date(selectedAssignment.lockedUntil!).toLocaleDateString()}
+                      Locked until {new Date(selectedAssignment.lockedUntil).toLocaleDateString()}
                     </Badge>
                   )}
                 </div>
@@ -337,7 +339,7 @@ export default function FormBuilder() {
                     </div>
                     {expandedPersonalization ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </button>
-                  
+
                   {expandedPersonalization && (
                     <div className="border-t p-4 space-y-4 bg-muted/20">
                       {currentPersonalizationTemplate && (
@@ -354,9 +356,9 @@ export default function FormBuilder() {
                           )}
                         </div>
                       )}
-                      
+
                       <Separator />
-                      
+
                       <div>
                         <label className="text-sm font-medium mb-2 block">Available Templates:</label>
                         <div className="space-y-2">
@@ -365,11 +367,10 @@ export default function FormBuilder() {
                               key={template.id}
                               onClick={() => handleSelectTemplate("personalization", template.id)}
                               disabled={lockedWarning}
-                              className={`w-full text-left rounded-md border p-3 text-sm transition ${
-                                template.id === selectedPersonalization
+                              className={`w-full text-left rounded-md border p-3 text-sm transition ${template.id === selectedPersonalization
                                   ? "border-primary bg-primary/10 text-primary"
                                   : "border-border hover:border-primary/50"
-                              } ${lockedWarning ? "opacity-50 cursor-not-allowed" : ""}`}
+                                } ${lockedWarning ? "opacity-50 cursor-not-allowed" : ""}`}
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-medium">{template.name}</span>
@@ -403,7 +404,7 @@ export default function FormBuilder() {
                     </div>
                     {expandedAccount ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </button>
-                  
+
                   {expandedAccount && (
                     <div className="border-t p-4 space-y-4 bg-muted/20">
                       {currentAccountTemplate && (
@@ -420,9 +421,9 @@ export default function FormBuilder() {
                           </div>
                         </div>
                       )}
-                      
+
                       <Separator />
-                      
+
                       <div>
                         <label className="text-sm font-medium mb-2 block">Available Templates:</label>
                         <div className="space-y-2">
@@ -465,7 +466,7 @@ export default function FormBuilder() {
                     </div>
                     {expandedDoctor ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </button>
-                  
+
                   {expandedDoctor && (
                     <div className="border-t p-4 space-y-4 bg-muted/20">
                       {currentDoctorTemplate && (
@@ -479,9 +480,9 @@ export default function FormBuilder() {
                           )}
                         </div>
                       )}
-                      
+
                       <Separator />
-                      
+
                       <div>
                         <label className="text-sm font-medium mb-2 block">Available Templates:</label>
                         <div className="space-y-2">
@@ -490,11 +491,10 @@ export default function FormBuilder() {
                               key={template.id}
                               onClick={() => handleSelectTemplate("doctor", template.id)}
                               disabled={lockedWarning}
-                              className={`w-full text-left rounded-md border p-3 text-sm transition ${
-                                template.id === selectedDoctor
+                              className={`w-full text-left rounded-md border p-3 text-sm transition ${template.id === selectedDoctor
                                   ? "border-primary bg-primary/10 text-primary"
                                   : "border-border hover:border-primary/50"
-                              } ${lockedWarning ? "opacity-50 cursor-not-allowed" : ""}`}
+                                } ${lockedWarning ? "opacity-50 cursor-not-allowed" : ""}`}
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-medium">{template.name}</span>
@@ -525,11 +525,10 @@ export default function FormBuilder() {
                     <button
                       key={palette.id}
                       onClick={() => setSelectedTheme(palette.id)}
-                      className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition ${
-                        selectedTheme === palette.id
+                      className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition ${selectedTheme === palette.id
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border hover:border-primary/50"
-                      }`}
+                        }`}
                     >
                       <div>
                         <div className="font-medium capitalize">{palette.id}</div>
@@ -562,11 +561,10 @@ export default function FormBuilder() {
                     <button
                       key={layout.id}
                       onClick={() => setSelectedLayout(layout.id)}
-                      className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${
-                        selectedLayout === layout.id
+                      className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${selectedLayout === layout.id
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border hover:border-primary/50"
-                      }`}
+                        }`}
                     >
                       <div className="font-medium">{layout.name}</div>
                       <div className="text-xs text-muted-foreground line-clamp-2">{layout.description}</div>
@@ -601,7 +599,7 @@ export default function FormBuilder() {
               >
                 <RotateCcw className="mr-2 h-4 w-4" /> Reset to Live
               </Button>
-              
+
               <Button
                 disabled={saveDisabled}
                 onClick={handleSave}

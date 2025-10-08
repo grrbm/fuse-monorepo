@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Loader2, RefreshCcw, Search, Edit3, ExternalLink, Clock, Edit, Layers } from "lucide-react"
-import { useTemplates } from "./hooks/useTemplates"
+import { useTemplates } from "@/hooks/useTemplates"
 import { QuestionnaireEditor } from "./QuestionnaireEditor"
 import { useAuth } from "@/contexts/AuthContext"
 

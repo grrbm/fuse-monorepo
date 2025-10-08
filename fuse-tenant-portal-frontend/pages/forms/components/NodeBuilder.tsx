@@ -2,7 +2,7 @@ import { useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { getThemePalette } from "@/lib/utils"
-import type { FormSectionTemplate } from "../hooks/useTemplates"
+import type { FormSectionTemplate } from "@/hooks/useTemplates"
 
 interface NodeBuilderProps {
   layoutTemplate: string
@@ -95,11 +95,10 @@ export function NodeBuilder({ layoutTemplate, themeId, sections, locked = false 
                           section.onSelectTemplate?.(section.key, template.id)
                         }}
                         disabled={sectionLocked}
-                        className={`w-full rounded-md border px-3 py-2 text-left text-xs transition ${
-                          isSelected
+                        className={`w-full rounded-md border px-3 py-2 text-left text-xs transition ${isSelected
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border hover:border-primary/50"
-                        } ${sectionLocked ? "opacity-60 cursor-not-allowed" : ""}`}
+                          } ${sectionLocked ? "opacity-60 cursor-not-allowed" : ""}`}
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-medium">{template.name}</span>
