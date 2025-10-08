@@ -13,7 +13,7 @@
     "pm2:reload": "pnpm build && pnpm with-env pm2 reload patient-api",
     "pm2:reload-no-build": "pnpm with-env pm2 reload patient-api",
     "pm2:stop": "pm2 stop patient-api",
-    "clean": "git clean -xdf .cache .turbo dist .next node_modules",
+    "clean": "git clean -xdf .cache .turbo dist .next node_modules bundle",
     "with-env": "dotenv -e ../.env.local --"
   },
   "dependencies": {
