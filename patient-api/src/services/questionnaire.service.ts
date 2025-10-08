@@ -14,6 +14,7 @@ class QuestionnaireService {
         description?: string;
         treatmentId?: string | null;
         productId?: string | null;
+        category?: string | null;
     }) {
         return Questionnaire.create({
             title: input.title,
@@ -21,6 +22,7 @@ class QuestionnaireService {
             checkoutStepPosition: -1,
             treatmentId: input.treatmentId ?? null,
             productId: input.productId ?? null,
+            category: input.category ?? null,
             isTemplate: true,
             userId: null,
             personalizationQuestionsSetup: false,

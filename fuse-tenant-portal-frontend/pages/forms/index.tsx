@@ -140,12 +140,10 @@ export default function Forms() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name,
+          title: name,
           description,
-          sectionType,
+          // set category only for non-account templates
           category: sectionType === "account" ? null : category,
-          schema: { steps: [] },
-          isGlobal: true, // Create as global template (master for all tenants)
         }),
       })
 

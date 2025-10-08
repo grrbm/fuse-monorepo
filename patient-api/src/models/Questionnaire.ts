@@ -67,6 +67,29 @@ export default class Questionnaire extends Entity {
     @BelongsTo(() => Treatment)
     declare treatment?: Treatment | null;
 
+    @Column({
+        // Use explicit literals to avoid runtime import/init issues
+        type: DataType.ENUM(
+            'weight_loss',
+            'hair_growth',
+            'performance',
+            'sexual_health',
+            'skincare',
+            'wellness',
+            'other'
+        ),
+        allowNull: true,
+    })
+    declare category?:
+        | 'weight_loss'
+        | 'hair_growth'
+        | 'performance'
+        | 'sexual_health'
+        | 'skincare'
+        | 'wellness'
+        | 'other'
+        | null;
+
 
     @ForeignKey(() => Product)
     @Column({

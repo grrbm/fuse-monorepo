@@ -3883,7 +3883,7 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const { title, description, treatmentId, productId } = req.body;
+    const { title, description, treatmentId, productId, category } = req.body;
 
     if (!title) {
       return res.status(400).json({ success: false, message: 'Title is required' });
@@ -3892,8 +3892,9 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
     const template = await questionnaireService.createTemplate({
       title,
       description,
-      treatmentId,
+      treatmentId: typeof treatmentId === 'string' ? treatmentId : null,
       productId,
+      category,
     });
 
     res.status(201).json({ success: true, data: template });
