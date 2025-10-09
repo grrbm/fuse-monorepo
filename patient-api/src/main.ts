@@ -65,6 +65,7 @@ import {
   brandTreatmentSchema,
   organizationUpdateSchema,
   updateSelectionSchema,
+  updateTenantProductPriceSchema,
   listProductsSchema,
 } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
