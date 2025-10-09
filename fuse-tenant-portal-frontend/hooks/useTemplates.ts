@@ -42,6 +42,9 @@ interface UseTemplatesResult {
     error: string | null
     sections: Record<string, FormSectionTemplate[]>
     assignments: TenantProductFormAssignment[]
+    page: number
+    totalPages: number
+    setPage: (p: number) => void
     refresh: () => Promise<void>
     saveAssignment: (input: SaveAssignmentInput) => Promise<void>
 }
@@ -62,6 +65,8 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
     const [error, setError] = useState<string | null>(null)
     const [templates, setTemplates] = useState<FormSectionTemplate[]>([])
     const [assignments, setAssignments] = useState<TenantProductFormAssignment[]>([])
+    const [page, setPage] = useState<number>(1)
+    const [totalPages, setTotalPages] = useState<number>(1)
 
     const fetchTemplates = useCallback(async () => {
         if (!token) return
@@ -70,7 +75,7 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
 
         try {
             // Always load products; other resources are optional
-            const productsRes = await fetch(`${baseUrl}/products-management?limit=100&isActive=true`, {
+            const productsRes = await fetch(`${baseUrl}/products-management?limit=100&isActive=true&page=${page}`, {
                 headers: { Authorization: `Bearer ${token}` },
             })
             if (!productsRes.ok) {
@@ -106,7 +111,24 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
                 setTemplates([])
             }
 
-            const allProducts = productsData.data?.products ?? []
+            // Normalize products payload from various API shapes
+            const allProducts = Array.isArray(productsData)
+                ? productsData
+                : Array.isArray(productsData?.data?.products)
+                    ? productsData.data.products
+                    : Array.isArray(productsData?.data)
+                        ? productsData.data
+                        : Array.isArray(productsData?.products)
+                            ? productsData.products
+                            : []
+
+            // Derive pagination if present
+            const pagination = productsData?.data?.pagination
+            if (pagination && typeof pagination.totalPages === 'number') {
+                setTotalPages(pagination.totalPages)
+            } else {
+                setTotalPages(1)
+            }
 
             const assignmentMap = new Map(
                 existingAssignments.map((a: TenantProductFormAssignment) => [a.treatmentId, a])
@@ -152,7 +174,7 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
         } finally {
             setLoading(false)
         }
-    }, [baseUrl, token])
+    }, [baseUrl, token, page])
 
     const saveAssignment = useCallback(
         async (input: SaveAssignmentInput) => {
@@ -195,7 +217,7 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
 
     useEffect(() => {
         fetchTemplates()
-    }, [fetchTemplates])
+    }, [fetchTemplates, page])
 
     const sections = useMemo(() => {
         const grouped: Record<string, FormSectionTemplate[]> = {
@@ -219,6 +241,9 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
         error,
         sections,
         assignments,
+        page,
+        totalPages,
+        setPage,
         refresh: fetchTemplates,
         saveAssignment,
     }

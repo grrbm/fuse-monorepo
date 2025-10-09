@@ -40,7 +40,7 @@ const SORT_OPTIONS = [
 export default function Forms() {
   const router = useRouter()
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001", [])
-  const { loading, error, assignments, sections, refresh } = useTemplates(baseUrl)
+  const { loading, error, assignments, sections, refresh, page, totalPages, setPage } = useTemplates(baseUrl)
   const { questionnaires, refresh: refreshQuestionnaires } = useQuestionnaires(baseUrl)
   const { token } = useAuth()
   const { selectedTenant } = useTenant()
@@ -378,19 +378,30 @@ export default function Forms() {
                 <span>
                   Showing {filteredAndSortedAssignments.length} of {assignments.length} product forms
                 </span>
-                {(searchQuery || selectedCategory || selectedStatus !== "all") && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSearchQuery("")
-                      setSelectedCategory("")
-                      setSelectedStatus("all")
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {(searchQuery || selectedCategory || selectedStatus !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSearchQuery("")
+                        setSelectedCategory("")
+                        setSelectedStatus("all")
+                      }}
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage(Math.max(1, page - 1))}>
+                      Prev
+                    </Button>
+                    <span className="text-xs">Page {page} / {totalPages}</span>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage(page + 1)}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               {/* Product Forms List */}
