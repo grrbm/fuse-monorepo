@@ -12,7 +12,7 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => User)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare tenantId: string
 
@@ -22,7 +22,7 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => Treatment)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare treatmentId: string
 
@@ -32,7 +32,7 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => FormSectionTemplate)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare personalizationTemplateId: string
 
@@ -42,7 +42,7 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => FormSectionTemplate)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare accountTemplateId: string
 
@@ -52,7 +52,7 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => FormSectionTemplate)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare doctorTemplateId: string
 
@@ -61,7 +61,7 @@ export default class TenantProductForm extends Entity {
 
   @Column({
     type: DataType.STRING,
-    allowNull: false,
+    allowNull: true,
     defaultValue: 'layout_a',
   })
   declare layoutTemplate: string
