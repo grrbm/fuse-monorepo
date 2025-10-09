@@ -245,7 +245,18 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 ...question,
                 questionText: replaceVariables(question.questionText || '', variables),
                 placeholder: replaceVariables(question.placeholder || '', variables),
-                options: question.options?.map((option: string) => replaceVariables(option, variables)),
+                options: question.options?.map((opt: any) => {
+                  if (typeof opt === 'string') {
+                    return replaceVariables(opt, variables);
+                  }
+                  if (opt && typeof opt === 'object') {
+                    return {
+                      ...opt,
+                      optionText: replaceVariables(opt.optionText || '', variables),
+                    };
+                  }
+                  return opt;
+                }),
               })),
             }));
           }
