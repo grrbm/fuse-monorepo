@@ -64,7 +64,6 @@ import {
   patientUpdateSchema,
   brandTreatmentSchema,
   organizationUpdateSchema,
-  updateTenantProductPriceSchema,
   updateSelectionSchema,
   listProductsSchema,
 } from "@fuse/validators";
@@ -5696,6 +5695,91 @@ app.post("/tenant-products/update-selection", authenticateJWT, async (req, res) 
     res.status(500).json({
       success: false,
       message: "Failed to update tenant product selection"
+    });
+  }
+});
+
+// Update tenant product price
+app.post("/tenant-products/update", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+
+
+    // Validate request body using updateTenantProductPriceSchema
+    const validation = updateTenantProductPriceSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { tenantProductId, price } = validation.data
+
+    // Create tenant product service instance
+    const tenantProductService = new TenantProductService();
+
+    // Update tenant product price
+    const result = await tenantProductService.updatePrice({
+      tenantProductId, price,
+      userId: currentUser.id
+    });
+
+    if (!result.success) {
+      // Handle specific error types
+      if (result.error?.includes('not found')) {
+        return res.status(404).json({
+          success: false,
+          message: result.error
+        });
+      }
+
+      if (result.error?.includes('does not belong to')) {
+        return res.status(403).json({
+          success: false,
+          message: result.error
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: result.error || 'Failed to update price'
+      });
+    }
+
+    console.log('✅ Tenant product price updated:', {
+      tenantProductId,
+      price: validation.data.price,
+      stripeProductId: result.stripeProductId,
+      stripePriceId: result.stripePriceId,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: result.message || 'Price updated successfully',
+      data: {
+        tenantProduct: result.tenantProduct,
+        stripeProductId: result.stripeProductId,
+        stripePriceId: result.stripePriceId
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating tenant product price:', error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update tenant product price"
     });
   }
 });
