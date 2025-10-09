@@ -13,6 +13,7 @@ import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
 import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
+import TenantProduct from "./models/TenantProduct";
 import { createJWTToken, authenticateJWT, getCurrentUser, extractTokenFromHeader, verifyJWTToken } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
@@ -2145,6 +2146,198 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to confirm payment"
+    });
+  }
+});
+
+// Create subscription-based product purchase with payment intent
+app.post("/products/create-payment-intent", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate request body using createProductSubscriptionSchema
+    const validation = createProductSubscriptionSchema.safeParse(req.body);
+
+    console.log(" validation ", validation)
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const {
+      productId,
+      shippingInfo,
+      questionnaireAnswers
+    } = validation.data;
+
+
+
+    // Get tenant product configuration (includes clinic pricing and questionnaire)
+    const tenantProduct = await TenantProduct.findByPk(productId, {
+      include: [
+        {
+          model: Clinic,
+          as: 'clinic',
+          required: true
+        },
+        {
+          model: Product,
+          as: 'product',
+          required: true
+        }
+      ]
+    });
+
+
+    if (!tenantProduct) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not available for subscription"
+      });
+    }
+
+    // Use tenant product price if available, otherwise use base product price
+    const unitPrice = tenantProduct.price;
+    const totalAmount = unitPrice;
+
+    // Get or create Stripe customer
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const userService = new UserService();
+    const stripeCustomerId = await userService.getOrCreateCustomerId(user, {
+      userId: user.id,
+      productId
+    });
+
+
+
+    // Create order
+    const orderNumber = Order.generateOrderNumber();
+    const order = await Order.create({
+      orderNumber,
+      userId: currentUser.id,
+      clinicId: tenantProduct.clinicId, // Product subscription order linked to clinic
+      questionnaireId: tenantProduct.questionnaireId || null,
+      status: 'pending',
+      billingInterval: BillingInterval.MONTHLY,
+      subtotalAmount: totalAmount,
+      discountAmount: 0,
+      taxAmount: 0,
+      shippingAmount: 0,
+      totalAmount: totalAmount,
+      questionnaireAnswers,
+      stripePriceId: tenantProduct.stripePriceId,
+      tenantProductId: tenantProduct.id
+    });
+
+    // Create order item
+    await OrderItem.create({
+      orderId: order.id,
+      productId: tenantProduct.product.id,
+      quantity: 1,
+      unitPrice: unitPrice,
+      totalPrice: totalAmount,
+      dosage: tenantProduct.product.dosage
+    });
+
+    // Create shipping address if provided
+    if (shippingInfo.address && shippingInfo.city && shippingInfo.state && shippingInfo.zipCode) {
+      await ShippingAddress.create({
+        orderId: order.id,
+        address: shippingInfo.address,
+        apartment: shippingInfo.apartment || null,
+        city: shippingInfo.city,
+        state: shippingInfo.state,
+        zipCode: shippingInfo.zipCode,
+        country: shippingInfo.country || 'US',
+        userId: currentUser.id,
+      });
+    }
+
+    // Create payment intent with Stripe
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(totalAmount * 100), // Convert to cents
+      currency: 'usd',
+      customer: stripeCustomerId,
+      metadata: {
+        userId: currentUser.id,
+        productId,
+        orderId: order.id,
+        orderNumber: orderNumber,
+        orderType: 'product_subscription'
+      },
+      description: `Subscription Order ${orderNumber} - ${tenantProduct.product.name}`,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: 'never'
+      },
+      setup_future_usage: 'off_session',
+    });
+
+    // Create payment record
+    await Payment.create({
+      orderId: order.id,
+      stripePaymentIntentId: paymentIntent.id,
+      status: 'pending',
+      paymentMethod: 'card',
+      amount: totalAmount,
+      currency: 'USD'
+    });
+
+    console.log('💳 Product subscription order and payment intent created:', {
+      orderId: order.id,
+      orderNumber: orderNumber,
+      paymentIntentId: paymentIntent.id,
+      amount: paymentIntent.amount,
+      userId: currentUser.id,
+      productId,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        orderId: order.id,
+        orderNumber: orderNumber
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating product subscription order and payment intent:', error);
+
+    // Log specific error details for debugging
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+
+    // Check if it's a Stripe error
+    if (error && typeof error === 'object' && 'type' in error) {
+      console.error('Stripe error type:', (error as any).type);
+      console.error('Stripe error code:', (error as any).code);
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create product subscription order and payment intent",
+      error: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
     });
   }
 });
