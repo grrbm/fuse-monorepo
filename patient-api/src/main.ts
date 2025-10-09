@@ -45,6 +45,7 @@ import {
   treatmentPlanCreateSchema,
   treatmentPlanUpdateSchema,
   createPaymentIntentSchema,
+  createProductSubscriptionSchema,
   treatmentSubscriptionSchema,
   clinicSubscriptionSchema,
   brandPaymentIntentSchema,
@@ -63,6 +64,7 @@ import {
   patientUpdateSchema,
   brandTreatmentSchema,
   organizationUpdateSchema,
+  updateTenantProductPriceSchema,
   updateSelectionSchema,
   listProductsSchema,
 } from "@fuse/validators";
