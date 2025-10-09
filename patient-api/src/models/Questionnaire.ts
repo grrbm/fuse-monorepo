@@ -68,6 +68,13 @@ export default class Questionnaire extends Entity {
     declare treatment?: Treatment | null;
 
     @Column({
+        type: DataType.ENUM('normal', 'user_profile', 'doctor'),
+        allowNull: true,
+        defaultValue: null,
+    })
+    declare formTemplateType: 'normal' | 'user_profile' | 'doctor' | null;
+
+    @Column({
         // Use explicit literals to avoid runtime import/init issues
         type: DataType.ENUM(
             'weight_loss',

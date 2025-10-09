@@ -3883,7 +3883,7 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const { title, description, treatmentId, productId, category } = req.body;
+    const { title, description, treatmentId, productId, category, formTemplateType } = req.body;
 
     if (!title) {
       return res.status(400).json({ success: false, message: 'Title is required' });
@@ -3895,6 +3895,7 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
       treatmentId: typeof treatmentId === 'string' ? treatmentId : null,
       productId,
       category,
+      formTemplateType: (formTemplateType === 'normal' || formTemplateType === 'user_profile' || formTemplateType === 'doctor') ? formTemplateType : null,
     });
 
     res.status(201).json({ success: true, data: template });

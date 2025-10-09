@@ -15,6 +15,7 @@ class QuestionnaireService {
         treatmentId?: string | null;
         productId?: string | null;
         category?: string | null;
+        formTemplateType?: 'normal' | 'user_profile' | 'doctor' | null;
     }) {
         return Questionnaire.create({
             title: input.title,
@@ -23,6 +24,7 @@ class QuestionnaireService {
             treatmentId: input.treatmentId ?? null,
             productId: input.productId ?? null,
             category: input.category ?? null,
+            formTemplateType: input.formTemplateType ?? null,
             isTemplate: true,
             userId: null,
             personalizationQuestionsSetup: false,

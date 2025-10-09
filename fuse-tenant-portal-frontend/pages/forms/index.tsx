@@ -104,9 +104,10 @@ export default function Forms() {
     return filtered
   }, [assignments, searchQuery, selectedCategory, selectedStatus, selectedSort])
 
-  const accountTemplate = useMemo(() => {
-    return (sections?.account || []).find((t: any) => !t.category)
-  }, [sections])
+  const accountQuestionnaire = useMemo(() => {
+    const list = (questionnaires || []).filter((q: any) => q.formTemplateType === 'user_profile')
+    return list.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())[0] || null
+  }, [questionnaires])
 
   const handleEditForm = (assignmentId: string) => {
     router.push(`/forms/builder/${assignmentId}`)
@@ -147,6 +148,7 @@ export default function Forms() {
           description,
           // set category only for non-account templates
           category: sectionType === "account" ? null : category,
+          formTemplateType: sectionType === "account" ? 'user_profile' : null,
         }),
       })
 
@@ -158,8 +160,8 @@ export default function Forms() {
       const data = await response.json()
       const template = data.data
 
-      // Refresh templates to get the new one
-      await refresh()
+      // Refresh questionnaires to get the new one
+      await refreshQuestionnaires()
 
       // Navigate to editor
       router.push(`/forms/editor/${template.id}`)
@@ -577,8 +579,8 @@ export default function Forms() {
                   <p className="text-sm text-muted-foreground mb-4">
                     These questions are used globally. Changes will impact every product form.
                   </p>
-                  {accountTemplate ? (
-                    <Button onClick={() => router.push(`/forms/editor/${accountTemplate.id}`)} className="w-full">
+                  {accountQuestionnaire ? (
+                    <Button onClick={() => router.push(`/forms/editor/${accountQuestionnaire.id}`)} className="w-full">
                       <Edit3 className="mr-2 h-4 w-4" />
                       Edit Account Questions
                     </Button>
