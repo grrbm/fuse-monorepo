@@ -46,6 +46,9 @@ export default function ProductDetail() {
     const [product, setProduct] = useState<Product | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [templates, setTemplates] = useState<any[]>([])
+    const [enablingId, setEnablingId] = useState<string | null>(null)
+    const [enabledForms, setEnabledForms] = useState<any[]>([])
     const { user, token } = useAuth()
     const router = useRouter()
     const { id } = router.query
@@ -96,6 +99,82 @@ export default function ProductDetail() {
 
         fetchProduct()
     }, [token, id])
+
+    useEffect(() => {
+        const fetchTemplates = async () => {
+            if (!token || !id) return
+            try {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/product/${id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                if (!res.ok) return
+                const data = await res.json()
+                setTemplates(Array.isArray(data?.data) ? data.data : [])
+            } catch { }
+        }
+        fetchTemplates()
+    }, [token, id])
+
+    useEffect(() => {
+        const fetchEnabled = async () => {
+            if (!token || !id) return
+            try {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms?productId=${id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                if (!res.ok) return
+                const data = await res.json()
+                setEnabledForms(Array.isArray(data?.data) ? data.data : [])
+            } catch { }
+        }
+        fetchEnabled()
+    }, [token, id])
+
+    const enableTemplate = async (questionnaireId: string) => {
+        if (!token || !id) return
+        setEnablingId(questionnaireId)
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId: id, questionnaireId })
+            })
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}))
+                throw new Error(err?.message || 'Failed to enable form')
+            }
+            const data = await res.json().catch(() => ({}))
+            const created = data?.data
+            if (created) {
+                setEnabledForms((prev) => {
+                    const filtered = prev.filter((r: any) => r?.questionnaireId !== questionnaireId)
+                    return [...filtered, created]
+                })
+            }
+        } catch (e: any) {
+            alert(e?.message || 'Failed to enable form')
+        } finally {
+            setEnablingId(null)
+        }
+    }
+
+    const disableTemplate = async (questionnaireId: string) => {
+        if (!token || !id) return
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId: id, questionnaireId })
+            })
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}))
+                throw new Error(err?.message || 'Failed to disable form')
+            }
+            setEnabledForms((prev) => prev.filter((r: any) => r?.questionnaireId !== questionnaireId))
+        } catch (e: any) {
+            alert(e?.message || 'Failed to disable form')
+        }
+    }
 
     const getStatusBadge = (active: boolean) => {
         return active
@@ -363,6 +442,40 @@ export default function ProductDetail() {
 
                         {/* Sidebar */}
                         <div className="space-y-6">
+                            {/* Product Forms (Templates) */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Available Product Forms</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {templates.length === 0 ? (
+                                        <div className="text-sm text-muted-foreground">No templates found for this product.</div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {templates.map(t => {
+                                                const isEnabled = enabledForms.some((f: any) => f?.questionnaireId === t.id)
+                                                return (
+                                                    <div key={t.id} className="flex items-center justify-between border rounded-md p-3">
+                                                        <div>
+                                                            <div className="text-sm font-medium">{t.title}</div>
+                                                            <div className="text-xs text-muted-foreground">{t.formTemplateType || 'normal'}</div>
+                                                        </div>
+                                                        {isEnabled ? (
+                                                            <Button size="sm" variant="outline" onClick={() => disableTemplate(t.id)}>
+                                                                Disable
+                                                            </Button>
+                                                        ) : (
+                                                            <Button size="sm" onClick={() => enableTemplate(t.id)} disabled={enablingId === t.id}>
+                                                                {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                             {/* Product Details */}
                             <Card>
                                 <CardHeader>

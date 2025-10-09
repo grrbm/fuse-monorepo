@@ -69,41 +69,44 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
         setError(null)
 
         try {
-            const [templatesRes, assignmentsRes, productsRes] = await Promise.all([
-                fetch(`${baseUrl}/questionnaires/templates`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-                fetch(`${baseUrl}/questionnaires/templates/assignments`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-                fetch(`${baseUrl}/products-management?limit=100&isActive=true`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-            ])
-
-            if (!templatesRes.ok) {
-                const data = await templatesRes.json().catch(() => ({}))
-                throw new Error(data.message || "Failed to load templates")
-            }
-
-            if (!assignmentsRes.ok) {
-                const data = await assignmentsRes.json().catch(() => ({}))
-                throw new Error(data.message || "Failed to load template assignments")
-            }
-
+            // Always load products; other resources are optional
+            const productsRes = await fetch(`${baseUrl}/products-management?limit=100&isActive=true`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
             if (!productsRes.ok) {
                 const data = await productsRes.json().catch(() => ({}))
                 throw new Error(data.message || "Failed to load products")
             }
-
-            const templatesData = await templatesRes.json()
-            const assignmentsData = await assignmentsRes.json()
             const productsData = await productsRes.json()
 
-            setTemplates(templatesData.data ?? [])
+            // Best-effort fetch of assignments; tolerate failures
+            let existingAssignments: any[] = []
+            try {
+                const assignmentsRes = await fetch(`${baseUrl}/questionnaires/templates/assignments`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+                if (assignmentsRes.ok) {
+                    const assignmentsData = await assignmentsRes.json()
+                    existingAssignments = assignmentsData.data ?? []
+                }
+            } catch { }
+
+            // Best-effort fetch of templates; not required anymore for Forms index
+            try {
+                const templatesRes = await fetch(`${baseUrl}/questionnaires/templates`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+                if (templatesRes.ok) {
+                    const templatesData = await templatesRes.json()
+                    setTemplates(templatesData.data ?? [])
+                } else {
+                    setTemplates([])
+                }
+            } catch {
+                setTemplates([])
+            }
 
             const allProducts = productsData.data?.products ?? []
-            const existingAssignments = assignmentsData.data ?? []
 
             const assignmentMap = new Map(
                 existingAssignments.map((a: TenantProductFormAssignment) => [a.treatmentId, a])

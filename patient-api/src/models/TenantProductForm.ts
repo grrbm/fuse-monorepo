@@ -2,7 +2,9 @@ import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typesc
 import Entity from './Entity'
 import User from './User'
 import Treatment from './Treatment'
-import FormSectionTemplate from './FormSectionTemplate'
+import Product from './Product'
+import Questionnaire from './Questionnaire'
+import Clinic from './Clinic'
 
 @Table({
   freezeTableName: true,
@@ -22,42 +24,42 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => Treatment)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare treatmentId: string
 
   @BelongsTo(() => Treatment)
   declare treatment: Treatment
 
-  @ForeignKey(() => FormSectionTemplate)
+  @ForeignKey(() => Product)
   @Column({
     type: DataType.UUID,
     allowNull: false,
   })
-  declare personalizationTemplateId: string
+  declare productId: string
 
-  @BelongsTo(() => FormSectionTemplate, 'personalizationTemplateId')
-  declare personalizationTemplate: FormSectionTemplate
+  @BelongsTo(() => Product)
+  declare product: Product
 
-  @ForeignKey(() => FormSectionTemplate)
+  @ForeignKey(() => Questionnaire)
   @Column({
     type: DataType.UUID,
     allowNull: false,
   })
-  declare accountTemplateId: string
+  declare questionnaireId: string
 
-  @BelongsTo(() => FormSectionTemplate, 'accountTemplateId')
-  declare accountTemplate: FormSectionTemplate
+  @BelongsTo(() => Questionnaire)
+  declare questionnaire: Questionnaire
 
-  @ForeignKey(() => FormSectionTemplate)
+  @ForeignKey(() => Clinic)
   @Column({
     type: DataType.UUID,
     allowNull: false,
   })
-  declare doctorTemplateId: string
+  declare clinicId: string
 
-  @BelongsTo(() => FormSectionTemplate, 'doctorTemplateId')
-  declare doctorTemplate: FormSectionTemplate
+  @BelongsTo(() => Clinic)
+  declare clinic: Clinic
 
   @Column({
     type: DataType.STRING,

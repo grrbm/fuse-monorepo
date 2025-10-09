@@ -77,6 +77,7 @@ import PharmacyWebhookService from "./services/pharmacy/webhook";
 import BrandSubscriptionService from "./services/brandSubscription.service";
 import MessageService from "./services/Message.service";
 import ProductService from "./services/product.service";
+import TenantProductForm from "./models/TenantProductForm";
 import { assignTemplatesSchema } from "./validators/formTemplates";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
@@ -3933,6 +3934,105 @@ app.get("/questionnaires/product/:productId", authenticateJWT, async (req, res) 
   } catch (error) {
     console.error('❌ Error fetching questionnaires for product:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch questionnaires for product' });
+  }
+});
+
+// Enable a questionnaire for current user's clinic and product
+app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(400).json({ success: false, message: "User clinic not found" });
+    }
+
+    const { productId, questionnaireId } = req.body || {};
+    if (!productId || !questionnaireId) {
+      return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
+    }
+
+    const record = await TenantProductForm.create({
+      tenantId: currentUser.id,
+      treatmentId: null,
+      productId,
+      questionnaireId,
+      clinicId: user.clinicId,
+      layoutTemplate: 'layout_a',
+      themeId: null,
+      lockedUntil: null,
+    });
+
+    res.status(201).json({ success: true, data: record });
+  } catch (error) {
+    console.error('❌ Error enabling tenant product form:', error);
+    res.status(500).json({ success: false, message: 'Failed to enable product form' });
+  }
+});
+
+// List enabled forms for current user's clinic and a product
+app.get("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(400).json({ success: false, message: "User clinic not found" });
+    }
+
+    const productId = typeof req.query.productId === 'string' ? req.query.productId : undefined;
+    if (!productId) {
+      return res.status(400).json({ success: false, message: "productId is required" });
+    }
+
+    const records = await TenantProductForm.findAll({
+      where: { tenantId: currentUser.id, clinicId: user.clinicId, productId },
+    });
+
+    res.status(200).json({ success: true, data: records });
+  } catch (error) {
+    console.error('❌ Error listing tenant product forms:', error);
+    res.status(500).json({ success: false, message: 'Failed to list enabled forms' });
+  }
+});
+
+// Disable an enabled form for the current user's clinic/product
+app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(400).json({ success: false, message: "User clinic not found" });
+    }
+
+    const { productId, questionnaireId } = req.body || {};
+    if (!productId || !questionnaireId) {
+      return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
+    }
+
+    const record = await TenantProductForm.findOne({
+      where: { tenantId: currentUser.id, clinicId: user.clinicId, productId, questionnaireId },
+    });
+
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'Enabled form not found' });
+    }
+
+    await record.destroy();
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('❌ Error disabling tenant product form:', error);
+    res.status(500).json({ success: false, message: 'Failed to disable product form' });
   }
 });
 
