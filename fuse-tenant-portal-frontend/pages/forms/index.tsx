@@ -53,6 +53,7 @@ export default function Forms() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
   const [editingTemplateType, setEditingTemplateType] = useState<"personalization" | "account" | "doctor" | null>(null)
   const [creating, setCreating] = useState(false)
+  const [configuringProductId, setConfiguringProductId] = useState<string | null>(null)
 
   useEffect(() => {
     refresh()
@@ -111,6 +112,59 @@ export default function Forms() {
 
   const handleEditForm = (assignmentId: string) => {
     router.push(`/forms/builder/${assignmentId}`)
+  }
+
+  const handleConfigureProduct = async (assignment: any) => {
+    if (!token) return
+    const productId = assignment?.treatmentId
+    if (!productId) return
+    setConfiguringProductId(productId)
+    try {
+      // Try to find existing product questionnaire (prefer formTemplateType: 'normal')
+      const res = await fetch(`${baseUrl}/questionnaires/product/${productId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const list = Array.isArray(data?.data) ? data.data : []
+        const existing = list
+          .filter((q: any) => q.formTemplateType === 'normal')
+          .sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())[0]
+          || list[0]
+        if (existing?.id) {
+          router.push(`/forms/editor/${existing.id}`)
+          return
+        }
+      }
+
+      // None exists: create one
+      const name = `${assignment?.treatment?.name || 'Product'} Form`
+      const description = `Questionnaire for ${assignment?.treatment?.name || 'product'}`
+      const createRes = await fetch(`${baseUrl}/questionnaires/templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: name,
+          description,
+          productId,
+          formTemplateType: 'normal',
+        }),
+      })
+      if (!createRes.ok) {
+        const err = await createRes.json().catch(() => ({}))
+        throw new Error(err?.message || 'Failed to create product questionnaire')
+      }
+      const created = await createRes.json()
+      const q = created?.data
+      if (q?.id) {
+        router.push(`/forms/editor/${q.id}`)
+      }
+    } catch (e: any) {
+      console.error('❌ Configure product failed', e)
+      alert(e?.message || 'Failed to configure form')
+    } finally {
+      setConfiguringProductId(null)
+    }
   }
 
   const handleViewLive = (assignment: any) => {
@@ -451,10 +505,13 @@ export default function Forms() {
                               className="flex-1"
                               variant={assignment.hasAssignment ? "default" : "secondary"}
                               size="sm"
-                              onClick={() => handleEditForm(assignment.id)}
+                              onClick={() => handleConfigureProduct(assignment)}
+                              disabled={configuringProductId === assignment.treatmentId}
                             >
                               <Edit3 className="mr-2 h-4 w-4" />
-                              {!assignment.hasAssignment ? "Configure Form" : locked ? "View Form" : "Edit Form"}
+                              {configuringProductId === assignment.treatmentId
+                                ? 'Opening...'
+                                : (!assignment.hasAssignment ? "Configure Form" : locked ? "View Form" : "Edit Form")}
                             </Button>
                             {isLive && (
                               <Button
