@@ -520,28 +520,31 @@ export default function Forms() {
                               const categoryTemplate = (questionnaires || []).find(
                                 (q: any) => q.category === selectedCategory
                               )
-                              return categoryTemplate ? (
-                                <Button
-                                  onClick={() => router.push(`/forms/editor/${categoryTemplate.id}`)}
-                                  className="w-full"
-                                >
-                                  <Edit3 className="mr-2 h-4 w-4" />
-                                  Edit Personalization Questions
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => handleCreateTemplate("personalization", selectedCategory)}
-                                  variant="outline"
-                                  className="w-full"
-                                  disabled={creating}
-                                >
-                                  {creating ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Layers className="mr-2 h-4 w-4" />
+                              return (
+                                <div className="grid gap-2">
+                                  {categoryTemplate && (
+                                    <Button
+                                      onClick={() => router.push(`/forms/editor/${categoryTemplate.id}`)}
+                                      className="w-full"
+                                    >
+                                      <Edit3 className="mr-2 h-4 w-4" />
+                                      Edit Personalization Questions
+                                    </Button>
                                   )}
-                                  {creating ? "Creating..." : "Create Personalization Template"}
-                                </Button>
+                                  <Button
+                                    onClick={() => handleCreateTemplate("personalization", selectedCategory)}
+                                    variant={categoryTemplate ? "outline" : "default"}
+                                    className="w-full"
+                                    disabled={creating}
+                                  >
+                                    {creating ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Layers className="mr-2 h-4 w-4" />
+                                    )}
+                                    {creating ? "Creating..." : categoryTemplate ? "Create Another Template" : "Create Personalization Template"}
+                                  </Button>
+                                </div>
                               )
                             })()}
                           </CardContent>
