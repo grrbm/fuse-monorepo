@@ -3,6 +3,7 @@ import Entity from './Entity';
 import Subscription from './Subscription';
 import Treatment from './Treatment';
 import TenantProduct from './TenantProduct';
+import Sale from './Sale';
 
 
 export enum PaymentStatus {
@@ -63,5 +64,8 @@ export default class Clinic extends Entity {
 
     @HasMany(() => TenantProduct)
     declare tenantProducts: TenantProduct[];
+
+    @HasMany(() => Sale)
+    declare sales: Sale[];
 
 }
