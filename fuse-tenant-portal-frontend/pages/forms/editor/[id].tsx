@@ -98,6 +98,18 @@ export default function TemplateEditor() {
   const handleAddStep = async (stepType: "question" | "info") => {
     if (!token || !templateId) return
     try {
+      // Persist the currently edited step's title/description to avoid losing unsaved changes
+      if (editingStepId) {
+        const editing = steps.find((s) => s.id === editingStepId)
+        if (editing) {
+          await fetch(`${baseUrl}/questionnaires/step`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ stepId: editing.id, title: editing.title, description: editing.description }),
+          }).catch(() => { })
+        }
+      }
+
       const res = await fetch(`${baseUrl}/questionnaires/step`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
