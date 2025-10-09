@@ -963,18 +963,20 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Transform data to match frontend expectations
-    const transformedProducts = result.items?.map(product => ({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      pharmacyProductId: product.pharmacyProductId,
-      dosage: product.dosage,
-      imageUrl: product.imageUrl,
-      active: product.active,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-      treatments: product.treatments || []
+    // Transform data to match frontend expectations with both prices
+    const transformedProducts = result.items?.map(item => ({
+      id: item.product.id,
+      name: item.product.name,
+      productPrice: item.product.price, // Base product price
+      price: item.tenantProductPrice, // Tenant-specific price (overrides base price)
+      tenantProductId: item.tenantProductId,
+      pharmacyProductId: item.product.pharmacyProductId,
+      dosage: item.product.dosage,
+      imageUrl: item.product.imageUrl,
+      active: item.product.active,
+      createdAt: item.product.createdAt,
+      updatedAt: item.product.updatedAt,
+      treatments: item.product.treatments || []
     }));
 
     res.status(200).json({
