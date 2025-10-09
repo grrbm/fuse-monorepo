@@ -993,16 +993,13 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 
     console.log(`📊 Total products in database: ${allProducts.length}`);
 
-    // Fetch products that belong to this clinic (both with matching clinicId and legacy products)
-    let products = [];
-
-    // First, get products with matching clinicId
-    const directProducts = await Product.findAll({
-      where: { clinicId },
+    // Fetch products associated to treatments belonging to this clinic
+    const clinicProducts = await Product.findAll({
       include: [
         {
           model: Treatment,
           as: 'treatments',
+          where: { clinicId },
           through: { attributes: [] },
           attributes: ['id', 'name'],
         }
@@ -1010,70 +1007,10 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       order: [['name', 'ASC']]
     });
 
-    console.log(`✅ Found ${directProducts.length} products with matching clinicId ${clinicId}`);
-    products.push(...directProducts);
-
-    // Also get legacy products (without clinicId) that are associated with treatments from this clinic
-    if (user.clinicId) {
-      const legacyProducts = await Product.findAll({
-        where: { clinicId: null },
-        include: [
-          {
-            model: Treatment,
-            as: 'treatments',
-            where: { clinicId: user.clinicId }, // Only treatments from user's clinic
-            through: { attributes: [] },
-            attributes: ['id', 'name'],
-          }
-        ],
-        order: [['name', 'ASC']]
-      });
-
-      // Filter out products that don't have treatments from this clinic
-      const filteredLegacyProducts = legacyProducts.filter(product =>
-        product.treatments && product.treatments.length > 0
-      );
-
-      if (filteredLegacyProducts.length > 0) {
-        console.log(`🔄 Found ${filteredLegacyProducts.length} legacy products (without clinicId) associated with treatments from clinic ${user.clinicId}`);
-        products.push(...filteredLegacyProducts);
-      }
-
-      // As a comprehensive fallback, also get any products that have treatments from this clinic
-      // (this catches products that might have clinicId set to something else or null)
-      const allClinicProducts = await Product.findAll({
-        include: [
-          {
-            model: Treatment,
-            as: 'treatments',
-            where: { clinicId: user.clinicId },
-            through: { attributes: [] },
-            attributes: ['id', 'name'],
-          }
-        ],
-        order: [['name', 'ASC']]
-      });
-
-      const comprehensiveFilteredProducts = allClinicProducts.filter(product =>
-        product.treatments && product.treatments.length > 0 &&
-        !products.some(p => p.id === product.id) // Don't duplicate products already found
-      );
-
-      if (comprehensiveFilteredProducts.length > 0) {
-        console.log(`🔄 Found ${comprehensiveFilteredProducts.length} additional products through comprehensive treatments search`);
-        products.push(...comprehensiveFilteredProducts);
-      }
-    }
-
-    // Remove duplicates based on product ID
-    const uniqueProducts = products.filter((product, index, self) =>
-      index === self.findIndex(p => p.id === product.id)
-    );
-
-    console.log(`📊 Total unique products found: ${uniqueProducts.length} (from ${products.length} before deduplication)`);
+    console.log(`✅ Found ${clinicProducts.length} products linked to treatments for clinic ${clinicId}`);
 
     // Transform data to match frontend expectations
-    const transformedProducts = uniqueProducts.map(product => ({
+    const transformedProducts = clinicProducts.map(product => ({
       id: product.id,
       name: product.name,
       price: product.price,
