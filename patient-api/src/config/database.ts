@@ -27,6 +27,7 @@ import UserPatient from '../models/UserPatient';
 import TenantProduct from '../models/TenantProduct';
 import FormSectionTemplate from '../models/FormSectionTemplate';
 import TenantProductForm from '../models/TenantProductForm';
+import Sale from '../models/Sale';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -80,7 +81,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
-    TenantProductForm
+    TenantProductForm, Sale
   ],
 });
 

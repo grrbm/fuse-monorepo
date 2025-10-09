@@ -18,7 +18,7 @@ class PharmacyService {
 
   async createPharmacyOrder(order: Order) {
 
-    const provider = order.treatment.pharmacyProvider;
+    const provider = order?.treatment?.pharmacyProvider ?? order.tenantProduct?.product.pharmacyProvider;
 
 
     switch (provider) {

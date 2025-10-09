@@ -15,8 +15,15 @@ export const createPaymentIntentSchema = z.object({
   questionnaireAnswers: questionnaireAnswersSchema.optional(),
 });
 
+export const createProductSubscriptionSchema = z.object({
+  productId: z.string().uuid('Invalid product ID'),
+  shippingInfo: shippingInfoSchema,
+  questionnaireAnswers: questionnaireAnswersSchema.optional(),
+});
+
 /**
  * Type exports
  */
 
 export type CreatePaymentIntentInput = z.infer<typeof createPaymentIntentSchema>;
+export type CreateProductSubscriptionInput = z.infer<typeof createProductSubscriptionSchema>;

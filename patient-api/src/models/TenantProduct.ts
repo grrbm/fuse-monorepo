@@ -51,4 +51,23 @@ export default class TenantProduct extends Entity {
         defaultValue: true,
     })
     declare active: boolean;
+
+    @Column({
+        type: DataType.FLOAT,
+        allowNull: false,
+        defaultValue: 0,
+    })
+    declare price: number;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare stripeProductId?: string;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare stripePriceId?: string;
 }
