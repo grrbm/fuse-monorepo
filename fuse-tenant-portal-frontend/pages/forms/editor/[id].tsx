@@ -128,7 +128,7 @@ export default function TemplateEditor() {
           body: JSON.stringify({
             stepId: newStepId,
             questionText: 'New question',
-            answerType: 'select',
+            answerType: 'radio',
             isRequired: true,
             options: [
               { optionText: 'Option 1', optionValue: 'option_1', optionOrder: 1 },

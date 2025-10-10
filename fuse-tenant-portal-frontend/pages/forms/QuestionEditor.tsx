@@ -49,6 +49,7 @@ export function QuestionEditor({
     const editable = Boolean(token)
     const [isEditing, setIsEditing] = useState(false)
     const [questionText, setQuestionText] = useState(question.questionText)
+    const [answerType, setAnswerType] = useState<string>(question.answerType || 'radio')
     const [helpText, setHelpText] = useState(question.helpText || '')
     const [options, setOptions] = useState<EditableOption[]>(() =>
         (question.options ?? []).map((option, index) => ({
@@ -65,6 +66,7 @@ export function QuestionEditor({
     useEffect(() => {
         if (!isEditing) {
             setQuestionText(question.questionText)
+            setAnswerType(question.answerType || 'radio')
             setHelpText(question.helpText || '')
             setOptions(
                 (question.options ?? []).map((option, index) => ({
@@ -171,6 +173,7 @@ export function QuestionEditor({
                 },
                 body: JSON.stringify({
                     questionText: trimmedQuestionText,
+                    answerType: answerType || 'radio',
                     helpText: helpText.trim() || null,
                     options: cleanedOptions,
                 }),
@@ -185,6 +188,7 @@ export function QuestionEditor({
             if (data?.data) {
                 onQuestionSaved(data.data)
                 setQuestionText(data.data.questionText ?? trimmedQuestionText)
+                setAnswerType(data.data.answerType || answerType || 'radio')
                 setHelpText(data.data.helpText || '')
                 setOptions(
                     (data.data.options ?? cleanedOptions).map((option: any, index: number) => ({
@@ -237,9 +241,27 @@ export function QuestionEditor({
                             <p className="text-xs text-muted-foreground italic">{question.helpText}</p>
                         )
                     )}
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Type: {question.answerType}
-                    </div>
+                    {!restrictStructuralEdits ? (
+                        <div className="text-xs tracking-wide text-muted-foreground flex items-center gap-2">
+                            <span className="uppercase">Type:</span>
+                            {isEditing ? (
+                                <select
+                                    className="border border-input bg-background rounded px-2 py-1 text-xs"
+                                    value={answerType}
+                                    onChange={(e) => setAnswerType(e.target.value)}
+                                >
+                                    <option value="radio">radio</option>
+                                    <option value="select">select</option>
+                                </select>
+                            ) : (
+                                <span className="font-medium text-foreground">{question.answerType || 'radio'}</span>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                            Type: {question.answerType || 'radio'}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2">
