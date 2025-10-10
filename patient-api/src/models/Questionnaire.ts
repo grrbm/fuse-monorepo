@@ -14,6 +14,13 @@ import Product from './Product';
             fields: ['title', 'userId'],
             name: 'questionnaire_title_user_unique',
         },
+        {
+            unique: true,
+            fields: ['formTemplateType'],
+            name: 'unique_user_profile_formTemplateType',
+            // Ensure only a single questionnaire can have formTemplateType = 'user_profile'
+            where: { formTemplateType: 'user_profile' } as any,
+        },
     ],
 })
 export default class Questionnaire extends Entity {
