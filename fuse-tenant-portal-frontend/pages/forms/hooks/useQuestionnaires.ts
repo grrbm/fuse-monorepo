@@ -25,15 +25,27 @@ export function useQuestionnaires(baseUrl: string) {
         setLoading(true)
         setError(null)
         try {
-            const res = await fetch(`${baseUrl}/questionnaires/templates`, {
+            // Fetch templates (isTemplate=true)
+            const tplRes = await fetch(`${baseUrl}/questionnaires/templates`, {
                 headers: { Authorization: `Bearer ${token}` },
             })
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}))
-                throw new Error(data.message || "Failed to load questionnaires")
+            const tplData = await tplRes.json().catch(() => ({}))
+            const templatesList: any[] = Array.isArray(tplData?.data) ? tplData.data : []
+
+            // Fetch all questionnaires (includes non-templates like account clones)
+            const allRes = await fetch(`${baseUrl}/questionnaires`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            const allData = await allRes.json().catch(() => ({}))
+            const allList: any[] = Array.isArray(allData?.data) ? allData.data : []
+
+            // Merge by id, prefer non-template records for user_profile
+            const byId = new Map<string, any>()
+            for (const q of [...templatesList, ...allList]) {
+                if (!byId.has(q.id)) byId.set(q.id, q)
             }
-            const data = await res.json()
-            setQuestionnaires(Array.isArray(data?.data) ? data.data : [])
+
+            setQuestionnaires(Array.from(byId.values()))
         } catch (err: any) {
             setError(err?.message || "Failed to load questionnaires")
         } finally {

@@ -57,12 +57,16 @@ export default function TemplateEditor() {
           headers: { Authorization: `Bearer ${token}` },
         })
 
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}))
-          throw new Error(data.message || "Failed to load template")
+        let data = await response.json()
+        // If fetching by templates endpoint failed previously, try generic questionnaire endpoint
+        if (!response.ok || !data?.data) {
+          const qRes = await fetch(`${baseUrl}/questionnaires/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
+          const qData = await qRes.json().catch(() => ({}))
+          if (!qRes.ok || !qData?.success || !qData?.data) {
+            throw new Error(qData?.message || data?.message || "Failed to load template")
+          }
+          data = qData
         }
-
-        const data = await response.json()
         setTemplate(data.data)
         // Normalize backend steps/questions/options into local editor shape
         const loadedSteps = (data.data?.steps || []).map((s: any) => ({

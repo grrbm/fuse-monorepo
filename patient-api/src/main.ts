@@ -3877,13 +3877,13 @@ app.post("/questionnaires/templates/account-from-master", authenticateJWT, async
 
     const master = masters[0] as any;
 
-    // Create the new questionnaire (account template)
+    // Create the new questionnaire (account template clone; not a template itself)
     const newQ = await Questionnaire.create({
       title: `Account Template - ${new Date().toISOString()}`,
       description: 'Cloned from master_template (user_profile steps)',
       checkoutStepPosition: -1,
       treatmentId: null,
-      isTemplate: true,
+      isTemplate: false,
       userId: currentUser.id,
       productId: null,
       formTemplateType: 'user_profile',

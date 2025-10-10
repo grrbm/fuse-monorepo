@@ -105,7 +105,7 @@ class QuestionnaireService {
 
     async getTemplateById(id: string) {
         return Questionnaire.findOne({
-            where: { id, isTemplate: true },
+            where: { id },
             include: [
                 {
                     model: QuestionnaireStep,
