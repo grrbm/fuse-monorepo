@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Loader2, RefreshCcw, Search, Edit3, ExternalLink, Clock, Edit, Layers } from "lucide-react"
 import { useTemplates } from "@/hooks/useTemplates"
 import { QuestionnaireEditor } from "./QuestionnaireEditor"
-import { useQuestionnaires } from "./hooks/useQuestionnaires"
+import { useQuestionnaires } from "@/hooks/useQuestionnaires"
 import { useAuth } from "@/contexts/AuthContext"
 
 const CATEGORY_OPTIONS = [
@@ -220,8 +220,8 @@ export default function Forms() {
           title: name,
           description,
           // set category only for non-account templates
-          category: sectionType === "account" ? null : category,
-          formTemplateType: sectionType === "account" ? 'user_profile' : null,
+          category: category,
+          formTemplateType: null,
         }),
       })
 
