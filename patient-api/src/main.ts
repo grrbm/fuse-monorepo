@@ -6195,6 +6195,41 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
   }
 });
 
+// Public: get the latest questionnaire with formTemplateType = 'user_profile'
+app.get("/public/questionnaires/first-user-profile", async (_req, res) => {
+  try {
+    const questionnaire = await Questionnaire.findOne({
+      where: { formTemplateType: 'user_profile' },
+      include: [
+        {
+          model: QuestionnaireStep,
+          include: [
+            {
+              model: Question,
+              include: [QuestionOption],
+            },
+          ],
+        },
+      ],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+        ["updatedAt", "DESC"],
+      ] as any,
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'No user_profile questionnaire found' });
+    }
+
+    res.status(200).json({ success: true, data: questionnaire });
+  } catch (error) {
+    console.error('❌ Error fetching first user_profile questionnaire:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch user_profile questionnaire' });
+  }
+});
+
 // Public: get questionnaire by id (no auth), includes steps/questions/options
 app.get("/public/questionnaires/:id", async (req, res) => {
   try {
@@ -6211,6 +6246,11 @@ app.get("/public/questionnaires/:id", async (req, res) => {
           ],
         },
       ],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+      ] as any,
     });
 
     if (!questionnaire) {
@@ -6221,6 +6261,36 @@ app.get("/public/questionnaires/:id", async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching public questionnaire:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch questionnaire' });
+  }
+});
+
+// Public: get the latest questionnaire with formTemplateType = 'user_profile'
+app.get("/public/questionnaires/first-user-profile", async (_req, res) => {
+  try {
+    const questionnaire = await Questionnaire.findOne({
+      where: { formTemplateType: 'user_profile' },
+      include: [
+        {
+          model: QuestionnaireStep,
+          include: [
+            {
+              model: Question,
+              include: [QuestionOption],
+            },
+          ],
+        },
+      ],
+      order: [["updatedAt", "DESC"]],
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'No user_profile questionnaire found' });
+    }
+
+    res.status(200).json({ success: true, data: questionnaire });
+  } catch (error) {
+    console.error('❌ Error fetching first user_profile questionnaire:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch user_profile questionnaire' });
   }
 });
 

@@ -11,9 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ success: false, message: 'Questionnaire id is required' })
         }
 
-        if (!hostname || typeof hostname !== 'string') {
-            return res.status(400).json({ success: false, message: 'Clinic hostname not provided' })
-        }
+        // hostname not required for questionnaire-by-id
 
         const url = `${API_BASE}/public/questionnaires/${encodeURIComponent(id)}`
         const response = await fetch(url)

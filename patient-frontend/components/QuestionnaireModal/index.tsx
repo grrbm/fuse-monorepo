@@ -228,6 +228,31 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             questionnaireData.steps = []
           }
 
+          // If no user_profile steps exist, append them from the global first user_profile questionnaire
+          const hasUserProfile = (questionnaireData.steps || []).some((s: any) => s.category === 'user_profile')
+          if (!hasUserProfile) {
+            try {
+              const upRes = await fetch('/api/public/questionnaires/first-user-profile')
+              const upData = await upRes.json().catch(() => null)
+              if (upRes.ok && upData?.success && upData?.data) {
+                const userProfileSteps = (upData.data.steps || []).filter((s: any) => s.category === 'user_profile')
+                if (userProfileSteps.length > 0) {
+                  const normal = (questionnaireData.steps || [])
+                    .filter((s: any) => s.category === 'normal' || !s.category)
+                    .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                  const userProfileSorted = userProfileSteps.sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                  const others = (questionnaireData.steps || [])
+                    .filter((s: any) => s.category && s.category !== 'normal' && s.category !== 'user_profile')
+                    .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                  const merged = [...normal, ...userProfileSorted, ...others]
+                  questionnaireData.steps = merged
+                }
+              }
+            } catch (e) {
+              console.warn('Failed to append user_profile steps:', e)
+            }
+          }
+
           // No clinic variables available without treatment context; use as-is
           setQuestionnaire(questionnaireData)
           setLoading(false)

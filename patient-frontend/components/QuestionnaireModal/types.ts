@@ -25,6 +25,7 @@ export interface QuestionnaireStep {
     title: string;
     description?: string;
     stepOrder: number;
+    category?: 'normal' | 'user_profile' | 'doctor';
     questions?: Question[];
 }
 
