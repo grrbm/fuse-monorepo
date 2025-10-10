@@ -1,4 +1,4 @@
-import { Table, Column, DataType, BelongsToMany, HasMany } from 'sequelize-typescript';
+import { Table, Column, DataType, BelongsToMany, HasMany, BeforeValidate } from 'sequelize-typescript';
 import Entity from './Entity';
 import Prescription from './Prescription';
 import PrescriptionProducts from './PrescriptionProducts';
@@ -29,6 +29,13 @@ export enum ProductCategory {
     freezeTableName: true,
 })
 export default class Product extends Entity {
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+        unique: true,
+    })
+    declare slug?: string | null;
+
     @Column({
         type: DataType.STRING,
         allowNull: false,
@@ -150,4 +157,16 @@ export default class Product extends Entity {
 
     @HasMany(() => TenantProduct)
     declare tenantProducts: TenantProduct[];
+
+    // Auto-generate slug from product name if not provided
+    @BeforeValidate
+    static ensureSlug(instance: Product) {
+        if (!instance.slug && instance.name) {
+            const base = instance.name
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+            instance.slug = base || null;
+        }
+    }
 }

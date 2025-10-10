@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { useAuth } from '@/contexts/AuthContext'
@@ -18,6 +18,8 @@ import {
     Calendar,
     ImageIcon,
     Edit,
+    Copy,
+    Check,
     Pill,
     FileText,
     Hash,
@@ -49,9 +51,12 @@ export default function ProductDetail() {
     const [templates, setTemplates] = useState<any[]>([])
     const [enablingId, setEnablingId] = useState<string | null>(null)
     const [enabledForms, setEnabledForms] = useState<any[]>([])
+    const [copiedId, setCopiedId] = useState<string | null>(null)
+    const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const { user, token } = useAuth()
     const router = useRouter()
     const { id } = router.query
+    const [clinicSlug, setClinicSlug] = useState<string | null>(null)
 
     useEffect(() => {
         const fetchProduct = async () => {
@@ -99,6 +104,25 @@ export default function ProductDetail() {
 
         fetchProduct()
     }, [token, id])
+
+    useEffect(() => {
+        const loadClinicSlug = async () => {
+            if (!token) return
+            const userWithClinic: any = user
+            const clinicId = userWithClinic?.clinicId
+            if (!clinicId) return
+            try {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/clinic/${clinicId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                if (!res.ok) return
+                const data = await res.json().catch(() => null)
+                const slug = data?.data?.slug || data?.slug || null
+                if (slug) setClinicSlug(slug)
+            } catch { }
+        }
+        loadClinicSlug()
+    }, [token, user])
 
     useEffect(() => {
         const fetchTemplates = async () => {
@@ -174,6 +198,37 @@ export default function ProductDetail() {
         } catch (e: any) {
             alert(e?.message || 'Failed to disable form')
         }
+    }
+
+    useEffect(() => {
+        return () => {
+            if (copyTimeoutRef.current) {
+                clearTimeout(copyTimeoutRef.current)
+            }
+        }
+    }, [])
+
+    const handleCopyUrl = (url: string, id: string) => {
+        if (typeof navigator === 'undefined' || !navigator.clipboard) {
+            console.error('Clipboard API not available')
+            return
+        }
+
+        navigator.clipboard
+            .writeText(url)
+            .then(() => {
+                setCopiedId(id)
+                if (copyTimeoutRef.current) {
+                    clearTimeout(copyTimeoutRef.current)
+                }
+                copyTimeoutRef.current = setTimeout(() => {
+                    setCopiedId(null)
+                    copyTimeoutRef.current = null
+                }, 2000)
+            })
+            .catch((err) => {
+                console.error('Failed to copy preview URL:', err)
+            })
     }
 
     const getStatusBadge = (active: boolean) => {
@@ -454,21 +509,55 @@ export default function ProductDetail() {
                                         <div className="space-y-2">
                                             {templates.map(t => {
                                                 const isEnabled = enabledForms.some((f: any) => f?.questionnaireId === t.id)
+                                                // Build a preview URL using clinic slug and product slug
+                                                const clinicSlugValue = clinicSlug || 'limitless.health'
+                                                const productSlug = (product as any)?.slug || ((product?.name || 'product')
+                                                    .toLowerCase()
+                                                    .replace(/[^a-z0-9]+/g, '-')
+                                                    .replace(/^-+|-+$/g, ''))
+                                                const devUrl = `http://${clinicSlugValue}.localhost:3000/my-treatments/${productSlug}`
+                                                const prodDisplay = `${clinicSlugValue}.fuse.health/my-treatments/${productSlug}`
+                                                const previewDisplay = process.env.NODE_ENV === 'production' ? prodDisplay : devUrl
+                                                const previewHref = process.env.NODE_ENV === 'production' ? `https://${prodDisplay}` : devUrl
+                                                const isCopied = copiedId === t.id
                                                 return (
-                                                    <div key={t.id} className="flex items-center justify-between border rounded-md p-3">
-                                                        <div>
-                                                            <div className="text-sm font-medium">{t.title}</div>
-                                                            <div className="text-xs text-muted-foreground">{t.formTemplateType || 'normal'}</div>
+                                                    <div key={t.id} className="border rounded-md p-3 space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <div className="text-sm font-medium">{t.title}</div>
+                                                                <div className="text-xs text-muted-foreground">{t.formTemplateType || 'normal'}</div>
+                                                            </div>
+                                                            {isEnabled ? (
+                                                                <Button size="sm" variant="outline" onClick={() => disableTemplate(t.id)}>
+                                                                    Disable
+                                                                </Button>
+                                                            ) : (
+                                                                <Button size="sm" onClick={() => enableTemplate(t.id)} disabled={enablingId === t.id}>
+                                                                    {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
+                                                                </Button>
+                                                            )}
                                                         </div>
-                                                        {isEnabled ? (
-                                                            <Button size="sm" variant="outline" onClick={() => disableTemplate(t.id)}>
-                                                                Disable
-                                                            </Button>
-                                                        ) : (
-                                                            <Button size="sm" onClick={() => enableTemplate(t.id)} disabled={enablingId === t.id}>
-                                                                {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
-                                                            </Button>
-                                                        )}
+                                                        <div className="flex items-center gap-2 text-xs">
+                                                            <span className="text-muted-foreground">Preview URL:</span>
+                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                <code
+                                                                    className="px-2 py-1 bg-muted/30 rounded border text-xs font-mono overflow-hidden text-ellipsis whitespace-nowrap flex-1"
+                                                                    title={previewDisplay}
+                                                                >
+                                                                    {previewDisplay}
+                                                                </code>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className={`h-7 w-7 shrink-0 transition-colors ${isCopied ? 'text-green-600' : 'text-muted-foreground'}`}
+                                                                    onClick={() => handleCopyUrl(previewHref, t.id)}
+                                                                    aria-label={isCopied ? 'Preview URL copied' : 'Copy preview URL'}
+                                                                >
+                                                                    {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                                                </Button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 )
                                             })}

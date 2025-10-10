@@ -14,7 +14,7 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => User)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare tenantId: string
 
@@ -34,7 +34,7 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => Product)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare productId: string
 
@@ -44,7 +44,7 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => Questionnaire)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare questionnaireId: string
 
@@ -54,7 +54,7 @@ export default class TenantProductForm extends Entity {
   @ForeignKey(() => Clinic)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
   declare clinicId: string
 
@@ -63,7 +63,7 @@ export default class TenantProductForm extends Entity {
 
   @Column({
     type: DataType.STRING,
-    allowNull: false,
+    allowNull: true,
     defaultValue: 'layout_a',
   })
   declare layoutTemplate: string

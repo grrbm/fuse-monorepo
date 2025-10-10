@@ -1107,10 +1107,24 @@ app.get("/products/:id", async (req, res) => {
       });
     }
 
+    // Ensure slug is persisted if missing
+    if (!product.slug && product.name) {
+      const computedSlug = product.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      try {
+        await product.update({ slug: computedSlug });
+      } catch (e) {
+        console.warn('⚠️ Failed to persist computed slug for product', id, e);
+      }
+    }
+
     // Transform data to match frontend expectations
     const transformedProduct = {
       id: product.id,
       name: product.name,
+      slug: product.slug || null,
       price: product.price,
       pharmacyProductId: product.pharmacyProductId,
       dosage: product.dosage,
