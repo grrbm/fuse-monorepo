@@ -42,7 +42,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
   onClose,
   treatmentId,
-  treatmentName
+  treatmentName,
+  questionnaireId,
+  productName
 }) => {
   const [questionnaire, setQuestionnaire] = React.useState<QuestionnaireData | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -1214,7 +1216,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           theme={theme}
                           questionnaireProducts={questionnaire.treatment?.products}
                           selectedProducts={selectedProducts}
-                          treatmentName={treatmentName}
+                          treatmentName={treatmentName ?? productName ?? ''}
                         />
                       </div>
                     </>
