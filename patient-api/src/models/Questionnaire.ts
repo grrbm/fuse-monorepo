@@ -139,15 +139,7 @@ export default class Questionnaire extends Entity {
     })
     declare color: string | null;
 
-    @ForeignKey(() => Product)
-    @Column({
-        type: DataType.UUID,
-        allowNull: true,
-    })
-    declare productId?: string | null;
-
-    @BelongsTo(() => Product)
-    declare product?: Product | null;
+    // productId and product already declared above; duplicate declarations removed
 
     @HasMany(() => QuestionnaireStep)
     declare steps: QuestionnaireStep[];
