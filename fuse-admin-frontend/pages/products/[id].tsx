@@ -539,7 +539,7 @@ export default function ProductDetail() {
                                                         </div>
                                                         <div className="flex items-center gap-2 text-xs">
                                                             <span className="text-muted-foreground">Preview URL:</span>
-                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                                                                 <code
                                                                     className="px-2 py-1 bg-muted/30 rounded border text-xs font-mono overflow-hidden text-ellipsis whitespace-nowrap flex-1"
                                                                     title={previewDisplay}
@@ -557,6 +557,14 @@ export default function ProductDetail() {
                                                                     {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                                                                 </Button>
                                                             </div>
+                                                            <div>
+                                                                <a href={previewHref} target="_blank" rel="noopener noreferrer">
+                                                                    <Button variant="outline" size="sm">
+                                                                        <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                                                                    </Button>
+                                                                </a>
+                                                            </div>
+
                                                         </div>
                                                     </div>
                                                 )
