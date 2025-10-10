@@ -203,13 +203,38 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     { key: "DC", name: "District of Columbia" }
   ];
 
-  // Load questionnaire data
+  // Load questionnaire data (supports treatment-based or direct questionnaireId)
   React.useEffect(() => {
     const loadQuestionnaire = async () => {
-      if (!isOpen || !treatmentId) return;
+      if (!isOpen) return;
 
       setLoading(true);
       try {
+        // If questionnaireId is provided (product-based), fetch questionnaire directly via public proxy
+        if (questionnaireId) {
+          const qRes = await fetch(`/api/public/questionnaires/${encodeURIComponent(questionnaireId)}`)
+          const qData = await qRes.json().catch(() => null)
+
+          if (!qRes.ok || !qData?.success || !qData?.data) {
+            throw new Error(qData?.message || 'Failed to load questionnaire')
+          }
+
+          const questionnaireData = qData.data
+
+          // Ensure steps
+          if (!Array.isArray(questionnaireData.steps)) {
+            questionnaireData.steps = []
+          }
+
+          // No clinic variables available without treatment context; use as-is
+          setQuestionnaire(questionnaireData)
+          setLoading(false)
+          return
+        }
+
+        // Else fallback to treatment-based flow
+        if (!treatmentId) return;
+
         // Fetch both questionnaire and treatment products
         const [questionnaireResult, treatmentResult] = await Promise.all([
           apiCall(`/questionnaires/treatment/${treatmentId}`),
@@ -281,7 +306,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     };
 
     loadQuestionnaire();
-  }, [isOpen, treatmentId, onClose]);
+  }, [isOpen, treatmentId, questionnaireId, onClose]);
 
   // Reset state when modal closes
   React.useEffect(() => {

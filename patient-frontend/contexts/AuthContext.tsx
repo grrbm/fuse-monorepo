@@ -22,6 +22,7 @@ const PUBLIC_PATH_PATTERNS = [
   '/treatments/weightloss',
   '/my-treatments/[slug]',
   '/treatments/[slug]',
+  '/my-products/[slug]',
 ]
 
 const matchesPublicPattern = (pattern: string, pathname: string, asPath: string) => {

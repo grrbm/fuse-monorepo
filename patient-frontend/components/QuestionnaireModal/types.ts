@@ -71,8 +71,10 @@ export interface QuestionnaireData {
 export interface QuestionnaireModalProps {
     isOpen: boolean;
     onClose: () => void;
-    treatmentId: string;
-    treatmentName: string;
+    treatmentId?: string;
+    treatmentName?: string;
+    questionnaireId?: string; // when provided, load questionnaire directly (product-based)
+    productName?: string; // optional label when questionnaire is product-based
 }
 
 export interface ThemePalette {

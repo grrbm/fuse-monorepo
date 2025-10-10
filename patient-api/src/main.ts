@@ -6115,6 +6115,35 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
   }
 });
 
+// Public: get questionnaire by id (no auth), includes steps/questions/options
+app.get("/public/questionnaires/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const questionnaire = await Questionnaire.findByPk(id, {
+      include: [
+        {
+          model: QuestionnaireStep,
+          include: [
+            {
+              model: Question,
+              include: [QuestionOption],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'Questionnaire not found' });
+    }
+
+    res.status(200).json({ success: true, data: questionnaire });
+  } catch (error) {
+    console.error('❌ Error fetching public questionnaire:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch questionnaire' });
+  }
+});
+
 app.get("/public/brand-treatments/:clinicSlug/:slug", async (req, res) => {
   try {
     const { clinicSlug, slug } = req.params;

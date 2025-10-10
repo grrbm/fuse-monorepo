@@ -87,8 +87,8 @@ export default function PublicProductPage() {
                 <QuestionnaireModal
                     isOpen={isModalOpen}
                     onClose={handleModalClose}
-                    treatmentId={product.id}
-                    treatmentName={product.name}
+                    questionnaireId={product.questionnaireId}
+                    productName={product.name}
                 />
             )}
         </div>
