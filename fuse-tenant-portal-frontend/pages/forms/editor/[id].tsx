@@ -39,6 +39,7 @@ export default function TemplateEditor() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [template, setTemplate] = useState<any>(null)
   const [steps, setSteps] = useState<Step[]>([])
+  const isAccountTemplate = useMemo(() => template?.formTemplateType === 'user_profile', [template?.formTemplateType])
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
   const [showVariables, setShowVariables] = useState(false)
   const [draggedStepId, setDraggedStepId] = useState<string | null>(null)
@@ -96,6 +97,7 @@ export default function TemplateEditor() {
   }
 
   const handleAddStep = async (stepType: "question" | "info") => {
+    if (isAccountTemplate) return
     if (!token || !templateId) return
     try {
       // Persist the currently edited step's title/description to avoid losing unsaved changes
@@ -165,6 +167,7 @@ export default function TemplateEditor() {
   }
 
   const handleDeleteStep = async (stepId: string) => {
+    if (isAccountTemplate) return
     if (!token) return
     if (!confirm("Are you sure you want to delete this step?")) return
     try {
@@ -233,6 +236,7 @@ export default function TemplateEditor() {
   }
 
   const handleDragStart = (stepId: string) => {
+    if (isAccountTemplate) return
     setDraggedStepId(stepId)
   }
 
@@ -258,6 +262,7 @@ export default function TemplateEditor() {
   }
 
   const handleDragEnd = async () => {
+    if (isAccountTemplate) return
     const finishedDraggedId = draggedStepId
     setDraggedStepId(null)
     if (!token || !templateId) return
@@ -592,9 +597,10 @@ export default function TemplateEditor() {
                                         isRequired: true,
                                         options: (q.options || []).map((text, idx) => ({ id: undefined as any, optionText: text, optionValue: text, optionOrder: idx + 1 } as any)),
                                       } as any}
-                                      stepCategory={'normal'}
+                                      stepCategory={template?.formTemplateType === 'user_profile' ? 'user_profile' : 'normal'}
                                       token={token}
                                       baseUrl={baseUrl}
+                                      restrictStructuralEdits={template?.formTemplateType === 'user_profile'}
                                       onQuestionSaved={(updated) => {
                                         setSteps((prev) => prev.map((s) => s.id === step.id ? {
                                           ...s,
@@ -631,14 +637,16 @@ export default function TemplateEditor() {
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteStep(step.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {!isAccountTemplate && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteStep(step.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardHeader>

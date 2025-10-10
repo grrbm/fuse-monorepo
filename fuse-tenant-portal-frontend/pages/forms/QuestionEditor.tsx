@@ -35,6 +35,7 @@ interface QuestionEditorProps {
     token: string | null
     baseUrl: string
     onQuestionSaved: (question: QuestionnaireQuestionTemplate) => void
+    restrictStructuralEdits?: boolean
 }
 
 export function QuestionEditor({
@@ -42,9 +43,10 @@ export function QuestionEditor({
     stepCategory,
     token,
     baseUrl,
-    onQuestionSaved
+    onQuestionSaved,
+    restrictStructuralEdits = false
 }: QuestionEditorProps) {
-    const editable = stepCategory === 'normal' && Boolean(token)
+    const editable = Boolean(token)
     const [isEditing, setIsEditing] = useState(false)
     const [questionText, setQuestionText] = useState(question.questionText)
     const [helpText, setHelpText] = useState(question.helpText || '')
@@ -97,6 +99,7 @@ export function QuestionEditor({
     }
 
     const handleAddOption = () => {
+        if (restrictStructuralEdits) return
         setOptions((prev) => (
             [...prev, {
                 id: undefined,
@@ -109,6 +112,7 @@ export function QuestionEditor({
     }
 
     const handleRemoveOption = (localKey: string) => {
+        if (restrictStructuralEdits) return
         setOptions((prev) =>
             prev
                 .filter((option) => option.localKey !== localKey)
@@ -304,9 +308,11 @@ export function QuestionEditor({
                 <div className="mt-3 space-y-3">
                     <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
                         <span>Options</span>
-                        <Button type="button" variant="outline" size="sm" onClick={handleAddOption}>
-                            + Add option
-                        </Button>
+                        {!restrictStructuralEdits && (
+                            <Button type="button" variant="outline" size="sm" onClick={handleAddOption}>
+                                + Add option
+                            </Button>
+                        )}
                     </div>
                     <div className="space-y-2">
                         {options.map((option) => (
@@ -333,7 +339,7 @@ export function QuestionEditor({
                                         className="text-xs"
                                     />
                                 </div>
-                                {options.length > 1 && (
+                                {options.length > 1 && !restrictStructuralEdits && (
                                     <div className="flex justify-end">
                                         <Button
                                             type="button"
