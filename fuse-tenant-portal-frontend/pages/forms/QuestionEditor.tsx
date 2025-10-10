@@ -35,6 +35,7 @@ interface QuestionEditorProps {
     token: string | null
     baseUrl: string
     onQuestionSaved: (question: QuestionnaireQuestionTemplate) => void
+    restrictStructuralEdits?: boolean
 }
 
 export function QuestionEditor({
@@ -42,11 +43,13 @@ export function QuestionEditor({
     stepCategory,
     token,
     baseUrl,
-    onQuestionSaved
+    onQuestionSaved,
+    restrictStructuralEdits = false
 }: QuestionEditorProps) {
-    const editable = stepCategory === 'normal' && Boolean(token)
+    const editable = Boolean(token)
     const [isEditing, setIsEditing] = useState(false)
     const [questionText, setQuestionText] = useState(question.questionText)
+    const [answerType, setAnswerType] = useState<string>(question.answerType || 'radio')
     const [helpText, setHelpText] = useState(question.helpText || '')
     const [options, setOptions] = useState<EditableOption[]>(() =>
         (question.options ?? []).map((option, index) => ({
@@ -63,6 +66,7 @@ export function QuestionEditor({
     useEffect(() => {
         if (!isEditing) {
             setQuestionText(question.questionText)
+            setAnswerType(question.answerType || 'radio')
             setHelpText(question.helpText || '')
             setOptions(
                 (question.options ?? []).map((option, index) => ({
@@ -97,6 +101,7 @@ export function QuestionEditor({
     }
 
     const handleAddOption = () => {
+        if (restrictStructuralEdits) return
         setOptions((prev) => (
             [...prev, {
                 id: undefined,
@@ -109,6 +114,7 @@ export function QuestionEditor({
     }
 
     const handleRemoveOption = (localKey: string) => {
+        if (restrictStructuralEdits) return
         setOptions((prev) =>
             prev
                 .filter((option) => option.localKey !== localKey)
@@ -167,6 +173,7 @@ export function QuestionEditor({
                 },
                 body: JSON.stringify({
                     questionText: trimmedQuestionText,
+                    answerType: answerType || 'radio',
                     helpText: helpText.trim() || null,
                     options: cleanedOptions,
                 }),
@@ -181,6 +188,7 @@ export function QuestionEditor({
             if (data?.data) {
                 onQuestionSaved(data.data)
                 setQuestionText(data.data.questionText ?? trimmedQuestionText)
+                setAnswerType(data.data.answerType || answerType || 'radio')
                 setHelpText(data.data.helpText || '')
                 setOptions(
                     (data.data.options ?? cleanedOptions).map((option: any, index: number) => ({
@@ -233,9 +241,27 @@ export function QuestionEditor({
                             <p className="text-xs text-muted-foreground italic">{question.helpText}</p>
                         )
                     )}
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Type: {question.answerType}
-                    </div>
+                    {!restrictStructuralEdits ? (
+                        <div className="text-xs tracking-wide text-muted-foreground flex items-center gap-2">
+                            <span className="uppercase">Type:</span>
+                            {isEditing ? (
+                                <select
+                                    className="border border-input bg-background rounded px-2 py-1 text-xs"
+                                    value={answerType}
+                                    onChange={(e) => setAnswerType(e.target.value)}
+                                >
+                                    <option value="radio">radio</option>
+                                    <option value="select">select</option>
+                                </select>
+                            ) : (
+                                <span className="font-medium text-foreground">{question.answerType || 'radio'}</span>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                            Type: {question.answerType || 'radio'}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -304,9 +330,11 @@ export function QuestionEditor({
                 <div className="mt-3 space-y-3">
                     <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
                         <span>Options</span>
-                        <Button type="button" variant="outline" size="sm" onClick={handleAddOption}>
-                            + Add option
-                        </Button>
+                        {!restrictStructuralEdits && (
+                            <Button type="button" variant="outline" size="sm" onClick={handleAddOption}>
+                                + Add option
+                            </Button>
+                        )}
                     </div>
                     <div className="space-y-2">
                         {options.map((option) => (
@@ -333,7 +361,7 @@ export function QuestionEditor({
                                         className="text-xs"
                                     />
                                 </div>
-                                {options.length > 1 && (
+                                {options.length > 1 && !restrictStructuralEdits && (
                                     <div className="flex justify-end">
                                         <Button
                                             type="button"

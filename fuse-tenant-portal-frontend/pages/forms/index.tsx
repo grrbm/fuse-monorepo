@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Loader2, RefreshCcw, Search, Edit3, ExternalLink, Clock, Edit, Layers } from "lucide-react"
 import { useTemplates } from "@/hooks/useTemplates"
 import { QuestionnaireEditor } from "./QuestionnaireEditor"
+import { useQuestionnaires } from "./hooks/useQuestionnaires"
 import { useAuth } from "@/contexts/AuthContext"
 
 const CATEGORY_OPTIONS = [
@@ -39,11 +40,12 @@ const SORT_OPTIONS = [
 export default function Forms() {
   const router = useRouter()
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001", [])
-  const { loading, error, assignments, sections, refresh } = useTemplates(baseUrl)
+  const { loading, error, assignments, sections, refresh, page, totalPages, setPage } = useTemplates(baseUrl)
+  const { questionnaires, refresh: refreshQuestionnaires } = useQuestionnaires(baseUrl)
   const { token } = useAuth()
   const { selectedTenant } = useTenant()
 
-  const [activeTab, setActiveTab] = useState<"products" | "templates" | "account">("products")
+  const [activeTab, setActiveTab] = useState<"products" | "templates" | "account" | "tenant">("products")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("all")
@@ -51,9 +53,11 @@ export default function Forms() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
   const [editingTemplateType, setEditingTemplateType] = useState<"personalization" | "account" | "doctor" | null>(null)
   const [creating, setCreating] = useState(false)
+  const [configuringProductId, setConfiguringProductId] = useState<string | null>(null)
 
   useEffect(() => {
     refresh()
+    refreshQuestionnaires()
   }, [])
 
   // Filter and sort assignments
@@ -101,12 +105,66 @@ export default function Forms() {
     return filtered
   }, [assignments, searchQuery, selectedCategory, selectedStatus, selectedSort])
 
-  const accountTemplate = useMemo(() => {
-    return (sections?.account || []).find((t: any) => !t.category)
-  }, [sections])
+  const accountQuestionnaire = useMemo(() => {
+    const list = (questionnaires || []).filter((q: any) => q.formTemplateType === 'user_profile')
+    return list.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())[0] || null
+  }, [questionnaires])
 
   const handleEditForm = (assignmentId: string) => {
     router.push(`/forms/builder/${assignmentId}`)
+  }
+
+  const handleConfigureProduct = async (assignment: any) => {
+    if (!token) return
+    const productId = assignment?.treatmentId
+    if (!productId) return
+    setConfiguringProductId(productId)
+    try {
+      // Try to find existing product questionnaire (prefer formTemplateType: 'normal')
+      const res = await fetch(`${baseUrl}/questionnaires/product/${productId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const list = Array.isArray(data?.data) ? data.data : []
+        const existing = list
+          .filter((q: any) => q.formTemplateType === 'normal')
+          .sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())[0]
+          || list[0]
+        if (existing?.id) {
+          router.push(`/forms/editor/${existing.id}`)
+          return
+        }
+      }
+
+      // None exists: create one
+      const name = `${assignment?.treatment?.name || 'Product'} Form`
+      const description = `Questionnaire for ${assignment?.treatment?.name || 'product'}`
+      const createRes = await fetch(`${baseUrl}/questionnaires/templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: name,
+          description,
+          productId,
+          formTemplateType: 'normal',
+        }),
+      })
+      if (!createRes.ok) {
+        const err = await createRes.json().catch(() => ({}))
+        throw new Error(err?.message || 'Failed to create product questionnaire')
+      }
+      const created = await createRes.json()
+      const q = created?.data
+      if (q?.id) {
+        router.push(`/forms/editor/${q.id}`)
+      }
+    } catch (e: any) {
+      console.error('❌ Configure product failed', e)
+      alert(e?.message || 'Failed to configure form')
+    } finally {
+      setConfiguringProductId(null)
+    }
   }
 
   const handleViewLive = (assignment: any) => {
@@ -133,6 +191,25 @@ export default function Forms() {
           ? `Category-specific personalization questions for ${categoryLabel} products`
           : `Doctor-required questions for ${categoryLabel} products`
 
+      // For account templates, clone from master user_profile steps
+      if (sectionType === 'account') {
+        const cloneRes = await fetch(`${baseUrl}/questionnaires/templates/account-from-master`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        })
+        if (!cloneRes.ok) {
+          const err = await cloneRes.json().catch(() => ({}))
+          throw new Error(err?.message || 'Failed to clone account template')
+        }
+        const cloned = await cloneRes.json()
+        const q = cloned?.data
+        await refreshQuestionnaires()
+        if (q?.id) {
+          router.push(`/forms/editor/${q.id}`)
+        }
+        return
+      }
+
       const response = await fetch(`${baseUrl}/questionnaires/templates`, {
         method: "POST",
         headers: {
@@ -140,12 +217,11 @@ export default function Forms() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name,
+          title: name,
           description,
-          sectionType,
+          // set category only for non-account templates
           category: sectionType === "account" ? null : category,
-          schema: { steps: [] },
-          isGlobal: true, // Create as global template (master for all tenants)
+          formTemplateType: sectionType === "account" ? 'user_profile' : null,
         }),
       })
 
@@ -157,8 +233,8 @@ export default function Forms() {
       const data = await response.json()
       const template = data.data
 
-      // Refresh templates to get the new one
-      await refresh()
+      // Refresh questionnaires to get the new one
+      await refreshQuestionnaires()
 
       // Navigate to editor
       router.push(`/forms/editor/${template.id}`)
@@ -222,6 +298,15 @@ export default function Forms() {
               >
                 Account Questions
               </button>
+              {/* <button
+                onClick={() => setActiveTab("tenant")}
+                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "tenant"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+              >
+                Generate Form for Tenant
+              </button> */}
             </div>
           </div>
 
@@ -312,19 +397,30 @@ export default function Forms() {
                 <span>
                   Showing {filteredAndSortedAssignments.length} of {assignments.length} product forms
                 </span>
-                {(searchQuery || selectedCategory || selectedStatus !== "all") && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSearchQuery("")
-                      setSelectedCategory("")
-                      setSelectedStatus("all")
-                    }}
-                  >
-                    Clear Filters
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {(searchQuery || selectedCategory || selectedStatus !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSearchQuery("")
+                        setSelectedCategory("")
+                        setSelectedStatus("all")
+                      }}
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage(Math.max(1, page - 1))}>
+                      Prev
+                    </Button>
+                    <span className="text-xs">Page {page} / {totalPages}</span>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage(page + 1)}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               {/* Product Forms List */}
@@ -439,10 +535,13 @@ export default function Forms() {
                               className="flex-1"
                               variant={assignment.hasAssignment ? "default" : "secondary"}
                               size="sm"
-                              onClick={() => handleEditForm(assignment.id)}
+                              onClick={() => handleConfigureProduct(assignment)}
+                              disabled={configuringProductId === assignment.treatmentId}
                             >
                               <Edit3 className="mr-2 h-4 w-4" />
-                              {!assignment.hasAssignment ? "Configure Form" : locked ? "View Form" : "Edit Form"}
+                              {configuringProductId === assignment.treatmentId
+                                ? 'Opening...'
+                                : (!assignment.hasAssignment ? "Configure Form" : locked ? "View Form" : "Edit Form")}
                             </Button>
                             {isLive && (
                               <Button
@@ -507,31 +606,34 @@ export default function Forms() {
                               These questions are shown in all {CATEGORY_OPTIONS.find(c => c.value === selectedCategory)?.label} product forms.
                             </p>
                             {(() => {
-                              const categoryTemplate = (sections?.personalization || []).find(
-                                (t: any) => t.category === selectedCategory
+                              const categoryTemplate = (questionnaires || []).find(
+                                (q: any) => q.category === selectedCategory
                               )
-                              return categoryTemplate ? (
-                                <Button
-                                  onClick={() => router.push(`/forms/editor/${categoryTemplate.id}`)}
-                                  className="w-full"
-                                >
-                                  <Edit3 className="mr-2 h-4 w-4" />
-                                  Edit Personalization Questions
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => handleCreateTemplate("personalization", selectedCategory)}
-                                  variant="outline"
-                                  className="w-full"
-                                  disabled={creating}
-                                >
-                                  {creating ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Layers className="mr-2 h-4 w-4" />
+                              return (
+                                <div className="grid gap-2">
+                                  {categoryTemplate && (
+                                    <Button
+                                      onClick={() => router.push(`/forms/editor/${categoryTemplate.id}`)}
+                                      className="w-full"
+                                    >
+                                      <Edit3 className="mr-2 h-4 w-4" />
+                                      Edit Personalization Questions
+                                    </Button>
                                   )}
-                                  {creating ? "Creating..." : "Create Personalization Template"}
-                                </Button>
+                                  <Button
+                                    onClick={() => handleCreateTemplate("personalization", selectedCategory)}
+                                    variant={categoryTemplate ? "outline" : "default"}
+                                    className="w-full"
+                                    disabled={creating}
+                                  >
+                                    {creating ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Layers className="mr-2 h-4 w-4" />
+                                    )}
+                                    {creating ? "Creating..." : categoryTemplate ? "Create Another Template" : "Create Personalization Template"}
+                                  </Button>
+                                </div>
                               )
                             })()}
                           </CardContent>
@@ -564,11 +666,33 @@ export default function Forms() {
                   <p className="text-sm text-muted-foreground mb-4">
                     These questions are used globally. Changes will impact every product form.
                   </p>
-                  {accountTemplate ? (
-                    <Button onClick={() => router.push(`/forms/editor/${accountTemplate.id}`)} className="w-full">
-                      <Edit3 className="mr-2 h-4 w-4" />
-                      Edit Account Questions
-                    </Button>
+                  {accountQuestionnaire ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button onClick={() => router.push(`/forms/editor/${accountQuestionnaire.id}`)}>
+                        <Edit3 className="mr-2 h-4 w-4" />
+                        Edit Account Template
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          if (!token) return
+                          if (!confirm('Delete this account questionnaire? This cannot be undone.')) return
+                          try {
+                            const res = await fetch(`${baseUrl}/questionnaires/${accountQuestionnaire.id}`, {
+                              method: 'DELETE',
+                              headers: { Authorization: `Bearer ${token}` },
+                            })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok) throw new Error(data?.message || 'Failed to delete account questionnaire')
+                            await refreshQuestionnaires()
+                          } catch (e: any) {
+                            alert(e?.message || 'Failed to delete account questionnaire')
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   ) : (
                     <Button
                       onClick={() => handleCreateTemplate("account")}
@@ -588,6 +712,78 @@ export default function Forms() {
               </Card>
             </>
           )}
+
+          {/* {activeTab === "tenant" && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Generate Form for Tenant</CardTitle>
+                  <CardDescription>
+                    Review the currently selected tenant before generating a tailored form experience.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedTenant ? (
+                    <div className="space-y-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="text-base font-semibold text-foreground">{selectedTenant.name}</h3>
+                          <p className="text-sm text-muted-foreground">Slug: {selectedTenant.slug}</p>
+                        </div>
+                        <Badge variant="secondary" className="uppercase tracking-wide text-xs">
+                          {selectedTenant.status.replace("_", " ")}
+                        </Badge>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Business Type</span>
+                          <p className="text-sm font-medium text-foreground">
+                            {selectedTenant.businessType || "Not specified"}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Activation Status</span>
+                          <p className="text-sm font-medium text-foreground">{selectedTenant.active ? "Active" : "Inactive"}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Created</span>
+                          <p className="text-sm font-medium text-foreground">
+                            {new Date(selectedTenant.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground">Last Updated</span>
+                          <p className="text-sm font-medium text-foreground">
+                            {new Date(selectedTenant.updatedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+
+                      {selectedTenant.owner && (
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-semibold text-foreground">Primary Contact</h4>
+                          <div className="grid gap-2 text-sm text-muted-foreground">
+                            <span>{selectedTenant.owner.firstName} {selectedTenant.owner.lastName}</span>
+                            <span>{selectedTenant.owner.email}</span>
+                            {selectedTenant.owner.phoneNumber && <span>{selectedTenant.owner.phoneNumber}</span>}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+                        Form generation actions will appear here. For now, review the tenant details above to confirm you have the correct tenant selected in the header.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      Select a tenant from the header to view tenant information and generate forms.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )} */}
         </main>
       </div>
     </div>

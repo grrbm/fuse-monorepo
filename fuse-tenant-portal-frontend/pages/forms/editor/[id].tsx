@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { QuestionEditor } from "../QuestionEditor"
 
 interface Step {
   id: string
@@ -31,13 +32,14 @@ export default function TemplateEditor() {
   const { id: templateId } = router.query
   const { token } = useAuth()
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001", [])
-  
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [template, setTemplate] = useState<any>(null)
   const [steps, setSteps] = useState<Step[]>([])
+  const isAccountTemplate = useMemo(() => template?.formTemplateType === 'user_profile', [template?.formTemplateType])
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
   const [showVariables, setShowVariables] = useState(false)
   const [draggedStepId, setDraggedStepId] = useState<string | null>(null)
@@ -55,14 +57,34 @@ export default function TemplateEditor() {
           headers: { Authorization: `Bearer ${token}` },
         })
 
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}))
-          throw new Error(data.message || "Failed to load template")
+        let data = await response.json()
+        // If fetching by templates endpoint failed previously, try generic questionnaire endpoint
+        if (!response.ok || !data?.data) {
+          const qRes = await fetch(`${baseUrl}/questionnaires/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
+          const qData = await qRes.json().catch(() => ({}))
+          if (!qRes.ok || !qData?.success || !qData?.data) {
+            throw new Error(qData?.message || data?.message || "Failed to load template")
+          }
+          data = qData
         }
-
-        const data = await response.json()
         setTemplate(data.data)
-        setSteps(data.data?.schema?.steps || [])
+        // Normalize backend steps/questions/options into local editor shape
+        const loadedSteps = (data.data?.steps || []).map((s: any) => ({
+          id: String(s.id),
+          title: String(s.title || ''),
+          description: String(s.description || ''),
+          stepOrder: Number(s.stepOrder || 0),
+          category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info',
+          stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+          questions: (s.questions || []).map((q: any) => ({
+            id: String(q.id),
+            type: 'single-choice',
+            questionText: String(q.questionText || ''),
+            required: Boolean(q.isRequired),
+            options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          })),
+        })) as Step[]
+        setSteps(loadedSteps)
       } catch (err: any) {
         console.error("❌ Error loading template:", err)
         setError(err.message || "Failed to load template")
@@ -78,32 +100,92 @@ export default function TemplateEditor() {
     router.push("/forms?tab=templates")
   }
 
-  const handleAddStep = (stepType: "question" | "info") => {
-    const newStep: Step = {
-      id: `step-${Date.now()}`,
-      title: stepType === "question" ? "New Question" : "Information Title",
-      description: stepType === "question" 
-        ? "Please select an option below." 
-        : "Provide helpful information to the patient here.",
-      stepOrder: steps.length + 1,
-      category: stepType === "info" ? "info" : "normal",
-      stepType,
-      questions: stepType === "question" ? [{
-        id: `q-${Date.now()}`,
-        type: "single-choice",
-        questionText: "",
-        required: true,
-        options: ["Option 1", "Option 2", "Option 3"]
-      }] : undefined,
+  const handleAddStep = async (stepType: "question" | "info") => {
+    if (isAccountTemplate) return
+    if (!token || !templateId) return
+    try {
+      // Persist the currently edited step's title/description to avoid losing unsaved changes
+      if (editingStepId) {
+        const editing = steps.find((s) => s.id === editingStepId)
+        if (editing) {
+          await fetch(`${baseUrl}/questionnaires/step`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ stepId: editing.id, title: editing.title, description: editing.description }),
+          }).catch(() => { })
+        }
+      }
+
+      const res = await fetch(`${baseUrl}/questionnaires/step`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ questionnaireId: templateId }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create step')
+      const created = await res.json()
+      const newStepId = created?.data?.id as string | undefined
+
+      if (stepType === 'question' && newStepId) {
+        const qRes = await fetch(`${baseUrl}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            questionText: 'New question',
+            answerType: 'radio',
+            isRequired: true,
+            options: [
+              { optionText: 'Option 1', optionValue: 'option_1', optionOrder: 1 },
+              { optionText: 'Option 2', optionValue: 'option_2', optionOrder: 2 },
+            ],
+          }),
+        })
+        if (!qRes.ok) throw new Error((await qRes.json().catch(() => ({}))).message || 'Failed to create question')
+      }
+
+      const ref = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const refData = await ref.json()
+      setTemplate(refData.data)
+      const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
+        id: String(s.id),
+        title: String(s.title || ''),
+        description: String(s.description || ''),
+        stepOrder: Number(s.stepOrder || 0),
+        category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info',
+        stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        questions: (s.questions || []).map((q: any) => ({
+          id: String(q.id),
+          type: 'single-choice',
+          questionText: String(q.questionText || ''),
+          required: Boolean(q.isRequired),
+          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+        })),
+      })) as Step[]
+      setSteps(loadedSteps)
+      if (newStepId) setEditingStepId(newStepId)
+    } catch (e) {
+      console.error('❌ Failed to add step', e)
     }
-    setSteps([...steps, newStep])
-    setEditingStepId(newStep.id)
   }
 
-  const handleDeleteStep = (stepId: string) => {
+  const handleDeleteStep = async (stepId: string) => {
+    if (isAccountTemplate) return
+    if (!token) return
     if (!confirm("Are you sure you want to delete this step?")) return
-    setSteps(steps.filter(s => s.id !== stepId))
-    if (editingStepId === stepId) setEditingStepId(null)
+    try {
+      const res = await fetch(`${baseUrl}/questionnaires/step`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ stepId }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to delete step')
+      setSteps(steps.filter(s => s.id !== stepId))
+      if (editingStepId === stepId) setEditingStepId(null)
+    } catch (e) {
+      console.error('❌ Failed to delete step', e)
+    }
   }
 
   const handleUpdateStep = (stepId: string, updates: Partial<Step>) => {
@@ -158,6 +240,7 @@ export default function TemplateEditor() {
   }
 
   const handleDragStart = (stepId: string) => {
+    if (isAccountTemplate) return
     setDraggedStepId(stepId)
   }
 
@@ -182,8 +265,23 @@ export default function TemplateEditor() {
     setSteps(newSteps)
   }
 
-  const handleDragEnd = () => {
+  const handleDragEnd = async () => {
+    if (isAccountTemplate) return
+    const finishedDraggedId = draggedStepId
     setDraggedStepId(null)
+    if (!token || !templateId) return
+    try {
+      await fetch(`${baseUrl}/questionnaires/step/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          questionnaireId: templateId,
+          steps: steps.map((s, idx) => ({ stepId: s.id, stepOrder: idx + 1 })),
+        }),
+      })
+    } catch (e) {
+      console.error('❌ Failed to save step order', e)
+    }
   }
 
   const handleCopyVariable = async (variable: string) => {
@@ -203,25 +301,31 @@ export default function TemplateEditor() {
     setSaveMessage(null)
 
     try {
-      const response = await fetch(`${baseUrl}/questionnaires/templates/${template.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          schema: { steps },
-        }),
-      })
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          setSaveMessage("❌ Session expired. Please log out and log back in.")
-          return
+      // Save step titles/descriptions
+      await Promise.all(
+        steps.map((s) =>
+          fetch(`${baseUrl}/questionnaires/step`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ stepId: s.id, title: s.title, description: s.description }),
+          })
+        )
+      )
+      // Save questions/options for each step
+      const questionUpdates: Promise<any>[] = []
+      for (const s of steps) {
+        for (const q of s.questions || []) {
+          const optionsPayload = (q.options || []).map((text, idx) => ({ optionText: text, optionValue: text, optionOrder: idx + 1 }))
+          questionUpdates.push(
+            fetch(`${baseUrl}/questions/${q.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ questionText: q.questionText, options: optionsPayload }),
+            })
+          )
         }
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.message || "Failed to save template")
       }
+      await Promise.all(questionUpdates)
 
       setSaveMessage("✅ Template saved successfully!")
       setTimeout(() => setSaveMessage(null), 3000)
@@ -289,13 +393,7 @@ export default function TemplateEditor() {
                 Back to Forms
               </Button>
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-semibold text-foreground">{template.name}</h1>
-                <Badge variant="default" className="bg-purple-600 hover:bg-purple-700">
-                  🌐 GLOBAL TEMPLATE
-                </Badge>
-                <Badge variant={template.sectionType === "account" ? "secondary" : "default"} className="uppercase">
-                  {template.sectionType}
-                </Badge>
+                <h1 className="text-3xl font-semibold text-foreground">{template.title}</h1>
                 {template.category && (
                   <Badge variant="outline">{template.category}</Badge>
                 )}
@@ -376,8 +474,8 @@ export default function TemplateEditor() {
               <CardContent>
                 <div className="space-y-4">
                   {steps.map((step, index) => (
-                    <Card 
-                      key={step.id} 
+                    <Card
+                      key={step.id}
                       className={`
                         ${editingStepId === step.id ? "ring-2 ring-primary" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
@@ -426,7 +524,7 @@ export default function TemplateEditor() {
                                   {showVariables && (
                                     <div className="mb-2 p-2 bg-muted/50 rounded-md border text-xs space-y-1">
                                       <div className="flex items-center gap-2">
-                                        <code 
+                                        <code
                                           className="bg-background px-2 py-0.5 rounded border font-mono cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors relative group"
                                           onClick={() => handleCopyVariable('{{companyName}}')}
                                           title="Click to copy"
@@ -441,7 +539,7 @@ export default function TemplateEditor() {
                                         <span className="text-muted-foreground">Your company name</span>
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <code 
+                                        <code
                                           className="bg-background px-2 py-0.5 rounded border font-mono cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors relative group"
                                           onClick={() => handleCopyVariable('{{clinicName}}')}
                                           title="Click to copy"
@@ -456,7 +554,7 @@ export default function TemplateEditor() {
                                         <span className="text-muted-foreground">Your clinic name</span>
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <code 
+                                        <code
                                           className="bg-background px-2 py-0.5 rounded border font-mono cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors relative group"
                                           onClick={() => handleCopyVariable('{{patientName}}')}
                                           title="Click to copy"
@@ -491,41 +589,35 @@ export default function TemplateEditor() {
                                   />
                                 </div>
                                 {/* Question Options (only for question type) */}
-                                {step.stepType === "question" && step.questions && step.questions[0] && (
-                                  <div>
-                                    <label className="text-sm font-medium mb-2 block">Answer Options</label>
-                                    <div className="space-y-2">
-                                      {step.questions[0].options?.map((option, optionIndex) => (
-                                        <div key={optionIndex} className="flex items-center gap-2">
-                                          <input
-                                            type="text"
-                                            value={option}
-                                            onChange={(e) => handleUpdateOption(step.id, step.questions![0].id, optionIndex, e.target.value)}
-                                            className="flex-1 px-3 py-2 border rounded-md bg-background"
-                                            placeholder={`Option ${optionIndex + 1}`}
-                                          />
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => handleDeleteOption(step.id, step.questions![0].id, optionIndex)}
-                                            className="text-destructive hover:text-destructive"
-                                          >
-                                            <X className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      ))}
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleAddOption(step.id, step.questions![0].id)}
-                                        className="w-full"
-                                      >
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        Add Option
-                                      </Button>
-                                    </div>
+                                {step.stepType === "question" && (step.questions || []).map((q) => (
+                                  <div key={q.id} className="mt-3">
+                                    <QuestionEditor
+                                      question={{
+                                        id: q.id,
+                                        stepId: step.id,
+                                        questionText: q.questionText,
+                                        answerType: 'select',
+                                        questionOrder: 1,
+                                        isRequired: true,
+                                        options: (q.options || []).map((text, idx) => ({ id: undefined as any, optionText: text, optionValue: text, optionOrder: idx + 1 } as any)),
+                                      } as any}
+                                      stepCategory={template?.formTemplateType === 'user_profile' ? 'user_profile' : 'normal'}
+                                      token={token}
+                                      baseUrl={baseUrl}
+                                      restrictStructuralEdits={template?.formTemplateType === 'user_profile'}
+                                      onQuestionSaved={(updated) => {
+                                        setSteps((prev) => prev.map((s) => s.id === step.id ? {
+                                          ...s,
+                                          questions: (s.questions || []).map((oldQ) => oldQ.id === q.id ? {
+                                            ...oldQ,
+                                            questionText: updated.questionText,
+                                            options: (updated.options || []).map((o: any) => o.optionText),
+                                          } : oldQ)
+                                        } : s))
+                                      }}
+                                    />
                                   </div>
-                                )}
+                                ))}
                               </div>
                             ) : (
                               <div>
@@ -549,14 +641,16 @@ export default function TemplateEditor() {
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteStep(step.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {!isAccountTemplate && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteStep(step.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardHeader>
@@ -585,7 +679,7 @@ export default function TemplateEditor() {
                 <strong>This is a master template used by ALL tenants across the entire platform.</strong>
               </p>
               <p>
-                {template.category 
+                {template.category
                   ? `All ${template.category} products from every tenant will use these questions.`
                   : 'All products from every tenant will use these questions.'}
               </p>

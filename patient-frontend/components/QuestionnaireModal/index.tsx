@@ -42,7 +42,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
   onClose,
   treatmentId,
-  treatmentName
+  treatmentName,
+  questionnaireId,
+  productName
 }) => {
   const [questionnaire, setQuestionnaire] = React.useState<QuestionnaireData | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -203,13 +205,63 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     { key: "DC", name: "District of Columbia" }
   ];
 
-  // Load questionnaire data
+  // Load questionnaire data (supports treatment-based or direct questionnaireId)
   React.useEffect(() => {
     const loadQuestionnaire = async () => {
-      if (!isOpen || !treatmentId) return;
+      if (!isOpen) return;
 
       setLoading(true);
       try {
+        // If questionnaireId is provided (product-based), fetch questionnaire directly via public proxy
+        if (questionnaireId) {
+          const qRes = await fetch(`/api/public/questionnaires/${encodeURIComponent(questionnaireId)}`)
+          const qData = await qRes.json().catch(() => null)
+
+          if (!qRes.ok || !qData?.success || !qData?.data) {
+            throw new Error(qData?.message || 'Failed to load questionnaire')
+          }
+
+          const questionnaireData = qData.data
+
+          // Ensure steps
+          if (!Array.isArray(questionnaireData.steps)) {
+            questionnaireData.steps = []
+          }
+
+          // If no user_profile steps exist, append them from the global first user_profile questionnaire
+          const hasUserProfile = (questionnaireData.steps || []).some((s: any) => s.category === 'user_profile')
+          if (!hasUserProfile) {
+            try {
+              const upRes = await fetch('/api/public/questionnaires/first-user-profile')
+              const upData = await upRes.json().catch(() => null)
+              if (upRes.ok && upData?.success && upData?.data) {
+                const userProfileSteps = (upData.data.steps || []).filter((s: any) => s.category === 'user_profile')
+                if (userProfileSteps.length > 0) {
+                  const normal = (questionnaireData.steps || [])
+                    .filter((s: any) => s.category === 'normal' || !s.category)
+                    .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                  const userProfileSorted = userProfileSteps.sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                  const others = (questionnaireData.steps || [])
+                    .filter((s: any) => s.category && s.category !== 'normal' && s.category !== 'user_profile')
+                    .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                  const merged = [...normal, ...userProfileSorted, ...others]
+                  questionnaireData.steps = merged
+                }
+              }
+            } catch (e) {
+              console.warn('Failed to append user_profile steps:', e)
+            }
+          }
+
+          // No clinic variables available without treatment context; use as-is
+          setQuestionnaire(questionnaireData)
+          setLoading(false)
+          return
+        }
+
+        // Else fallback to treatment-based flow
+        if (!treatmentId) return;
+
         // Fetch both questionnaire and treatment products
         const [questionnaireResult, treatmentResult] = await Promise.all([
           apiCall(`/questionnaires/treatment/${treatmentId}`),
@@ -245,7 +297,18 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 ...question,
                 questionText: replaceVariables(question.questionText || '', variables),
                 placeholder: replaceVariables(question.placeholder || '', variables),
-                options: question.options?.map((option: string) => replaceVariables(option, variables)),
+                options: question.options?.map((opt: any) => {
+                  if (typeof opt === 'string') {
+                    return replaceVariables(opt, variables);
+                  }
+                  if (opt && typeof opt === 'object') {
+                    return {
+                      ...opt,
+                      optionText: replaceVariables(opt.optionText || '', variables),
+                    };
+                  }
+                  return opt;
+                }),
               })),
             }));
           }
@@ -270,7 +333,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     };
 
     loadQuestionnaire();
-  }, [isOpen, treatmentId, onClose]);
+  }, [isOpen, treatmentId, questionnaireId, onClose]);
 
   // Reset state when modal closes
   React.useEffect(() => {
@@ -1178,7 +1241,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           theme={theme}
                           questionnaireProducts={questionnaire.treatment?.products}
                           selectedProducts={selectedProducts}
-                          treatmentName={treatmentName}
+                          treatmentName={treatmentName ?? productName ?? ''}
                         />
                       </div>
                     </>

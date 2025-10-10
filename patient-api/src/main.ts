@@ -26,6 +26,7 @@ import TreatmentProducts from "./models/TreatmentProducts";
 import TreatmentPlan, { BillingInterval } from "./models/TreatmentPlan";
 import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
+import formTemplateService from "./services/formTemplate.service";
 import User from "./models/User";
 import Clinic from "./models/Clinic";
 import { Op } from "sequelize";
@@ -72,12 +73,17 @@ import MDFilesService from "./services/mdIntegration/MDFiles.service";
 import PharmacyWebhookService from "./services/pharmacy/webhook";
 import BrandSubscriptionService from "./services/brandSubscription.service";
 import MessageService from "./services/Message.service";
-import formTemplateService from "./services/formTemplate.service";
 import ProductService from "./services/product.service";
-import { listTemplatesQuerySchema, assignTemplatesSchema } from "./validators/formTemplates";
+import TenantProductForm from "./models/TenantProductForm";
+import TenantProduct from "./models/TenantProduct";
+// import QuestionnaireStep twice causes duplicate identifier; keep single import below
+import Question from "./models/Question";
+import QuestionOption from "./models/QuestionOption";
+import { assignTemplatesSchema } from "./validators/formTemplates";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
 import TenantProductService from "./services/tenantProduct.service";
+import QuestionnaireStep from "./models/QuestionnaireStep";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -952,6 +958,15 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
     const productService = new ProductService();
     const result = await productService.getProductsByClinic(clinicId, currentUser.id);
 
+    // Fetch full user to check role/clinic access
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
     if (!result.success) {
       const statusCode = result.message === "Access denied" ? 403 :
         result.message === "User not found" ? 401 : 500;
@@ -962,8 +977,57 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Only allow doctors and brand users to access products for their own clinic
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can access products. Your role: ${user.role}`
+      });
+    }
+
+    // Verify the user has access to this clinic
+    if (user.clinicId !== clinicId) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. You can only access products for your own clinic."
+      });
+    }
+
+    console.log(`🛍️ Fetching products for clinic: ${clinicId}, user role: ${user.role}, user clinicId: ${user.clinicId}`);
+
+    // First, let's see all products in the database for debugging
+    const allProducts = await Product.findAll({
+      include: [
+        {
+          model: Treatment,
+          as: 'treatments',
+          through: { attributes: [] },
+          attributes: ['id', 'name'],
+        }
+      ],
+      order: [['name', 'ASC']]
+    });
+
+    console.log(`📊 Total products in database: ${allProducts.length}`);
+
+    // Fetch products associated to treatments belonging to this clinic
+    const clinicProducts = await Product.findAll({
+      include: [
+        {
+          model: Treatment,
+          as: 'treatments',
+          where: { clinicId },
+          through: { attributes: [] },
+          attributes: ['id', 'name'],
+        }
+      ],
+      order: [['name', 'ASC']]
+    });
+
+    console.log(`✅ Found ${clinicProducts.length} products linked to treatments for clinic ${clinicId}`);
+
     // Transform data to match frontend expectations
-    const transformedProducts = result.items?.map(product => ({
+    const transformedProducts = clinicProducts.map(product => ({
       id: product.id,
       name: product.name,
       price: product.price,
@@ -987,6 +1051,490 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch products"
+    });
+  }
+});
+
+// Single product endpoint
+app.get("/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Support special virtual id "new" so the admin UI can preload defaults without hitting the DB
+    if (id === "new") {
+      return res.status(200).json({
+        success: true,
+        data: null,
+      });
+    }
+
+    const token = extractTokenFromHeader(req.headers.authorization);
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const payload = verifyJWTToken(token);
+
+    if (!payload) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired token"
+      });
+    }
+
+    // Fetch full user data from database to get role
+    const user = await User.findByPk(payload.userId);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to access products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can access products. Your role: ${user.role}`
+      });
+    }
+
+    console.log(`🛍️ Fetching single product: ${id}, user role: ${user.role}`);
+
+    // Fetch product with associated treatments
+    const product = await Product.findByPk(id, {
+      include: [
+        {
+          model: Treatment,
+          as: 'treatments',
+          through: { attributes: [] }, // Don't include junction table attributes
+          attributes: ['id', 'name'] // Only include needed fields
+        }
+      ]
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Ensure slug is persisted if missing
+    if (!product.slug && product.name) {
+      const computedSlug = product.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      try {
+        await product.update({ slug: computedSlug });
+      } catch (e) {
+        console.warn('⚠️ Failed to persist computed slug for product', id, e);
+      }
+    }
+
+    // Transform data to match frontend expectations
+    const transformedProduct = {
+      id: product.id,
+      name: product.name,
+      slug: product.slug || null,
+      price: product.price,
+      pharmacyProductId: product.pharmacyProductId,
+      dosage: product.dosage,
+      description: product.description,
+      activeIngredients: product.activeIngredients,
+      imageUrl: product.imageUrl,
+      active: true, // Default to active since Product model doesn't have active field
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      treatments: product.treatments || []
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Product retrieved successfully",
+      data: transformedProduct
+    });
+
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch product"
+    });
+  }
+});
+
+// Create product endpoint
+app.post("/products", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate request body using productCreateSchema
+    const validation = productCreateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, price, description, pharmacyProductId, dosage, activeIngredients, isActive } = validation.data;
+
+    // Fetch full user data from database to get role and clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to create products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can create products. Your role: ${user.role}`
+      });
+    }
+
+    console.log(`🛍️ Creating product for clinic: ${user.clinicId}, user role: ${user.role}`);
+
+    // Create the product
+    const newProduct = await Product.create({
+      name,
+      price: price,
+      description,
+      pharmacyProductId,
+      dosage,
+      activeIngredients: activeIngredients || [],
+      active: isActive !== undefined ? isActive : true,
+      isActive: isActive !== undefined ? isActive : true,
+      clinicId: user.clinicId,
+      imageUrl: '' // Set empty string as default since imageUrl is now nullable
+    });
+
+    console.log('✅ Product created successfully:', { id: newProduct.id, name: newProduct.name });
+
+    res.status(201).json({
+      success: true,
+      message: "Product created successfully",
+      data: newProduct
+    });
+
+  } catch (error) {
+    console.error('Error creating product:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create product"
+    });
+  }
+});
+
+// Delete product endpoint
+app.delete("/products/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get role and clinicId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to delete products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can delete products. Your role: ${user.role}`
+      });
+    }
+
+    console.log(`🗑️ Deleting product: ${id}, user role: ${user.role}`);
+
+    // Find the product
+    const product = await Product.findByPk(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Delete associated image from S3 if it exists
+    if (product.imageUrl && product.imageUrl.trim() !== '') {
+      try {
+        await deleteFromS3(product.imageUrl);
+        console.log('🗑️ Product image deleted from S3');
+      } catch (error) {
+        console.error('Warning: Failed to delete product image from S3:', error);
+        // Don't fail the entire request if image deletion fails
+      }
+    }
+
+    // Delete the product
+    try {
+      await product.destroy();
+      console.log('✅ Product deleted successfully:', { id: product.id, name: product.name });
+    } catch (deleteError) {
+      console.error('Error deleting product from database:', deleteError);
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete product because it is being used by treatments. Please remove it from all treatments first."
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Product deleted successfully"
+    });
+
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete product"
+    });
+  }
+});
+
+// Update product endpoint
+app.put("/products/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate request body using productUpdateSchema
+    const validation = productUpdateSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const { name, price, description, pharmacyProductId, dosage, activeIngredients, isActive } = validation.data;
+
+    // Fetch full user data from database to get role
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to update products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. Only doctors and brand users can update products. Your role: ${user.role}`
+      });
+    }
+
+    console.log(`🛍️ Updating product: ${id}, user role: ${user.role}`);
+
+    // Find the product
+    const product = await Product.findByPk(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Update the product
+    const updatedProduct = await product.update({
+      name,
+      price: price,
+      description,
+      pharmacyProductId,
+      dosage,
+      activeIngredients: activeIngredients || [],
+      active: isActive !== undefined ? isActive : true,
+      isActive: isActive !== undefined ? isActive : true,
+      // Only update imageUrl if it's explicitly provided in the request
+      ...(req.body.imageUrl !== undefined && { imageUrl: req.body.imageUrl })
+    });
+
+    console.log('✅ Product updated successfully:', { id: updatedProduct.id, name: updatedProduct.name });
+
+    res.status(200).json({
+      success: true,
+      message: "Product updated successfully",
+      data: updatedProduct
+    });
+
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update product"
+    });
+  }
+});
+
+// Product image upload endpoint
+app.post("/products/:id/upload-image", authenticateJWT, upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Fetch full user data from database to get role
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Only allow doctors and brand users to upload product images for their own clinic's products
+    if (user.role !== 'doctor' && user.role !== 'brand') {
+      return res.status(403).json({
+        success: false,
+        message: "Only doctors and brand users can upload product images"
+      });
+    }
+
+    // Check if this is a removal request (no file provided)
+    const removeImage = req.body && typeof req.body === 'object' && 'removeImage' in req.body && req.body.removeImage === true;
+
+    if (removeImage) {
+      // Remove the image
+      const product = await Product.findByPk(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found"
+        });
+      }
+
+      if (product.imageUrl && product.imageUrl.trim() !== '') {
+        try {
+          await deleteFromS3(product.imageUrl);
+          console.log('🗑️ Product image deleted from S3');
+        } catch (error) {
+          console.error('Warning: Failed to delete product image from S3:', error);
+          // Don't fail the entire request if deletion fails
+        }
+      }
+
+      // Update product to remove the image URL
+      await product.update({ imageUrl: null });
+
+      console.log('🖼️ Image removed from product:', { id: product.id });
+
+      return res.status(200).json({
+        success: true,
+        message: "Product image removed successfully",
+        data: {
+          id: product.id,
+          name: product.name,
+          imageUrl: product.imageUrl,
+        }
+      });
+    }
+
+    // Check if file was uploaded for new image
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded"
+      });
+    }
+
+    // Validate file size (additional check)
+    if (!isValidFileSize(req.file.size)) {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Maximum size is 5MB."
+      });
+    }
+
+    const product = await Product.findByPk(id);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found"
+      });
+    }
+
+    // Delete old image from S3 if it exists (1 product = 1 image policy)
+    if (product.imageUrl && product.imageUrl.trim() !== '') {
+      try {
+        await deleteFromS3(product.imageUrl);
+        console.log('🗑️ Old product image deleted from S3 (clean storage policy)');
+      } catch (error) {
+        console.error('Warning: Failed to delete old product image from S3:', error);
+        // Don't fail the entire request if deletion fails
+      }
+    }
+
+    // Upload new image to S3
+    const imageUrl = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    // Update product with new image URL
+    await product.update({ imageUrl });
+
+    console.log('🖼️ Image uploaded for product:', { id: product.id, imageUrl });
+
+    res.status(200).json({
+      success: true,
+      message: "Product image uploaded successfully",
+      data: {
+        id: product.id,
+        name: product.name,
+        imageUrl: product.imageUrl,
+      }
+    });
+
+  } catch (error) {
+    console.error('Error uploading product image:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload product image"
     });
   }
 });
@@ -3132,13 +3680,7 @@ app.get("/questionnaires/templates", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const validation = listTemplatesQuerySchema.safeParse(req.query);
-
-    if (!validation.success) {
-      return res.status(400).json({ success: false, message: 'Invalid query parameters', errors: validation.error.flatten() });
-    }
-
-    const templates = await formTemplateService.listTemplates(validation.data);
+    const templates = await questionnaireService.listTemplates();
 
     res.status(200).json({ success: true, data: templates });
   } catch (error) {
@@ -3195,28 +3737,112 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const { name, description, sectionType, category, schema } = req.body;
+    const { title, description, treatmentId, productId, category, formTemplateType } = req.body;
 
-    if (!name || !sectionType) {
-      return res.status(400).json({ success: false, message: 'Name and sectionType are required' });
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Title is required' });
     }
 
-    if (!['personalization', 'account', 'doctor'].includes(sectionType)) {
-      return res.status(400).json({ success: false, message: 'Invalid sectionType' });
-    }
-
-    const template = await formTemplateService.createTemplate({
-      name,
+    const template = await questionnaireService.createTemplate({
+      title,
       description,
-      sectionType,
+      treatmentId: typeof treatmentId === 'string' ? treatmentId : null,
+      productId,
       category,
-      schema,
+      formTemplateType: (formTemplateType === 'normal' || formTemplateType === 'user_profile' || formTemplateType === 'doctor') ? formTemplateType : null,
     });
 
     res.status(201).json({ success: true, data: template });
   } catch (error) {
     console.error('❌ Error creating questionnaire template:', error);
     res.status(500).json({ success: false, message: 'Failed to create questionnaire template' });
+  }
+});
+
+// Create Account Template by cloning user_profile steps from master_template
+app.post("/questionnaires/templates/account-from-master", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Find master template
+    const masters = await Questionnaire.findAll({ where: { formTemplateType: 'master_template' }, include: [{ model: QuestionnaireStep, as: 'steps', include: [{ model: Question, as: 'questions', include: [{ model: QuestionOption, as: 'options' }] }] }] });
+    if (masters.length !== 1) {
+      return res.status(400).json({ success: false, message: 'There should be 1 and only 1 master_template questionnaire' });
+    }
+
+    const master = masters[0] as any;
+
+    // Create the new questionnaire (account template clone; not a template itself)
+    const newQ = await Questionnaire.create({
+      title: `Account Template - ${new Date().toISOString()}`,
+      description: 'Cloned from master_template (user_profile steps)',
+      checkoutStepPosition: -1,
+      treatmentId: null,
+      isTemplate: false,
+      userId: currentUser.id,
+      productId: null,
+      formTemplateType: 'user_profile',
+      personalizationQuestionsSetup: false,
+      createAccountQuestionsSetup: true,
+      doctorQuestionsSetup: false,
+      color: null,
+    });
+
+    // Clone only user_profile steps and descendants
+    const steps: any[] = (master.steps || []).filter((s: any) => s.category === 'user_profile');
+    for (const step of steps) {
+      const clonedStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: step.stepOrder,
+        questionnaireId: newQ.id,
+      });
+
+      for (const question of (step.questions || [])) {
+        const clonedQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: question.questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: question.subQuestionOrder,
+          conditionalLevel: question.conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: question.footerNote,
+          conditionalLogic: question.conditionalLogic,
+          stepId: clonedStep.id,
+        });
+
+        if (question.options?.length) {
+          await QuestionOption.bulkCreate(
+            question.options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              questionId: clonedQuestion.id,
+            }))
+          );
+        }
+      }
+    }
+
+    const full = await Questionnaire.findByPk(newQ.id, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ model: Question, as: 'questions', include: [{ model: QuestionOption, as: 'options' }] }]
+      }]
+    });
+
+    return res.status(201).json({ success: true, data: full });
+  } catch (error) {
+    console.error('❌ Error cloning account template:', error);
+    return res.status(500).json({ success: false, message: 'Failed to clone account template' });
   }
 });
 
@@ -3235,7 +3861,7 @@ app.get("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Template ID is required' });
     }
 
-    const template = await formTemplateService.getTemplateById(id);
+    const template = await questionnaireService.getTemplateById(id);
 
     if (!template) {
       return res.status(404).json({ success: false, message: 'Template not found' });
@@ -3263,10 +3889,9 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Template ID is required' });
     }
 
-    const template = await formTemplateService.updateTemplate(id, {
-      name,
+    const template = await questionnaireService.updateTemplate(id, {
+      title: name,
       description,
-      schema,
     });
 
     res.status(200).json({ success: true, data: template });
@@ -3292,8 +3917,7 @@ app.get("/questionnaires", authenticateJWT, async (req, res) => {
   }
 });
 
-// Create questionnaire
-app.post("/questionnaires", authenticateJWT, async (req, res) => {
+app.get("/questionnaires/product/:productId", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
 
@@ -3301,80 +3925,117 @@ app.post("/questionnaires", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    // Validate request body using createQuestionnaireSchema
-    const validation = createQuestionnaireSchema.safeParse(req.body);
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
-      });
+    const { productId } = req.params;
+
+    if (!productId) {
+      return res.status(400).json({ success: false, message: "productId is required" });
     }
 
-    const result = await questionnaireService.createQuestionnaire(
-      currentUser.id,
-      validation.data
-    );
+    const templates = await questionnaireService.listTemplatesByProduct(productId);
 
-    if (!result.success) {
-      return res.status(400).json({
-        success: false,
-        message: result.error || "Failed to create questionnaire"
-      });
-    }
-
-    res.status(201).json(result);
-  } catch (error: any) {
-    console.error('❌ Error creating questionnaire:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to create questionnaire'
-    });
+    res.status(200).json({ success: true, data: templates });
+  } catch (error) {
+    console.error('❌ Error fetching questionnaires for product:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch questionnaires for product' });
   }
 });
 
-// Update questionnaire
-app.put("/questionnaires/:id", authenticateJWT, async (req, res) => {
+// Enable a questionnaire for current user's clinic and product
+app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
-
     if (!currentUser) {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    // Validate request body using updateQuestionnaireSchema
-    const validation = updateQuestionnaireSchema.safeParse({
-      ...req.body,
-      id: req.params.id
-    });
-    if (!validation.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: validation.error.errors
-      });
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(400).json({ success: false, message: "User clinic not found" });
     }
 
-    const result = await questionnaireService.updateQuestionnaire(
-      currentUser.id,
-      validation.data
-    );
-
-    if (!result.success) {
-      const statusCode = result.error === 'Questionnaire not found' ? 404 : 400;
-      return res.status(statusCode).json({
-        success: false,
-        message: result.error || "Failed to update questionnaire"
-      });
+    const { productId, questionnaireId } = req.body || {};
+    if (!productId || !questionnaireId) {
+      return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
     }
 
-    res.status(200).json(result);
-  } catch (error: any) {
-    console.error('❌ Error updating questionnaire:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to update questionnaire'
+    const record = await TenantProductForm.create({
+      tenantId: currentUser.id,
+      treatmentId: null,
+      productId,
+      questionnaireId,
+      clinicId: user.clinicId,
+      layoutTemplate: 'layout_a',
+      themeId: null,
+      lockedUntil: null,
     });
+
+    res.status(201).json({ success: true, data: record });
+  } catch (error) {
+    console.error('❌ Error enabling tenant product form:', error);
+    res.status(500).json({ success: false, message: 'Failed to enable product form' });
+  }
+});
+
+// List enabled forms for current user's clinic and a product
+app.get("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(400).json({ success: false, message: "User clinic not found" });
+    }
+
+    const productId = typeof req.query.productId === 'string' ? req.query.productId : undefined;
+    if (!productId) {
+      return res.status(400).json({ success: false, message: "productId is required" });
+    }
+
+    const records = await TenantProductForm.findAll({
+      where: { tenantId: currentUser.id, clinicId: user.clinicId, productId },
+    });
+
+    res.status(200).json({ success: true, data: records });
+  } catch (error) {
+    console.error('❌ Error listing tenant product forms:', error);
+    res.status(500).json({ success: false, message: 'Failed to list enabled forms' });
+  }
+});
+
+// Disable an enabled form for the current user's clinic/product
+app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(400).json({ success: false, message: "User clinic not found" });
+    }
+
+    const { productId, questionnaireId } = req.body || {};
+    if (!productId || !questionnaireId) {
+      return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
+    }
+
+    const record = await TenantProductForm.findOne({
+      where: { tenantId: currentUser.id, clinicId: user.clinicId, productId, questionnaireId },
+    });
+
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'Enabled form not found' });
+    }
+
+    await record.destroy();
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('❌ Error disabling tenant product form:', error);
+    res.status(500).json({ success: false, message: 'Failed to disable product form' });
   }
 });
 
@@ -5346,6 +6007,164 @@ app.get("/brand-treatments/published", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching published brand treatments:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch published treatments' });
+  }
+});
+
+// Public: get product form by clinic slug + product slug
+app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
+  try {
+    const { clinicSlug, slug } = req.params;
+
+    const clinic = await Clinic.findOne({ where: { slug: clinicSlug } });
+    if (!clinic) {
+      return res.status(404).json({ success: false, message: "Clinic not found" });
+    }
+
+    // Find an enabled product for this clinic matching the slug
+    const tenantProduct = await TenantProduct.findOne({
+      where: { clinicId: clinic.id },
+      include: [
+        {
+          model: Product,
+          required: true,
+          where: { slug },
+        },
+        {
+          model: Questionnaire,
+          required: false,
+          include: [
+            {
+              model: QuestionnaireStep,
+              include: [
+                {
+                  model: Question,
+                  include: [QuestionOption],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!tenantProduct || !tenantProduct.product) {
+      return res.status(404).json({ success: false, message: "Product not enabled for this brand" });
+    }
+
+    const product = tenantProduct.product as any;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        questionnaireId: tenantProduct.questionnaireId || null,
+        clinicSlug: clinic.slug,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error fetching published brand products:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch published products' });
+  }
+});
+
+// Public: get the latest questionnaire with formTemplateType = 'user_profile'
+app.get("/public/questionnaires/first-user-profile", async (_req, res) => {
+  try {
+    const questionnaire = await Questionnaire.findOne({
+      where: { formTemplateType: 'user_profile' },
+      include: [
+        {
+          model: QuestionnaireStep,
+          include: [
+            {
+              model: Question,
+              include: [QuestionOption],
+            },
+          ],
+        },
+      ],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+        ["updatedAt", "DESC"],
+      ] as any,
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'No user_profile questionnaire found' });
+    }
+
+    res.status(200).json({ success: true, data: questionnaire });
+  } catch (error) {
+    console.error('❌ Error fetching first user_profile questionnaire:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch user_profile questionnaire' });
+  }
+});
+
+// Public: get questionnaire by id (no auth), includes steps/questions/options
+app.get("/public/questionnaires/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const questionnaire = await Questionnaire.findByPk(id, {
+      include: [
+        {
+          model: QuestionnaireStep,
+          include: [
+            {
+              model: Question,
+              include: [QuestionOption],
+            },
+          ],
+        },
+      ],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+      ] as any,
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'Questionnaire not found' });
+    }
+
+    res.status(200).json({ success: true, data: questionnaire });
+  } catch (error) {
+    console.error('❌ Error fetching public questionnaire:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch questionnaire' });
+  }
+});
+
+// Public: get the latest questionnaire with formTemplateType = 'user_profile'
+app.get("/public/questionnaires/first-user-profile", async (_req, res) => {
+  try {
+    const questionnaire = await Questionnaire.findOne({
+      where: { formTemplateType: 'user_profile' },
+      include: [
+        {
+          model: QuestionnaireStep,
+          include: [
+            {
+              model: Question,
+              include: [QuestionOption],
+            },
+          ],
+        },
+      ],
+      order: [["updatedAt", "DESC"]],
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'No user_profile questionnaire found' });
+    }
+
+    res.status(200).json({ success: true, data: questionnaire });
+  } catch (error) {
+    console.error('❌ Error fetching first user_profile questionnaire:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch user_profile questionnaire' });
   }
 });
 

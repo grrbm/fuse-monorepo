@@ -343,7 +343,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
             );
 
         case "select":
-            if (question.questionText === "What state do you live in?") {
+            if ((question as any).questionSubtype === "State") {
                 const stateAbbreviations: Record<string, string> = {
                     "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR",
                     "California": "CA", "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE",

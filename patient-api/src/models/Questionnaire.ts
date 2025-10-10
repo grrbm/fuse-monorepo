@@ -14,6 +14,13 @@ import Product from './Product';
             fields: ['title', 'userId'],
             name: 'questionnaire_title_user_unique',
         },
+        {
+            unique: true,
+            fields: ['formTemplateType'],
+            name: 'unique_user_profile_formTemplateType',
+            // Ensure only a single questionnaire can have formTemplateType = 'user_profile'
+            where: { formTemplateType: 'user_profile' } as any,
+        },
     ],
 })
 export default class Questionnaire extends Entity {
@@ -28,6 +35,27 @@ export default class Questionnaire extends Entity {
         allowNull: true,
     })
     declare description: string;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare personalizationQuestionsSetup: boolean;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare createAccountQuestionsSetup: boolean;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare doctorQuestionsSetup: boolean;
 
     @Column({
         type: DataType.INTEGER,
@@ -45,6 +73,48 @@ export default class Questionnaire extends Entity {
 
     @BelongsTo(() => Treatment)
     declare treatment?: Treatment | null;
+
+    @Column({
+        type: DataType.ENUM('normal', 'user_profile', 'doctor', 'master_template'),
+        allowNull: true,
+        defaultValue: null,
+    })
+    //NOTE: Master template should only be assigned for a SINGLE Questionnaire !!!
+    declare formTemplateType: 'normal' | 'user_profile' | 'doctor' | 'master_template' | null;
+
+    @Column({
+        // Use explicit literals to avoid runtime import/init issues
+        type: DataType.ENUM(
+            'weight_loss',
+            'hair_growth',
+            'performance',
+            'sexual_health',
+            'skincare',
+            'wellness',
+            'other'
+        ),
+        allowNull: true,
+    })
+    declare category?:
+        | 'weight_loss'
+        | 'hair_growth'
+        | 'performance'
+        | 'sexual_health'
+        | 'skincare'
+        | 'wellness'
+        | 'other'
+        | null;
+
+
+    @ForeignKey(() => Product)
+    @Column({
+        type: DataType.UUID,
+        allowNull: true,
+    })
+    declare productId: string | null;
+
+    @BelongsTo(() => Product)
+    declare product?: Product | null;
 
     @ForeignKey(() => User)
     @Column({

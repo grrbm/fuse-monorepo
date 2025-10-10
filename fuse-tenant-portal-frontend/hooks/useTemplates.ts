@@ -42,6 +42,9 @@ interface UseTemplatesResult {
     error: string | null
     sections: Record<string, FormSectionTemplate[]>
     assignments: TenantProductFormAssignment[]
+    page: number
+    totalPages: number
+    setPage: (p: number) => void
     refresh: () => Promise<void>
     saveAssignment: (input: SaveAssignmentInput) => Promise<void>
 }
@@ -62,6 +65,8 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
     const [error, setError] = useState<string | null>(null)
     const [templates, setTemplates] = useState<FormSectionTemplate[]>([])
     const [assignments, setAssignments] = useState<TenantProductFormAssignment[]>([])
+    const [page, setPage] = useState<number>(1)
+    const [totalPages, setTotalPages] = useState<number>(1)
 
     const fetchTemplates = useCallback(async () => {
         if (!token) return
@@ -69,41 +74,61 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
         setError(null)
 
         try {
-            const [templatesRes, assignmentsRes, productsRes] = await Promise.all([
-                fetch(`${baseUrl}/questionnaires/templates`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-                fetch(`${baseUrl}/questionnaires/templates/assignments`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-                fetch(`${baseUrl}/products-management?limit=100&isActive=true`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-            ])
-
-            if (!templatesRes.ok) {
-                const data = await templatesRes.json().catch(() => ({}))
-                throw new Error(data.message || "Failed to load templates")
-            }
-
-            if (!assignmentsRes.ok) {
-                const data = await assignmentsRes.json().catch(() => ({}))
-                throw new Error(data.message || "Failed to load template assignments")
-            }
-
+            // Always load products; other resources are optional
+            const productsRes = await fetch(`${baseUrl}/products-management?limit=100&isActive=true&page=${page}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
             if (!productsRes.ok) {
                 const data = await productsRes.json().catch(() => ({}))
                 throw new Error(data.message || "Failed to load products")
             }
-
-            const templatesData = await templatesRes.json()
-            const assignmentsData = await assignmentsRes.json()
             const productsData = await productsRes.json()
 
-            setTemplates(templatesData.data ?? [])
+            // Best-effort fetch of assignments; tolerate failures
+            let existingAssignments: any[] = []
+            try {
+                const assignmentsRes = await fetch(`${baseUrl}/questionnaires/templates/assignments`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+                if (assignmentsRes.ok) {
+                    const assignmentsData = await assignmentsRes.json()
+                    existingAssignments = assignmentsData.data ?? []
+                }
+            } catch { }
 
-            const allProducts = productsData.data?.products ?? []
-            const existingAssignments = assignmentsData.data ?? []
+            // Best-effort fetch of templates; not required anymore for Forms index
+            try {
+                const templatesRes = await fetch(`${baseUrl}/questionnaires/templates`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+                if (templatesRes.ok) {
+                    const templatesData = await templatesRes.json()
+                    setTemplates(templatesData.data ?? [])
+                } else {
+                    setTemplates([])
+                }
+            } catch {
+                setTemplates([])
+            }
+
+            // Normalize products payload from various API shapes
+            const allProducts = Array.isArray(productsData)
+                ? productsData
+                : Array.isArray(productsData?.data?.products)
+                    ? productsData.data.products
+                    : Array.isArray(productsData?.data)
+                        ? productsData.data
+                        : Array.isArray(productsData?.products)
+                            ? productsData.products
+                            : []
+
+            // Derive pagination if present
+            const pagination = productsData?.data?.pagination
+            if (pagination && typeof pagination.totalPages === 'number') {
+                setTotalPages(pagination.totalPages)
+            } else {
+                setTotalPages(1)
+            }
 
             const assignmentMap = new Map(
                 existingAssignments.map((a: TenantProductFormAssignment) => [a.treatmentId, a])
@@ -149,7 +174,7 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
         } finally {
             setLoading(false)
         }
-    }, [baseUrl, token])
+    }, [baseUrl, token, page])
 
     const saveAssignment = useCallback(
         async (input: SaveAssignmentInput) => {
@@ -192,7 +217,7 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
 
     useEffect(() => {
         fetchTemplates()
-    }, [fetchTemplates])
+    }, [fetchTemplates, page])
 
     const sections = useMemo(() => {
         const grouped: Record<string, FormSectionTemplate[]> = {
@@ -216,6 +241,9 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
         error,
         sections,
         assignments,
+        page,
+        totalPages,
+        setPage,
         refresh: fetchTemplates,
         saveAssignment,
     }

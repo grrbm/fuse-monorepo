@@ -10,6 +10,8 @@ import { Loader2, ArrowLeft, Settings, Save, RotateCcw, ChevronDown, ChevronUp, 
 import { useTemplates } from "@/hooks/useTemplates"
 import NodeBuilder from "../components/NodeBuilder"
 import { listAvailablePalettes } from "@/lib/utils"
+import { CheckCircle2, CircleSlash2 } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
 
 const LAYOUT_OPTIONS = [
   {
@@ -34,6 +36,7 @@ export default function FormBuilder() {
   const { id: assignmentId } = router.query
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001", [])
   const { loading, error, sections, assignments, refresh, saveAssignment } = useTemplates(baseUrl)
+  const { token } = useAuth()
 
   const [selectedPersonalization, setSelectedPersonalization] = useState<string | null>(null)
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
@@ -42,6 +45,8 @@ export default function FormBuilder() {
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [templateLoading, setTemplateLoading] = useState(false)
+  const [productTemplate, setProductTemplate] = useState<any | null>(null)
 
   // Expanded sections for template review
   const [expandedPersonalization, setExpandedPersonalization] = useState(false)
@@ -91,6 +96,44 @@ export default function FormBuilder() {
     setSelectedLayout(selectedAssignment.layoutTemplate ?? LAYOUT_OPTIONS[0].id)
     setSelectedTheme(selectedAssignment.themeId ?? null)
   }, [selectedAssignment?.id])
+
+  // Fetch questionnaire template linked to the product to read setup booleans
+  useEffect(() => {
+    const productId = selectedAssignment?.treatmentId
+    if (!productId || !token) {
+      setProductTemplate(null)
+      return
+    }
+
+    let cancelled = false
+      ; (async () => {
+        try {
+          setTemplateLoading(true)
+          const res = await fetch(`${baseUrl}/questionnaires/product/${productId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!res.ok) {
+            setProductTemplate(null)
+            return
+          }
+          const data = await res.json()
+          if (!cancelled) {
+            const list = Array.isArray(data?.data) ? data.data : []
+            // pick most recently updated if available
+            const picked = list.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())[0] || null
+            setProductTemplate(picked)
+          }
+        } catch {
+          if (!cancelled) setProductTemplate(null)
+        } finally {
+          if (!cancelled) setTemplateLoading(false)
+        }
+      })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedAssignment?.treatmentId, token, baseUrl])
 
   // Auto-select templates when there's only one available for the category
   useEffect(() => {
@@ -315,6 +358,62 @@ export default function FormBuilder() {
 
           {/* Main Content */}
           <div className="space-y-6">
+            {/* Section Setup Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Sections Setup</CardTitle>
+                <CardDescription>Review which parts of this questionnaire are configured</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {templateLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading template status...</div>
+                ) : productTemplate ? (
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="flex items-center gap-2 rounded-md border p-3">
+                      {productTemplate.personalizationQuestionsSetup ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <CircleSlash2 className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <div className="text-sm">
+                        <div className="font-medium">Personalization</div>
+                        <div className="text-xs text-muted-foreground">
+                          {productTemplate.personalizationQuestionsSetup ? "Configured" : "Not configured"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-md border p-3">
+                      {productTemplate.createAccountQuestionsSetup ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <CircleSlash2 className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <div className="text-sm">
+                        <div className="font-medium">Create Account</div>
+                        <div className="text-xs text-muted-foreground">
+                          {productTemplate.createAccountQuestionsSetup ? "Configured" : "Not configured"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-md border p-3">
+                      {productTemplate.doctorQuestionsSetup ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <CircleSlash2 className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <div className="text-sm">
+                        <div className="font-medium">Doctor Questions</div>
+                        <div className="text-xs text-muted-foreground">
+                          {productTemplate.doctorQuestionsSetup ? "Configured" : "Not configured"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No template found for this product yet.</div>
+                )}
+              </CardContent>
+            </Card>
             {/* Template Management Section */}
             <Card>
               <CardHeader>
@@ -368,8 +467,8 @@ export default function FormBuilder() {
                               onClick={() => handleSelectTemplate("personalization", template.id)}
                               disabled={lockedWarning}
                               className={`w-full text-left rounded-md border p-3 text-sm transition ${template.id === selectedPersonalization
-                                  ? "border-primary bg-primary/10 text-primary"
-                                  : "border-border hover:border-primary/50"
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border hover:border-primary/50"
                                 } ${lockedWarning ? "opacity-50 cursor-not-allowed" : ""}`}
                             >
                               <div className="flex items-center justify-between">
@@ -492,8 +591,8 @@ export default function FormBuilder() {
                               onClick={() => handleSelectTemplate("doctor", template.id)}
                               disabled={lockedWarning}
                               className={`w-full text-left rounded-md border p-3 text-sm transition ${template.id === selectedDoctor
-                                  ? "border-primary bg-primary/10 text-primary"
-                                  : "border-border hover:border-primary/50"
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border hover:border-primary/50"
                                 } ${lockedWarning ? "opacity-50 cursor-not-allowed" : ""}`}
                             >
                               <div className="flex items-center justify-between">
@@ -526,8 +625,8 @@ export default function FormBuilder() {
                       key={palette.id}
                       onClick={() => setSelectedTheme(palette.id)}
                       className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition ${selectedTheme === palette.id
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border hover:border-primary/50"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border hover:border-primary/50"
                         }`}
                     >
                       <div>
@@ -562,8 +661,8 @@ export default function FormBuilder() {
                       key={layout.id}
                       onClick={() => setSelectedLayout(layout.id)}
                       className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${selectedLayout === layout.id
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border hover:border-primary/50"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border hover:border-primary/50"
                         }`}
                     >
                       <div className="font-medium">{layout.name}</div>

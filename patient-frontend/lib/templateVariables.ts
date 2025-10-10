@@ -24,20 +24,20 @@ export function replaceVariables(
   text: string,
   variables: TemplateVariables
 ): string {
-  if (!text) return text
-  
+  if (typeof text !== 'string' || text.length === 0) return typeof text === 'string' ? text : ''
+
   let result = text
-  
+
   // Replace each variable
   Object.keys(variables).forEach((key) => {
     const value = variables[key]
     if (value !== undefined) {
       // Replace all occurrences of {{key}} with the value
       const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g')
-      result = result.replace(regex, value)
+      result = result.replace(regex, String(value))
     }
   })
-  
+
   return result
 }
 
@@ -50,10 +50,10 @@ export function replaceVariablesInSchema(
   variables: TemplateVariables
 ): any {
   if (!schema) return schema
-  
+
   // Clone the schema to avoid mutations
   const processedSchema = JSON.parse(JSON.stringify(schema))
-  
+
   // Process steps
   if (processedSchema.steps && Array.isArray(processedSchema.steps)) {
     processedSchema.steps = processedSchema.steps.map((step: any) => ({
@@ -63,13 +63,13 @@ export function replaceVariablesInSchema(
       questions: step.questions?.map((question: any) => ({
         ...question,
         questionText: replaceVariables(question.questionText || '', variables),
-        options: question.options?.map((option: string) => 
+        options: question.options?.map((option: string) =>
           replaceVariables(option, variables)
         ),
       })),
     }))
   }
-  
+
   return processedSchema
 }
 
