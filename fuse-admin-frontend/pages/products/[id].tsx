@@ -515,8 +515,8 @@ export default function ProductDetail() {
                                                     .toLowerCase()
                                                     .replace(/[^a-z0-9]+/g, '-')
                                                     .replace(/^-+|-+$/g, ''))
-                                                const devUrl = `http://${clinicSlugValue}.localhost:3000/my-treatments/${productSlug}`
-                                                const prodDisplay = `${clinicSlugValue}.fuse.health/my-treatments/${productSlug}`
+                                                const devUrl = `http://${clinicSlugValue}.localhost:3000/my-products/${productSlug}`
+                                                const prodDisplay = `${clinicSlugValue}.fuse.health/my-products/${productSlug}`
                                                 const previewDisplay = process.env.NODE_ENV === 'production' ? prodDisplay : devUrl
                                                 const previewHref = process.env.NODE_ENV === 'production' ? `https://${prodDisplay}` : devUrl
                                                 const isCopied = copiedId === t.id

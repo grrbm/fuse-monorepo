@@ -78,6 +78,10 @@ import BrandSubscriptionService from "./services/brandSubscription.service";
 import MessageService from "./services/Message.service";
 import ProductService from "./services/product.service";
 import TenantProductForm from "./models/TenantProductForm";
+import TenantProduct from "./models/TenantProduct";
+// import QuestionnaireStep twice causes duplicate identifier; keep single import below
+import Question from "./models/Question";
+import QuestionOption from "./models/QuestionOption";
 import { assignTemplatesSchema } from "./validators/formTemplates";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
@@ -6042,6 +6046,72 @@ app.get("/brand-treatments/published", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching published brand treatments:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch published treatments' });
+  }
+});
+
+// Public: get product form by clinic slug + product slug
+app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
+  try {
+    const { clinicSlug, slug } = req.params;
+
+    const clinic = await Clinic.findOne({ where: { slug: clinicSlug } });
+    if (!clinic) {
+      return res.status(404).json({ success: false, message: "Clinic not found" });
+    }
+
+    // Find an enabled product for this clinic matching the slug
+    const tenantProduct = await TenantProduct.findOne({
+      where: { clinicId: clinic.id },
+      include: [
+        {
+          model: Product,
+          required: true,
+        },
+        {
+          model: Questionnaire,
+          required: false,
+          include: [
+            {
+              model: QuestionnaireStep,
+              include: [
+                {
+                  model: Question,
+                  include: [QuestionOption],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!tenantProduct || !tenantProduct.product) {
+      return res.status(404).json({ success: false, message: "Product not enabled for this brand" });
+    }
+
+    const product = tenantProduct.product as any;
+    const computedSlug = (product.slug || product.name)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (computedSlug !== slug) {
+      return res.status(404).json({ success: false, message: "Product slug not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: product.id,
+        name: product.name,
+        slug: computedSlug,
+        questionnaireId: tenantProduct.questionnaireId || null,
+        clinicSlug: clinic.slug,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error fetching published brand products:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch published products' });
   }
 });
 
