@@ -174,6 +174,15 @@ export default function ProductDetail() {
                     const filtered = prev.filter((r: any) => r?.questionnaireId !== questionnaireId)
                     return [...filtered, created]
                 })
+
+                // Also create/enable TenantProduct so public product page works
+                try {
+                    await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update-selection`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ products: [{ productId: id, questionnaireId }] })
+                    })
+                } catch { }
             }
         } catch (e: any) {
             alert(e?.message || 'Failed to enable form')
@@ -195,6 +204,21 @@ export default function ProductDetail() {
                 throw new Error(err?.message || 'Failed to disable form')
             }
             setEnabledForms((prev) => prev.filter((r: any) => r?.questionnaireId !== questionnaireId))
+
+            // Also remove TenantProduct mapping if present
+            try {
+                const list = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                const listData = await list.json().catch(() => null)
+                const tp = (listData?.data || []).find((t: any) => t?.productId === id)
+                if (tp?.id) {
+                    await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/${tp.id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                }
+            } catch { }
         } catch (e: any) {
             alert(e?.message || 'Failed to disable form')
         }

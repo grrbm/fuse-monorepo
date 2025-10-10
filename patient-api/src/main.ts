@@ -6066,6 +6066,7 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
         {
           model: Product,
           required: true,
+          where: { slug },
         },
         {
           model: Questionnaire,
@@ -6090,21 +6091,13 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
     }
 
     const product = tenantProduct.product as any;
-    const computedSlug = (product.slug || product.name)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-
-    if (computedSlug !== slug) {
-      return res.status(404).json({ success: false, message: "Product slug not found" });
-    }
 
     res.status(200).json({
       success: true,
       data: {
         id: product.id,
         name: product.name,
-        slug: computedSlug,
+        slug: product.slug,
         questionnaireId: tenantProduct.questionnaireId || null,
         clinicSlug: clinic.slug,
       },
