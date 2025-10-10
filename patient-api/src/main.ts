@@ -3861,6 +3861,93 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
   }
 });
 
+// Create Account Template by cloning user_profile steps from master_template
+app.post("/questionnaires/templates/account-from-master", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Find master template
+    const masters = await Questionnaire.findAll({ where: { formTemplateType: 'master_template' }, include: [{ model: QuestionnaireStep, as: 'steps', include: [{ model: Question, as: 'questions', include: [{ model: QuestionOption, as: 'options' }] }] }] });
+    if (masters.length !== 1) {
+      return res.status(400).json({ success: false, message: 'There should be 1 and only 1 master_template questionnaire' });
+    }
+
+    const master = masters[0] as any;
+
+    // Create the new questionnaire (account template)
+    const newQ = await Questionnaire.create({
+      title: `Account Template - ${new Date().toISOString()}`,
+      description: 'Cloned from master_template (user_profile steps)',
+      checkoutStepPosition: -1,
+      treatmentId: null,
+      isTemplate: true,
+      userId: currentUser.id,
+      productId: null,
+      formTemplateType: 'user_profile',
+      personalizationQuestionsSetup: false,
+      createAccountQuestionsSetup: true,
+      doctorQuestionsSetup: false,
+      color: null,
+    });
+
+    // Clone only user_profile steps and descendants
+    const steps: any[] = (master.steps || []).filter((s: any) => s.category === 'user_profile');
+    for (const step of steps) {
+      const clonedStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: step.stepOrder,
+        questionnaireId: newQ.id,
+      });
+
+      for (const question of (step.questions || [])) {
+        const clonedQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: question.questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: question.subQuestionOrder,
+          conditionalLevel: question.conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: question.footerNote,
+          conditionalLogic: question.conditionalLogic,
+          stepId: clonedStep.id,
+        });
+
+        if (question.options?.length) {
+          await QuestionOption.bulkCreate(
+            question.options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              questionId: clonedQuestion.id,
+            }))
+          );
+        }
+      }
+    }
+
+    const full = await Questionnaire.findByPk(newQ.id, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ model: Question, as: 'questions', include: [{ model: QuestionOption, as: 'options' }] }]
+      }]
+    });
+
+    return res.status(201).json({ success: true, data: full });
+  } catch (error) {
+    console.error('❌ Error cloning account template:', error);
+    return res.status(500).json({ success: false, message: 'Failed to clone account template' });
+  }
+});
+
 // IMPORTANT: This route must come AFTER all specific /questionnaires/templates/* routes
 app.get("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
   try {

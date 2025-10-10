@@ -191,6 +191,25 @@ export default function Forms() {
           ? `Category-specific personalization questions for ${categoryLabel} products`
           : `Doctor-required questions for ${categoryLabel} products`
 
+      // For account templates, clone from master user_profile steps
+      if (sectionType === 'account') {
+        const cloneRes = await fetch(`${baseUrl}/questionnaires/templates/account-from-master`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        })
+        if (!cloneRes.ok) {
+          const err = await cloneRes.json().catch(() => ({}))
+          throw new Error(err?.message || 'Failed to clone account template')
+        }
+        const cloned = await cloneRes.json()
+        const q = cloned?.data
+        await refreshQuestionnaires()
+        if (q?.id) {
+          router.push(`/forms/editor/${q.id}`)
+        }
+        return
+      }
+
       const response = await fetch(`${baseUrl}/questionnaires/templates`, {
         method: "POST",
         headers: {
@@ -648,10 +667,32 @@ export default function Forms() {
                     These questions are used globally. Changes will impact every product form.
                   </p>
                   {accountQuestionnaire ? (
-                    <Button onClick={() => router.push(`/forms/editor/${accountQuestionnaire.id}`)} className="w-full">
-                      <Edit3 className="mr-2 h-4 w-4" />
-                      Edit Account Questions
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button onClick={() => router.push(`/forms/editor/${accountQuestionnaire.id}`)}>
+                        <Edit3 className="mr-2 h-4 w-4" />
+                        Edit Account Template
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          if (!token) return
+                          if (!confirm('Delete this account questionnaire? This cannot be undone.')) return
+                          try {
+                            const res = await fetch(`${baseUrl}/questionnaires/${accountQuestionnaire.id}`, {
+                              method: 'DELETE',
+                              headers: { Authorization: `Bearer ${token}` },
+                            })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok) throw new Error(data?.message || 'Failed to delete account questionnaire')
+                            await refreshQuestionnaires()
+                          } catch (e: any) {
+                            alert(e?.message || 'Failed to delete account questionnaire')
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   ) : (
                     <Button
                       onClick={() => handleCreateTemplate("account")}
