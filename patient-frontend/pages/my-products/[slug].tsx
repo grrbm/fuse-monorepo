@@ -10,6 +10,7 @@ interface PublicProduct {
     name: string
     slug: string
     questionnaireId: string | null
+    category?: string | null
 }
 
 export default function PublicProductPage() {
@@ -46,6 +47,7 @@ export default function PublicProductPage() {
                 name: data.data.name,
                 slug: data.data.slug,
                 questionnaireId: data.data.questionnaireId,
+                category: data.data.category || null,
             })
             setIsModalOpen(true)
         } catch (err) {
@@ -89,6 +91,7 @@ export default function PublicProductPage() {
                     onClose={handleModalClose}
                     questionnaireId={product.questionnaireId}
                     productName={product.name}
+                    productCategory={product.category || undefined}
                 />
             )}
         </div>

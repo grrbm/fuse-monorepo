@@ -6080,11 +6080,51 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
         slug: product.slug,
         questionnaireId: tenantProduct.questionnaireId || null,
         clinicSlug: clinic.slug,
+        category: product.category || null,
       },
     });
   } catch (error) {
     console.error('❌ Error fetching published brand products:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch published products' });
+  }
+});
+// Public: list standardized templates (optionally filtered by category)
+app.get("/public/questionnaires/standardized", async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const where: any = {
+      isTemplate: true,
+      formTemplateType: 'standardized_template'
+    };
+    if (typeof category === 'string' && category.trim().length > 0) {
+      where.category = category.trim();
+    }
+
+    const questionnaires = await Questionnaire.findAll({
+      where,
+      include: [
+        {
+          model: QuestionnaireStep,
+          include: [
+            {
+              model: Question,
+              include: [QuestionOption],
+            },
+          ],
+        },
+      ],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+      ] as any,
+    });
+
+    res.status(200).json({ success: true, data: questionnaires });
+  } catch (error) {
+    console.error('❌ Error fetching standardized questionnaires:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch standardized questionnaires' });
   }
 });
 

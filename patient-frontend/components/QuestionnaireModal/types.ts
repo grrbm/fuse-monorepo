@@ -76,6 +76,7 @@ export interface QuestionnaireModalProps {
     treatmentName?: string;
     questionnaireId?: string; // when provided, load questionnaire directly (product-based)
     productName?: string; // optional label when questionnaire is product-based
+    productCategory?: string; // optional product category (e.g., weight_loss)
 }
 
 export interface ThemePalette {

@@ -44,7 +44,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   treatmentId,
   treatmentName,
   questionnaireId,
-  productName
+  productName,
+  productCategory
 }) => {
   const [questionnaire, setQuestionnaire] = React.useState<QuestionnaireData | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -251,6 +252,38 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             } catch (e) {
               console.warn('Failed to append user_profile steps:', e)
             }
+          }
+
+          // Append standardized (category) steps after user_profile if productCategory is provided
+          try {
+            if (productCategory) {
+              const stdRes = await fetch(`/api/public/questionnaires/standardized?category=${encodeURIComponent(productCategory)}`)
+              const stdData = await stdRes.json().catch(() => null)
+              if (stdRes.ok && stdData?.success && Array.isArray(stdData?.data) && stdData.data.length > 0) {
+                // Merge all standardized templates' steps
+                const standardizedSteps = stdData.data.flatMap((q: any) => q.steps || [])
+                if (standardizedSteps.length > 0) {
+                  const currentSteps = Array.isArray(questionnaireData.steps) ? questionnaireData.steps : []
+
+                  const normal = currentSteps
+                    .filter((s: any) => s.category === 'normal' || !s.category)
+                    .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                  const userProfile = currentSteps
+                    .filter((s: any) => s.category === 'user_profile')
+                    .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                  const others = currentSteps
+                    .filter((s: any) => s.category && s.category !== 'normal' && s.category !== 'user_profile')
+                    .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+
+                  const standardizedSorted = standardizedSteps.sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+
+                  // Order: normal, user_profile, standardized, others
+                  questionnaireData.steps = [...normal, ...userProfile, ...standardizedSorted, ...others]
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to append standardized steps:', e)
           }
 
           // No clinic variables available without treatment context; use as-is
