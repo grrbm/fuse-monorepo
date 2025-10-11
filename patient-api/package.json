@@ -10,8 +10,8 @@
     "migrate:undo": "sequelize db:migrate:undo",
     "dev": "pnpm with-env ts-node-dev --respawn src/main.ts",
     "pm2:start": "pnpm with-env pm2 start bundle/main.js -i 1 --name patient-api --node-args='--max-old-space-size=1024 --no-warnings'",
-    "pm2:reload": "pnpm build && pnpm with-env pm2 reload patient-api",
-    "pm2:reload-no-build": "pnpm with-env pm2 reload patient-api",
+    "pm2:reload": "pnpm build && pnpm with-env pm2 reload patient-api --update-env",
+    "pm2:reload-no-build": "pnpm with-env pm2 reload patient-api --update-env",
     "pm2:stop": "pm2 stop patient-api",
     "clean": "git clean -xdf .cache .turbo dist .next node_modules",
     "with-env": "dotenv -e ../.env.local --"

@@ -139,6 +139,19 @@ if (!process.env.STRIPE_SECRET_KEY) {
   console.log('✅ Stripe secret key found, initializing...');
 }
 
+// Log Stripe env key suffixes for debugging
+const lastChars = (val?: string, n = 6) => (val ? val.slice(-n) : 'MISSING');
+const publishableSuffix = lastChars(process.env.STRIPE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+const secretSuffix = lastChars(process.env.STRIPE_SECRET_KEY);
+const brandSuffix = lastChars(process.env.STRIPE_BRAND_SUBSCRIPTION_PRODUCT_ID);
+const stripeWebhookSuffix = lastChars(process.env.STRIPE_WEBHOOK_SECRET);
+console.log('🔎 Stripe env suffixes', {
+  STRIPE_PUBLISHABLE_KEY: publishableSuffix,
+  STRIPE_SECRET_KEY: secretSuffix,
+  STRIPE_BRAND_SUBSCRIPTION_PRODUCT_ID: brandSuffix,
+  STRIPE_WEBHOOK_SECRET: stripeWebhookSuffix
+});
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-08-27.basil',
 });
