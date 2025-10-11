@@ -17,7 +17,7 @@ class QuestionnaireService {
         treatmentId?: string | null;
         productId?: string | null;
         category?: string | null;
-        formTemplateType?: 'normal' | 'user_profile' | 'doctor' | null;
+        formTemplateType?: 'normal' | 'user_profile' | 'doctor' | 'master_template' | 'standardized_template' | null;
     }) {
         return Questionnaire.create({
             title: input.title,
@@ -37,7 +37,7 @@ class QuestionnaireService {
 
     async listTemplates() {
         return Questionnaire.findAll({
-            where: { isTemplate: true },
+            where: { isTemplate: true, formTemplateType: 'standardized_template' },
             include: [
                 {
                     model: QuestionnaireStep,
@@ -655,13 +655,18 @@ class QuestionnaireService {
             throw new Error('Questionnaire not found');
         }
 
-        // Ensure user owns this questionnaire and it's not a template
-        if (questionnaire.userId !== userId) {
-            throw new Error('Questionnaire does not belong to your account');
-        }
-
+        // Ownership and template rules
         if (questionnaire.isTemplate) {
-            throw new Error('Cannot delete template questionnaires');
+            // Allow deleting standardized templates with no owner
+            if (questionnaire.formTemplateType !== 'standardized_template' || questionnaire.userId !== null) {
+                throw new Error('Cannot delete template questionnaires');
+            }
+            // standardized_template with userId === null → permitted via tenant portal
+        } else {
+            // Non-templates must belong to the requesting user
+            if (questionnaire.userId !== userId) {
+                throw new Error('Questionnaire does not belong to your account');
+            }
         }
 
         const sequelize = Questionnaire.sequelize;

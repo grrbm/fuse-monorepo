@@ -221,7 +221,7 @@ export default function Forms() {
           description,
           // set category only for non-account templates
           category: category,
-          formTemplateType: null,
+          formTemplateType: 'standardized_template',
         }),
       })
 
@@ -607,32 +607,56 @@ export default function Forms() {
                             </p>
                             {(() => {
                               const categoryTemplate = (questionnaires || []).find(
-                                (q: any) => q.category === selectedCategory
+                                (q: any) => q.formTemplateType === 'standardized_template' && q.category === selectedCategory
                               )
                               return (
                                 <div className="grid gap-2">
                                   {categoryTemplate && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <Button
+                                        onClick={() => router.push(`/forms/editor/${categoryTemplate.id}`)}
+                                        className="w-full"
+                                      >
+                                        <Edit3 className="mr-2 h-4 w-4" />
+                                        Edit Personalization Questions
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        onClick={async () => {
+                                          if (!token) return
+                                          if (!confirm('Delete this personalization template? This cannot be undone.')) return
+                                          try {
+                                            const res = await fetch(`${baseUrl}/questionnaires/${categoryTemplate.id}`, {
+                                              method: 'DELETE',
+                                              headers: { Authorization: `Bearer ${token}` },
+                                            })
+                                            const data = await res.json().catch(() => ({}))
+                                            if (!res.ok) throw new Error(data?.message || 'Failed to delete personalization template')
+                                            await refreshQuestionnaires()
+                                          } catch (e: any) {
+                                            alert(e?.message || 'Failed to delete personalization template')
+                                          }
+                                        }}
+                                        className="w-full"
+                                      >
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  )}
+                                  {!categoryTemplate && (
                                     <Button
-                                      onClick={() => router.push(`/forms/editor/${categoryTemplate.id}`)}
+                                      onClick={() => handleCreateTemplate("personalization", selectedCategory)}
                                       className="w-full"
+                                      disabled={creating}
                                     >
-                                      <Edit3 className="mr-2 h-4 w-4" />
-                                      Edit Personalization Questions
+                                      {creating ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Layers className="mr-2 h-4 w-4" />
+                                      )}
+                                      {creating ? "Creating..." : "Create Personalization Template"}
                                     </Button>
                                   )}
-                                  <Button
-                                    onClick={() => handleCreateTemplate("personalization", selectedCategory)}
-                                    variant={categoryTemplate ? "outline" : "default"}
-                                    className="w-full"
-                                    disabled={creating}
-                                  >
-                                    {creating ? (
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Layers className="mr-2 h-4 w-4" />
-                                    )}
-                                    {creating ? "Creating..." : categoryTemplate ? "Create Another Template" : "Create Personalization Template"}
-                                  </Button>
                                 </div>
                               )
                             })()}

@@ -3762,7 +3762,13 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
       treatmentId: typeof treatmentId === 'string' ? treatmentId : null,
       productId,
       category,
-      formTemplateType: (formTemplateType === 'normal' || formTemplateType === 'user_profile' || formTemplateType === 'doctor') ? formTemplateType : null,
+      formTemplateType: (
+        formTemplateType === 'normal' ||
+        formTemplateType === 'user_profile' ||
+        formTemplateType === 'doctor' ||
+        formTemplateType === 'master_template' ||
+        formTemplateType === 'standardized_template'
+      ) ? formTemplateType : null,
     });
 
     res.status(201).json({ success: true, data: template });

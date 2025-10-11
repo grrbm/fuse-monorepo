@@ -75,12 +75,12 @@ export default class Questionnaire extends Entity {
     declare treatment?: Treatment | null;
 
     @Column({
-        type: DataType.ENUM('normal', 'user_profile', 'doctor', 'master_template'),
+        type: DataType.ENUM('normal', 'user_profile', 'doctor', 'master_template', 'standardized_template'),
         allowNull: true,
         defaultValue: null,
     })
     //NOTE: Master template should only be assigned for a SINGLE Questionnaire !!!
-    declare formTemplateType: 'normal' | 'user_profile' | 'doctor' | 'master_template' | null;
+    declare formTemplateType: 'normal' | 'user_profile' | 'doctor' | 'master_template' | 'standardized_template' | null;
 
     @Column({
         // Use explicit literals to avoid runtime import/init issues
