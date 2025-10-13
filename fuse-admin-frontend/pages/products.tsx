@@ -42,6 +42,7 @@ export default function Products() {
     const [products, setProducts] = useState<Product[]>([])
     const [allProducts, setAllProducts] = useState<Product[]>([])
     const [activeTab, setActiveTab] = useState<'my' | 'select'>('my')
+    const [assignments, setAssignments] = useState<Array<{ productId: string; questionnaireId: string }>>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const { user, token } = useAuth()
@@ -109,9 +110,7 @@ export default function Products() {
                     const items: Product[] = data.data || []
                     console.log('🔍 Products count:', items.length)
                     setAllProducts(items)
-                    // My Products: those with tenantProductId (selected)
-                    const myProducts = items.filter((p: any) => !!p.tenantProductId)
-                    setProducts(myProducts)
+                    // My Products are derived from TenantProductForm assignments; will be set after assignments load
 
                     if (items.length === 0) {
                         console.log('ℹ️ No products found for this clinic - checking user state...')
@@ -147,10 +146,34 @@ export default function Products() {
         }
     }, [token, userWithClinic?.clinicId])
 
+    const fetchAssignments = useCallback(async () => {
+        try {
+            if (!token) return
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/templates/assignments`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            if (!res.ok) return
+            const data = await res.json().catch(() => null)
+            const rows = Array.isArray(data?.data) ? data.data : []
+            setAssignments(rows)
+            // Build My Products from assignments
+            const productIds = new Set(rows.map((r: any) => r.productId).filter(Boolean))
+            const my = allProducts.filter(p => productIds.has(p.id))
+            setProducts(my)
+        } catch (e) {
+            console.warn('Failed to load assignments', e)
+        }
+    }, [token, allProducts])
+
     useEffect(() => {
         console.log('🔍 Products useEffect running')
         fetchProducts()
     }, [fetchProducts])
+
+    useEffect(() => {
+        // After products are loaded, fetch assignments and build My Products
+        fetchAssignments()
+    }, [fetchAssignments, allProducts])
 
     const getStatusBadge = (active: boolean) => {
         return active

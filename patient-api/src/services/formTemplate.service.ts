@@ -1,6 +1,8 @@
 import FormSectionTemplate, { FormSectionType } from '../models/FormSectionTemplate'
 import TenantProductForm from '../models/TenantProductForm'
 import Treatment from '../models/Treatment'
+import Product from '../models/Product'
+import Questionnaire from '../models/Questionnaire'
 import { sequelize } from '../config/database'
 
 interface TemplateAssignmentInput {
@@ -72,7 +74,7 @@ class FormTemplateService {
     schema?: Record<string, any>
   }) {
     const template = await FormSectionTemplate.findByPk(id)
-    
+
     if (!template) {
       throw new Error('Template not found')
     }
@@ -153,10 +155,9 @@ class FormTemplateService {
     return TenantProductForm.findOne({
       where: { tenantId, treatmentId },
       include: [
-        { model: FormSectionTemplate, as: 'personalizationTemplate' },
-        { model: FormSectionTemplate, as: 'accountTemplate' },
-        { model: FormSectionTemplate, as: 'doctorTemplate' },
         { model: Treatment },
+        { model: Product },
+        { model: Questionnaire },
       ],
     })
   }
@@ -165,10 +166,9 @@ class FormTemplateService {
     return TenantProductForm.findAll({
       where: { tenantId },
       include: [
-        { model: FormSectionTemplate, as: 'personalizationTemplate' },
-        { model: FormSectionTemplate, as: 'accountTemplate' },
-        { model: FormSectionTemplate, as: 'doctorTemplate' },
         { model: Treatment },
+        { model: Product },
+        { model: Questionnaire },
       ],
       order: [['createdAt', 'DESC']],
     })
