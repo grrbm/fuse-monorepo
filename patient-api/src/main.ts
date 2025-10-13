@@ -6259,7 +6259,7 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
       return res.status(404).json({ success: false, message: "Clinic not found" });
     }
 
-    // Find an enabled product for this clinic matching the slug
+    // First try legacy enablement via TenantProduct (selected products)
     const tenantProduct = await TenantProduct.findOne({
       where: { clinicId: clinic.id },
       include: [
@@ -6286,23 +6286,49 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
       ],
     });
 
-    if (!tenantProduct || !tenantProduct.product) {
-      return res.status(404).json({ success: false, message: "Product not enabled for this brand" });
+    if (tenantProduct && tenantProduct.product) {
+      const product = tenantProduct.product as any;
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          questionnaireId: tenantProduct.questionnaireId || null,
+          clinicSlug: clinic.slug,
+          category: product.category || null,
+        },
+      });
     }
 
-    const product = tenantProduct.product as any;
-
-    res.status(200).json({
-      success: true,
-      data: {
-        id: product.id,
-        name: product.name,
-        slug: product.slug,
-        questionnaireId: tenantProduct.questionnaireId || null,
-        clinicSlug: clinic.slug,
-        category: product.category || null,
-      },
+    // Fallback: consider enablement via TenantProductForm (form assignment)
+    const tenantProductForm = await TenantProductForm.findOne({
+      where: { clinicId: clinic.id },
+      include: [
+        {
+          model: Product,
+          required: true,
+          where: { slug },
+        },
+      ],
     });
+
+    if (tenantProductForm && (tenantProductForm as any).product) {
+      const product = (tenantProductForm as any).product;
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          questionnaireId: tenantProductForm.questionnaireId || null,
+          clinicSlug: clinic.slug,
+          category: product.category || null,
+        },
+      });
+    }
+
+    return res.status(404).json({ success: false, message: "Product not enabled for this brand" });
   } catch (error) {
     console.error('❌ Error fetching published brand products:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch published products' });
