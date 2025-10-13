@@ -1042,40 +1042,49 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 
     console.log(`✅ Found ${clinicProducts.length} products linked to treatments for clinic ${clinicId}`);
 
-
-    // Transform data to match frontend expectations
-    // const transformedProducts = clinicProducts.map(product => ({
-    //   id: product.id,
-    //   name: product.name,
-    //   price: product.price,
-    //   pharmacyProductId: product.pharmacyProductId,
-    //   dosage: product.dosage,
-    //   imageUrl: product.imageUrl,
-    //   active: product.active,
-    //   createdAt: product.createdAt,
-    //   updatedAt: product.updatedAt,
-    //   treatments: product.treatments || []
-    // }));
-    const transformedProducts = result.items?.map(item => ({
-      id: item.product.id,
-      name: item.product.name,
-      productPrice: item.product.price, // Base product price
-      price: item.tenantProductPrice, // Tenant-specific price (overrides base price)
-      tenantProductId: item.tenantProductId,
-      pharmacyProductId: item.product.pharmacyProductId,
-      dosage: item.product.dosage,
-      imageUrl: item.product.imageUrl,
-      active: item.product.active,
-      createdAt: item.product.createdAt,
-      updatedAt: item.product.updatedAt,
-      treatments: item.product.treatments || []
-
+    // Build base list from clinic-linked products
+    const baseProducts = clinicProducts.map(product => ({
+      id: product.id,
+      name: product.name,
+      price: typeof product.price === 'string' ? parseFloat(product.price as any) : product.price,
+      pharmacyProductId: product.pharmacyProductId,
+      dosage: product.dosage,
+      imageUrl: product.imageUrl,
+      active: (product as any).active ?? true,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+      treatments: (product as any).treatments || []
     }));
+
+    // Map tenant overrides by productId (price, tenantProductId)
+    const overrides = new Map<string, { price?: number; tenantProductId?: string }>();
+    for (const item of (result.items || [])) {
+      const productId = item.product?.id;
+      if (productId) {
+        overrides.set(productId, {
+          price: typeof item.tenantProductPrice === 'string' ? parseFloat(item.tenantProductPrice as any) : item.tenantProductPrice,
+          tenantProductId: item.tenantProductId
+        });
+      }
+    }
+
+    // Apply overrides where available, keep others as base
+    const mergedProducts = baseProducts.map(p => {
+      const o = overrides.get(p.id);
+      if (o) {
+        return {
+          ...p,
+          price: o.price ?? p.price,
+          tenantProductId: o.tenantProductId
+        } as any;
+      }
+      return p as any;
+    });
 
     res.status(200).json({
       success: true,
       message: result.message,
-      data: transformedProducts
+      data: mergedProducts
     });
 
   } catch (error) {

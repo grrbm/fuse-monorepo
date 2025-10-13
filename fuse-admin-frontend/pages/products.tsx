@@ -40,6 +40,8 @@ interface Product {
 
 export default function Products() {
     const [products, setProducts] = useState<Product[]>([])
+    const [allProducts, setAllProducts] = useState<Product[]>([])
+    const [activeTab, setActiveTab] = useState<'my' | 'select'>('my')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const { user, token } = useAuth()
@@ -104,23 +106,20 @@ export default function Products() {
 
                 if (data.success) {
                     console.log('✅ API call successful!')
-                    const products = data.data || []
-                    console.log('🔍 Products count:', products.length)
-                    console.log('🔍 Products with images:', products.filter((p: Product) => p.imageUrl).length)
-                    console.log('🔍 Sample product with image:', products.find((p: Product) => p.imageUrl))
-                    console.log('🔍 Products with clinicId:', products.filter((p: Product) => p.clinicId).length)
-                    console.log('🔍 Products without clinicId:', products.filter((p: Product) => !p.clinicId).length)
-                    console.log('🔍 All products:', products.map((p: Product) => ({ id: p.id, name: p.name, clinicId: p.clinicId })))
+                    const items: Product[] = data.data || []
+                    console.log('🔍 Products count:', items.length)
+                    setAllProducts(items)
+                    // My Products: those with tenantProductId (selected)
+                    const myProducts = items.filter((p: any) => !!p.tenantProductId)
+                    setProducts(myProducts)
 
-                    setProducts(products)
-
-                    if (products.length === 0) {
+                    if (items.length === 0) {
                         console.log('ℹ️ No products found for this clinic - checking user state...')
                         console.log('🔍 User clinicId:', (user as any)?.clinicId)
                         console.log('🔍 User role:', (user as any)?.role)
                         setError(`No products found for your clinic. Please check your clinic assignment.`)
                     } else {
-                        console.log('✅ Products loaded successfully:', products.length, 'products')
+                        console.log('✅ Products loaded successfully:', items.length, 'products')
                     }
                 } else {
                     console.error('❌ API returned success=false:', data.message)
@@ -199,6 +198,8 @@ export default function Products() {
         }
     }
 
+    const visibleProducts = activeTab === 'my' ? products : allProducts
+
     if (loading) {
         return (
             <Layout>
@@ -276,6 +277,24 @@ export default function Products() {
                         </Button>
                     </div>
 
+                    {/* Tabs */}
+                    <div className="mb-6 border-b">
+                        <div className="flex gap-6">
+                            <button
+                                className={`py-2 border-b-2 ${activeTab === 'my' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}
+                                onClick={() => setActiveTab('my')}
+                            >
+                                My Products
+                            </button>
+                            <button
+                                className={`py-2 border-b-2 ${activeTab === 'select' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}
+                                onClick={() => setActiveTab('select')}
+                            >
+                                Select Products
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Error Message */}
                     {error && (
                         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
@@ -301,9 +320,9 @@ export default function Products() {
                     )}
 
                     {/* Products Grid */}
-                    {products.length > 0 ? (
+                    {visibleProducts.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {products.map((product) => (
+                            {visibleProducts.map((product) => (
                                 <Card key={product.id} className="hover:shadow-lg transition-shadow">
                                     <CardHeader>
                                         <div className="flex justify-between items-start">
