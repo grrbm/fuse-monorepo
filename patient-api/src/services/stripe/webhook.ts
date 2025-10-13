@@ -12,6 +12,10 @@ import MDAuthService from '../mdIntegration/MDAuth.service';
 import MDCaseService from '../mdIntegration/MDCase.service';
 import Treatment from '../../models/Treatment';
 import PharmacyService from '../pharmacy.service';
+import TenantProduct from '../../models/TenantProduct';
+import ShippingOrder from '../../models/ShippingOrder';
+import Product from '../../models/Product';
+import Sale from '../../models/Sale';
 
 
 export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
@@ -293,12 +297,33 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
             console.log('✅ Subscription updated to paid:', sub.id);
 
             if (sub.orderId) {
-                const order = await Order.findByPk(sub.orderId);
+                const order = await Order.findByPk(sub.orderId, {
+                    include: [
+                        {
+                            model: Treatment,
+                            as: 'treatment',
+                        },
+                        {
+                            model: TenantProduct,
+                            as: 'tenantProduct',
+                        },
+                        {
+                            model: ShippingOrder,
+                            as: 'shippingOrders',
+                        }
+                    ]
+                });
                 if (order) {
                     await order.update({
                         status: PaymentStatus.PAID
                     })
-                    console.log("Sending new order ", order.shippingOrders.length)
+
+                    await Sale.create({
+                        orderId: order.id,
+                        clinicId: order.clinicId,
+                        salePrice: order.totalAmount
+                    })
+                    console.log("Sending new order ", order?.shippingOrders?.length)
 
                     // Order Renewal
                     const pharmacyService = new PharmacyService()
@@ -579,7 +604,14 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
                 as: 'order',
                 include: [
                     { model: User, as: 'user' },
-                    { model: Treatment, as: 'treatment' }
+                    { model: Treatment, as: 'treatment' },
+                    {
+                        model: TenantProduct, as: 'tenantProduct', include: [
+                            {
+                                model: Product, as: 'product',
+                            }
+                        ]
+                    }
                 ]
             }
         ]
@@ -593,6 +625,7 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
     const user = payment.order.user;
     const order = payment.order;
     const treatment = payment.order.treatment;
+    const tenantProduct = payment.order.tenantProduct;
 
     // Check if user has mdPatientId
     if (!user.mdPatientId) {
@@ -634,6 +667,13 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
             caseOfferings = [
                 {
                     offering_id: treatment.mdCaseId
+                }
+            ];
+        } else if (tenantProduct && tenantProduct.product && tenantProduct.product.mdCaseId) {
+            // Use product's mdCaseId for offering in production
+            caseOfferings = [
+                {
+                    offering_id: tenantProduct.product.mdCaseId
                 }
             ];
         }

@@ -261,7 +261,9 @@ class OrderService {
                             metadata: {
                                 userId: order.userId,
                                 orderId: order.id,
-                                treatmentId: order.treatmentId,
+                                ...(order?.treatmentId &&{
+                                    treatmentId: order?.treatmentId,
+                                }),
                                 initial_payment_intent_id: capturedPayment.id
                             }
                         });

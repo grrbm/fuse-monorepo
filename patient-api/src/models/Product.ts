@@ -133,6 +133,12 @@ export default class Product extends Entity {
     })
     declare suggestedRetailPrice?: number;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare mdCaseId?: string;
+
     @BelongsToMany(() => Prescription, () => PrescriptionProducts)
     declare prescriptions: Prescription[];
 

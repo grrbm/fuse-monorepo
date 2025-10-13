@@ -13,6 +13,7 @@ import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
 import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
+// import TenantProduct from "./models/TenantProduct";
 import { createJWTToken, authenticateJWT, getCurrentUser, extractTokenFromHeader, verifyJWTToken } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
 import Stripe from "stripe";
@@ -45,6 +46,7 @@ import {
   treatmentPlanCreateSchema,
   treatmentPlanUpdateSchema,
   createPaymentIntentSchema,
+  createProductSubscriptionSchema,
   treatmentSubscriptionSchema,
   clinicSubscriptionSchema,
   brandPaymentIntentSchema,
@@ -64,6 +66,7 @@ import {
   brandTreatmentSchema,
   organizationUpdateSchema,
   updateSelectionSchema,
+  // updateTenantProductPriceSchema,
   listProductsSchema,
 } from "@fuse/validators";
 import TreatmentPlanService from "./services/treatmentPlan.service";
@@ -1039,18 +1042,34 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 
     console.log(`✅ Found ${clinicProducts.length} products linked to treatments for clinic ${clinicId}`);
 
+
     // Transform data to match frontend expectations
-    const transformedProducts = clinicProducts.map(product => ({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      pharmacyProductId: product.pharmacyProductId,
-      dosage: product.dosage,
-      imageUrl: product.imageUrl,
-      active: product.active,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-      treatments: product.treatments || []
+    // const transformedProducts = clinicProducts.map(product => ({
+    //   id: product.id,
+    //   name: product.name,
+    //   price: product.price,
+    //   pharmacyProductId: product.pharmacyProductId,
+    //   dosage: product.dosage,
+    //   imageUrl: product.imageUrl,
+    //   active: product.active,
+    //   createdAt: product.createdAt,
+    //   updatedAt: product.updatedAt,
+    //   treatments: product.treatments || []
+    // }));
+    const transformedProducts = result.items?.map(item => ({
+      id: item.product.id,
+      name: item.product.name,
+      productPrice: item.product.price, // Base product price
+      price: item.tenantProductPrice, // Tenant-specific price (overrides base price)
+      tenantProductId: item.tenantProductId,
+      pharmacyProductId: item.product.pharmacyProductId,
+      dosage: item.product.dosage,
+      imageUrl: item.product.imageUrl,
+      active: item.product.active,
+      createdAt: item.product.createdAt,
+      updatedAt: item.product.updatedAt,
+      treatments: item.product.treatments || []
+
     }));
 
     res.status(200).json({
@@ -2706,6 +2725,198 @@ app.post("/confirm-payment", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to confirm payment"
+    });
+  }
+});
+
+// Create subscription-based product purchase with payment intent
+app.post("/products/create-payment-intent", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Validate request body using createProductSubscriptionSchema
+    const validation = createProductSubscriptionSchema.safeParse(req.body);
+
+    console.log(" validation ", validation)
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: validation.error.errors
+      });
+    }
+
+    const {
+      productId,
+      shippingInfo,
+      questionnaireAnswers
+    } = validation.data;
+
+
+
+    // Get tenant product configuration (includes clinic pricing and questionnaire)
+    const tenantProduct = await TenantProduct.findByPk(productId, {
+      include: [
+        {
+          model: Clinic,
+          as: 'clinic',
+          required: true
+        },
+        {
+          model: Product,
+          as: 'product',
+          required: true
+        }
+      ]
+    });
+
+
+    if (!tenantProduct) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not available for subscription"
+      });
+    }
+
+    // Use tenant product price if available, otherwise use base product price
+    const unitPrice = tenantProduct.price;
+    const totalAmount = unitPrice;
+
+    // Get or create Stripe customer
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const userService = new UserService();
+    const stripeCustomerId = await userService.getOrCreateCustomerId(user, {
+      userId: user.id,
+      productId
+    });
+
+
+
+    // Create order
+    const orderNumber = Order.generateOrderNumber();
+    const order = await Order.create({
+      orderNumber,
+      userId: currentUser.id,
+      clinicId: tenantProduct.clinicId, // Product subscription order linked to clinic
+      questionnaireId: tenantProduct.questionnaireId || null,
+      status: 'pending',
+      billingInterval: BillingInterval.MONTHLY,
+      subtotalAmount: totalAmount,
+      discountAmount: 0,
+      taxAmount: 0,
+      shippingAmount: 0,
+      totalAmount: totalAmount,
+      questionnaireAnswers,
+      stripePriceId: tenantProduct.stripePriceId,
+      tenantProductId: tenantProduct.id
+    });
+
+    // Create order item
+    await OrderItem.create({
+      orderId: order.id,
+      productId: tenantProduct.product.id,
+      quantity: 1,
+      unitPrice: unitPrice,
+      totalPrice: totalAmount,
+      dosage: tenantProduct.product.dosage
+    });
+
+    // Create shipping address if provided
+    if (shippingInfo.address && shippingInfo.city && shippingInfo.state && shippingInfo.zipCode) {
+      await ShippingAddress.create({
+        orderId: order.id,
+        address: shippingInfo.address,
+        apartment: shippingInfo.apartment || null,
+        city: shippingInfo.city,
+        state: shippingInfo.state,
+        zipCode: shippingInfo.zipCode,
+        country: shippingInfo.country || 'US',
+        userId: currentUser.id,
+      });
+    }
+
+    // Create payment intent with Stripe
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(totalAmount * 100), // Convert to cents
+      currency: 'usd',
+      customer: stripeCustomerId,
+      metadata: {
+        userId: currentUser.id,
+        productId,
+        orderId: order.id,
+        orderNumber: orderNumber,
+        orderType: 'product_subscription'
+      },
+      description: `Subscription Order ${orderNumber} - ${tenantProduct.product.name}`,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: 'never'
+      },
+      setup_future_usage: 'off_session',
+    });
+
+    // Create payment record
+    await Payment.create({
+      orderId: order.id,
+      stripePaymentIntentId: paymentIntent.id,
+      status: 'pending',
+      paymentMethod: 'card',
+      amount: totalAmount,
+      currency: 'USD'
+    });
+
+    console.log('💳 Product subscription order and payment intent created:', {
+      orderId: order.id,
+      orderNumber: orderNumber,
+      paymentIntentId: paymentIntent.id,
+      amount: paymentIntent.amount,
+      userId: currentUser.id,
+      productId,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        orderId: order.id,
+        orderNumber: orderNumber
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating product subscription order and payment intent:', error);
+
+    // Log specific error details for debugging
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+
+    // Check if it's a Stripe error
+    if (error && typeof error === 'object' && 'type' in error) {
+      console.error('Stripe error type:', (error as any).type);
+      console.error('Stripe error code:', (error as any).code);
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create product subscription order and payment intent",
+      error: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
     });
   }
 });
@@ -6377,6 +6588,86 @@ app.post("/tenant-products/update-selection", authenticateJWT, async (req, res) 
     res.status(500).json({
       success: false,
       message: "Failed to update tenant product selection"
+    });
+  }
+});
+
+// Update tenant product price
+app.post("/tenant-products/update", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    // Basic validation (schema removed): expect tenantProductId (uuid) and positive price
+    const { tenantProductId, price } = req.body || {};
+    if (typeof tenantProductId !== 'string' || tenantProductId.trim().length === 0) {
+      return res.status(400).json({ success: false, message: 'tenantProductId is required' });
+    }
+    if (typeof price !== 'number' || !(price > 0)) {
+      return res.status(400).json({ success: false, message: 'price must be a positive number' });
+    }
+
+    // Create tenant product service instance
+    const tenantProductService = new TenantProductService();
+
+    // Update tenant product price
+    const result = await tenantProductService.updatePrice({
+      tenantProductId, price,
+      userId: currentUser.id
+    });
+
+    if (!result.success) {
+      // Handle specific error types
+      if (result.error?.includes('not found')) {
+        return res.status(404).json({
+          success: false,
+          message: result.error
+        });
+      }
+
+      if (result.error?.includes('does not belong to')) {
+        return res.status(403).json({
+          success: false,
+          message: result.error
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: result.error || 'Failed to update price'
+      });
+    }
+
+    console.log('✅ Tenant product price updated:', {
+      tenantProductId,
+      price,
+      stripeProductId: result.stripeProductId,
+      stripePriceId: result.stripePriceId,
+      userId: currentUser.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: result.message || 'Price updated successfully',
+      data: {
+        tenantProduct: result.tenantProduct,
+        stripeProductId: result.stripeProductId,
+        stripePriceId: result.stripePriceId
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating tenant product price:', error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to update tenant product price"
     });
   }
 });

@@ -2,14 +2,17 @@ import { Table, Column, DataType, ForeignKey, BelongsTo, HasMany, HasOne } from 
 import Entity from './Entity';
 import User from './User';
 import Treatment from './Treatment';
+import Clinic from './Clinic';
 import Questionnaire from './Questionnaire';
 import OrderItem from './OrderItem';
 import ShippingAddress from './ShippingAddress';
 import ShippingOrder from './ShippingOrder';
 import Subscription from './Subscription';
 import Payment from './Payment';
+import Sale from './Sale';
 import TreatmentPlan, { BillingInterval } from './TreatmentPlan';
 import Physician from './Physician';
+import TenantProduct from './TenantProduct';
 
 export enum OrderStatus {
   PENDING = 'pending',
@@ -49,12 +52,22 @@ export default class Order extends Entity {
   @ForeignKey(() => Treatment)
   @Column({
     type: DataType.UUID,
-    allowNull: false,
+    allowNull: true,
   })
-  declare treatmentId: string;
+  declare treatmentId?: string;
 
   @BelongsTo(() => Treatment)
-  declare treatment: Treatment;
+  declare treatment?: Treatment;
+
+  @ForeignKey(() => Clinic)
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  declare clinicId?: string;
+
+  @BelongsTo(() => Clinic)
+  declare clinic?: Clinic;
 
   @ForeignKey(() => Questionnaire)
   @Column({
@@ -171,6 +184,9 @@ export default class Order extends Entity {
   @HasMany(() => OrderItem)
   declare orderItems: OrderItem[];
 
+  @HasOne(() => Sale, 'orderId')
+  declare sale?: Sale;
+
 
   @ForeignKey(() => ShippingAddress)
   @Column({
@@ -190,6 +206,25 @@ export default class Order extends Entity {
     allowNull: true,
   })
   declare mdCaseId?: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare stripePriceId?: string;
+
+
+  @ForeignKey(() => TenantProduct)
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  declare tenantProductId?: string;
+
+  @BelongsTo(() => TenantProduct)
+  declare tenantProduct?: TenantProduct;
+
+
 
 
   // Static method to generate order number

@@ -59,7 +59,11 @@ export const listProducts = async (
 export const listProductsByClinic = async (
     clinicId: string,
 ): Promise<
-    Product[]
+    Array<{
+        product: Product;
+        tenantProductPrice: number;
+        tenantProductId: string;
+    }>
 > => {
 
 
@@ -76,7 +80,11 @@ export const listProductsByClinic = async (
         order: [[{ model: Product, as: 'product' }, 'name', 'ASC']]
     });
 
-    // Extract products from tenant products
-    return tenantProducts.map(tp => tp.product);
+    // Return products with both base price and tenant price
+    return tenantProducts.map(tp => ({
+        product: tp.product,
+        tenantProductPrice: tp.price,
+        tenantProductId: tp.id
+    }));
 }
 

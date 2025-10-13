@@ -3,6 +3,8 @@ import Product from '../models/Product';
 import Questionnaire from '../models/Questionnaire';
 import User from '../models/User';
 import BrandSubscription from '../models/BrandSubscription';
+import Clinic from '../models/Clinic';
+import { StripeService } from '@fuse/stripe';
 import {
     bulkUpsertTenantProducts,
     getTenantProductsByClinic,
@@ -204,6 +206,165 @@ class TenantProductService {
         await deleteTenantProduct(tenantProductId);
 
         return { deleted: true, tenantProductId };
+    }
+
+    /**
+     * Updates the price of a tenant product
+     * Creates Stripe product and price IDs if not found
+     */
+    async updatePrice(params: {
+        tenantProductId: string;
+        price: number;
+        userId: string;
+    }): Promise<{
+        success: boolean;
+        tenantProduct?: TenantProduct;
+        stripeProductId?: string;
+        stripePriceId?: string;
+        error?: string;
+        message?: string;
+    }> {
+        const { tenantProductId, price, userId } = params;
+
+        try {
+            // Validate user permission
+            const { clinicId } = await this.validateUserPermission(userId);
+
+            // Get tenant product with relations
+            const tenantProduct = await TenantProduct.findByPk(tenantProductId, {
+                include: [
+                    {
+                        model: Product,
+                        as: 'product',
+                        required: true
+                    },
+                    {
+                        model: Clinic,
+                        as: 'clinic',
+                        required: false
+                    }
+                ]
+            });
+
+            if (!tenantProduct) {
+                return { success: false, error: 'Tenant product not found' };
+            }
+
+            // Verify tenant product belongs to user's clinic
+            if (tenantProduct.clinicId !== clinicId) {
+                return { success: false, error: 'Tenant product does not belong to your clinic' };
+            }
+
+            if (!tenantProduct.product) {
+                return { success: false, error: 'Product not found for tenant product' };
+            }
+
+            const product = tenantProduct.product;
+            const oldPrice = tenantProduct.price;
+            const baseProductPrice = product.price;
+
+            // Validate that tenant price is not less than base product price
+            if (price < baseProductPrice) {
+                const error = `Tenant product price ($${price}) cannot be less than base product price ($${baseProductPrice})`;
+                console.error('❌', error);
+                return { success: false, error };
+            }
+
+            // Check if price is actually changing
+            if (oldPrice === price) {
+                console.log('ℹ️ Price unchanged, skipping update:', {
+                    tenantProductId,
+                    currentPrice: oldPrice,
+                    requestedPrice: price
+                });
+
+                return {
+                    success: true,
+                    tenantProduct,
+                    stripeProductId: tenantProduct.stripeProductId,
+                    stripePriceId: undefined, // No new price created
+                    message: 'Price unchanged'
+                };
+            }
+
+            console.log('💰 Price change detected:', {
+                tenantProductId,
+                oldPrice,
+                newPrice: price,
+                baseProductPrice
+            });
+
+            const stripeService = new StripeService();
+
+            // Step 1: Create or get Stripe product
+            let stripeProductId = tenantProduct.stripeProductId;
+            if (!stripeProductId) {
+                console.log('📦 Creating Stripe product for tenant product:', tenantProductId);
+
+                const stripeProduct = await stripeService.createProduct({
+                    name: `${product.name} - ${tenantProduct.clinic?.name || 'Subscription'}`,
+                    description: product.description,
+                    metadata: {
+                        productId: product.id,
+                        tenantProductId: tenantProduct.id,
+                        clinicId: tenantProduct.clinicId
+                    }
+                });
+
+                stripeProductId = stripeProduct.id;
+                await tenantProduct.update({ stripeProductId });
+
+                console.log('✅ Stripe product created:', stripeProductId);
+            } else {
+                console.log('✅ Using existing Stripe product:', stripeProductId);
+            }
+
+            // Step 2: Create new Stripe price (prices are immutable in Stripe)
+            console.log('💰 Creating Stripe price for tenant product:', tenantProductId);
+
+            const stripePrice = await stripeService.createPrice({
+                product: stripeProductId,
+                currency: 'usd',
+                unit_amount: Math.round(price * 100), // Convert to cents
+                recurring: {
+                    interval: 'month',
+                    interval_count: 1
+                  },
+                metadata: {
+                    productId: product.id,
+                    tenantProductId: tenantProduct.id,
+                    clinicId: tenantProduct.clinicId,
+                    priceType: 'base_price'
+                }
+            });
+
+            console.log('✅ Stripe price created:', stripePrice.id);
+
+            // Step 3: Update tenant product with new price
+            await tenantProduct.update({ price, stripePriceId: stripePrice.id });
+
+            console.log('✅ Tenant product price updated:', {
+                tenantProductId,
+                oldPrice,
+                newPrice: price,
+                stripeProductId,
+                stripePriceId: stripePrice.id
+            });
+
+            // Reload to get updated values
+            await tenantProduct.reload();
+
+            return {
+                success: true,
+                tenantProduct,
+                stripeProductId,
+                stripePriceId: stripePrice.id
+            };
+        } catch (error) {
+            console.error('❌ Error updating tenant product price:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            return { success: false, error: errorMessage };
+        }
     }
 }
 
