@@ -233,6 +233,232 @@ app.use((req, res, next) => {
   }
 });
 
+// Clone 'doctor' steps from master_template into a target questionnaire (preserve order)
+app.post("/questionnaires/clone-doctor-from-master", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { questionnaireId } = req.body || {};
+    if (!questionnaireId || typeof questionnaireId !== 'string') {
+      return res.status(400).json({ success: false, message: "questionnaireId is required" });
+    }
+
+    // Find target questionnaire
+    const target = await Questionnaire.findByPk(questionnaireId, {
+      include: [{ model: QuestionnaireStep, as: 'steps' }],
+    });
+    if (!target) {
+      return res.status(404).json({ success: false, message: "Target questionnaire not found" });
+    }
+
+    // If target already has doctor steps, do nothing
+    const hasDoctorSteps = (target as any).steps?.some((s: any) => s.category === 'doctor');
+    if (hasDoctorSteps) {
+      return res.status(200).json({ success: true, message: 'Doctor steps already present' });
+    }
+
+    // Find master template (must be exactly one)
+    const masters = await Questionnaire.findAll({
+      where: { formTemplateType: 'master_template' },
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ model: Question, as: 'questions', include: [{ model: QuestionOption, as: 'options' }] }]
+      }],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+      ] as any,
+    });
+
+    if (masters.length !== 1) {
+      return res.status(400).json({ success: false, message: 'There should be 1 and only 1 master_template questionnaire' });
+    }
+
+    const master = masters[0] as any;
+    const doctorSteps = (master.steps || []).filter((s: any) => s.category === 'doctor');
+    if (doctorSteps.length === 0) {
+      return res.status(200).json({ success: true, message: 'No doctor steps found in master_template' });
+    }
+
+    // Determine offset to preserve order without collisions
+    const existingMaxOrder = ((target as any).steps || []).reduce((max: number, s: any) => Math.max(max, s.stepOrder ?? 0), -1);
+    const baseOffset = isFinite(existingMaxOrder) ? existingMaxOrder + 1 : 0;
+
+    // Clone steps, questions, options
+    for (const step of doctorSteps) {
+      const clonedStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: (step.stepOrder ?? 0) + baseOffset,
+        questionnaireId: target.id,
+      });
+
+      for (const question of (step.questions || [])) {
+        const clonedQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: (question as any).questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: (question as any).subQuestionOrder,
+          conditionalLevel: (question as any).conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: (question as any).footerNote,
+          conditionalLogic: (question as any).conditionalLogic,
+          stepId: clonedStep.id,
+        });
+
+        if (question.options?.length) {
+          await QuestionOption.bulkCreate(
+            question.options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              questionId: clonedQuestion.id,
+            }))
+          );
+        }
+      }
+    }
+
+    // Return updated questionnaire
+    const updated = await Questionnaire.findByPk(target.id, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ model: Question, as: 'questions', include: [{ model: QuestionOption, as: 'options' }] }]
+      }],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+      ] as any,
+    });
+
+    return res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    console.error('❌ Error cloning doctor steps from master_template:', error);
+    return res.status(500).json({ success: false, message: 'Failed to clone doctor steps' });
+  }
+});
+
+// Reset questionnaire steps to doctor steps from master_template (delete all, then clone doctor)
+app.post("/questionnaires/reset-doctor-from-master", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { questionnaireId } = req.body || {};
+    if (!questionnaireId || typeof questionnaireId !== 'string') {
+      return res.status(400).json({ success: false, message: "questionnaireId is required" });
+    }
+
+    // Find all steps with questions/options for this questionnaire
+    const steps = await QuestionnaireStep.findAll({
+      where: { questionnaireId },
+      include: [{ model: Question, as: 'questions', include: [{ model: QuestionOption, as: 'options' }] }]
+    });
+
+    // Delete options, questions, then steps
+    for (const step of steps) {
+      for (const q of ((step as any).questions || [])) {
+        if (q.options?.length) {
+          await QuestionOption.destroy({ where: { questionId: q.id } });
+        }
+        await Question.destroy({ where: { id: q.id } });
+      }
+      await QuestionnaireStep.destroy({ where: { id: step.id } });
+    }
+
+    // Reuse clone logic by calling previous handler logic inline
+    // Find master template
+    const masters = await Questionnaire.findAll({
+      where: { formTemplateType: 'master_template' },
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ model: Question, as: 'questions', include: [{ model: QuestionOption, as: 'options' }] }]
+      }],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+      ] as any,
+    });
+
+    if (masters.length !== 1) {
+      return res.status(400).json({ success: false, message: 'There should be 1 and only 1 master_template questionnaire' });
+    }
+
+    const master = masters[0] as any;
+    const doctorSteps = (master.steps || []).filter((s: any) => s.category === 'doctor');
+
+    for (const step of doctorSteps) {
+      const clonedStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: step.stepOrder,
+        questionnaireId,
+      });
+
+      for (const question of (step.questions || [])) {
+        const clonedQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: (question as any).questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: (question as any).subQuestionOrder,
+          conditionalLevel: (question as any).conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: (question as any).footerNote,
+          conditionalLogic: (question as any).conditionalLogic,
+          stepId: clonedStep.id,
+        });
+
+        if (question.options?.length) {
+          await QuestionOption.bulkCreate(
+            question.options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              questionId: clonedQuestion.id,
+            }))
+          );
+        }
+      }
+    }
+
+    const updated = await Questionnaire.findByPk(questionnaireId, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ model: Question, as: 'questions', include: [{ model: QuestionOption, as: 'options' }] }]
+      }],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+      ] as any,
+    });
+
+    return res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    console.error('❌ Error resetting and cloning doctor steps:', error);
+    return res.status(500).json({ success: false, message: 'Failed to reset and clone doctor steps' });
+  }
+});
 // No session middleware needed for JWT
 
 // Health check endpoint
@@ -1189,6 +1415,7 @@ app.get("/products/:id", async (req, res) => {
       activeIngredients: product.activeIngredients,
       imageUrl: product.imageUrl,
       active: true, // Default to active since Product model doesn't have active field
+      category: (product as any).category || null,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
       treatments: product.treatments || []

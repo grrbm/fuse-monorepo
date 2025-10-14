@@ -54,11 +54,40 @@ export default function Forms() {
   const [editingTemplateType, setEditingTemplateType] = useState<"personalization" | "account" | "doctor" | null>(null)
   const [creating, setCreating] = useState(false)
   const [configuringProductId, setConfiguringProductId] = useState<string | null>(null)
+  const [creatingForProductId, setCreatingForProductId] = useState<string | null>(null)
+  const [deletingForProductId, setDeletingForProductId] = useState<string | null>(null)
+  const [productQStatus, setProductQStatus] = useState<Record<string, 'unknown' | 'exists' | 'none'>>({})
 
   useEffect(() => {
     refresh()
     refreshQuestionnaires()
   }, [])
+
+  // Probe product questionnaire existence for current assignments
+  useEffect(() => {
+    if (!token) return
+    const toCheck = (assignments || []).map((a: any) => a.treatmentId).filter(Boolean)
+    toCheck.forEach(async (productId: string) => {
+      if (!productId) return
+      if (productQStatus[productId]) return
+      try {
+        const res = await fetch(`${baseUrl}/questionnaires/product/${productId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) {
+          setProductQStatus(prev => ({ ...prev, [productId]: 'none' }))
+          return
+        }
+        const data = await res.json().catch(() => null)
+        const list = Array.isArray(data?.data) ? data.data : []
+        const existing = list.find((q: any) => q.formTemplateType === 'normal') || list[0]
+        setProductQStatus(prev => ({ ...prev, [productId]: existing?.id ? 'exists' : 'none' }))
+      } catch {
+        setProductQStatus(prev => ({ ...prev, [productId]: 'none' }))
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignments, token])
 
   // Filter and sort assignments
   const filteredAndSortedAssignments = useMemo(() => {
@@ -157,6 +186,7 @@ export default function Forms() {
       const created = await createRes.json()
       const q = created?.data
       if (q?.id) {
+        setProductQStatus(prev => ({ ...prev, [productId]: 'exists' }))
         router.push(`/forms/editor/${q.id}`)
       }
     } catch (e: any) {
@@ -164,6 +194,69 @@ export default function Forms() {
       alert(e?.message || 'Failed to configure form')
     } finally {
       setConfiguringProductId(null)
+    }
+  }
+
+  const handleCreateProductQuestionnaire = async (assignment: any) => {
+    if (!token) return
+    const productId = assignment?.treatmentId
+    if (!productId) return
+    setCreatingForProductId(productId)
+    try {
+      const name = `${assignment?.treatment?.name || 'Product'} Form`
+      const description = `Questionnaire for ${assignment?.treatment?.name || 'product'}`
+      const createRes = await fetch(`${baseUrl}/questionnaires/templates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: name, description, productId, formTemplateType: 'normal' }),
+      })
+      if (!createRes.ok) {
+        const err = await createRes.json().catch(() => ({}))
+        throw new Error(err?.message || 'Failed to create product questionnaire')
+      }
+      const created = await createRes.json()
+      const q = created?.data
+      // No automatic cloning here; use the Rebuild from Template button in the editor
+      setProductQStatus(prev => ({ ...prev, [productId]: 'exists' }))
+      router.push(`/forms/editor/${q.id}`)
+    } catch (e: any) {
+      alert(e?.message || 'Failed to create product questionnaire')
+    } finally {
+      setCreatingForProductId(null)
+    }
+  }
+
+  const handleDeleteProductQuestionnaire = async (assignment: any) => {
+    if (!token) return
+    const productId = assignment?.treatmentId
+    if (!productId) return
+    if (!confirm('Delete this product questionnaire? This cannot be undone.')) return
+    setDeletingForProductId(productId)
+    try {
+      const res = await fetch(`${baseUrl}/questionnaires/product/${productId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json().catch(() => null)
+      const list = Array.isArray(data?.data) ? data.data : []
+      const existing = list.find((q: any) => q.formTemplateType === 'normal') || list[0]
+      if (!existing?.id) {
+        alert('No questionnaire found to delete')
+        return
+      }
+      const del = await fetch(`${baseUrl}/questionnaires/${existing.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const delData = await del.json().catch(() => ({}))
+      if (!del.ok || delData?.success === false) {
+        throw new Error(delData?.message || 'Failed to delete questionnaire')
+      }
+      setProductQStatus(prev => ({ ...prev, [productId]: 'none' }))
+      await refreshQuestionnaires()
+    } catch (e: any) {
+      alert(e?.message || 'Failed to delete questionnaire')
+    } finally {
+      setDeletingForProductId(null)
     }
   }
 
@@ -543,6 +636,16 @@ export default function Forms() {
                                 ? 'Opening...'
                                 : (!assignment.hasAssignment ? "Configure Form" : locked ? "View Form" : "Edit Form")}
                             </Button>
+                            {productQStatus[assignment.treatmentId] !== 'exists' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleCreateProductQuestionnaire(assignment)}
+                                disabled={creatingForProductId === assignment.treatmentId}
+                              >
+                                {creatingForProductId === assignment.treatmentId ? 'Creating...' : 'Create Questionnaire'}
+                              </Button>
+                            )}
                             {isLive && (
                               <Button
                                 variant="outline"

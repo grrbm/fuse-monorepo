@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Eye, Copy, Check } from "lucide-react"
+import { Eye, Copy, Check, RefreshCw } from "lucide-react"
 import { StepEditor } from "./StepEditor"
 import { QuestionEditor } from "./QuestionEditor"
 import { useState, useRef } from "react"
@@ -73,6 +73,7 @@ export function QuestionnaireEditor({
     const steps = questionnaire?.steps ?? []
     const [copiedQuestionnaireId, setCopiedQuestionnaireId] = useState<string | null>(null)
     const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const [rebuilding, setRebuilding] = useState(false)
 
     // Group steps by category for reordering logic
     const normalSteps = steps.filter(step => step.category === 'normal')
@@ -180,6 +181,33 @@ export function QuestionnaireEditor({
                     )}
                 </div>
                 <div className="flex space-x-2">
+                    <Button
+                        variant="outline"
+                        onClick={async () => {
+                            if (!token || !questionnaire?.id) return
+                            if (!confirm('This will rebuild the questionnaire from the master doctor template and remove existing steps. Continue?')) return
+                            try {
+                                setRebuilding(true)
+                                const res = await fetch(`${baseUrl}/questionnaires/reset-doctor-from-master`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({ questionnaireId: questionnaire.id })
+                                })
+                                const data = await res.json().catch(() => ({}))
+                                if (!res.ok || data?.success === false) {
+                                    throw new Error(data?.message || 'Failed to rebuild from template')
+                                }
+                                window.location.reload()
+                            } catch (e: any) {
+                                alert(e?.message || 'Failed to rebuild from template')
+                            } finally {
+                                setRebuilding(false)
+                            }
+                        }}
+                        disabled={rebuilding}
+                    >
+                        <RefreshCw className="mr-2 h-4 w-4" /> {rebuilding ? 'Rebuilding...' : 'Rebuild from Template'}
+                    </Button>
                     <Button variant="outline" disabled>
                         <Eye className="mr-2 h-4 w-4" />
                         Preview

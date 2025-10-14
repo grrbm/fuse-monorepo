@@ -5,7 +5,7 @@ import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp } from "lucide-react"
+import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../QuestionEditor"
 
@@ -39,6 +39,8 @@ export default function TemplateEditor() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [template, setTemplate] = useState<any>(null)
   const [steps, setSteps] = useState<Step[]>([])
+  const [rebuilding, setRebuilding] = useState(false)
+  const [productCategory, setProductCategory] = useState<string | null>(null)
   const isAccountTemplate = useMemo(() => template?.formTemplateType === 'user_profile', [template?.formTemplateType])
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
   const [showVariables, setShowVariables] = useState(false)
@@ -95,6 +97,30 @@ export default function TemplateEditor() {
 
     fetchTemplate()
   }, [templateId, token, baseUrl])
+
+  // Load product category if this questionnaire is tied to a product
+  useEffect(() => {
+    const loadCategory = async () => {
+      try {
+        if (!token || !template?.productId) {
+          setProductCategory(null)
+          return
+        }
+        const res = await fetch(`${baseUrl}/products/${template.productId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data?.success && data?.data) {
+          setProductCategory(data.data.category || null)
+        } else {
+          setProductCategory(null)
+        }
+      } catch {
+        setProductCategory(null)
+      }
+    }
+    loadCategory()
+  }, [template?.productId, token, baseUrl])
 
   const handleBack = () => {
     router.push("/forms?tab=templates")
@@ -405,6 +431,58 @@ export default function TemplateEditor() {
             <div className="flex items-center gap-3">
               {saveMessage && (
                 <span className="text-sm text-muted-foreground">{saveMessage}</span>
+              )}
+              {productCategory === 'weight_loss' && (
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!token || !templateId) return
+                    if (!confirm('This will delete all steps in this questionnaire and rebuild from the master doctor template. Continue?')) return
+                    try {
+                      setRebuilding(true)
+                      const res = await fetch(`${baseUrl}/questionnaires/reset-doctor-from-master`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ questionnaireId: templateId })
+                      })
+                      const data = await res.json().catch(() => ({}))
+                      if (!res.ok || data?.success === false) {
+                        throw new Error(data?.message || 'Failed to rebuild from template')
+                      }
+                      // Re-fetch template to reflect new steps
+                      setLoading(true)
+                      const ref = await fetch(`${baseUrl}/questionnaires/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
+                      const refData = await ref.json().catch(() => ({}))
+                      if (ref.ok && refData?.data) {
+                        setTemplate(refData.data)
+                        const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
+                          id: String(s.id),
+                          title: String(s.title || ''),
+                          description: String(s.description || ''),
+                          stepOrder: Number(s.stepOrder || 0),
+                          category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info',
+                          stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+                          questions: (s.questions || []).map((q: any) => ({
+                            id: String(q.id),
+                            type: 'single-choice',
+                            questionText: String(q.questionText || ''),
+                            required: Boolean(q.isRequired),
+                            options: (q.options || []).map((o: any) => String(o.optionText || '')),
+                          })),
+                        })) as Step[]
+                        setSteps(loadedSteps)
+                      }
+                    } catch (e: any) {
+                      alert(e?.message || 'Failed to rebuild from template')
+                    } finally {
+                      setRebuilding(false)
+                      setLoading(false)
+                    }
+                  }}
+                  disabled={rebuilding}
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" /> {rebuilding ? 'Rebuilding...' : 'Rebuild from Template'}
+                </Button>
               )}
               <Button onClick={handleSave} disabled={saving}>
                 {saving ? (
