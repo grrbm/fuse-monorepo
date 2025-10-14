@@ -57,6 +57,7 @@ export default function Forms() {
   const [creatingForProductId, setCreatingForProductId] = useState<string | null>(null)
   const [deletingForProductId, setDeletingForProductId] = useState<string | null>(null)
   const [productQStatus, setProductQStatus] = useState<Record<string, 'unknown' | 'exists' | 'none'>>({})
+  const [productInfoById, setProductInfoById] = useState<Record<string, { dosage?: string }>>({})
 
   useEffect(() => {
     refresh()
@@ -88,6 +89,27 @@ export default function Forms() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignments, token])
+
+  // Fetch product info (e.g., dosage) for each assignment's productId
+  useEffect(() => {
+    if (!token) return
+    const toCheck = (assignments || []).map((a: any) => a.treatmentId).filter(Boolean)
+    toCheck.forEach(async (productId: string) => {
+      if (!productId) return
+      if (productInfoById[productId]) return
+      try {
+        const res = await fetch(`${baseUrl}/products/${productId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json().catch(() => null)
+        if (res.ok && data?.success && data?.data) {
+          setProductInfoById(prev => ({ ...prev, [productId]: { dosage: data.data.dosage || undefined } }))
+        }
+      } catch {
+        // ignore
+      }
+    })
+  }, [assignments, token, baseUrl, productInfoById])
 
   // Filter and sort assignments
   const filteredAndSortedAssignments = useMemo(() => {
@@ -541,13 +563,16 @@ export default function Forms() {
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <CardTitle className="text-lg">{assignment.treatment?.name || "Untitled Product"}</CardTitle>
-                              <CardDescription className="mt-1">
+                              <div className="mt-1 flex items-center gap-2">
                                 {categoryLabel && (
                                   <Badge variant="secondary" className="text-xs">
                                     {categoryLabel}
                                   </Badge>
                                 )}
-                              </CardDescription>
+                                {assignment?.treatmentId && productInfoById[assignment.treatmentId]?.dosage && (
+                                  <div className="text-xs text-muted-foreground">{productInfoById[assignment.treatmentId]?.dosage}</div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </CardHeader>
@@ -600,27 +625,7 @@ export default function Forms() {
                             )}
                           </div>
 
-                          {/* Template Summary */}
-                          <div className="pt-3 border-t space-y-1 text-xs text-muted-foreground">
-                            <div className="flex justify-between">
-                              <span>Personalization:</span>
-                              <span className="font-medium">
-                                {assignment.personalizationTemplate?.name || "Not set"}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Account:</span>
-                              <span className="font-medium">
-                                {assignment.accountTemplate?.name || "Not set"}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Doctor Questions:</span>
-                              <span className="font-medium">
-                                {assignment.doctorTemplate?.name || "Not set"}
-                              </span>
-                            </div>
-                          </div>
+                          {/* Template Summary removed per requirements */}
 
                           {/* Actions */}
                           <div className="flex gap-2 pt-2">
