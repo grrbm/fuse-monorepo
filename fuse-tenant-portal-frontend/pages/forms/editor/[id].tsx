@@ -449,11 +449,31 @@ export default function TemplateEditor() {
                       if (!res.ok || data?.success === false) {
                         throw new Error(data?.message || 'Failed to rebuild from template')
                       }
-                      // Re-fetch template to reflect new steps
+                      // Re-fetch template using the same logic as initial load (templates endpoint, fallback to generic)
                       setLoading(true)
-                      const ref = await fetch(`${baseUrl}/questionnaires/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
-                      const refData = await ref.json().catch(() => ({}))
-                      if (ref.ok && refData?.data) {
+                      let refData: any = null
+                      let refOk = false
+                      try {
+                        const tRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
+                        const tData = await tRes.json().catch(() => ({}))
+                        if (tRes.ok && tData?.data) {
+                          refData = tData
+                          refOk = true
+                        }
+                      } catch { }
+
+                      if (!refOk) {
+                        try {
+                          const qRes = await fetch(`${baseUrl}/questionnaires/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
+                          const qData = await qRes.json().catch(() => ({}))
+                          if (qRes.ok && qData?.data) {
+                            refData = qData
+                            refOk = true
+                          }
+                        } catch { }
+                      }
+
+                      if (refOk && refData?.data) {
                         setTemplate(refData.data)
                         const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
                           id: String(s.id),
