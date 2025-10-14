@@ -85,18 +85,37 @@ export default function Products() {
     setLoading(true)
 
     try {
-      const params = new URLSearchParams()
-      if (selectedCategory) params.append("category", selectedCategory)
-      if (typeof showActiveOnly === "boolean") params.append("isActive", String(showActiveOnly))
+      // Always use pagination; fetch all pages and merge so we show ALL products
+      const baseParams = new URLSearchParams()
+      baseParams.append("page", "1")
+      baseParams.append("limit", "100") // server max is 100
+      if (selectedCategory) baseParams.append("category", selectedCategory)
+      if (typeof showActiveOnly === "boolean") baseParams.append("isActive", String(showActiveOnly))
 
-      const response = await fetch(`${baseUrl}/products-management?${params.toString()}`, {
+      const firstRes = await fetch(`${baseUrl}/products-management?${baseParams.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!firstRes.ok) throw new Error("Failed to fetch products")
+      const firstJson = await firstRes.json()
+      const firstPageProducts: Product[] = firstJson?.data?.products || []
+      const totalPages: number = firstJson?.data?.pagination?.totalPages || 1
 
-      if (!response.ok) throw new Error("Failed to fetch products")
-
-      const data = await response.json()
-      setProducts(data.data?.products || [])
+      if (totalPages <= 1) {
+        setProducts(firstPageProducts)
+      } else {
+        // Fetch remaining pages in parallel
+        const pageNumbers = Array.from({ length: totalPages - 1 }, (_, i) => i + 2)
+        const requests = pageNumbers.map((page) => {
+          const params = new URLSearchParams(baseParams.toString())
+          params.set("page", String(page))
+          return fetch(`${baseUrl}/products-management?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).then(r => r.json()).catch(() => null)
+        })
+        const pages = await Promise.all(requests)
+        const restProducts: Product[] = pages.flatMap(p => (p?.data?.products || []))
+        setProducts([...firstPageProducts, ...restProducts])
+      }
     } catch (error: any) {
       console.error("❌ Error fetching products:", error)
       setSaveMessage(error.message)
