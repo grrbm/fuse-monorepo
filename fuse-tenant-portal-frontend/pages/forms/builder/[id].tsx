@@ -12,24 +12,9 @@ import NodeBuilder from "../components/NodeBuilder"
 import { listAvailablePalettes } from "@/lib/utils"
 import { CheckCircle2, CircleSlash2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { LAYOUT_OPTIONS } from "@fuse/enums"
 
-const LAYOUT_OPTIONS = [
-  {
-    id: "layout_a",
-    name: "Narrative",
-    description: "Story-driven flow: personalization first, then account and doctor review.",
-  },
-  {
-    id: "layout_b",
-    name: "Express",
-    description: "Fast track account creation before personalization for returning patients.",
-  },
-  {
-    id: "layout_c",
-    name: "Clinical First",
-    description: "Begin with doctor-required questions for higher-compliance products.",
-  },
-]
+ 
 
 export default function FormBuilder() {
   const router = useRouter()

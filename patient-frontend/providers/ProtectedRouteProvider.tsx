@@ -1,5 +1,6 @@
 import { ReactNode, createContext, useContext, useMemo } from 'react'
 import { useRouter } from 'next/router'
+import { UNPROTECTED_PATHS } from '@fuse/enums'
 
 interface ProtectedRouteContextValue {
     isProtected: boolean
@@ -7,7 +8,6 @@ interface ProtectedRouteContextValue {
 
 const ProtectedRouteContext = createContext<ProtectedRouteContextValue>({ isProtected: true })
 
-const UNPROTECTED_PATHS = ['/my-treatments/[slug]', '/treatments/[slug]']
 
 interface ProviderProps {
     children: ReactNode
