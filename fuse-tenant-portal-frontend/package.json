@@ -15,6 +15,7 @@
     "with-env": "dotenv -e ../.env.local --"
   },
   "dependencies": {
+    "@fuse/enums": "workspace:*",
     "@hookform/resolvers": "catalog:",
     "@radix-ui/react-accordion": "catalog:",
     "@radix-ui/react-alert-dialog": "catalog:",
