@@ -64,6 +64,8 @@ export default function Products() {
     const [tenantProductCount, setTenantProductCount] = useState<number>(0)
     const [enabledProductIds, setEnabledProductIds] = useState<Set<string>>(new Set())
     const [clinicName, setClinicName] = useState<string>("")
+    const [retryLoading, setRetryLoading] = useState<boolean>(false)
+    const [bannerMessage, setBannerMessage] = useState<string | null>(null)
 
     // Cast user to include clinicId property
     const userWithClinic = user as any
@@ -385,8 +387,53 @@ export default function Products() {
                             const reached = !isUnlimited && used >= (max as number)
                             if (!reached) return null
                             return (
-                                <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                                    You have reached your product slots limit ({used}/{max}). Upgrade your plan to add more products.
+                                <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 space-y-2">
+                                    <div>
+                                        You have reached your product slots limit ({used}/{max}). Upgrade your plan to add more products.
+                                        {subscription?.nextBillingDate && (
+                                            <>
+                                                {' '}Next cycle begins {new Date(subscription.nextBillingDate).toLocaleString()}.
+                                            </>
+                                        )}
+                                    </div>
+                                    {bannerMessage && (
+                                        <div className="text-amber-800">{bannerMessage}</div>
+                                    )}
+                                    {!(subscription as any)?.retriedProductSelectionForCurrentCycle ? (
+                                        <div className="flex gap-2">
+                                            <Button size="sm" variant="outline"
+                                                disabled={retryLoading}
+                                                onClick={async () => {
+                                                    if (!confirm('This will clear ALL your current product selections. You can only do this ONCE per billing cycle. Continue?')) return
+                                                    setRetryLoading(true)
+                                                    setBannerMessage(null)
+                                                    try {
+                                                        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/retry-selection`, {
+                                                            method: 'POST',
+                                                            headers: { 'Authorization': `Bearer ${token}` }
+                                                        })
+                                                        const txt = await res.text().catch(() => '')
+                                                        let json: any = null
+                                                        try { json = JSON.parse(txt) } catch { }
+                                                        if (!res.ok || !json?.success) {
+                                                            setBannerMessage(json?.message || txt || 'Failed to retry product selection')
+                                                        } else {
+                                                            setBannerMessage('Selections cleared. You can choose products again.')
+                                                            await fetchTenantProductCount()
+                                                            await fetchSubscription()
+                                                            // Recompute My Products list
+                                                        }
+                                                    } catch (e: any) {
+                                                        setBannerMessage(e?.message || 'Failed to retry product selection')
+                                                    } finally {
+                                                        setRetryLoading(false)
+                                                    }
+                                                }}
+                                            >{retryLoading ? 'Working…' : 'Retry product selection'}</Button>
+                                        </div>
+                                    ) : (
+                                        <div className="text-amber-800">You already retried once for this billing cycle. No more retries available.</div>
+                                    )}
                                 </div>
                             )
                         })()}

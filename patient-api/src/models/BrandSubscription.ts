@@ -153,6 +153,13 @@ export default class BrandSubscription extends Entity {
   })
   declare productsChangedAmountOnCurrentCycle: number;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare retriedProductSelectionForCurrentCycle: boolean;
+
   @BelongsTo(() => User)
   declare user?: User;
 

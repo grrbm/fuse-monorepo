@@ -109,6 +109,24 @@ export async function initializeDatabase() {
       // ignore
     }
 
+    // Reset retry flag at the start of a new billing cycle
+    try {
+      await sequelize.query(`
+        UPDATE "BrandSubscription"
+        SET "retriedProductSelectionForCurrentCycle" = false,
+            "productsChangedAmountOnCurrentCycle" = 0
+        WHERE "currentPeriodStart" IS NOT NULL
+          AND "currentPeriodEnd" IS NOT NULL
+          AND NOW() >= "currentPeriodStart"
+          AND NOW() < "currentPeriodEnd"
+          AND (
+            "lastProductChangeAt" IS NULL OR "lastProductChangeAt" < "currentPeriodStart"
+          )
+      `);
+    } catch (e) {
+      // ignore
+    }
+
     return true;
   } catch (error) {
     console.error('❌ Unable to connect to the database:', error);
