@@ -81,7 +81,10 @@ export function Sidebar() {
   const handleDisabledClick = (e: React.MouseEvent, itemName: string) => {
     e.preventDefault()
     if (!hasActiveSubscription && itemName !== 'Plans' && itemName !== 'Settings') {
-      // Redirect to plans page
+      // Don't redirect away during product selection flows
+      if (itemName === 'Products') {
+        return
+      }
       router.push('/plans?message=Please select a plan to access this feature.')
     }
   }

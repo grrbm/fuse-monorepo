@@ -24,6 +24,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       '/settings',
       '/settings/subscription',
       '/settings?message=You already have an active subscription.',
+      // Allow product management flows without forcing plan selection
+      '/products',
+      '/products/[id]'
     ])
 
     if (
