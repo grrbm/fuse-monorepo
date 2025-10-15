@@ -4506,7 +4506,7 @@ app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Enabled form not found' });
     }
 
-    await record.destroy();
+    await record.destroy({ force: true } as any);
     res.status(200).json({ success: true });
   } catch (error) {
     console.error('❌ Error disabling tenant product form:', error);

@@ -9,6 +9,7 @@ import Clinic from './Clinic'
 @Table({
   freezeTableName: true,
   tableName: 'TenantProductForms',
+  paranoid: false,
 })
 export default class TenantProductForm extends Entity {
   @ForeignKey(() => User)

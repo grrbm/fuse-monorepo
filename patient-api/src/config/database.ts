@@ -102,6 +102,12 @@ export async function initializeDatabase() {
     } catch (e) {
       // ignore if already nullable or if statement not applicable
     }
+    try {
+      // Clean up any soft-deleted TenantProductForms by hard-deleting
+      await sequelize.query('DELETE FROM "TenantProductForms" WHERE "deletedAt" IS NOT NULL;');
+    } catch (e) {
+      // ignore
+    }
 
     return true;
   } catch (error) {
