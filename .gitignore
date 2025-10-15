@@ -2,6 +2,7 @@
 # Next.js build output
 .next
 
+.cursorrules
 # dependencies
 node_modules
 .pnp
