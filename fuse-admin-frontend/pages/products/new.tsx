@@ -21,12 +21,15 @@ import {
     Hash,
     Check
 } from 'lucide-react'
+import Tutorial from '@/components/ui/tutorial'
+import { tutorialSteps } from '@/utils/tutorialSteps'
 
 export default function CreateProduct() {
     const [loading, setLoading] = useState(false)
     const [uploadingImage, setUploadingImage] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [imageFile, setImageFile] = useState<File | null>(null)
+    const [runTutorial, setRunTutorial] = useState(true)
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [imageConfirmed, setImageConfirmed] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -224,7 +227,7 @@ export default function CreateProduct() {
                 <title>Create Product - Fuse Admin</title>
                 <meta name="description" content="Create a new product for your clinic" />
             </Head>
-
+            <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} steps={tutorialSteps.slice(-2)} />
             <div className="min-h-screen bg-background p-6">
                 <div className="max-w-4xl mx-auto">
                     {/* Header */}
@@ -256,7 +259,7 @@ export default function CreateProduct() {
                     )}
 
                     <form onSubmit={handleSubmit}>
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div id="tutorial-step-5" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             {/* Main Form */}
                             <div className="lg:col-span-2 space-y-6">
                                 {/* Basic Information */}
@@ -567,6 +570,7 @@ export default function CreateProduct() {
                                 Cancel
                             </Button>
                             <Button
+                                id="tutorial-step-6"
                                 type="submit"
                                 disabled={loading || !formData.name.trim()}
                             >

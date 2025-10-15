@@ -1,37 +1,55 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/router'
-import { Sidebar } from "@/components/sidebar"
-import { Header } from "@/components/header"
-import { useAuth } from '@/contexts/AuthContext'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
-import { Building2, User, CreditCard, Check, Camera, Upload, Crown, RefreshCw, Calendar, Shield, ArrowRight } from 'lucide-react'
-import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete'
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/router";
+import { Sidebar } from "@/components/sidebar";
+import { Header } from "@/components/header";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import {
+  Building2,
+  User,
+  CreditCard,
+  Check,
+  Camera,
+  Upload,
+  Crown,
+  RefreshCw,
+  Calendar,
+  Shield,
+  ArrowRight,
+} from "lucide-react";
+import Tutorial from "@/components/ui/tutorial";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 interface PlanFeatures {
-  maxProducts: number
-  maxCampaigns: number
-  analyticsAccess: boolean
-  customerSupport: string
-  customBranding: boolean
-  apiAccess?: boolean
-  whiteLabel?: boolean
-  customIntegrations?: boolean
+  maxProducts: number;
+  maxCampaigns: number;
+  analyticsAccess: boolean;
+  customerSupport: string;
+  customBranding: boolean;
+  apiAccess?: boolean;
+  whiteLabel?: boolean;
+  customIntegrations?: boolean;
 }
 
 interface Plan {
-  id: string
-  name: string
-  price: number
-  planType: string
-  interval: string
-  features: PlanFeatures
-  stripePriceId: string
-  description?: string
+  id: string;
+  name: string;
+  price: number;
+  planType: string;
+  interval: string;
+  features: PlanFeatures;
+  stripePriceId: string;
+  description?: string;
 }
 
 const getAddressComponent = (
@@ -39,295 +57,338 @@ const getAddressComponent = (
   type: string,
   useShort = false
 ) => {
-  if (!components) return ''
-  const component = components.find((item) => item.types.includes(type))
-  if (!component) return ''
-  return useShort ? component.short_name : component.long_name
-}
+  if (!components) return "";
+  const component = components.find((item) => item.types.includes(type));
+  if (!component) return "";
+  return useShort ? component.short_name : component.long_name;
+};
 
 const parsePlaceAddress = (place: google.maps.places.PlaceResult) => {
-  const components = place.address_components
+  const components = place.address_components;
   if (!components) {
-    return null
+    return null;
   }
 
-  const streetNumber = getAddressComponent(components, 'street_number')
-  const route = getAddressComponent(components, 'route')
+  const streetNumber = getAddressComponent(components, "street_number");
+  const route = getAddressComponent(components, "route");
   const city =
-    getAddressComponent(components, 'locality') ||
-    getAddressComponent(components, 'sublocality') ||
-    getAddressComponent(components, 'administrative_area_level_2')
-  const state = getAddressComponent(components, 'administrative_area_level_1', true)
-  const zipCode = getAddressComponent(components, 'postal_code')
+    getAddressComponent(components, "locality") ||
+    getAddressComponent(components, "sublocality") ||
+    getAddressComponent(components, "administrative_area_level_2");
+  const state = getAddressComponent(
+    components,
+    "administrative_area_level_1",
+    true
+  );
+  const zipCode = getAddressComponent(components, "postal_code");
 
-  const address = [streetNumber, route].filter(Boolean).join(' ')
+  const address = [streetNumber, route].filter(Boolean).join(" ");
 
   return {
     address,
     city,
     state,
     zipCode,
-  }
-}
-
+  };
+};
 
 const formatCurrency = (amount: number | null | undefined) => {
-  if (!amount && amount !== 0) return '—'
+  if (!amount && amount !== 0) return "—";
   return `$${Number(amount).toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  })}`
-}
+  })}`;
+};
 
 const formatDate = (date?: string | null) => {
-  if (!date) return '—'
+  if (!date) return "—";
   try {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    }).format(new Date(date))
+    return new Intl.DateTimeFormat("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(date));
   } catch (error) {
-    return '—'
+    return "—";
   }
-}
+};
 
-export default function Settings({ showToast }: { showToast: (type: 'success' | 'error', message: string) => void }) {
-  const router = useRouter()
-  const { user, token, hasActiveSubscription, refreshSubscription, authenticatedFetch } = useAuth()
-  const [loading, setLoading] = useState(false)
+export default function Settings({
+  showToast,
+}: {
+  showToast: (type: "success" | "error", message: string) => void;
+}) {
+  const router = useRouter();
+  const {
+    user,
+    token,
+    hasActiveSubscription,
+    refreshSubscription,
+    authenticatedFetch,
+  } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [runTutorial, setRunTutorial] = useState(true);
 
   const [organizationData, setOrganizationData] = useState({
-    businessName: '',
-    businessType: '',
-    website: '',
-    phone: '',
-    address: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    logo: '',
-  })
-  const [logoFile, setLogoFile] = useState<File | null>(null)
-  const [logoPreview, setLogoPreview] = useState<string | null>(null)
-  const [isHoveringLogo, setIsHoveringLogo] = useState(false)
+    businessName: "",
+    businessType: "",
+    website: "",
+    phone: "",
+    address: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    logo: "",
+  });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [isHoveringLogo, setIsHoveringLogo] = useState(false);
 
   const [profileData, setProfileData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  })
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
-  const [subscriptionData, setSubscriptionData] = useState<any>(null)
-  const [subscriptionLoading, setSubscriptionLoading] = useState(false)
-  const [creatingPlan, setCreatingPlan] = useState<string | null>(null)
-  const [plans, setPlans] = useState<Plan[]>([])
-  const [plansLoading, setPlansLoading] = useState(false)
+  const [subscriptionData, setSubscriptionData] = useState<any>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  const [creatingPlan, setCreatingPlan] = useState<string | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
 
   const buildAuthHeaders = (additional: Record<string, string> = {}) => {
-    const authToken = token || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null)
-    const headers: Record<string, string> = { ...additional }
+    const authToken =
+      token ||
+      (typeof window !== "undefined"
+        ? localStorage.getItem("admin_token")
+        : null);
+    const headers: Record<string, string> = { ...additional };
     if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`
+      headers["Authorization"] = `Bearer ${authToken}`;
     }
-    return headers
-  }
+    return headers;
+  };
 
   useEffect(() => {
     if (user) {
       setProfileData({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-      })
-      fetchOrganizationData()
-      fetchSubscriptionData()
-      fetchPlans()
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      fetchOrganizationData();
+      fetchSubscriptionData();
+      fetchPlans();
     }
-  }, [user])
+  }, [user]);
 
   const fetchPlans = async () => {
-    setPlansLoading(true)
+    setPlansLoading(true);
     try {
-      const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/plans`, {
-        method: 'GET',
-      })
+      const response = await authenticatedFetch(
+        `${API_URL}/brand-subscriptions/plans`,
+        {
+          method: "GET",
+        }
+      );
 
       if (response.ok) {
-        const data = await response.json()
+        const data = await response.json();
         if (data.success && data.plans) {
-          setPlans(data.plans.map((plan: any) => ({
-            id: plan.id,
-            name: plan.name,
-            price: plan.monthlyPrice,
-            planType: plan.planType,
-            interval: plan.interval,
-            features: plan.features,
-            stripePriceId: plan.stripePriceId,
-            description: plan.description
-          })))
+          setPlans(
+            data.plans.map((plan: any) => ({
+              id: plan.id,
+              name: plan.name,
+              price: plan.monthlyPrice,
+              planType: plan.planType,
+              interval: plan.interval,
+              features: plan.features,
+              stripePriceId: plan.stripePriceId,
+              description: plan.description,
+            }))
+          );
         }
       }
     } catch (error) {
-      console.error('Error fetching plans:', error)
+      console.error("Error fetching plans:", error);
     } finally {
-      setPlansLoading(false)
+      setPlansLoading(false);
     }
-  }
+  };
 
   const fetchSubscriptionData = async () => {
-    setSubscriptionLoading(true)
+    setSubscriptionLoading(true);
     try {
-      const response = await authenticatedFetch(`${API_URL}/subscriptions/current`, {
-        method: 'GET',
-        skipLogoutOn401: true,
-      })
+      const response = await authenticatedFetch(
+        `${API_URL}/subscriptions/current`,
+        {
+          method: "GET",
+          skipLogoutOn401: true,
+        }
+      );
 
       if (response.status === 401) {
-        setSubscriptionData(null)
+        setSubscriptionData(null);
       } else if (response.ok) {
-        const data = await response.json()
-        setSubscriptionData(data)
+        const data = await response.json();
+        setSubscriptionData(data);
       } else {
-        setSubscriptionData(null)
+        setSubscriptionData(null);
       }
     } catch (error) {
-      console.error('Error fetching subscription:', error)
-      setSubscriptionData(null)
+      console.error("Error fetching subscription:", error);
+      setSubscriptionData(null);
     } finally {
-      setSubscriptionLoading(false)
+      setSubscriptionLoading(false);
     }
-  }
+  };
 
   const fetchOrganizationData = async () => {
     try {
       const response = await authenticatedFetch(`${API_URL}/organization`, {
-        method: 'GET',
+        method: "GET",
         skipLogoutOn401: true,
-      })
+      });
 
       if (response.status === 401) {
-        setOrganizationData((prev) => ({ ...prev }))
-        return
+        setOrganizationData((prev) => ({ ...prev }));
+        return;
       }
 
       if (response.ok) {
-        const data = await response.json()
+        const data = await response.json();
         setOrganizationData({
-          businessName: data.clinicName || data.businessName || '',
-          businessType: data.businessType || '',
-          website: data.website || '',
-          phone: data.phone || data.phoneNumber || '',
-          address: data.address || '',
-          city: data.city || '',
-          state: data.state || '',
-          zipCode: data.zipCode || '',
-          logo: data.logo || '',
-        })
+          businessName: data.clinicName || data.businessName || "",
+          businessType: data.businessType || "",
+          website: data.website || "",
+          phone: data.phone || data.phoneNumber || "",
+          address: data.address || "",
+          city: data.city || "",
+          state: data.state || "",
+          zipCode: data.zipCode || "",
+          logo: data.logo || "",
+        });
         if (data.logo) {
-          setLogoPreview(data.logo)
+          setLogoPreview(data.logo);
         }
       }
     } catch (error) {
-      console.error('Error fetching organization data:', error)
+      console.error("Error fetching organization data:", error);
     }
-  }
+  };
 
-  const handlePlaceSelected = useCallback((place: google.maps.places.PlaceResult) => {
-    const parsed = parsePlaceAddress(place)
-    if (!parsed) {
-      showToast('error', 'Unable to read that address. Please try a different search.')
-      return
-    }
+  const handlePlaceSelected = useCallback(
+    (place: google.maps.places.PlaceResult) => {
+      const parsed = parsePlaceAddress(place);
+      if (!parsed) {
+        showToast(
+          "error",
+          "Unable to read that address. Please try a different search."
+        );
+        return;
+      }
 
-    setOrganizationData((prev) => ({
-      ...prev,
-      address: parsed.address || prev.address,
-      city: parsed.city || prev.city,
-      state: parsed.state || prev.state,
-      zipCode: parsed.zipCode || prev.zipCode,
-    }))
-
-    if (place.formatted_address) {
       setOrganizationData((prev) => ({
         ...prev,
         address: parsed.address || prev.address,
-      }))
-    }
+        city: parsed.city || prev.city,
+        state: parsed.state || prev.state,
+        zipCode: parsed.zipCode || prev.zipCode,
+      }));
 
-    showToast('success', 'Address details updated from search')
-  }, [showToast])
+      if (place.formatted_address) {
+        setOrganizationData((prev) => ({
+          ...prev,
+          address: parsed.address || prev.address,
+        }));
+      }
 
-  const { inputRef: addressInputRef } = usePlacesAutocomplete({
-    onPlaceSelected: handlePlaceSelected,
-    componentRestrictions: { country: 'us' },
-  })
+      showToast("success", "Address details updated from search");
+    },
+    [showToast]
+  );
+
+  // const { inputRef: addressInputRef } = usePlacesAutocomplete({
+  //   onPlaceSelected: handlePlaceSelected,
+  //   componentRestrictions: { country: "us" },
+  // });
 
   const handleRefreshSubscription = async () => {
-    await fetchSubscriptionData()
-    await refreshSubscription()
-  }
+    await fetchSubscriptionData();
+    await refreshSubscription();
+  };
 
   const handlePlanSelect = async (plan: Plan) => {
     if (!token) {
-      alert('You need to be signed in to select a plan.')
-      return
+      alert("You need to be signed in to select a plan.");
+      return;
     }
 
-    const hasActiveSub = subscriptionData && subscriptionData.status === 'active'
+    const hasActiveSub =
+      subscriptionData && subscriptionData.status === "active";
 
     // If user has active subscription, change tier instead of creating new
     if (hasActiveSub) {
-      if (!confirm(`Are you sure you want to change your subscription to ${plan.name}?`)) {
-        return
+      if (
+        !confirm(
+          `Are you sure you want to change your subscription to ${plan.name}?`
+        )
+      ) {
+        return;
       }
 
       try {
-        setCreatingPlan(plan.planType)
-        const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/change`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            newPlanId: plan.id
-          }),
-        })
+        setCreatingPlan(plan.planType);
+        const response = await authenticatedFetch(
+          `${API_URL}/brand-subscriptions/change`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              newPlanId: plan.id,
+            }),
+          }
+        );
 
         if (response.ok) {
-          showToast('success', 'Subscription tier changed successfully')
-          await fetchSubscriptionData()
-          await refreshSubscription()
+          showToast("success", "Subscription tier changed successfully");
+          await fetchSubscriptionData();
+          await refreshSubscription();
         } else {
-          const errorData = await response.json().catch(() => ({}))
-          showToast('error', errorData.error || 'Failed to change subscription tier')
+          const errorData = await response.json().catch(() => ({}));
+          showToast(
+            "error",
+            errorData.error || "Failed to change subscription tier"
+          );
         }
       } catch (error) {
-        showToast('error', 'An error occurred while changing subscription')
+        showToast("error", "An error occurred while changing subscription");
       } finally {
-        setCreatingPlan(null)
+        setCreatingPlan(null);
       }
-      return
+      return;
     }
 
     // No active subscription - go through checkout flow
-    const downpaymentAmount = plan.price
+    const downpaymentAmount = plan.price;
 
     try {
-      setCreatingPlan(plan.planType)
+      setCreatingPlan(plan.planType);
       // @deprecated: Not used
       const response = await authenticatedFetch(`${API_URL}/auth/profile`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           selectedPlanCategory: plan.planType,
@@ -339,12 +400,12 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
           selectedDownpaymentPrice: downpaymentAmount,
           planSelectionTimestamp: new Date().toISOString(),
         }),
-      })
+      });
 
       if (!response.ok) {
-        alert('Plan selection failed. Status: ' + response.status)
-        setCreatingPlan(null)
-        return
+        alert("Plan selection failed. Status: " + response.status);
+        setCreatingPlan(null);
+        return;
       }
 
       const queryParams = new URLSearchParams({
@@ -356,102 +417,108 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
         downpaymentName: `${plan.name} First Month`,
         downpaymentAmount: downpaymentAmount.toString(),
         brandSubscriptionPlanId: plan.id,
-        stripePriceId: plan.stripePriceId
-      })
+        stripePriceId: plan.stripePriceId,
+      });
 
-      router.push(`/checkout?${queryParams.toString()}`)
+      router.push(`/checkout?${queryParams.toString()}`);
     } catch (error) {
-      alert('Error saving plan selection: ' + (error instanceof Error ? error.message : String(error)))
-      setCreatingPlan(null)
+      alert(
+        "Error saving plan selection: " +
+          (error instanceof Error ? error.message : String(error))
+      );
+      setCreatingPlan(null);
     }
-  }
+  };
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const file = e.target.files?.[0];
     if (file) {
-      setLogoFile(file)
+      setLogoFile(file);
 
-      if (file.type === 'application/pdf') {
-        setLogoPreview(file.name)
-        await uploadLogo(file)
+      if (file.type === "application/pdf") {
+        setLogoPreview(file.name);
+        await uploadLogo(file);
       } else {
-        const reader = new FileReader()
+        const reader = new FileReader();
         reader.onloadend = async () => {
-          setLogoPreview(reader.result as string)
-          await uploadLogo(file)
-        }
-        reader.readAsDataURL(file)
+          setLogoPreview(reader.result as string);
+          await uploadLogo(file);
+        };
+        reader.readAsDataURL(file);
       }
     }
-  }
+  };
 
   const uploadLogo = async (file: File) => {
-    setLoading(true)
+    setLoading(true);
 
     try {
-      const formData = new FormData()
-      formData.append('logo', file)
+      const formData = new FormData();
+      formData.append("logo", file);
 
       const uploadResponse = await fetch(`${API_URL}/upload/logo`, {
-        method: 'POST',
-        credentials: 'include',
+        method: "POST",
+        credentials: "include",
         headers: buildAuthHeaders(),
         body: formData,
-      })
+      });
 
       if (uploadResponse.ok) {
-        const uploadData = await uploadResponse.json()
-        setOrganizationData({ ...organizationData, logo: uploadData.url })
-        showToast('success', 'Logo uploaded successfully!')
+        const uploadData = await uploadResponse.json();
+        setOrganizationData({ ...organizationData, logo: uploadData.url });
+        showToast("success", "Logo uploaded successfully!");
       } else {
-        showToast('error', 'Failed to upload logo')
+        showToast("error", "Failed to upload logo");
       }
     } catch (error) {
-      showToast('error', 'An error occurred while uploading')
+      showToast("error", "An error occurred while uploading");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleOrganizationUpdate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
 
     try {
       const response = await fetch(`${API_URL}/organization/update`, {
-        method: 'PUT',
-        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-        credentials: 'include',
+        method: "PUT",
+        headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+        credentials: "include",
         body: JSON.stringify(organizationData),
-      })
+      });
 
       if (response.ok) {
-        showToast('success', 'Organization settings updated successfully!')
+        showToast("success", "Organization settings updated successfully!");
       } else {
-        showToast('error', 'Failed to update organization settings')
+        showToast("error", "Failed to update organization settings");
       }
     } catch (error) {
-      showToast('error', 'An error occurred while updating')
+      showToast("error", "An error occurred while updating");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
 
-    if (profileData.newPassword && profileData.newPassword !== profileData.confirmPassword) {
-      showToast('error', 'New passwords do not match')
-      setLoading(false)
-      return
+    if (
+      profileData.newPassword &&
+      profileData.newPassword !== profileData.confirmPassword
+    ) {
+      showToast("error", "New passwords do not match");
+      setLoading(false);
+      return;
     }
 
     try {
       const response = await fetch(`${API_URL}/users/profile`, {
-        method: 'PUT',
-        headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-        credentials: 'include',
+        method: "PUT",
+        headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+        credentials: "include",
         body: JSON.stringify({
           firstName: profileData.firstName,
           lastName: profileData.lastName,
@@ -461,50 +528,59 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
             newPassword: profileData.newPassword,
           }),
         }),
-      })
+      });
 
       if (response.ok) {
-        showToast('success', 'Profile updated successfully!')
-        setProfileData({ ...profileData, currentPassword: '', newPassword: '', confirmPassword: '' })
+        showToast("success", "Profile updated successfully!");
+        setProfileData({
+          ...profileData,
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
       } else {
-        const error = await response.json()
-        showToast('error', error.message || 'Failed to update profile')
+        const error = await response.json();
+        showToast("error", error.message || "Failed to update profile");
       }
     } catch (error) {
-      showToast('error', 'An error occurred while updating')
+      showToast("error", "An error occurred while updating");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleCancelSubscription = async () => {
-    if (!confirm('Are you sure you want to cancel your subscription?')) return
+    if (!confirm("Are you sure you want to cancel your subscription?")) return;
 
-    setLoading(true)
+    setLoading(true);
 
     try {
-      const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/cancel`, {
-        method: 'POST',
-      })
+      const response = await authenticatedFetch(
+        `${API_URL}/brand-subscriptions/cancel`,
+        {
+          method: "POST",
+        }
+      );
 
       if (response.ok) {
-        showToast('success', 'Subscription cancelled successfully')
-        fetchSubscriptionData()
+        showToast("success", "Subscription cancelled successfully");
+        fetchSubscriptionData();
       } else {
-        showToast('error', 'Failed to cancel subscription')
+        showToast("error", "Failed to cancel subscription");
       }
     } catch (error) {
-      showToast('error', 'An error occurred')
+      showToast("error", "An error occurred");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const currentPlanType = subscriptionData?.plan?.type
-  const currentPlan = plans.find(p => p.planType === currentPlanType)
+  const currentPlanType = subscriptionData?.plan?.type;
+  const currentPlan = plans.find((p) => p.planType === currentPlanType);
 
   return (
     <div className="flex h-screen bg-background">
+      <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} />
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
@@ -512,13 +588,18 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
           <div className="max-w-6xl mx-auto space-y-6">
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-3xl font-semibold text-foreground mb-2">Settings</h1>
-                <p className="text-muted-foreground">Manage your organization, profile, and subscription settings</p>
+                <h1 className="text-3xl font-semibold text-foreground mb-2">
+                  Settings
+                </h1>
+                <p className="text-muted-foreground">
+                  Manage your organization, profile, and subscription settings
+                </p>
               </div>
 
               {/* Logo Upload - Top Right */}
               <div className="flex-shrink-0">
                 <div
+                  id="tutorial-step-1"
                   className="relative group cursor-pointer"
                   onMouseEnter={() => setIsHoveringLogo(true)}
                   onMouseLeave={() => setIsHoveringLogo(false)}
@@ -533,7 +614,8 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                   <label htmlFor="logo-upload" className="cursor-pointer">
                     <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-border bg-muted transition-all group-hover:border-primary">
                       {logoPreview || organizationData.logo ? (
-                        logoPreview?.endsWith('.pdf') || organizationData.logo?.endsWith('.pdf') ? (
+                        logoPreview?.endsWith(".pdf") ||
+                        organizationData.logo?.endsWith(".pdf") ? (
                           <div className="w-full h-full flex items-center justify-center bg-gray-100">
                             <div className="text-center">
                               <Upload className="h-8 w-8 text-gray-400 mx-auto mb-1" />
@@ -554,7 +636,9 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                       )}
 
                       {/* Hover Overlay */}
-                      <div className={`absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center transition-opacity ${isHoveringLogo ? 'opacity-100' : 'opacity-0'}`}>
+                      <div
+                        className={`absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center transition-opacity ${isHoveringLogo ? "opacity-100" : "opacity-0"}`}
+                      >
                         <div className="text-center text-white">
                           <Camera className="h-6 w-6 mx-auto mb-1" />
                           <p className="text-xs font-medium">Edit Logo</p>
@@ -563,21 +647,32 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                     </div>
                   </label>
                 </div>
-                <p className="text-xs text-muted-foreground text-center mt-2">Company Logo</p>
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Company Logo
+                </p>
               </div>
             </div>
 
             <Tabs defaultValue="organization" className="space-y-6">
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="organization" className="flex items-center gap-2">
+                <TabsTrigger
+                  value="organization"
+                  className="flex items-center gap-2"
+                >
                   <Building2 className="h-4 w-4" />
                   Organization
                 </TabsTrigger>
-                <TabsTrigger value="profile" className="flex items-center gap-2">
+                <TabsTrigger
+                  value="profile"
+                  className="flex items-center gap-2"
+                >
                   <User className="h-4 w-4" />
                   Profile
                 </TabsTrigger>
-                <TabsTrigger value="subscription" className="flex items-center gap-2">
+                <TabsTrigger
+                  value="subscription"
+                  className="flex items-center gap-2"
+                >
                   <CreditCard className="h-4 w-4" />
                   Subscription & Billing
                 </TabsTrigger>
@@ -585,30 +680,46 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
 
               {/* Organization Settings */}
               <TabsContent value="organization">
-                <Card>
+                <Card id="tutorial-step-2">
                   <CardHeader>
                     <CardTitle>Organization Settings</CardTitle>
-                    <CardDescription>Update your business information and preferences</CardDescription>
+                    <CardDescription>
+                      Update your business information and preferences
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={handleOrganizationUpdate} className="space-y-4">
+                    <form
+                      onSubmit={handleOrganizationUpdate}
+                      className="space-y-4"
+                    >
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <label className="text-sm font-medium">Business Name</label>
+                          <label className="text-sm font-medium">
+                            Business Name
+                          </label>
                           <input
                             type="text"
                             value={organizationData.businessName}
-                            onChange={(e) => setOrganizationData({ ...organizationData, businessName: e.target.value })}
+                            onChange={(e) =>
+                              setOrganizationData({
+                                ...organizationData,
+                                businessName: e.target.value,
+                              })
+                            }
                             className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             placeholder="Enter business name"
                           />
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-sm font-medium">Business Type</label>
+                          <label className="text-sm font-medium">
+                            Business Type
+                          </label>
                           <input
                             type="text"
-                            value={organizationData.businessType || 'Not specified'}
+                            value={
+                              organizationData.businessType || "Not specified"
+                            }
                             readOnly
                             disabled
                             className="w-full px-3 py-2 border border-input rounded-md bg-muted text-muted-foreground"
@@ -620,7 +731,12 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                           <input
                             type="text"
                             value={organizationData.website}
-                            onChange={(e) => setOrganizationData({ ...organizationData, website: e.target.value })}
+                            onChange={(e) =>
+                              setOrganizationData({
+                                ...organizationData,
+                                website: e.target.value,
+                              })
+                            }
                             className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             placeholder="company.com"
                           />
@@ -631,7 +747,12 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                           <input
                             type="tel"
                             value={organizationData.phone}
-                            onChange={(e) => setOrganizationData({ ...organizationData, phone: e.target.value })}
+                            onChange={(e) =>
+                              setOrganizationData({
+                                ...organizationData,
+                                phone: e.target.value,
+                              })
+                            }
                             className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             placeholder="(555) 123-4567"
                           />
@@ -641,19 +762,25 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                           <label className="text-sm font-medium">Address</label>
                           <input
                             type="text"
-                            ref={addressInputRef}
                             value={organizationData.address}
-                            onChange={(e) => setOrganizationData({ ...organizationData, address: e.target.value })}
+                            onChange={(e) =>
+                              setOrganizationData({
+                                ...organizationData,
+                                address: e.target.value,
+                              })
+                            }
                             className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             placeholder="123 Main St"
                             autoComplete="off"
                           />
                           <p className="text-xs text-muted-foreground pt-1">
-                            {typeof window === 'undefined'
-                              ? 'Preparing address suggestions…'
-                              : window.google && window.google.maps && window.google.maps.places
-                                ? 'Autocomplete suggestions powered by Google Places'
-                                : 'Type to search for your address'}
+                            {typeof window === "undefined"
+                              ? "Preparing address suggestions…"
+                              : window.google &&
+                                  window.google.maps &&
+                                  window.google.maps.places
+                                ? "Autocomplete suggestions powered by Google Places"
+                                : "Type to search for your address"}
                           </p>
                         </div>
 
@@ -662,7 +789,12 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                           <input
                             type="text"
                             value={organizationData.city}
-                            onChange={(e) => setOrganizationData({ ...organizationData, city: e.target.value })}
+                            onChange={(e) =>
+                              setOrganizationData({
+                                ...organizationData,
+                                city: e.target.value,
+                              })
+                            }
                             className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             placeholder="City"
                           />
@@ -673,18 +805,30 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                           <input
                             type="text"
                             value={organizationData.state}
-                            onChange={(e) => setOrganizationData({ ...organizationData, state: e.target.value })}
+                            onChange={(e) =>
+                              setOrganizationData({
+                                ...organizationData,
+                                state: e.target.value,
+                              })
+                            }
                             className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             placeholder="State"
                           />
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-sm font-medium">ZIP Code</label>
+                          <label className="text-sm font-medium">
+                            ZIP Code
+                          </label>
                           <input
                             type="text"
                             value={organizationData.zipCode}
-                            onChange={(e) => setOrganizationData({ ...organizationData, zipCode: e.target.value })}
+                            onChange={(e) =>
+                              setOrganizationData({
+                                ...organizationData,
+                                zipCode: e.target.value,
+                              })
+                            }
                             className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             placeholder="12345"
                           />
@@ -693,7 +837,7 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
 
                       <div className="flex justify-end pt-4">
                         <Button type="submit" disabled={loading}>
-                          {loading ? 'Saving...' : 'Save Changes'}
+                          {loading ? "Saving..." : "Save Changes"}
                         </Button>
                       </div>
                     </form>
@@ -706,29 +850,47 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                 <Card>
                   <CardHeader>
                     <CardTitle>Profile Settings</CardTitle>
-                    <CardDescription>Update your personal information and password</CardDescription>
+                    <CardDescription>
+                      Update your personal information and password
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleProfileUpdate} className="space-y-6">
                       <div className="space-y-4">
-                        <h3 className="text-lg font-medium">Personal Information</h3>
+                        <h3 className="text-lg font-medium">
+                          Personal Information
+                        </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <label className="text-sm font-medium">First Name</label>
+                            <label className="text-sm font-medium">
+                              First Name
+                            </label>
                             <input
                               type="text"
                               value={profileData.firstName}
-                              onChange={(e) => setProfileData({ ...profileData, firstName: e.target.value })}
+                              onChange={(e) =>
+                                setProfileData({
+                                  ...profileData,
+                                  firstName: e.target.value,
+                                })
+                              }
                               className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             />
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-sm font-medium">Last Name</label>
+                            <label className="text-sm font-medium">
+                              Last Name
+                            </label>
                             <input
                               type="text"
                               value={profileData.lastName}
-                              onChange={(e) => setProfileData({ ...profileData, lastName: e.target.value })}
+                              onChange={(e) =>
+                                setProfileData({
+                                  ...profileData,
+                                  lastName: e.target.value,
+                                })
+                              }
                               className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             />
                           </div>
@@ -741,7 +903,9 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                               disabled
                               className="w-full px-3 py-2 border border-input rounded-md bg-muted"
                             />
-                            <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+                            <p className="text-xs text-muted-foreground">
+                              Email cannot be changed
+                            </p>
                           </div>
 
                           <div className="space-y-2">
@@ -749,7 +913,12 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                             <input
                               type="tel"
                               value={profileData.phone}
-                              onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                              onChange={(e) =>
+                                setProfileData({
+                                  ...profileData,
+                                  phone: e.target.value,
+                                })
+                              }
                               className="w-full px-3 py-2 border border-input rounded-md bg-background"
                             />
                           </div>
@@ -760,33 +929,54 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                         <h3 className="text-lg font-medium">Change Password</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2 md:col-span-2">
-                            <label className="text-sm font-medium">Current Password</label>
+                            <label className="text-sm font-medium">
+                              Current Password
+                            </label>
                             <input
                               type="password"
                               value={profileData.currentPassword}
-                              onChange={(e) => setProfileData({ ...profileData, currentPassword: e.target.value })}
+                              onChange={(e) =>
+                                setProfileData({
+                                  ...profileData,
+                                  currentPassword: e.target.value,
+                                })
+                              }
                               className="w-full px-3 py-2 border border-input rounded-md bg-background"
                               placeholder="Enter current password"
                             />
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-sm font-medium">New Password</label>
+                            <label className="text-sm font-medium">
+                              New Password
+                            </label>
                             <input
                               type="password"
                               value={profileData.newPassword}
-                              onChange={(e) => setProfileData({ ...profileData, newPassword: e.target.value })}
+                              onChange={(e) =>
+                                setProfileData({
+                                  ...profileData,
+                                  newPassword: e.target.value,
+                                })
+                              }
                               className="w-full px-3 py-2 border border-input rounded-md bg-background"
                               placeholder="Enter new password"
                             />
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-sm font-medium">Confirm New Password</label>
+                            <label className="text-sm font-medium">
+                              Confirm New Password
+                            </label>
                             <input
                               type="password"
                               value={profileData.confirmPassword}
-                              onChange={(e) => setProfileData({ ...profileData, confirmPassword: e.target.value })}
+                              onChange={(e) =>
+                                setProfileData({
+                                  ...profileData,
+                                  confirmPassword: e.target.value,
+                                })
+                              }
                               className="w-full px-3 py-2 border border-input rounded-md bg-background"
                               placeholder="Confirm new password"
                             />
@@ -796,7 +986,7 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
 
                       <div className="flex justify-end pt-4">
                         <Button type="submit" disabled={loading}>
-                          {loading ? 'Saving...' : 'Save Changes'}
+                          {loading ? "Saving..." : "Save Changes"}
                         </Button>
                       </div>
                     </form>
@@ -812,7 +1002,8 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                     <CardHeader>
                       <CardTitle>Subscription Overview</CardTitle>
                       <CardDescription>
-                        Review your current plan status and explore available subscriptions.
+                        Review your current plan status and explore available
+                        subscriptions.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -822,33 +1013,57 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                             <div className="rounded-lg border border-border p-4 bg-muted/40">
                               <div className="flex items-center gap-2 mb-2">
                                 <Crown className="h-4 w-4 text-primary" />
-                                <span className="text-sm font-medium text-foreground">Current Plan</span>
+                                <span className="text-sm font-medium text-foreground">
+                                  Current Plan
+                                </span>
                               </div>
                               <p className="text-lg font-semibold text-foreground">
-                                {currentPlan?.name || subscriptionData.plan?.name || '—'}
+                                {currentPlan?.name ||
+                                  subscriptionData.plan?.name ||
+                                  "—"}
                               </p>
                               <p className="text-sm text-muted-foreground">
-                                {currentPlan?.description || 'Active subscription'}
+                                {currentPlan?.description ||
+                                  "Active subscription"}
                               </p>
                             </div>
 
                             <div className="rounded-lg border border-border p-4 bg-muted/40">
                               <div className="flex items-center gap-2 mb-2">
                                 <Calendar className="h-4 w-4 text-primary" />
-                                <span className="text-sm font-medium text-foreground">Billing</span>
+                                <span className="text-sm font-medium text-foreground">
+                                  Billing
+                                </span>
                               </div>
                               <div className="grid gap-1 text-sm">
                                 <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Monthly price</span>
-                                  <span className="font-medium text-foreground">{formatCurrency(currentPlan?.price ?? subscriptionData.plan?.price)}</span>
+                                  <span className="text-muted-foreground">
+                                    Monthly price
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {formatCurrency(
+                                      currentPlan?.price ??
+                                        subscriptionData.plan?.price
+                                    )}
+                                  </span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Status</span>
-                                  <span className="capitalize font-medium text-foreground">{subscriptionData.status || '—'}</span>
+                                  <span className="text-muted-foreground">
+                                    Status
+                                  </span>
+                                  <span className="capitalize font-medium text-foreground">
+                                    {subscriptionData.status || "—"}
+                                  </span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Next billing date</span>
-                                  <span className="font-medium text-foreground">{formatDate(subscriptionData.nextBillingDate)}</span>
+                                  <span className="text-muted-foreground">
+                                    Next billing date
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {formatDate(
+                                      subscriptionData.nextBillingDate
+                                    )}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -856,19 +1071,49 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
 
                           <div className="flex items-center justify-between pt-2">
                             <div className="space-y-1">
-                              <p className="text-xs uppercase tracking-wide text-muted-foreground">Identifiers</p>
+                              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Identifiers
+                              </p>
                               <div className="text-xs text-muted-foreground space-y-1">
-                                <p>Subscription ID: <span className="text-foreground font-medium">{subscriptionData.id}</span></p>
-                                <p>Stripe Subscription: <span className="text-foreground font-medium">{subscriptionData.stripeSubscriptionId || 'N/A'}</span></p>
-                                <p>Stripe Price ID: <span className="text-foreground font-medium">{subscriptionData.plan?.stripePriceId || subscriptionData.stripePriceId || 'N/A'}</span></p>
+                                <p>
+                                  Subscription ID:{" "}
+                                  <span className="text-foreground font-medium">
+                                    {subscriptionData.id}
+                                  </span>
+                                </p>
+                                <p>
+                                  Stripe Subscription:{" "}
+                                  <span className="text-foreground font-medium">
+                                    {subscriptionData.stripeSubscriptionId ||
+                                      "N/A"}
+                                  </span>
+                                </p>
+                                <p>
+                                  Stripe Price ID:{" "}
+                                  <span className="text-foreground font-medium">
+                                    {subscriptionData.plan?.stripePriceId ||
+                                      subscriptionData.stripePriceId ||
+                                      "N/A"}
+                                  </span>
+                                </p>
                               </div>
                             </div>
                             <div className="flex gap-3">
-                              <Button variant="outline" onClick={handleRefreshSubscription} disabled={subscriptionLoading}>
-                                <RefreshCw className={`mr-2 h-4 w-4 ${subscriptionLoading ? 'animate-spin' : ''}`} />
-                                {subscriptionLoading ? 'Refreshing' : 'Refresh'}
+                              <Button
+                                variant="outline"
+                                onClick={handleRefreshSubscription}
+                                disabled={subscriptionLoading}
+                              >
+                                <RefreshCw
+                                  className={`mr-2 h-4 w-4 ${subscriptionLoading ? "animate-spin" : ""}`}
+                                />
+                                {subscriptionLoading ? "Refreshing" : "Refresh"}
                               </Button>
-                              <Button variant="destructive" onClick={handleCancelSubscription} disabled={loading}>
+                              <Button
+                                variant="destructive"
+                                onClick={handleCancelSubscription}
+                                disabled={loading}
+                              >
                                 Cancel Subscription
                               </Button>
                             </div>
@@ -876,7 +1121,10 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                         </div>
                       ) : (
                         <div className="text-center py-8">
-                          <p className="text-muted-foreground mb-4">No active subscription found. Select a plan to get started.</p>
+                          <p className="text-muted-foreground mb-4">
+                            No active subscription found. Select a plan to get
+                            started.
+                          </p>
                           <Button asChild>
                             <a href="/plans">Browse Plans</a>
                           </Button>
@@ -892,10 +1140,14 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                           <div>
                             <CardTitle>Subscriptions</CardTitle>
-                            <CardDescription>Choose the plan that best fits your needs.</CardDescription>
+                            <CardDescription>
+                              Choose the plan that best fits your needs.
+                            </CardDescription>
                           </div>
                           {!hasActiveSubscription && (
-                            <Badge className="bg-primary text-primary-foreground">Action required</Badge>
+                            <Badge className="bg-primary text-primary-foreground">
+                              Action required
+                            </Badge>
                           )}
                         </div>
                       </CardHeader>
@@ -903,35 +1155,49 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                         {plansLoading ? (
                           <div className="text-center py-8">
                             <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                            <p className="text-muted-foreground">Loading plans...</p>
+                            <p className="text-muted-foreground">
+                              Loading plans...
+                            </p>
                           </div>
                         ) : plans.length === 0 ? (
                           <div className="text-center py-8">
-                            <p className="text-muted-foreground">No plans available</p>
+                            <p className="text-muted-foreground">
+                              No plans available
+                            </p>
                           </div>
                         ) : (
-                          <div className={`grid grid-cols-1 ${plans.length === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-8`}>
+                          <div
+                            className={`grid grid-cols-1 ${plans.length === 2 ? "lg:grid-cols-2" : "lg:grid-cols-3"} gap-8`}
+                          >
                             {plans.map((plan, index) => {
-                              const isCurrentPlan = currentPlanType === plan.planType
-                              const isActive = subscriptionData?.status === 'active'
-                              const isPopular = index === 0
-                              const Icon = index === 0 ? Building2 : Shield
+                              const isCurrentPlan =
+                                currentPlanType === plan.planType;
+                              const isActive =
+                                subscriptionData?.status === "active";
+                              const isPopular = index === 0;
+                              const Icon = index === 0 ? Building2 : Shield;
 
-                              let buttonLabel = 'Get started'
+                              let buttonLabel = "Get started";
                               if (isCurrentPlan) {
-                                buttonLabel = isActive ? 'Current Plan' : 'Plan Selected'
+                                buttonLabel = isActive
+                                  ? "Current Plan"
+                                  : "Plan Selected";
                               } else if (isActive && currentPlan) {
                                 // Show upgrade/downgrade for existing subscribers
-                                buttonLabel = plan.price > currentPlan.price ? 'Upgrade' : 'Change Plan'
+                                buttonLabel =
+                                  plan.price > currentPlan.price
+                                    ? "Upgrade"
+                                    : "Change Plan";
                               }
 
                               return (
                                 <Card
                                   key={plan.id}
-                                  className={`relative group transition-all duration-300 flex flex-col ${isPopular
-                                    ? 'border-primary shadow-lg hover:shadow-2xl hover:scale-[1.02]'
-                                    : 'border-border hover:border-primary/60 hover:shadow-xl hover:scale-[1.01]'
-                                    } ${creatingPlan ? 'opacity-75' : ''}`}
+                                  className={`relative group transition-all duration-300 flex flex-col ${
+                                    isPopular
+                                      ? "border-primary shadow-lg hover:shadow-2xl hover:scale-[1.02]"
+                                      : "border-border hover:border-primary/60 hover:shadow-xl hover:scale-[1.01]"
+                                  } ${creatingPlan ? "opacity-75" : ""}`}
                                 >
                                   {isPopular && (
                                     <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
@@ -956,14 +1222,21 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                                   <CardHeader className="pt-12 pb-6">
                                     <div className="flex items-center gap-2 mb-3">
                                       <Icon className="h-5 w-5" />
-                                      <CardTitle className="text-xl font-semibold">{plan.name}</CardTitle>
+                                      <CardTitle className="text-xl font-semibold">
+                                        {plan.name}
+                                      </CardTitle>
                                     </div>
                                     <div className="mb-4">
                                       <span className="text-3xl font-bold text-[#825AD1]">
                                         {formatCurrency(plan.price)}
                                       </span>
-                                      <span className="text-muted-foreground"> / {plan.interval}</span>
-                                      <div className="text-xs text-muted-foreground mt-1">+ 1% transaction fee</div>
+                                      <span className="text-muted-foreground">
+                                        {" "}
+                                        / {plan.interval}
+                                      </span>
+                                      <div className="text-xs text-muted-foreground mt-1">
+                                        + 1% transaction fee
+                                      </div>
                                     </div>
                                     {plan.description && (
                                       <p className="text-sm text-muted-foreground leading-relaxed">
@@ -974,13 +1247,11 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
 
                                   <CardContent className="flex flex-col h-full">
                                     <ul className="space-y-3 mb-8 flex-grow">
-                                      {plan.planType == 'entry' && (
+                                      {plan.planType == "entry" && (
                                         <>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                            <span>
-                                              Up to 3 products
-                                            </span>
+                                            <span>Up to 3 products</span>
                                           </li>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
@@ -990,94 +1261,83 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
                                           </li>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                            <span>
-                                              Instant setup
-                                            </span>
+                                            <span>Instant setup</span>
                                           </li>
                                         </>
                                       )}
 
-                                      {plan.planType == 'standard' && (
+                                      {plan.planType == "standard" && (
                                         <>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                            <span>
-                                              Everything in Standard
-                                            </span>
+                                            <span>Everything in Standard</span>
                                           </li>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
                                             <span>
-                                              Template forms with customer branding
+                                              Template forms with customer
+                                              branding
                                             </span>
                                           </li>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                            <span>
-                                              Instant setup
-                                            </span>
+                                            <span>Instant setup</span>
                                           </li>
                                         </>
                                       )}
-                                      {plan.planType == 'premium' && (
+                                      {plan.planType == "premium" && (
                                         <>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                            <span>
-                                              Unlimited products
-                                            </span>
+                                            <span>Unlimited products</span>
                                           </li>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                            <span>
-                                              Custom website
-                                            </span>
+                                            <span>Custom website</span>
                                           </li>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                            <span>
-                                              Done-for-you setup
-                                            </span>
+                                            <span>Done-for-you setup</span>
                                           </li>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                            <span>
-                                              Custom forms
-                                            </span>
+                                            <span>Custom forms</span>
                                           </li>
                                         </>
                                       )}
                                     </ul>
 
                                     <Button
-                                      className={`w-full mt-auto ${isCurrentPlan && isActive
-                                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                        : isPopular
-                                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                          : 'bg-white border border-gray-300 text-foreground hover:bg-gray-50'
-                                        }`}
+                                      className={`w-full mt-auto ${
+                                        isCurrentPlan && isActive
+                                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                                          : isPopular
+                                            ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                            : "bg-white border border-gray-300 text-foreground hover:bg-gray-50"
+                                      }`}
                                       onClick={() => handlePlanSelect(plan)}
                                       disabled={
-                                        (isCurrentPlan && isActive) || !!creatingPlan
+                                        (isCurrentPlan && isActive) ||
+                                        !!creatingPlan
                                       }
                                     >
                                       {creatingPlan === plan.planType
-                                        ? 'Preparing checkout...'
+                                        ? "Preparing checkout..."
                                         : buttonLabel}
-                                      {!isCurrentPlan && creatingPlan !== plan.planType && (
-                                        <ArrowRight className="ml-2 h-4 w-4" />
-                                      )}
+                                      {!isCurrentPlan &&
+                                        creatingPlan !== plan.planType && (
+                                          <ArrowRight className="ml-2 h-4 w-4" />
+                                        )}
                                     </Button>
                                   </CardContent>
                                 </Card>
-                              )
+                              );
                             })}
                           </div>
                         )}
                       </CardContent>
                     </Card>
                   )}
-
                 </div>
               </TabsContent>
             </Tabs>
@@ -1085,5 +1345,5 @@ export default function Settings({ showToast }: { showToast: (type: 'success' | 
         </main>
       </div>
     </div>
-  )
+  );
 }

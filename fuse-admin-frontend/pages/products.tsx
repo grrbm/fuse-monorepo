@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Layout from '@/components/Layout'
+import Tutorial from '@/components/ui/tutorial'
 import {
     Package,
     Plus,
@@ -45,6 +46,7 @@ export default function Products() {
     const [assignments, setAssignments] = useState<Array<{ productId: string; questionnaireId: string }>>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [runTutorial, setRunTutorial] = useState(true)
     const { user, token } = useAuth()
     const router = useRouter()
 
@@ -242,7 +244,7 @@ export default function Products() {
                 <title>Products - Fuse Admin</title>
                 <meta name="description" content="Manage your clinic products" />
             </Head>
-
+            <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} />
             <div className="min-h-screen bg-background p-6">
                 {/* Debug Panel */}
                 <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -291,6 +293,7 @@ export default function Products() {
                             <p className="text-muted-foreground">Manage and monitor your clinic's product catalog</p>
                         </div>
                         <Button
+                            id="tutorial-step-4"
                             onClick={() => router.push('/products/new')}
                             disabled={!userWithClinic?.clinicId}
                             title={!userWithClinic?.clinicId ? 'You need to be assigned to a clinic to add products' : 'Add new product'}
