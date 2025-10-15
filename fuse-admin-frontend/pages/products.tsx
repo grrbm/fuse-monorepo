@@ -173,14 +173,10 @@ export default function Products() {
             const data = await res.json().catch(() => null)
             const rows = Array.isArray(data?.data) ? data.data : []
             setAssignments(rows)
-            // Build My Products from assignments
-            const productIds = new Set(rows.map((r: any) => r.productId).filter(Boolean))
-            const my = allProducts.filter(p => productIds.has(p.id))
-            setProducts(my)
         } catch (e) {
             console.warn('Failed to load assignments', e)
         }
-    }, [token, allProducts])
+    }, [token])
 
     const fetchSubscription = useCallback(async () => {
         if (!token) return
@@ -233,6 +229,12 @@ export default function Products() {
         fetchTenantProductCount()
         fetchClinicName()
     }, [fetchAssignments, allProducts, fetchSubscription, fetchTenantProductCount, fetchClinicName])
+
+    // Build My Products from TenantProduct mappings (enabledProductIds)
+    useEffect(() => {
+        const my = allProducts.filter(p => enabledProductIds.has(p.id))
+        setProducts(my)
+    }, [allProducts, enabledProductIds])
 
     // React to query param changes to set the tab (e.g., after enabling redirect)
     useEffect(() => {
