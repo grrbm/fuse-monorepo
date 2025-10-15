@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Loader2, Plus, Edit2, Trash2, Package, DollarSign, Building2, FileText } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { CATEGORY_OPTIONS } from "@fuse/enums"
 
 interface Product {
   id: string
@@ -33,15 +34,7 @@ interface PharmacyVendor {
   description: string
 }
 
-const CATEGORY_OPTIONS = [
-  { value: "weight_loss", label: "Weight Loss" },
-  { value: "hair_growth", label: "Hair Growth" },
-  { value: "performance", label: "Performance" },
-  { value: "sexual_health", label: "Sexual Health" },
-  { value: "skincare", label: "Skincare" },
-  { value: "wellness", label: "Wellness" },
-  { value: "other", label: "Other" },
-]
+ 
 
 export default function Products() {
   const { token } = useAuth()
@@ -287,7 +280,7 @@ export default function Products() {
                 className="rounded-md border border-border bg-background px-3 py-2 text-sm"
               >
                 <option value="">All Categories</option>
-                {CATEGORY_OPTIONS.map((cat) => (
+                {CATEGORY_OPTIONS.map((cat: { value: string; label: string }) => (
                   <option key={cat.value} value={cat.value}>
                     {cat.label}
                   </option>
@@ -345,8 +338,8 @@ export default function Products() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {product.category && (
-                      <Badge variant="secondary">{CATEGORY_OPTIONS.find(c => c.value === product.category)?.label || product.category}</Badge>
+                      {product.category && (
+                      <Badge variant="secondary">{CATEGORY_OPTIONS.find((c: { value: string; label: string }) => c.value === product.category)?.label || product.category}</Badge>
                     )}
 
                     <div className="space-y-2 text-sm">
@@ -439,7 +432,7 @@ export default function Products() {
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   >
                     <option value="">Select category...</option>
-                    {CATEGORY_OPTIONS.map((cat) => (
+                    {CATEGORY_OPTIONS.map((cat: { value: string; label: string }) => (
                       <option key={cat.value} value={cat.value}>
                         {cat.label}
                       </option>

@@ -1,0 +1,17 @@
+{
+  "name": "@fuse/enums",
+  "version": "1.0.0",
+  "description": "Shared enums and constants for Fuse Health applications",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": ["enums", "constants", "fuse", "health"],
+  "author": "Fuse Health",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

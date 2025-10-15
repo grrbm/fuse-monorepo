@@ -12,30 +12,9 @@ import { useTemplates } from "@/hooks/useTemplates"
 import { QuestionnaireEditor } from "./QuestionnaireEditor"
 import { useQuestionnaires } from "@/hooks/useQuestionnaires"
 import { useAuth } from "@/contexts/AuthContext"
+import { CATEGORY_OPTIONS, STATUS_OPTIONS, SORT_OPTIONS } from "@fuse/enums"
 
-const CATEGORY_OPTIONS = [
-  { value: "", label: "All Categories" },
-  { value: "weight_loss", label: "Weight Loss" },
-  { value: "hair_growth", label: "Hair Growth" },
-  { value: "performance", label: "Performance" },
-  { value: "sexual_health", label: "Sexual Health" },
-  { value: "skincare", label: "Skincare" },
-  { value: "wellness", label: "Wellness" },
-  { value: "other", label: "Other" },
-]
-
-const STATUS_OPTIONS = [
-  { value: "all", label: "All Forms" },
-  { value: "live", label: "Live" },
-  { value: "pending", label: "Pending" },
-]
-
-const SORT_OPTIONS = [
-  { value: "name_asc", label: "A → Z" },
-  { value: "name_desc", label: "Z → A" },
-  { value: "updated_desc", label: "Recently Updated" },
-  { value: "updated_asc", label: "Oldest First" },
-]
+ 
 
 export default function Forms() {
   const router = useRouter()

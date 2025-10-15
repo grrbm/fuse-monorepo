@@ -3,6 +3,7 @@ import { User, checkAuth, signOut } from '../lib/auth';
 import { useRouter } from 'next/router';
 import { SessionTimeoutManager } from '../lib/sessionTimeout';
 import { SessionWarning } from '../components/SessionWarning';
+import { PUBLIC_PATH_PATTERNS } from '@fuse/enums';
 
 interface AuthContextType {
   user: User | null;
@@ -13,17 +14,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const PUBLIC_PATH_PATTERNS = [
-  '/signin',
-  '/signup',
-  '/privacy',
-  '/terms',
-  '/hipaa-notice',
-  '/treatments/weightloss',
-  '/my-treatments/[slug]',
-  '/treatments/[slug]',
-  '/my-products/[slug]',
-]
 
 const matchesPublicPattern = (pattern: string, pathname: string, asPath: string) => {
   if (!pattern.includes('[')) {
