@@ -366,6 +366,59 @@ class BrandSubscriptionService {
   }
 
   /**
+   * Get basic subscription info (status, tutorialFinished, stripeCustomerId)
+   */
+  async getBasicSubscriptionInfo(userId: string): Promise<{
+    status: string;
+    tutorialFinished: boolean;
+    stripeCustomerId: string | null;
+  } | null> {
+    try {
+      const subscription = await BrandSubscription.findOne({
+        where: { userId },
+        attributes: ['status', 'tutorialFinished', 'stripeCustomerId']
+      });
+
+      if (!subscription) {
+        return null;
+      }
+
+      return {
+        status: subscription.status,
+        tutorialFinished: subscription.tutorialFinished,
+        stripeCustomerId: subscription.stripeCustomerId || null
+      };
+    } catch (error) {
+      console.error('❌ Error getting basic subscription info:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Mark tutorial as finished for user's brand subscription
+   */
+  async markTutorialFinished(userId: string): Promise<boolean> {
+    try {
+      const subscription = await BrandSubscription.findOne({
+        where: { userId }
+      });
+
+      if (!subscription) {
+        return false;
+      }
+
+      await subscription.update({
+        tutorialFinished: true
+      });
+
+      return true;
+    } catch (error) {
+      console.error('❌ Error marking tutorial as finished:', error);
+      return false;
+    }
+  }
+
+  /**
    * Update brand subscription features and/or price (admin only)
    */
   async updateFeatures(

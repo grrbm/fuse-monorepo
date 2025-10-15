@@ -24,12 +24,14 @@ import {
 import Tutorial from '@/components/ui/tutorial'
 import { tutorialSteps } from '@/utils/tutorialSteps'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
 export default function CreateProduct() {
     const [loading, setLoading] = useState(false)
     const [uploadingImage, setUploadingImage] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [imageFile, setImageFile] = useState<File | null>(null)
-    const [runTutorial, setRunTutorial] = useState(true)
+    const [runTutorial, setRunTutorial] = useState(false)
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [imageConfirmed, setImageConfirmed] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -42,8 +44,46 @@ export default function CreateProduct() {
         activeIngredients: [] as string[],
         active: true
     })
-    const { user, token } = useAuth()
+    const { user, token, authenticatedFetch } = useAuth()
     const router = useRouter()
+
+    const fetchSubscriptionBasicInfo = async () => {
+        try {
+            const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/basic-info`, {
+                method: "GET",
+                skipLogoutOn401: true,
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    const needsTutorial = data.data.tutorialFinished === false && data.data.status === "active" && data.data.stripeCustomerId !== null;
+                    setRunTutorial(needsTutorial);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching subscription basic info:", error);
+        }
+    };
+
+    const handleTutorialFinish = async () => {
+        try {
+            const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/mark-tutorial-finished`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (response.ok) {
+                console.log('✅ Tutorial marked as finished')
+            } else {
+                console.error('❌ Failed to mark tutorial as finished')
+            }
+        } catch (error) {
+            console.error('❌ Error marking tutorial as finished:', error)
+        }
+    }
 
     const uploadProductImage = async (productId: string) => {
         if (!imageFile || !token) return
@@ -103,7 +143,7 @@ export default function CreateProduct() {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({...formData, price: 20})
             })
 
             if (response.ok) {
@@ -221,13 +261,24 @@ export default function CreateProduct() {
         }
     }
 
+    useEffect(() => {
+        if (user) {
+            fetchSubscriptionBasicInfo()
+        }
+    }, [user])
+
     return (
         <Layout>
             <Head>
                 <title>Create Product - Fuse Admin</title>
                 <meta name="description" content="Create a new product for your clinic" />
             </Head>
-            <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} steps={tutorialSteps.slice(-2)} />
+            <Tutorial 
+                runTutorial={runTutorial} 
+                setRunTutorial={setRunTutorial} 
+                steps={tutorialSteps.slice(-2)} 
+                onFinish={handleTutorialFinish}
+            />
             <div className="min-h-screen bg-background p-6">
                 <div className="max-w-4xl mx-auto">
                     {/* Header */}

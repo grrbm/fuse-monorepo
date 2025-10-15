@@ -644,8 +644,8 @@ app.post("/auth/signin", async (req, res) => {
       });
     }
 
-    // Validate password (permanent or temporary)
-    const isValidPassword = await user.validateAnyPassword(password);
+    // Validate password
+    const isValidPassword = await user.validatePassword(password);
     if (!isValidPassword) {
       return res.status(401).json({
         success: false,
@@ -3646,6 +3646,74 @@ app.get("/brand-subscriptions/current", authenticateJWT, async (req, res) => {
   }
 });
 
+// Get basic subscription info (status, tutorialFinished, stripeCustomerId)
+app.get("/brand-subscriptions/basic-info", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const brandSubscriptionService = new BrandSubscriptionService();
+    const subscriptionInfo = await brandSubscriptionService.getBasicSubscriptionInfo(currentUser.id);
+
+    if (!subscriptionInfo) {
+      return res.status(404).json({
+        success: false,
+        message: "No subscription found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: subscriptionInfo,
+    });
+  } catch (error) {
+    console.error("❌ Error getting basic subscription info:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+// Mark tutorial as finished
+app.post("/brand-subscriptions/mark-tutorial-finished", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const brandSubscriptionService = new BrandSubscriptionService();
+    const success = await brandSubscriptionService.markTutorialFinished(currentUser.id);
+
+    if (!success) {
+      return res.status(404).json({
+        success: false,
+        message: "No subscription found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Tutorial marked as finished",
+    });
+  } catch (error) {
+    console.error("❌ Error marking tutorial as finished:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
 // Update brand subscription features (admin only)
 app.put("/brand-subscriptions/features", authenticateJWT, async (req, res) => {
   try {
@@ -4424,15 +4492,6 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
     }
 
-    // Enforce product slots and ensure a TenantProduct exists
-    const tenantProductService = new TenantProductService();
-    try {
-      await tenantProductService.updateSelection({ products: [{ productId, questionnaireId }] } as any, currentUser.id);
-    } catch (e: any) {
-      const msg = e instanceof Error ? e.message : 'Failed to enable product for clinic';
-      return res.status(400).json({ success: false, message: msg });
-    }
-
     const record = await TenantProductForm.create({
       tenantId: currentUser.id,
       treatmentId: null,
@@ -4506,7 +4565,7 @@ app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Enabled form not found' });
     }
 
-    await record.destroy({ force: true } as any);
+    await record.destroy();
     res.status(200).json({ success: true });
   } catch (error) {
     console.error('❌ Error disabling tenant product form:', error);
@@ -5983,70 +6042,18 @@ app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
       plan: plan ? {
         name: plan.name,
         price: Number(plan.monthlyPrice),
-        type: plan.planType,
-        maxProducts: typeof (plan as any).maxProducts === 'number' ? (plan as any).maxProducts : undefined
+        type: plan.planType
       } : subscription.stripePriceId ? {
         name: subscription.planType,
         price: subscription.monthlyPrice ? Number(subscription.monthlyPrice) : 0,
         type: subscription.planType,
-        priceId: subscription.stripePriceId,
-        maxProducts: subscription.features && typeof (subscription.features as any).maxProducts === 'number' ? (subscription.features as any).maxProducts : undefined
+        priceId: subscription.stripePriceId
       } : null,
-      nextBillingDate: subscription.currentPeriodEnd || null,
-      lastProductChangeAt: subscription.lastProductChangeAt || null,
-      productsChangedAmountOnCurrentCycle: subscription.productsChangedAmountOnCurrentCycle || 0,
-      retriedProductSelectionForCurrentCycle: !!(subscription as any).retriedProductSelectionForCurrentCycle
+      nextBillingDate: subscription.currentPeriodEnd || null
     });
   } catch (error) {
     console.error('Error fetching subscription:', error);
     res.status(500).json({ success: false, message: "Internal server error" });
-  }
-});
-
-// Retry product selection: clears TenantProduct and TenantProductForm for current clinic, once per cycle
-app.post("/tenant-products/retry-selection", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-    if (!currentUser) {
-      return res.status(401).json({ success: false, message: "Not authenticated" });
-    }
-
-    const user = await User.findByPk(currentUser.id);
-    if (!user || !user.clinicId) {
-      return res.status(400).json({ success: false, message: "User clinic not found" });
-    }
-
-    const subscription = await BrandSubscription.findOne({
-      where: { userId: currentUser.id, status: BrandSubscriptionStatus.ACTIVE },
-      order: [["createdAt", "DESC"]]
-    });
-    if (!subscription) {
-      return res.status(400).json({ success: false, message: "No active subscription found" });
-    }
-
-    const periodStart = subscription.currentPeriodStart ? new Date(subscription.currentPeriodStart) : null;
-    const periodEnd = subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
-    if (
-      (subscription as any).retriedProductSelectionForCurrentCycle &&
-      periodStart && periodEnd && new Date() >= periodStart && new Date() < periodEnd
-    ) {
-      return res.status(400).json({ success: false, message: "You already retried once for this billing cycle." });
-    }
-
-    // Hard delete all mappings for this clinic
-    await (await import('./models/TenantProduct')).default.destroy({ where: { clinicId: user.clinicId } as any, force: true } as any);
-    await (await import('./models/TenantProductForm')).default.destroy({ where: { clinicId: user.clinicId } as any, force: true } as any);
-
-    await subscription.update({
-      productsChangedAmountOnCurrentCycle: 0,
-      retriedProductSelectionForCurrentCycle: true,
-      lastProductChangeAt: new Date(),
-    } as any)
-
-    res.status(200).json({ success: true, message: "Selections cleared. You can choose products again." });
-  } catch (error) {
-    console.error('❌ Error retrying product selection:', error);
-    res.status(500).json({ success: false, message: "Failed to retry product selection" });
   }
 });
 
@@ -6849,28 +6856,8 @@ app.post("/tenant-products/update-selection", authenticateJWT, async (req, res) 
       });
     }
 
-    // Validate request body using a relaxed schema that allows missing questionnaireId
-    const { z } = require('zod');
-    const relaxedItemSchema = z.object({
-      productId: z.string().uuid('Invalid product ID'),
-      questionnaireId: z.string().uuid('Invalid questionnaire ID').optional(),
-    });
-    const relaxedSchema = z.object({
-      products: z.array(relaxedItemSchema).min(1).max(100),
-    });
-
-    // Sanitize incoming to drop null questionnaireId values
-    const sanitized = {
-      products: Array.isArray(req.body?.products) ? req.body.products.map((p: any) => {
-        const obj: any = { productId: p?.productId };
-        if (typeof p?.questionnaireId === 'string' && p.questionnaireId.length > 0) {
-          obj.questionnaireId = p.questionnaireId;
-        }
-        return obj;
-      }) : []
-    };
-
-    const validation = relaxedSchema.safeParse(sanitized);
+    // Validate request body using updateSelectionSchema
+    const validation = updateSelectionSchema.safeParse(req.body);
     if (!validation.success) {
       return res.status(400).json({
         success: false,
@@ -6921,20 +6908,6 @@ app.post("/tenant-products/update-selection", authenticateJWT, async (req, res) 
       }
 
       if (error.message.includes('Duplicate')) {
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
-      }
-
-      if (error.message.includes('Product limit exceeded')) {
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
-      }
-
-      if (error.message.includes('only change products once per billing cycle')) {
         return res.status(400).json({
           success: false,
           message: error.message

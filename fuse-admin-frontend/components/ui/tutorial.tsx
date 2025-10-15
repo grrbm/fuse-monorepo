@@ -7,10 +7,12 @@ const Tutorial = ({
   runTutorial,
   setRunTutorial,
   steps,
+  onFinish,
 }: {
   runTutorial: boolean;
   setRunTutorial: (runTutorial: boolean) => void;
   steps?: any;
+  onFinish?: () => void;
 }) => {
   const router = useRouter();
 
@@ -39,6 +41,7 @@ const Tutorial = ({
 
     if (status === "finished" || status === "skipped") {
       setRunTutorial(false);
+      onFinish?.();
     }
   };
 
