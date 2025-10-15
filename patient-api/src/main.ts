@@ -6792,8 +6792,28 @@ app.post("/tenant-products/update-selection", authenticateJWT, async (req, res) 
       });
     }
 
-    // Validate request body using updateSelectionSchema
-    const validation = updateSelectionSchema.safeParse(req.body);
+    // Validate request body using a relaxed schema that allows missing questionnaireId
+    const { z } = require('zod');
+    const relaxedItemSchema = z.object({
+      productId: z.string().uuid('Invalid product ID'),
+      questionnaireId: z.string().uuid('Invalid questionnaire ID').optional(),
+    });
+    const relaxedSchema = z.object({
+      products: z.array(relaxedItemSchema).min(1).max(100),
+    });
+
+    // Sanitize incoming to drop null questionnaireId values
+    const sanitized = {
+      products: Array.isArray(req.body?.products) ? req.body.products.map((p: any) => {
+        const obj: any = { productId: p?.productId };
+        if (typeof p?.questionnaireId === 'string' && p.questionnaireId.length > 0) {
+          obj.questionnaireId = p.questionnaireId;
+        }
+        return obj;
+      }) : []
+    };
+
+    const validation = relaxedSchema.safeParse(sanitized);
     if (!validation.success) {
       return res.status(400).json({
         success: false,

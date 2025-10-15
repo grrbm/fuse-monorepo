@@ -49,6 +49,7 @@ export default function ProductDetail() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [templates, setTemplates] = useState<any[]>([])
+    const [tenantEnabled, setTenantEnabled] = useState<boolean>(false)
     const [enablingId, setEnablingId] = useState<string | null>(null)
     const [enabledForms, setEnabledForms] = useState<any[]>([])
     const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -143,12 +144,22 @@ export default function ProductDetail() {
         const fetchEnabled = async () => {
             if (!token || !id) return
             try {
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms?productId=${id}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                })
-                if (!res.ok) return
-                const data = await res.json()
-                setEnabledForms(Array.isArray(data?.data) ? data.data : [])
+                const [tpfRes, tpRes] = await Promise.all([
+                    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms?productId=${id}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                ])
+                if (tpfRes.ok) {
+                    const data = await tpfRes.json()
+                    setEnabledForms(Array.isArray(data?.data) ? data.data : [])
+                }
+                if (tpRes.ok) {
+                    const list = await tpRes.json().then(r => r?.data || [])
+                    setTenantEnabled(Array.isArray(list) && list.some((r: any) => r?.productId === id))
+                }
             } catch { }
         }
         fetchEnabled()
@@ -158,14 +169,21 @@ export default function ProductDetail() {
         if (!token || !id) return
         setEnablingId(questionnaireId)
         try {
+            console.groupCollapsed('[Enable template] Start')
+            console.log('Product ID:', id)
+            console.log('Questionnaire ID:', questionnaireId)
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ productId: id, questionnaireId })
             })
+            console.log('TenantProductForm POST status:', res.status)
             if (!res.ok) {
-                const err = await res.json().catch(() => ({}))
-                throw new Error(err?.message || 'Failed to enable form')
+                const errText = await res.text().catch(() => '')
+                console.error('TenantProductForm POST error body:', errText)
+                let errMsg = 'Failed to enable form'
+                try { const obj = JSON.parse(errText); errMsg = obj?.message || errMsg } catch { }
+                throw new Error(errMsg)
             }
             const data = await res.json().catch(() => ({}))
             const created = data?.data
@@ -177,14 +195,20 @@ export default function ProductDetail() {
 
                 // Also create/enable TenantProduct so public product page works
                 try {
+                    const updBody = { products: [{ productId: id, questionnaireId }] }
+                    console.log('TenantProduct update-selection payload:', updBody)
                     const tpRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update-selection`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ products: [{ productId: id, questionnaireId }] })
+                        body: JSON.stringify(updBody)
                     })
-                    const tpJson = await tpRes.json().catch(() => null)
+                    const tpText = await tpRes.text().catch(() => '')
+                    console.log('TenantProduct update-selection status:', tpRes.status)
+                    console.log('TenantProduct update-selection body:', tpText)
+                    let tpJson: any = null
+                    try { tpJson = JSON.parse(tpText) } catch { }
                     if (!tpRes.ok || !tpJson?.success) {
-                        throw new Error(tpJson?.message || 'Failed to enable clinic product')
+                        throw new Error(tpJson?.message || tpText || 'Failed to enable clinic product')
                     }
                     // Redirect back to products with tab=select so list refreshes and shows tint/counter
                     window.location.href = '/products?tab=select'
@@ -192,6 +216,7 @@ export default function ProductDetail() {
                     alert(err?.message || 'Failed to enable clinic product')
                 }
             }
+            console.groupEnd()
         } catch (e: any) {
             alert(e?.message || 'Failed to enable form')
         } finally {
@@ -229,6 +254,58 @@ export default function ProductDetail() {
             } catch { }
         } catch (e: any) {
             alert(e?.message || 'Failed to disable form')
+        }
+    }
+
+    const enableClinicOnly = async () => {
+        if (!token || !id) return
+        try {
+            const body = { products: [{ productId: id as string, questionnaireId: null }] }
+            console.groupCollapsed('[Enable product only] Start')
+            console.log('Payload:', body)
+            const tpRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update-selection`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            const raw = await tpRes.text().catch(() => '')
+            console.log('update-selection status:', tpRes.status)
+            console.log('update-selection body:', raw)
+            let tpJson: any = null
+            try { tpJson = JSON.parse(raw) } catch { }
+            if (!tpRes.ok || !tpJson?.success) {
+                throw new Error(tpJson?.message || raw || 'Failed to enable clinic product')
+            }
+            setTenantEnabled(true)
+            window.location.href = '/products?tab=select'
+            console.groupEnd()
+        } catch (e: any) {
+            alert(e?.message || 'Failed to enable clinic product')
+        }
+    }
+
+    const disableClinicOnly = async () => {
+        if (!token || !id) return
+        try {
+            const list = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            const listText = await list.text().catch(() => '')
+            console.log('tenant-products list status:', list.status)
+            console.log('tenant-products list body:', listText)
+            let listData: any = null
+            try { listData = JSON.parse(listText) } catch { }
+            const tp = (listData?.data || []).find((t: any) => t?.productId === id)
+            if (tp?.id) {
+                await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/${tp.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                setTenantEnabled(false)
+                window.location.href = '/products?tab=select'
+            }
+        } catch (e: any) {
+            alert(e?.message || 'Failed to disable clinic product')
         }
     }
 
@@ -529,6 +606,25 @@ export default function ProductDetail() {
 
                         {/* Sidebar */}
                         <div className="space-y-6">
+                            {/* Product Availability */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Product Availability</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="flex items-center justify-between">
+                                        <div className="text-sm text-muted-foreground">
+                                            Toggle product availability for your clinic without assigning a form.
+                                        </div>
+                                        {tenantEnabled ? (
+                                            <Button size="sm" variant="outline" onClick={disableClinicOnly}>Disable product for clinic</Button>
+                                        ) : (
+                                            <Button size="sm" onClick={enableClinicOnly}>Enable product for clinic</Button>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
                             {/* Product Forms (Templates) */}
                             <Card>
                                 <CardHeader>
@@ -536,7 +632,10 @@ export default function ProductDetail() {
                                 </CardHeader>
                                 <CardContent>
                                     {templates.length === 0 ? (
-                                        <div className="text-sm text-muted-foreground">No templates found for this product.</div>
+                                        <div className="text-sm text-muted-foreground">
+                                            <p className="mb-2">No templates found for this product.</p>
+                                            <p className="mb-1">You can still enable the product for your clinic without a form above.</p>
+                                        </div>
                                     ) : (
                                         <div className="space-y-2">
                                             {templates.map(t => {

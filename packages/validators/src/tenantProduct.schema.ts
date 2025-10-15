@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 export const productSelectionItemSchema = z.object({
   productId: z.string().uuid('Invalid product ID'),
-  questionnaireId: z.string().uuid('Invalid questionnaire ID'),
+  questionnaireId: z.string().uuid('Invalid questionnaire ID').optional().nullable(),
 });
 
 export const updateSelectionSchema = z.object({

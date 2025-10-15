@@ -33,7 +33,7 @@ import Sale from '../models/Sale';
 dotenv.config({ path: '.env.local' });
 
 // Use DEV_DATABASE_URL for development environment, otherwise use DATABASE_URL
-const databaseUrl = process.env.NODE_ENV === 'development' 
+const databaseUrl = process.env.NODE_ENV === 'development'
   ? process.env.DEV_DATABASE_URL || process.env.DATABASE_URL
   : process.env.DATABASE_URL;
 
@@ -95,6 +95,13 @@ export async function initializeDatabase() {
     // await sequelize.sync({ alter: { drop: false } });
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
+
+    // Ensure optional columns are nullable even if previous schema had NOT NULL
+    try {
+      await sequelize.query('ALTER TABLE "TenantProduct" ALTER COLUMN "questionnaireId" DROP NOT NULL;');
+    } catch (e) {
+      // ignore if already nullable or if statement not applicable
+    }
 
     return true;
   } catch (error) {

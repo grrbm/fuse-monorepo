@@ -39,7 +39,7 @@ export default class TenantProduct extends Entity {
     @ForeignKey(() => Questionnaire)
     @Column({
         type: DataType.UUID,
-        allowNull: false,
+        allowNull: true,
     })
     declare questionnaireId: string;
 

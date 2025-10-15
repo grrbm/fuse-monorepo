@@ -147,7 +147,7 @@ class TenantProductService {
 
         // 2. Extract unique product IDs and questionnaire IDs
         const productIds = [...new Set((data as any).products.map((p: any) => p.productId))] as any[];
-        const questionnaireIds = [...new Set((data as any).products.map((p: any) => p.questionnaireId))] as any[];
+        const questionnaireIds = [...new Set((data as any).products.map((p: any) => p.questionnaireId).filter(Boolean))] as any[];
 
         // 3. Enforce change-once-per-billing-cycle and validate subscription limits
         const subscription = await BrandSubscription.findOne({
@@ -186,7 +186,9 @@ class TenantProductService {
         await this.validateProducts(productIds);
 
         // 5. Validate questionnaires exist and belong to clinic
-        await this.validateQuestionnaires(questionnaireIds);
+        if (questionnaireIds.length > 0) {
+            await this.validateQuestionnaires(questionnaireIds);
+        }
 
         // 6. Check for duplicate product entries in the input
         const productIdCounts = new Map<string, number>();
@@ -206,7 +208,7 @@ class TenantProductService {
         // 7. Prepare data for bulk upsert
         const productsToUpsert = data.products.map(item => ({
             productId: item.productId,
-            questionnaireId: item.questionnaireId,
+            questionnaireId: (item as any).questionnaireId || null,
         }));
 
         // 8. Bulk upsert tenant products
