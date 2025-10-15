@@ -279,6 +279,25 @@ export default class User extends Entity {
     return bcrypt.compare(password, this.passwordHash);
   }
 
+  /**
+   * Validate either the permanent password or a temporary password if present.
+   */
+  public async validateAnyPassword(password: string): Promise<boolean> {
+    const permanentValid = await this.validatePassword(password);
+    if (permanentValid) return true;
+
+    if (this.temporaryPasswordHash) {
+      try {
+        const tempValid = await bcrypt.compare(password, this.temporaryPasswordHash);
+        if (tempValid) return true;
+      } catch (_) {
+        // ignore compare errors and fall through to false
+      }
+    }
+
+    return false;
+  }
+
   public async updateLastLogin(): Promise<void> {
     this.lastLoginAt = new Date();
     await this.save();

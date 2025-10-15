@@ -644,8 +644,8 @@ app.post("/auth/signin", async (req, res) => {
       });
     }
 
-    // Validate password
-    const isValidPassword = await user.validatePassword(password);
+    // Validate password (permanent or temporary)
+    const isValidPassword = await user.validateAnyPassword(password);
     if (!isValidPassword) {
       return res.status(401).json({
         success: false,
