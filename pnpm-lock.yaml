@@ -605,9 +605,13 @@ importers:
         version: 5.9.2
 
   packages/enums:
+    dependencies:
+      '@fuse/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
     devDependencies:
       typescript:
-        specifier: ^5.9.2
+        specifier: 'catalog:'
         version: 5.9.2
 
   packages/stripe:
