@@ -58,6 +58,8 @@ export default function Products() {
 
     const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
     const [tenantProductCount, setTenantProductCount] = useState<number>(0)
+    const [enabledProductIds, setEnabledProductIds] = useState<Set<string>>(new Set())
+    const [clinicName, setClinicName] = useState<string>("")
 
     // Cast user to include clinicId property
     const userWithClinic = user as any
@@ -198,8 +200,22 @@ export default function Products() {
             const data = await res.json().catch(() => null)
             const rows = Array.isArray(data?.data) ? data.data : []
             setTenantProductCount(rows.length)
+            setEnabledProductIds(new Set(rows.map((r: any) => r.productId).filter(Boolean)))
         } catch { }
     }, [token])
+
+    const fetchClinicName = useCallback(async () => {
+        if (!token || !userWithClinic?.clinicId) return
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/clinic/${userWithClinic.clinicId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            if (!res.ok) return
+            const data = await res.json().catch(() => null)
+            const name = data?.data?.name
+            if (typeof name === 'string') setClinicName(name)
+        } catch { }
+    }, [token, userWithClinic?.clinicId])
 
     useEffect(() => {
         console.log('🔍 Products useEffect running')
@@ -211,7 +227,8 @@ export default function Products() {
         fetchAssignments()
         fetchSubscription()
         fetchTenantProductCount()
-    }, [fetchAssignments, allProducts, fetchSubscription, fetchTenantProductCount])
+        fetchClinicName()
+    }, [fetchAssignments, allProducts, fetchSubscription, fetchTenantProductCount, fetchClinicName])
 
     const getStatusBadge = (active: boolean) => {
         return active
@@ -260,6 +277,14 @@ export default function Products() {
     }
 
     const visibleProducts = activeTab === 'my' ? products : allProducts
+    const displayedProducts = activeTab === 'select'
+        ? [...visibleProducts].sort((a, b) => {
+            const aEnabled = enabledProductIds.has(a.id)
+            const bEnabled = enabledProductIds.has(b.id)
+            if (aEnabled === bEnabled) return a.name.localeCompare(b.name)
+            return aEnabled ? -1 : 1
+        })
+        : visibleProducts
 
     if (loading) {
         return (
@@ -400,120 +425,126 @@ export default function Products() {
                     )}
 
                     {/* Products Grid */}
-                    {visibleProducts.length > 0 ? (
+                    {(activeTab === 'select' ? displayedProducts : visibleProducts).length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {visibleProducts.map((product) => (
-                                <Card key={product.id} className="hover:shadow-lg transition-shadow">
-                                    <CardHeader>
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex items-center gap-3">
-                                                <div className="relative">
-                                                    {product.imageUrl ? (
-                                                        <img
-                                                            src={product.imageUrl}
-                                                            alt={product.name}
-                                                            className="w-12 h-12 rounded-lg object-cover border"
-                                                            onLoad={(e) => {
-                                                                console.log('✅ Image loaded successfully:', product.imageUrl);
-                                                            }}
-                                                            onError={(e) => {
-                                                                console.log('❌ Image failed to load:', product.imageUrl, e);
-                                                                // Fallback to icon if image fails to load
-                                                                const target = e.target as HTMLImageElement;
-                                                                target.style.display = 'none';
-                                                                const parent = target.parentElement;
-                                                                if (parent && !parent.querySelector('.fallback-icon')) {
-                                                                    const icon = document.createElement('div');
-                                                                    icon.className = 'p-2 bg-primary/10 rounded-lg fallback-icon';
-                                                                    icon.innerHTML = '<svg class="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>';
-                                                                    parent.appendChild(icon);
-                                                                }
-                                                            }}
-                                                        />
-                                                    ) : (
-                                                        <div className="p-2 bg-primary/10 rounded-lg">
-                                                            <Package className="h-6 w-6 text-primary" />
+                            {(activeTab === 'select' ? displayedProducts : visibleProducts).map((product) => {
+                                const isEnabled = enabledProductIds.has(product.id)
+                                return (
+                                    <Card key={product.id} className={`hover:shadow-lg transition-shadow ${activeTab === 'select' && isEnabled ? 'bg-green-50 border-green-200' : ''}`}>
+                                        <CardHeader>
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="relative">
+                                                        {product.imageUrl ? (
+                                                            <img
+                                                                src={product.imageUrl}
+                                                                alt={product.name}
+                                                                className="w-12 h-12 rounded-lg object-cover border"
+                                                                onLoad={(e) => {
+                                                                    console.log('✅ Image loaded successfully:', product.imageUrl);
+                                                                }}
+                                                                onError={(e) => {
+                                                                    console.log('❌ Image failed to load:', product.imageUrl, e);
+                                                                    // Fallback to icon if image fails to load
+                                                                    const target = e.target as HTMLImageElement;
+                                                                    target.style.display = 'none';
+                                                                    const parent = target.parentElement;
+                                                                    if (parent && !parent.querySelector('.fallback-icon')) {
+                                                                        const icon = document.createElement('div');
+                                                                        icon.className = 'p-2 bg-primary/10 rounded-lg fallback-icon';
+                                                                        icon.innerHTML = '<svg class="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>';
+                                                                        parent.appendChild(icon);
+                                                                    }
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <div className="p-2 bg-primary/10 rounded-lg">
+                                                                <Package className="h-6 w-6 text-primary" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <CardTitle className="text-lg">{product.name}</CardTitle>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {product.pharmacyProductId && `Pharmacy ID: ${product.pharmacyProductId}`}
+                                                        </p>
+                                                        {activeTab === 'select' && isEnabled && clinicName && (
+                                                            <p className="text-xs text-green-700 mt-1">Enabled for {clinicName}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {getStatusBadge(product.active)}
+                                            </div>
+                                        </CardHeader>
+
+                                        <CardContent>
+                                            <div className="space-y-4">
+                                                {/* Price Information */}
+                                                <div className="flex justify-between items-center">
+                                                    <div className="flex items-center gap-2">
+                                                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                                                        <span className="text-sm text-muted-foreground">Price</span>
+                                                    </div>
+                                                    <span className="font-semibold">{formatPrice(product.price)}</span>
+                                                </div>
+
+                                                {/* Dosage Information */}
+                                                {product.dosage && (
+                                                    <div className="flex justify-between items-center">
+                                                        <div className="flex items-center gap-2">
+                                                            <Activity className="h-4 w-4 text-muted-foreground" />
+                                                            <span className="text-sm text-muted-foreground">Default Dosage</span>
                                                         </div>
-                                                    )}
-                                                </div>
-                                                <div className="flex-1">
-                                                    <CardTitle className="text-lg">{product.name}</CardTitle>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {product.pharmacyProductId && `Pharmacy ID: ${product.pharmacyProductId}`}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {getStatusBadge(product.active)}
-                                        </div>
-                                    </CardHeader>
-
-                                    <CardContent>
-                                        <div className="space-y-4">
-                                            {/* Price Information */}
-                                            <div className="flex justify-between items-center">
-                                                <div className="flex items-center gap-2">
-                                                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                                                    <span className="text-sm text-muted-foreground">Price</span>
-                                                </div>
-                                                <span className="font-semibold">{formatPrice(product.price)}</span>
-                                            </div>
-
-                                            {/* Dosage Information */}
-                                            {product.dosage && (
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex items-center gap-2">
-                                                        <Activity className="h-4 w-4 text-muted-foreground" />
-                                                        <span className="text-sm text-muted-foreground">Default Dosage</span>
+                                                        <span className="font-semibold">{product.dosage}</span>
                                                     </div>
-                                                    <span className="font-semibold">{product.dosage}</span>
-                                                </div>
-                                            )}
+                                                )}
 
-                                            {/* Treatments Count */}
-                                            {product.treatments && product.treatments.length > 0 && (
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex items-center gap-2">
-                                                        <Package className="h-4 w-4 text-muted-foreground" />
-                                                        <span className="text-sm text-muted-foreground">Used in</span>
+                                                {/* Treatments Count */}
+                                                {product.treatments && product.treatments.length > 0 && (
+                                                    <div className="flex justify-between items-center">
+                                                        <div className="flex items-center gap-2">
+                                                            <Package className="h-4 w-4 text-muted-foreground" />
+                                                            <span className="text-sm text-muted-foreground">Used in</span>
+                                                        </div>
+                                                        <span className="font-semibold">{product.treatments.length} treatment{(product.treatments.length > 1) ? 's' : ''}</span>
                                                     </div>
-                                                    <span className="font-semibold">{product.treatments.length} treatment{(product.treatments.length > 1) ? 's' : ''}</span>
-                                                </div>
-                                            )}
+                                                )}
 
-                                            {/* Actions */}
-                                            <div className="flex gap-2 pt-4">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1"
-                                                    onClick={() => router.push(`/products/${product.id}`)}
-                                                >
-                                                    <Eye className="h-4 w-4 mr-1" />
-                                                    View
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1"
-                                                    onClick={() => router.push(`/products/${product.id}/edit`)}
-                                                >
-                                                    <Edit className="h-4 w-4 mr-1" />
-                                                    Edit
-                                                </Button>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                    onClick={() => handleDeleteProduct(product.id, product.name)}
-                                                >
-                                                    <Trash2 className="h-4 w-4 mr-1" />
-                                                    Delete
-                                                </Button>
+                                                {/* Actions */}
+                                                <div className="flex gap-2 pt-4">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="flex-1"
+                                                        onClick={() => router.push(`/products/${product.id}`)}
+                                                    >
+                                                        <Eye className="h-4 w-4 mr-1" />
+                                                        View
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="flex-1"
+                                                        onClick={() => router.push(`/products/${product.id}/edit`)}
+                                                    >
+                                                        <Edit className="h-4 w-4 mr-1" />
+                                                        Edit
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                        onClick={() => handleDeleteProduct(product.id, product.name)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4 mr-1" />
+                                                        Delete
+                                                    </Button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
+                                        </CardContent>
+                                    </Card>
+                                )
+                            })}
                         </div>
                     ) : (
                         <Card className="p-12 text-center">

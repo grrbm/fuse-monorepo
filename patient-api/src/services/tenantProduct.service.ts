@@ -162,10 +162,16 @@ class TenantProductService {
         const now = new Date();
         const periodStart = subscription.currentPeriodStart ? new Date(subscription.currentPeriodStart) : null;
         const periodEnd = subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
-        const lastChangeAtIso = (subscription.features as any)?.lastProductChangeAt as string | undefined;
-        const lastChangeAt = lastChangeAtIso ? new Date(lastChangeAtIso) : null;
 
-        if (periodStart && periodEnd && lastChangeAt && lastChangeAt >= periodStart && lastChangeAt < periodEnd) {
+        // Reset counter at cycle start, if needed
+        if (periodStart && subscription.lastProductChangeAt && subscription.lastProductChangeAt < periodStart) {
+            try {
+                await subscription.update({ productsChangedAmountOnCurrentCycle: 0 } as any)
+            } catch { }
+        }
+
+        // Enforce once-per-cycle if already changed within this cycle
+        if (periodStart && periodEnd && subscription.lastProductChangeAt && subscription.lastProductChangeAt >= periodStart && subscription.lastProductChangeAt < periodEnd) {
             const nextChangeDate = periodEnd.toISOString();
             throw new Error(`You can only change products once per billing cycle. Try again after ${nextChangeDate}.`);
         }
@@ -213,13 +219,12 @@ class TenantProductService {
 
         // 10. Mark last change timestamp on subscription (features JSONB)
         try {
-            const updatedFeatures = {
-                ...(subscription.features || {}),
-                lastProductChangeAt: new Date().toISOString(),
-            } as any;
-            await subscription.update({ features: updatedFeatures } as any);
+            await subscription.update({
+                lastProductChangeAt: new Date(),
+                productsChangedAmountOnCurrentCycle: (subscription.productsChangedAmountOnCurrentCycle || 0) + 1,
+            } as any)
         } catch (e) {
-            console.warn('Failed to update lastProductChangeAt on subscription', e);
+            console.warn('Failed to update product change tracking fields on subscription', e);
         }
 
         return result.filter((tp): tp is TenantProduct => tp !== null);

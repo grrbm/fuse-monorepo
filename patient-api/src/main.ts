@@ -5984,7 +5984,8 @@ app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
         maxProducts: subscription.features && typeof (subscription.features as any).maxProducts === 'number' ? (subscription.features as any).maxProducts : undefined
       } : null,
       nextBillingDate: subscription.currentPeriodEnd || null,
-      lastProductChangeAt: (subscription.features as any)?.lastProductChangeAt || null
+      lastProductChangeAt: subscription.lastProductChangeAt || null,
+      productsChangedAmountOnCurrentCycle: subscription.productsChangedAmountOnCurrentCycle || 0
     });
   } catch (error) {
     console.error('Error fetching subscription:', error);

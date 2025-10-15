@@ -177,12 +177,18 @@ export default function ProductDetail() {
 
                 // Also create/enable TenantProduct so public product page works
                 try {
-                    await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update-selection`, {
+                    const tpRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update-selection`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({ products: [{ productId: id, questionnaireId }] })
                     })
-                } catch { }
+                    const tpJson = await tpRes.json().catch(() => null)
+                    if (!tpRes.ok || !tpJson?.success) {
+                        throw new Error(tpJson?.message || 'Failed to enable clinic product')
+                    }
+                } catch (err: any) {
+                    alert(err?.message || 'Failed to enable clinic product')
+                }
             }
         } catch (e: any) {
             alert(e?.message || 'Failed to enable form')

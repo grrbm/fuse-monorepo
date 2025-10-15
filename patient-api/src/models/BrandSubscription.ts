@@ -140,6 +140,19 @@ export default class BrandSubscription extends Entity {
   })
   declare features?: BrandSubscriptionFeatures;
 
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare lastProductChangeAt?: Date;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare productsChangedAmountOnCurrentCycle: number;
+
   @BelongsTo(() => User)
   declare user?: User;
 
