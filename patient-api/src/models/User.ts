@@ -51,7 +51,7 @@ export default class User extends Entity {
 
   @Column({
     type: DataType.STRING,
-    allowNull: false,
+    allowNull: true,
   })
   declare temporaryPasswordHash: string;
 
