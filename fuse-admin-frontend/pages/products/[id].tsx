@@ -195,20 +195,31 @@ export default function ProductDetail() {
 
                 // Also create/enable TenantProduct so public product page works
                 try {
-                    const updBody = { products: [{ productId: id, questionnaireId }] }
-                    console.log('TenantProduct update-selection payload:', updBody)
-                    const tpRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update-selection`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updBody)
+                    // First, check if already enabled
+                    const listRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
                     })
-                    const tpText = await tpRes.text().catch(() => '')
-                    console.log('TenantProduct update-selection status:', tpRes.status)
-                    console.log('TenantProduct update-selection body:', tpText)
-                    let tpJson: any = null
-                    try { tpJson = JSON.parse(tpText) } catch { }
-                    if (!tpRes.ok || !tpJson?.success) {
-                        throw new Error(tpJson?.message || tpText || 'Failed to enable clinic product')
+                    const listText = await listRes.text().catch(() => '')
+                    let listJson: any = null
+                    try { listJson = JSON.parse(listText) } catch { }
+                    const alreadyEnabled = Array.isArray(listJson?.data) && listJson.data.some((t: any) => t?.productId === id)
+                    if (!alreadyEnabled) {
+                        const updBody = { products: [{ productId: id, questionnaireId }] }
+                        console.log('TenantProduct update-selection payload:', updBody)
+                        const tpRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update-selection`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify(updBody)
+                        })
+                        const tpText = await tpRes.text().catch(() => '')
+                        console.log('TenantProduct update-selection status:', tpRes.status)
+                        console.log('TenantProduct update-selection body:', tpText)
+                        let tpJson: any = null
+                        try { tpJson = JSON.parse(tpText) } catch { }
+                        if (!tpRes.ok || !tpJson?.success) {
+                            // Don't block form enable; just warn
+                            console.warn('TenantProduct creation failed (slots?):', tpText)
+                        }
                     }
                     // Redirect back to products with tab=select so list refreshes and shows tint/counter
                     window.location.href = '/products?tab=select'
@@ -606,24 +617,26 @@ export default function ProductDetail() {
 
                         {/* Sidebar */}
                         <div className="space-y-6">
-                            {/* Product Availability */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Product Availability</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex items-center justify-between">
-                                        <div className="text-sm text-muted-foreground">
-                                            Toggle product availability for your clinic without assigning a form.
+                            {/* Product Availability - only when no templates exist */}
+                            {templates.length === 0 && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Product Availability</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-sm text-muted-foreground">
+                                                Toggle product availability for your clinic without assigning a form.
+                                            </div>
+                                            {tenantEnabled ? (
+                                                <Button size="sm" variant="outline" onClick={disableClinicOnly}>Disable product for clinic</Button>
+                                            ) : (
+                                                <Button size="sm" onClick={enableClinicOnly}>Enable product for clinic</Button>
+                                            )}
                                         </div>
-                                        {tenantEnabled ? (
-                                            <Button size="sm" variant="outline" onClick={disableClinicOnly}>Disable product for clinic</Button>
-                                        ) : (
-                                            <Button size="sm" onClick={enableClinicOnly}>Enable product for clinic</Button>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                    </CardContent>
+                                </Card>
+                            )}
 
                             {/* Product Forms (Templates) */}
                             <Card>

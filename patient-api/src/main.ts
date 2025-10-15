@@ -4424,6 +4424,15 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
     }
 
+    // Enforce product slots and ensure a TenantProduct exists
+    const tenantProductService = new TenantProductService();
+    try {
+      await tenantProductService.updateSelection({ products: [{ productId, questionnaireId }] } as any, currentUser.id);
+    } catch (e: any) {
+      const msg = e instanceof Error ? e.message : 'Failed to enable product for clinic';
+      return res.status(400).json({ success: false, message: msg });
+    }
+
     const record = await TenantProductForm.create({
       tenantId: currentUser.id,
       treatmentId: null,
