@@ -29,7 +29,7 @@ const navigation = [
 const operations = [
   { name: "Treatments", icon: Stethoscope, current: false, href: "/treatments" },
   // { name: "Offerings", icon: Gift, current: false, href: "/offerings" },
-  { name: "Products", icon: Package, current: false, href: "/products" },
+  { name: "Products", icon: Package, current: false, href: "/products", id: "tutorial-step-3" },
   { name: "Orders", icon: ShoppingCart, current: false, href: "/orders", hasSubmenu: true },
 ]
 
@@ -90,13 +90,13 @@ export function Sidebar() {
   }
 
   // Helper function to render a sidebar item
-  const renderSidebarItem = (item: { name: string; icon: any; current: boolean; href?: string; hasSubmenu?: boolean }, _section: string) => {
+  const renderSidebarItem = (item: { name: string; icon: any; current: boolean; href?: string; hasSubmenu?: boolean, id?: string }, _section: string) => {
     const isActive = router.pathname === item.href
     const disabled = isItemDisabled(item.name)
     const isHovered = hoveredItem === item.name
 
     return (
-      <div key={item.name} className="relative">
+      <div key={item.name} className="relative" id={item.id}>
         {disabled && !hasActiveSubscription ? (
           <div
             className={cn(
