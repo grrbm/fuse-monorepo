@@ -38,6 +38,14 @@ interface Product {
     }>
 }
 
+interface SubscriptionInfo {
+    id: string
+    status: string
+    plan?: { name: string; price: number; type: string; maxProducts?: number }
+    nextBillingDate?: string | null
+    lastProductChangeAt?: string | null
+}
+
 export default function Products() {
     const [products, setProducts] = useState<Product[]>([])
     const [allProducts, setAllProducts] = useState<Product[]>([])
@@ -47,6 +55,9 @@ export default function Products() {
     const [error, setError] = useState<string | null>(null)
     const { user, token } = useAuth()
     const router = useRouter()
+
+    const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
+    const [tenantProductCount, setTenantProductCount] = useState<number>(0)
 
     // Cast user to include clinicId property
     const userWithClinic = user as any
@@ -165,6 +176,31 @@ export default function Products() {
         }
     }, [token, allProducts])
 
+    const fetchSubscription = useCallback(async () => {
+        if (!token) return
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/subscriptions/current`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            if (!res.ok) return
+            const data = await res.json().catch(() => null)
+            setSubscription(data || null)
+        } catch { }
+    }, [token])
+
+    const fetchTenantProductCount = useCallback(async () => {
+        if (!token) return
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            if (!res.ok) return
+            const data = await res.json().catch(() => null)
+            const rows = Array.isArray(data?.data) ? data.data : []
+            setTenantProductCount(rows.length)
+        } catch { }
+    }, [token])
+
     useEffect(() => {
         console.log('🔍 Products useEffect running')
         fetchProducts()
@@ -173,7 +209,9 @@ export default function Products() {
     useEffect(() => {
         // After products are loaded, fetch assignments and build My Products
         fetchAssignments()
-    }, [fetchAssignments, allProducts])
+        fetchSubscription()
+        fetchTenantProductCount()
+    }, [fetchAssignments, allProducts, fetchSubscription, fetchTenantProductCount])
 
     const getStatusBadge = (active: boolean) => {
         return active
@@ -280,6 +318,25 @@ export default function Products() {
                         >
                             📊 Show State
                         </Button>
+                    </div>
+                </div>
+
+                {/* Subscription/product limit summary */}
+                <div className="mb-6 p-4 rounded-lg border bg-muted/40">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <div className="text-sm text-muted-foreground">Product Slots</div>
+                            <div className="text-xl font-semibold">
+                                {tenantProductCount}
+                                <span className="text-muted-foreground"> / </span>
+                                {subscription?.plan?.maxProducts === -1 || subscription?.plan?.maxProducts === undefined ? 'Unlimited' : subscription?.plan?.maxProducts}
+                            </div>
+                        </div>
+                        {subscription?.lastProductChangeAt && subscription?.nextBillingDate && (
+                            <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                You can only change products once per billing cycle. Next change after {new Date(subscription.nextBillingDate).toLocaleString()}.
+                            </div>
+                        )}
                     </div>
                 </div>
 

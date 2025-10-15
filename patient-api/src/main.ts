@@ -5974,14 +5974,17 @@ app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
       plan: plan ? {
         name: plan.name,
         price: Number(plan.monthlyPrice),
-        type: plan.planType
+        type: plan.planType,
+        maxProducts: typeof (plan as any).maxProducts === 'number' ? (plan as any).maxProducts : undefined
       } : subscription.stripePriceId ? {
         name: subscription.planType,
         price: subscription.monthlyPrice ? Number(subscription.monthlyPrice) : 0,
         type: subscription.planType,
-        priceId: subscription.stripePriceId
+        priceId: subscription.stripePriceId,
+        maxProducts: subscription.features && typeof (subscription.features as any).maxProducts === 'number' ? (subscription.features as any).maxProducts : undefined
       } : null,
-      nextBillingDate: subscription.currentPeriodEnd || null
+      nextBillingDate: subscription.currentPeriodEnd || null,
+      lastProductChangeAt: (subscription.features as any)?.lastProductChangeAt || null
     });
   } catch (error) {
     console.error('Error fetching subscription:', error);
@@ -6840,6 +6843,20 @@ app.post("/tenant-products/update-selection", authenticateJWT, async (req, res) 
       }
 
       if (error.message.includes('Duplicate')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      if (error.message.includes('Product limit exceeded')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      if (error.message.includes('only change products once per billing cycle')) {
         return res.status(400).json({
           success: false,
           message: error.message

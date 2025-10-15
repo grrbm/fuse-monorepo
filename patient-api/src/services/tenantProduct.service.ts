@@ -2,7 +2,8 @@ import TenantProduct from '../models/TenantProduct';
 import Product from '../models/Product';
 import Questionnaire from '../models/Questionnaire';
 import User from '../models/User';
-import BrandSubscription from '../models/BrandSubscription';
+import BrandSubscription, { BrandSubscriptionStatus } from '../models/BrandSubscription';
+import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
 import Clinic from '../models/Clinic';
 import { StripeService } from '@fuse/stripe';
 import {
@@ -94,9 +95,9 @@ class TenantProductService {
      * Validates that the number of products doesn't exceed subscription limits
      */
     async validateSubscriptionLimits(userId: string, productCount: number): Promise<void> {
-        // Get user's active subscription
+        // Get user's latest ACTIVE subscription
         const subscription = await BrandSubscription.findOne({
-            where: { userId },
+            where: { userId, status: BrandSubscriptionStatus.ACTIVE },
             order: [['createdAt', 'DESC']]
         });
 
@@ -104,13 +105,22 @@ class TenantProductService {
             throw new Error('No active subscription found. Please subscribe to a plan to manage products.');
         }
 
-        // Check if subscription is active
-        if (!subscription.isActive()) {
-            throw new Error(`Subscription is not active. Current status: ${subscription.status}`);
+        // Determine maxProducts: prefer features.maxProducts; fallback to plan by planType
+        let maxProducts: number | undefined = subscription.features?.maxProducts;
+        if (typeof maxProducts !== 'number') {
+            if (subscription.planType) {
+                const plan = await BrandSubscriptionPlans.findOne({ where: { planType: subscription.planType } });
+                if (plan) {
+                    maxProducts = plan.maxProducts;
+                }
+            }
         }
 
-        // Check maxProducts limit from features
-        const maxProducts = subscription.features?.maxProducts;
+        // If still undefined, treat as unlimited
+        if (typeof maxProducts !== 'number') {
+            console.log(`ℹ️ No maxProducts configured; treating as unlimited.`);
+            return;
+        }
 
         // -1 means unlimited products
         if (maxProducts === -1) {
@@ -118,13 +128,13 @@ class TenantProductService {
             return;
         }
 
-        if (maxProducts !== undefined && productCount > maxProducts) {
+        if (productCount > maxProducts) {
             throw new Error(
-                `Product limit exceeded. Your plan allows ${maxProducts} product(s), but you are trying to add ${productCount}. Please upgrade your subscription to add more products.`
+                `Product limit exceeded. Your plan allows ${maxProducts} product(s), but you are trying to enable ${productCount}. Please upgrade your subscription to add more products.`
             );
         }
 
-        console.log(`✅ Subscription validation passed: ${productCount} products (limit: ${maxProducts ?? 'unlimited'})`);
+        console.log(`✅ Subscription validation passed: ${productCount} products (limit: ${maxProducts})`);
     }
 
     /**
@@ -139,8 +149,32 @@ class TenantProductService {
         const productIds = [...new Set((data as any).products.map((p: any) => p.productId))] as any[];
         const questionnaireIds = [...new Set((data as any).products.map((p: any) => p.questionnaireId))] as any[];
 
-        // 3. Validate subscription limits based on number of products
-        await this.validateSubscriptionLimits(userId, productIds.length);
+        // 3. Enforce change-once-per-billing-cycle and validate subscription limits
+        const subscription = await BrandSubscription.findOne({
+            where: { userId, status: BrandSubscriptionStatus.ACTIVE },
+            order: [['createdAt', 'DESC']]
+        });
+        if (!subscription) {
+            throw new Error('No active subscription found. Please subscribe to a plan to manage products.');
+        }
+
+        // Change once per billing cycle check
+        const now = new Date();
+        const periodStart = subscription.currentPeriodStart ? new Date(subscription.currentPeriodStart) : null;
+        const periodEnd = subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
+        const lastChangeAtIso = (subscription.features as any)?.lastProductChangeAt as string | undefined;
+        const lastChangeAt = lastChangeAtIso ? new Date(lastChangeAtIso) : null;
+
+        if (periodStart && periodEnd && lastChangeAt && lastChangeAt >= periodStart && lastChangeAt < periodEnd) {
+            const nextChangeDate = periodEnd.toISOString();
+            throw new Error(`You can only change products once per billing cycle. Try again after ${nextChangeDate}.`);
+        }
+
+        // Validate subscription limits based on final total products (existing + incoming)
+        const existing = await getTenantProductsByClinic(clinicId);
+        const existingProductIds = new Set<string>(existing.map(tp => tp.productId));
+        const finalProductIds = new Set<string>([...existingProductIds, ...productIds as string[]]);
+        await this.validateSubscriptionLimits(userId, finalProductIds.size);
 
         // 4. Validate products exist
         await this.validateProducts(productIds);
@@ -176,6 +210,17 @@ class TenantProductService {
         const result = await Promise.all(
             tenantProducts.map(tp => getTenantProduct(tp.id))
         );
+
+        // 10. Mark last change timestamp on subscription (features JSONB)
+        try {
+            const updatedFeatures = {
+                ...(subscription.features || {}),
+                lastProductChangeAt: new Date().toISOString(),
+            } as any;
+            await subscription.update({ features: updatedFeatures } as any);
+        } catch (e) {
+            console.warn('Failed to update lastProductChangeAt on subscription', e);
+        }
 
         return result.filter((tp): tp is TenantProduct => tp !== null);
     }
@@ -329,7 +374,7 @@ class TenantProductService {
                 recurring: {
                     interval: 'month',
                     interval_count: 1
-                  },
+                },
                 metadata: {
                     productId: product.id,
                     tenantProductId: tenantProduct.id,
