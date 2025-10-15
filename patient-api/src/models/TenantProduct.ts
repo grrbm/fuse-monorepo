@@ -6,6 +6,7 @@ import Questionnaire from './Questionnaire';
 
 @Table({
     freezeTableName: true,
+    paranoid: false,
     indexes: [
         {
             unique: true,

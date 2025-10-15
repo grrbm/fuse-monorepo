@@ -170,11 +170,11 @@ class TenantProductService {
             } catch { }
         }
 
-        // Enforce once-per-cycle if already changed within this cycle
-        if (periodStart && periodEnd && subscription.lastProductChangeAt && subscription.lastProductChangeAt >= periodStart && subscription.lastProductChangeAt < periodEnd) {
-            const nextChangeDate = periodEnd.toISOString();
-            throw new Error(`You can only change products once per billing cycle. Try again after ${nextChangeDate}.`);
-        }
+        // Removed: once-per-cycle enforcement to allow changes up to plan limit
+        // if (periodStart && periodEnd && subscription.lastProductChangeAt && subscription.lastProductChangeAt >= periodStart && subscription.lastProductChangeAt < periodEnd) {
+        //     const nextChangeDate = periodEnd.toISOString();
+        //     throw new Error(`You can only change products once per billing cycle. Try again after ${nextChangeDate}.`);
+        // }
 
         // Validate subscription limits based on final total products (existing + incoming)
         const existing = await getTenantProductsByClinic(clinicId);

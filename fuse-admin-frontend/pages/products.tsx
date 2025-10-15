@@ -44,12 +44,16 @@ interface SubscriptionInfo {
     plan?: { name: string; price: number; type: string; maxProducts?: number }
     nextBillingDate?: string | null
     lastProductChangeAt?: string | null
+    productsChangedAmountOnCurrentCycle?: number
 }
 
 export default function Products() {
     const [products, setProducts] = useState<Product[]>([])
     const [allProducts, setAllProducts] = useState<Product[]>([])
-    const [activeTab, setActiveTab] = useState<'my' | 'select'>('my')
+    const [activeTab, setActiveTab] = useState<'my' | 'select'>(() => {
+        const tab = (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null)
+        return tab === 'select' ? 'select' : 'my'
+    })
     const [assignments, setAssignments] = useState<Array<{ productId: string; questionnaireId: string }>>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -230,6 +234,21 @@ export default function Products() {
         fetchClinicName()
     }, [fetchAssignments, allProducts, fetchSubscription, fetchTenantProductCount, fetchClinicName])
 
+    // React to query param changes to set the tab (e.g., after enabling redirect)
+    useEffect(() => {
+        const tab = router.query.tab
+        if (tab === 'select' || tab === 'my') {
+            setActiveTab(tab as 'my' | 'select')
+        }
+    }, [router.query.tab])
+
+    // When switching to Select tab, refresh enabled set and counts
+    useEffect(() => {
+        if (activeTab === 'select') {
+            fetchTenantProductCount()
+        }
+    }, [activeTab, fetchTenantProductCount])
+
     const getStatusBadge = (active: boolean) => {
         return active
             ? <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="h-3 w-3 mr-1" /> Active</Badge>
@@ -352,16 +371,23 @@ export default function Products() {
                         <div>
                             <div className="text-sm text-muted-foreground">Product Slots</div>
                             <div className="text-xl font-semibold">
-                                {tenantProductCount}
+                                {subscription?.productsChangedAmountOnCurrentCycle ?? tenantProductCount}
                                 <span className="text-muted-foreground"> / </span>
                                 {subscription?.plan?.maxProducts === -1 || subscription?.plan?.maxProducts === undefined ? 'Unlimited' : subscription?.plan?.maxProducts}
                             </div>
                         </div>
-                        {subscription?.lastProductChangeAt && subscription?.nextBillingDate && (
-                            <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                                You can only change products once per billing cycle. Next change after {new Date(subscription.nextBillingDate).toLocaleString()}.
-                            </div>
-                        )}
+                        {(() => {
+                            const max = subscription?.plan?.maxProducts
+                            const isUnlimited = max === -1 || max === undefined
+                            const used = subscription?.productsChangedAmountOnCurrentCycle ?? tenantProductCount
+                            const reached = !isUnlimited && used >= (max as number)
+                            if (!reached) return null
+                            return (
+                                <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                    You have reached your product slots limit ({used}/{max}). Upgrade your plan to add more products.
+                                </div>
+                            )
+                        })()}
                     </div>
                 </div>
 

@@ -186,6 +186,8 @@ export default function ProductDetail() {
                     if (!tpRes.ok || !tpJson?.success) {
                         throw new Error(tpJson?.message || 'Failed to enable clinic product')
                     }
+                    // Redirect back to products with tab=select so list refreshes and shows tint/counter
+                    window.location.href = '/products?tab=select'
                 } catch (err: any) {
                     alert(err?.message || 'Failed to enable clinic product')
                 }

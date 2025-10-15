@@ -56,7 +56,8 @@ export const updateTenantProduct = async (
 }
 
 export const deleteTenantProduct = async (id: string): Promise<number> => {
-    return TenantProduct.destroy({ where: { id } });
+    // Hard delete
+    return TenantProduct.destroy({ where: { id }, force: true } as any);
 }
 
 export const deleteTenantProductsByClinic = async (clinicId: string): Promise<number> => {
@@ -75,15 +76,28 @@ export const bulkUpsertTenantProducts = async (
     const tenantProducts: TenantProduct[] = [];
 
     for (const productData of products) {
-        const [tenantProduct] = await TenantProduct.upsert({
-            clinicId,
-            productId: productData.productId,
-            questionnaireId: productData.questionnaireId,
-            active: productData.active !== undefined ? productData.active : true,
-            customPrice: productData.customPrice
+        // Look up existing by clinicId + productId
+        const existing = await TenantProduct.findOne({
+            where: { clinicId, productId: productData.productId },
         });
 
-        tenantProducts.push(tenantProduct);
+        if (existing) {
+            await existing.update({
+                questionnaireId: productData.questionnaireId,
+                active: productData.active !== undefined ? productData.active : true,
+                price: productData.customPrice ?? existing.price ?? 0,
+            } as any);
+            tenantProducts.push(existing);
+        } else {
+            const created = await TenantProduct.create({
+                clinicId,
+                productId: productData.productId,
+                questionnaireId: productData.questionnaireId,
+                active: productData.active !== undefined ? productData.active : true,
+                price: productData.customPrice ?? 0,
+            } as any);
+            tenantProducts.push(created);
+        }
     }
 
     return tenantProducts;
