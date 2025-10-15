@@ -73,12 +73,10 @@ export default function Products() {
     const userWithClinic = user as any
 
     const fetchProducts = useCallback(async () => {
-        console.log('🔍 🔄 STARTING PRODUCTS FETCH PROCESS')
+        console.log('🔍 🔄 STARTING PRODUCTS FETCH PROCESS (ALL PRODUCTS)')
         console.log('🔍 User data:', user)
-        console.log('🔍 Token:', token)
-        console.log('🔍 Clinic ID:', userWithClinic?.clinicId)
+        console.log('🔍 Token present:', !!token)
 
-        // Set loading to true at the start of the fetch process
         setLoading(true)
         setError(null)
 
@@ -89,83 +87,61 @@ export default function Products() {
             return
         }
 
-        if (!userWithClinic?.clinicId) {
-            console.log('❌ No clinicId in user data, skipping fetch')
-            setError('❌ Clinic Access Required: Your account is not assigned to any clinic. Please contact support to get access to clinic data.')
-            setLoading(false)
-            return
-        }
-
-        console.log('✅ Authentication passed, proceeding with fetch')
-        console.log('🔍 🚀 STARTING ACTUAL PRODUCTS FETCH')
-        console.log('🔍 Target clinic ID:', userWithClinic.clinicId)
-
         try {
-            // Fetch products for the clinic with timeout
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
             const controller = new AbortController()
             const timeoutId = setTimeout(() => {
                 console.log('⏰ Request timed out after 30 seconds')
                 controller.abort()
-            }, 30000) // 30 second timeout
+            }, 30000)
 
-            console.log('🔍 Making fetch request...')
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products/by-clinic/${userWithClinic.clinicId}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
+            // Fetch ALL products with pagination from products-management
+            const baseParams = new URLSearchParams()
+            baseParams.append('page', '1')
+            baseParams.append('limit', '100')
+            // Show active products by default
+            baseParams.append('isActive', 'true')
+
+            console.log('🔍 Fetching first page of products-management...')
+            const firstRes = await fetch(`${baseUrl}/products-management?${baseParams.toString()}`, {
+                headers: { 'Authorization': `Bearer ${token}` },
                 signal: controller.signal
             })
+            const firstJson = await firstRes.json().catch(() => null)
+            if (!firstRes.ok || !firstJson) {
+                clearTimeout(timeoutId)
+                throw new Error(firstJson?.message || 'Failed to load products')
+            }
+
+            const firstPageProducts: Product[] = firstJson?.data?.products || []
+            const totalPages: number = firstJson?.data?.pagination?.totalPages || 1
+
+            let combined = [...firstPageProducts]
+            if (totalPages > 1) {
+                const pageNumbers = Array.from({ length: totalPages - 1 }, (_, i) => i + 2)
+                console.log('🔍 Fetching remaining pages:', pageNumbers)
+                const pageRequests = pageNumbers.map((page) => {
+                    const params = new URLSearchParams(baseParams.toString())
+                    params.set('page', String(page))
+                    return fetch(`${baseUrl}/products-management?${params.toString()}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).then(r => r.json()).catch(() => null)
+                })
+                const pages = await Promise.all(pageRequests)
+                const rest: Product[] = pages.flatMap(p => (p?.data?.products || []))
+                combined = [...combined, ...rest]
+            }
+
             clearTimeout(timeoutId)
-
-            console.log('🔍 📡 Response received!')
-            console.log('🔍 Response status:', response.status)
-
-            if (response.ok) {
-                console.log('✅ Response OK, parsing JSON...')
-                const data = await response.json()
-                console.log('🔍 ✅ Response data received:', data)
-
-                if (data.success) {
-                    console.log('✅ API call successful!')
-                    const items: Product[] = data.data || []
-                    console.log('🔍 Products count:', items.length)
-                    setAllProducts(items)
-                    // My Products are derived from TenantProductForm assignments; will be set after assignments load
-
-                    if (items.length === 0) {
-                        console.log('ℹ️ No products found for this clinic - checking user state...')
-                        console.log('🔍 User clinicId:', (user as any)?.clinicId)
-                        console.log('🔍 User role:', (user as any)?.role)
-                        setError(`No products found for your clinic. Please check your clinic assignment.`)
-                    } else {
-                        console.log('✅ Products loaded successfully:', items.length, 'products')
-                    }
-                } else {
-                    console.error('❌ API returned success=false:', data.message)
-                    setError(data.message || 'Failed to load products')
-                }
-            } else {
-                const errorText = await response.text()
-                console.error('❌ HTTP error response:', response.status, response.statusText)
-                console.error('❌ Error body:', errorText)
-                setError(`Failed to load products: ${response.status} ${response.statusText}`)
-            }
-
-        } catch (err) {
-            console.error('❌ Exception during fetch:', err)
-            if (err instanceof Error && err.name === 'AbortError') {
-                console.error('⏰ Request was aborted due to timeout')
-                setError('Request timed out. Please try again.')
-            } else {
-                console.error('❌ Other error type:', err)
-                setError('Failed to load products')
-            }
+            console.log('✅ Loaded products (combined):', combined.length)
+            setAllProducts(combined)
+        } catch (err: any) {
+            console.error('❌ Failed to load products:', err)
+            setError(err?.message || 'Failed to load products')
         } finally {
-            console.log('🔍 Setting loading to false')
             setLoading(false)
         }
-    }, [token, userWithClinic?.clinicId])
+    }, [token])
 
     const fetchAssignments = useCallback(async () => {
         try {
