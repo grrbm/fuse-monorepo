@@ -1390,16 +1390,33 @@ app.get("/products/:id", async (req, res) => {
       });
     }
 
-    // Ensure slug is persisted if missing
+    // Ensure slug is persisted if missing (with uniqueness fallback)
     if (!product.slug && product.name) {
-      const computedSlug = product.name
+      const baseSlug = product.name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
-      try {
-        await product.update({ slug: computedSlug });
-      } catch (e) {
-        console.warn('⚠️ Failed to persist computed slug for product', id, e);
+
+      let uniqueSlug = baseSlug;
+      let attempt = 0;
+      const maxAttempts = 10;
+
+      while (attempt < maxAttempts) {
+        try {
+          await product.update({ slug: uniqueSlug });
+          break; // success
+        } catch (e: any) {
+          const isUniqueViolation = Boolean(
+            e?.name === 'SequelizeUniqueConstraintError' ||
+            e?.parent?.code === '23505'
+          );
+          if (!isUniqueViolation) {
+            console.warn('⚠️ Failed to persist computed slug for product (non-unique error)', id, e);
+            break;
+          }
+          attempt += 1;
+          uniqueSlug = `${baseSlug}-${attempt}`;
+        }
       }
     }
 
