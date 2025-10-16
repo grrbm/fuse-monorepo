@@ -34,7 +34,7 @@ interface PharmacyVendor {
   description: string
 }
 
- 
+
 
 export default function Products() {
   const { token } = useAuth()
@@ -46,6 +46,8 @@ export default function Products() {
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [showActiveOnly, setShowActiveOnly] = useState(true)
+  const [selectedPharmacy, setSelectedPharmacy] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'selected' | 'all'>('selected')
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
@@ -71,7 +73,11 @@ export default function Products() {
     fetchProducts()
     fetchPharmacyVendors()
     fetchCategories()
-  }, [selectedCategory, showActiveOnly])
+  }, [selectedCategory, showActiveOnly, selectedPharmacy])
+
+  useEffect(() => {
+    setShowActiveOnly(activeTab === 'selected')
+  }, [activeTab])
 
   const fetchProducts = async () => {
     if (!token) return
@@ -83,7 +89,8 @@ export default function Products() {
       baseParams.append("page", "1")
       baseParams.append("limit", "100") // server max is 100
       if (selectedCategory) baseParams.append("category", selectedCategory)
-      if (typeof showActiveOnly === "boolean") baseParams.append("isActive", String(showActiveOnly))
+      if (activeTab === 'selected') baseParams.append("isActive", "true")
+      if (selectedPharmacy) baseParams.append("pharmacyProvider", selectedPharmacy)
 
       const firstRes = await fetch(`${baseUrl}/products-management?${baseParams.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -242,6 +249,29 @@ export default function Products() {
     }
   }
 
+  const handleToggleActive = async (product: Product) => {
+    if (!token) return
+    try {
+      const response = await fetch(`${baseUrl}/products-management/${product.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isActive: !product.isActive }),
+      })
+
+      if (!response.ok) throw new Error("Failed to update product status")
+
+      const data = await response.json()
+      setSaveMessage(data.message || (product.isActive ? "Product deactivated" : "Product activated"))
+      fetchProducts()
+    } catch (error: any) {
+      console.error("❌ Error toggling product status:", error)
+      setSaveMessage(error.message)
+    }
+  }
+
   const calculateProfitMargin = (wholesale: number, retail: number) => {
     if (!wholesale || !retail) return 0
     return ((retail - wholesale) / wholesale * 100).toFixed(1)
@@ -271,6 +301,21 @@ export default function Products() {
             </Card>
           )}
 
+          <div className="flex items-center gap-4 border-b border-border">
+            <button
+              onClick={() => setActiveTab('selected')}
+              className={`px-3 py-2 text-sm border-b-2 transition-colors ${activeTab === 'selected' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              Selected Products
+            </button>
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-3 py-2 text-sm border-b-2 transition-colors ${activeTab === 'all' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              All Products
+            </button>
+          </div>
+
           <div className="flex gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Filter by Category</label>
@@ -287,16 +332,19 @@ export default function Products() {
                 ))}
               </select>
             </div>
-
             <div className="space-y-2">
-              <label className="text-sm font-medium">Status</label>
+              <label className="text-sm font-medium">Filter by Pharmacy</label>
               <select
-                value={showActiveOnly ? "active" : "all"}
-                onChange={(e) => setShowActiveOnly(e.target.value === "active")}
+                value={selectedPharmacy || ""}
+                onChange={(e) => setSelectedPharmacy(e.target.value || null)}
                 className="rounded-md border border-border bg-background px-3 py-2 text-sm"
               >
-                <option value="all">All Products</option>
-                <option value="active">Active Only</option>
+                <option value="">All Pharmacies</option>
+                {pharmacyProviders.map((vendor) => (
+                  <option key={vendor.id} value={vendor.id}>
+                    {vendor.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -323,6 +371,9 @@ export default function Products() {
                         <CardDescription className="line-clamp-2 mt-1">{product.description}</CardDescription>
                       </div>
                       <div className="flex gap-2 ml-2">
+                        <Button size="sm" variant={product.isActive ? "destructive" : "default"} onClick={() => handleToggleActive(product)}>
+                          {product.isActive ? 'Deactivate' : 'Activate'}
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
                           <Edit2 className="h-4 w-4" />
                         </Button>
@@ -338,7 +389,7 @@ export default function Products() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                      {product.category && (
+                    {product.category && (
                       <Badge variant="secondary">{CATEGORY_OPTIONS.find((c: { value: string; label: string }) => c.value === product.category)?.label || product.category}</Badge>
                     )}
 

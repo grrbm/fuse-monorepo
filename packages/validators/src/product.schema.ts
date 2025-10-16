@@ -47,6 +47,7 @@ export const productGetSchema = z.object({
 export const listProductsSchema = paginationSchema.extend({
   category: z.string().optional(),
   isActive: z.boolean().optional(),
+  pharmacyProvider: z.string().optional(),
 });
 /**
  * Type exports

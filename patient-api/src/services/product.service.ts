@@ -19,8 +19,8 @@ function serializeProduct(product: Product): Product {
 }
 
 class ProductService {
-    async listProducts(userId: string, options: { page?: number; limit?: number; category?: string; isActive?: boolean } = {}) {
-        const { page = 1, limit = 50, category, isActive } = options
+    async listProducts(userId: string, options: { page?: number; limit?: number; category?: string; isActive?: boolean; pharmacyProvider?: string } = {}) {
+        const { page = 1, limit = 50, category, isActive, pharmacyProvider } = options
         const offset = (page - 1) * limit
 
         const where: any = {}
@@ -31,6 +31,10 @@ class ProductService {
 
         if (typeof isActive === 'boolean') {
             where.isActive = isActive
+        }
+
+        if (pharmacyProvider) {
+            where.pharmacyProvider = pharmacyProvider
         }
 
         const { rows: products, count: total } = await Product.findAndCountAll({
@@ -84,12 +88,12 @@ class ProductService {
                 };
             }
 
-            // Check user role - only admin users can create products
-            if (user.role !== 'admin') {
+            // Allow admins, doctors, and brand users to update product fields (e.g., isActive)
+            if (user.role !== 'admin' && user.role !== 'doctor' && user.role !== 'brand') {
                 return {
                     success: false,
                     message: "Access denied",
-                    error: "Only admin users can create products"
+                    error: `Only admin, doctor, or brand users can update products. Your role: ${user.role}`
                 };
             }
 
@@ -141,12 +145,12 @@ class ProductService {
                 };
             }
 
-            // Check user role - only admin users can create products
-            if (user.role !== 'admin') {
+            // Allow admins, doctors, and brand users to update product fields
+            if (user.role !== 'admin' && user.role !== 'doctor' && user.role !== 'brand') {
                 return {
                     success: false,
                     message: "Access denied",
-                    error: "Only admin users can create products"
+                    error: `Only admin, doctor, or brand users can update products. Your role: ${user.role}`
                 };
             }
 

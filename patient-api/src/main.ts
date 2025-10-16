@@ -1842,7 +1842,10 @@ app.get("/products-management", authenticateJWT, async (req, res) => {
     // Validate query parameters using paginationSchema
     const validation = listProductsSchema.safeParse({
       page: req.query.page,
-      limit: req.query.limit
+      limit: req.query.limit,
+      category: req.query.category,
+      isActive: req.query.isActive === undefined ? undefined : req.query.isActive === 'true',
+      pharmacyProvider: req.query.pharmacyProvider,
     });
 
     if (!validation.success) {
@@ -1853,12 +1856,11 @@ app.get("/products-management", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { page, limit, category,
-      isActive } = validation.data;
+    const { page, limit, category, isActive, pharmacyProvider } = validation.data;
 
 
 
-    const result = await productService.listProducts(currentUser.id, { page, limit, category, isActive });
+    const result = await productService.listProducts(currentUser.id, { page, limit, category, isActive, pharmacyProvider });
     res.status(200).json(result);
   } catch (error: any) {
     console.error('❌ Error listing products:', error);
