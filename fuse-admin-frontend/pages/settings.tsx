@@ -261,7 +261,9 @@ export default function Settings({
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
+          console.log("data.data", data.data);
           const needsTutorial = data.data.tutorialFinished === false && data.data.status === "active" && data.data.stripeCustomerId !== null;
+          console.log("needsTutorial", needsTutorial);
           setRunTutorial(needsTutorial);
         }
       }

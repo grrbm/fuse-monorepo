@@ -26,7 +26,7 @@ import {
     Trash2
 } from 'lucide-react'
 import Tutorial from '@/components/ui/tutorial'
-import { enableProductSteps, tutorialSteps } from '@/utils/tutorialSteps'
+import { enableProductSteps } from '@/utils/tutorialSteps'
 
 interface Product {
     id: string
@@ -46,6 +46,8 @@ interface Product {
     }>
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
 export default function ProductDetail() {
     const [product, setProduct] = useState<Product | null>(null)
     const [loading, setLoading] = useState(true)
@@ -54,10 +56,10 @@ export default function ProductDetail() {
     const [tenantEnabled, setTenantEnabled] = useState<boolean>(false)
     const [enablingId, setEnablingId] = useState<string | null>(null)
     const [enabledForms, setEnabledForms] = useState<any[]>([])
-    const [runTutorial, setRunTutorial] = useState(true)
+    const [runTutorial, setRunTutorial] = useState(false)
     const [copiedId, setCopiedId] = useState<string | null>(null)
     const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-    const { user, token } = useAuth()
+    const { user, token, authenticatedFetch } = useAuth()
     const router = useRouter()
     const { id } = router.query
     const [clinicSlug, setClinicSlug] = useState<string | null>(null)
@@ -108,6 +110,29 @@ export default function ProductDetail() {
 
         fetchProduct()
     }, [token, id])
+
+    useEffect(() => {
+        fetchSubscriptionBasicInfo()
+    }, [token])
+
+    const fetchSubscriptionBasicInfo = async () => {
+        try {
+            const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/basic-info`, {
+                method: "GET",
+                skipLogoutOn401: true,
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    const needsTutorial = data.data.tutorialFinished === false && data.data.status === "active" && data.data.stripeCustomerId !== null;
+                    setRunTutorial(needsTutorial);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching subscription basic info:", error);
+        }
+    };
 
     useEffect(() => {
         const loadClinicSlug = async () => {
@@ -332,6 +357,25 @@ export default function ProductDetail() {
         }
     }, [])
 
+    const handleTutorialFinish = async () => {
+        try {
+            const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/mark-tutorial-finished`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            if (response.ok) {
+                console.log('✅ Tutorial marked as finished')
+            } else {
+                console.error('❌ Failed to mark tutorial as finished')
+            }
+        } catch (error) {
+            console.error('❌ Error marking tutorial as finished:', error)
+        }
+    }
+
     const handleCopyUrl = (url: string, id: string) => {
         if (typeof navigator === 'undefined' || !navigator.clipboard) {
             console.error('Clipboard API not available')
@@ -469,7 +513,7 @@ export default function ProductDetail() {
                 <title>{product?.name || 'Product'} - Fuse Admin</title>
                 <meta name="description" content={`Product details for ${product?.name || 'Unknown Product'}`} />
             </Head>
-            <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} steps={enableProductSteps} endLabel="Enable Prooduct"/>
+            <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} steps={enableProductSteps} endLabel="Enable Prooduct" onFinish={handleTutorialFinish}/>
             <div className="min-h-screen bg-background p-6">
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
