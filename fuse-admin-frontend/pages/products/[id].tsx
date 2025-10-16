@@ -25,6 +25,8 @@ import {
     Hash,
     Trash2
 } from 'lucide-react'
+import Tutorial from '@/components/ui/tutorial'
+import { enableProductSteps, tutorialSteps } from '@/utils/tutorialSteps'
 
 interface Product {
     id: string
@@ -52,6 +54,7 @@ export default function ProductDetail() {
     const [tenantEnabled, setTenantEnabled] = useState<boolean>(false)
     const [enablingId, setEnablingId] = useState<string | null>(null)
     const [enabledForms, setEnabledForms] = useState<any[]>([])
+    const [runTutorial, setRunTutorial] = useState(true)
     const [copiedId, setCopiedId] = useState<string | null>(null)
     const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
     const { user, token } = useAuth()
@@ -168,6 +171,7 @@ export default function ProductDetail() {
     const enableTemplate = async (questionnaireId: string) => {
         if (!token || !id) return
         setEnablingId(questionnaireId)
+
         try {
             console.groupCollapsed('[Enable template] Start')
             console.log('Product ID:', id)
@@ -465,7 +469,7 @@ export default function ProductDetail() {
                 <title>{product?.name || 'Product'} - Fuse Admin</title>
                 <meta name="description" content={`Product details for ${product?.name || 'Unknown Product'}`} />
             </Head>
-
+            <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} steps={enableProductSteps} endLabel="Enable Prooduct"/>
             <div className="min-h-screen bg-background p-6">
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
@@ -624,14 +628,14 @@ export default function ProductDetail() {
                                         <CardTitle>Product Availability</CardTitle>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="flex items-center justify-between">
+                                        <div id="enable-product-for-clinic" className="flex items-center justify-between">
                                             <div className="text-sm text-muted-foreground">
                                                 Toggle product availability for your clinic without assigning a form.
                                             </div>
                                             {tenantEnabled ? (
                                                 <Button size="sm" variant="outline" onClick={disableClinicOnly}>Disable product for clinic</Button>
                                             ) : (
-                                                <Button size="sm" onClick={enableClinicOnly}>Enable product for clinic</Button>
+                                                <Button id="enable-product-btn" size="sm" onClick={enableClinicOnly}>Enable product for clinic</Button>
                                             )}
                                         </div>
                                     </CardContent>

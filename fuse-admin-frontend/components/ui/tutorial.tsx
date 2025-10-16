@@ -5,14 +5,16 @@ import React, { useState } from "react";
 
 const Tutorial = ({
   runTutorial,
-  setRunTutorial,
   steps,
+  setRunTutorial,
+  endLabel,
   onFinish,
 }: {
   runTutorial: boolean;
-  setRunTutorial: (runTutorial: boolean) => void;
   steps?: any;
   onFinish?: () => void;
+  setRunTutorial?: (runTutorial: boolean) => void;
+  endLabel?: string;
 }) => {
   const router = useRouter();
 
@@ -21,26 +23,28 @@ const Tutorial = ({
 
     if (action === "next" && index === 2) {
       console.log('Redirigiendo a products desde step 3');
-      setRunTutorial(true);
       router.push("/products");
       return;
     }
 
-    if (action === "next" && index === 4) {
-      console.log('Abriendo formulario de nuevo producto');
-      setRunTutorial(true);
-      router.push("/products/new");
+    if (action === "next" && index === 3) {
+      document.getElementById("tutorial-step-4")?.click();
       return;
     }
 
     if (action === "next" && index === 5) {
-      console.log('Tutorial completado');
-      setRunTutorial(false);
+      const el = document.getElementsByClassName("view-product")[0] as HTMLElement | undefined;
+      if (el) el.click();
+      return;
+    }
+
+    if (action === "next" && index === 6) {
+      document.getElementById("enable-product-for-clinic")?.click();
       return;
     }
 
     if (status === "finished" || status === "skipped") {
-      setRunTutorial(false);
+      setRunTutorial?.(false);
       onFinish?.();
     }
   };
@@ -57,7 +61,7 @@ const Tutorial = ({
       disableOverlayClose={true}
       locale={{
         close: "Close",
-        last: "End",
+        last: endLabel || "End",
         next: "Continue",
         skip: "Skip",
         back: "Back",

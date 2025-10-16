@@ -10,35 +10,36 @@ import Tutorial from '@/components/ui/tutorial'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 import {
-    Package,
-    Plus,
-    Edit,
-    Eye,
-    DollarSign,
-    Activity,
-    CheckCircle,
-    XCircle,
-    Clock,
-    AlertCircle,
-    ImageIcon,
-    Trash2
-} from 'lucide-react'
+  Package,
+  Plus,
+  Edit,
+  Eye,
+  DollarSign,
+  Activity,
+  CheckCircle,
+  XCircle,
+  Clock,
+  AlertCircle,
+  ImageIcon,
+  Trash2,
+} from "lucide-react";
+import { tutorialSteps } from "@/utils/tutorialSteps";
 
 interface Product {
-    id: string
-    name: string
-    price: number
-    pharmacyProductId?: string
-    dosage?: string
-    imageUrl?: string | null
-    clinicId?: string
-    active: boolean
-    createdAt: string
-    updatedAt: string
-    treatments?: Array<{
-        id: string
-        name: string
-    }>
+  id: string;
+  name: string;
+  price: number;
+  pharmacyProductId?: string;
+  dosage?: string;
+  imageUrl?: string | null;
+  clinicId?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  treatments?: Array<{
+    id: string;
+    name: string;
+  }>;
 }
 
 export default function Products() {
@@ -84,12 +85,12 @@ export default function Products() {
         setLoading(true)
         setError(null)
 
-        if (!token) {
-            console.log('❌ No token available, skipping fetch')
-            setError('No authentication token found')
-            setLoading(false)
-            return
-        }
+    if (!token) {
+      console.log("❌ No token available, skipping fetch");
+      setError("No authentication token found");
+      setLoading(false);
+      return;
+    }
 
         if (!userWithClinic?.clinicId) {
             console.log('❌ No clinicId in user data, skipping fetch')
@@ -201,101 +202,121 @@ export default function Products() {
         fetchAssignments()
     }, [fetchAssignments, allProducts])
 
-    const getStatusBadge = (active: boolean) => {
-        return active
-            ? <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="h-3 w-3 mr-1" /> Active</Badge>
-            : <Badge className="bg-red-100 text-red-800 border-red-300"><XCircle className="h-3 w-3 mr-1" /> Inactive</Badge>
+  const getStatusBadge = (active: boolean) => {
+    return active ? (
+      <Badge className="bg-green-100 text-green-800 border-green-300">
+        <CheckCircle className="h-3 w-3 mr-1" /> Active
+      </Badge>
+    ) : (
+      <Badge className="bg-red-100 text-red-800 border-red-300">
+        <XCircle className="h-3 w-3 mr-1" /> Inactive
+      </Badge>
+    );
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(price);
+  };
+
+  const handleDeleteProduct = async (
+    productId: string,
+    productName: string
+  ) => {
+    if (
+      !confirm(
+        `Are you sure you want to delete "${productName}"? This action cannot be undone.`
+      )
+    ) {
+      return;
     }
 
-    const formatPrice = (price: number) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD'
-        }).format(price)
-    }
-
-    const handleDeleteProduct = async (productId: string, productName: string) => {
-        if (!confirm(`Are you sure you want to delete "${productName}"? This action cannot be undone.`)) {
-            return
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/products/${productId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
         }
+      );
 
-        try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products/${productId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            })
-
-            if (response.ok) {
-                const data = await response.json()
-                if (data.success) {
-                    console.log('✅ Product deleted successfully')
-                    // Refresh the products list
-                    fetchProducts()
-                } else {
-                    setError(data.message || 'Failed to delete product')
-                }
-            } else {
-                const errorText = await response.text()
-                setError(`Failed to delete product: ${response.status} ${response.statusText}`)
-            }
-        } catch (err) {
-            console.error('Error deleting product:', err)
-            setError('Failed to delete product')
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          console.log("✅ Product deleted successfully");
+          // Refresh the products list
+          fetchProducts();
+        } else {
+          setError(data.message || "Failed to delete product");
         }
+      } else {
+        const errorText = await response.text();
+        setError(
+          `Failed to delete product: ${response.status} ${response.statusText}`
+        );
+      }
+    } catch (err) {
+      console.error("Error deleting product:", err);
+      setError("Failed to delete product");
     }
+  };
 
     const visibleProducts = activeTab === 'my' ? products : allProducts
 
-    if (loading) {
-        return (
-            <Layout>
-                <div className="min-h-screen bg-background flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-muted-foreground">Loading products...</p>
-                    </div>
-                </div>
-            </Layout>
-        )
-    }
-
+  if (loading) {
     return (
-        <Layout>
-            <Head>
-                <title>Products - Fuse Admin</title>
-                <meta name="description" content="Manage your clinic products" />
-            </Head>
-            <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} />
-            <div className="min-h-screen bg-background p-6">
-                {/* Debug Panel */}
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h3 className="text-sm font-semibold text-blue-800 mb-2">🔍 Debug Panel</h3>
-                    <div className="flex gap-2">
-                        <Button
-                            size="sm"
-                            onClick={() => {
-                                console.log('🔍 Manual trigger of fetchProducts')
-                                fetchProducts()
-                            }}
-                        >
-                            🔄 Reload Products
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                                console.log('🔍 Current state:')
-                                console.log('- User:', user)
-                                console.log('- Token exists:', !!token)
-                                console.log('- Clinic ID:', (user as any)?.clinicId)
-                                console.log('- Loading:', loading)
-                                console.log('- Error:', error)
+      <Layout>
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading products...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
-                                const clinicId = (user as any)?.clinicId || 'null'
-                                const hasClinic = !!clinicId && clinicId !== 'null'
+  return (
+    <Layout>
+      <Head>
+        <title>Products - Fuse Admin</title>
+        <meta name="description" content="Manage your clinic products" />
+      </Head>
+      <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} steps={tutorialSteps}/>
+      <div className="min-h-screen bg-background p-6">
+        {/* Debug Panel */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h3 className="text-sm font-semibold text-blue-800 mb-2">
+            🔍 Debug Panel
+          </h3>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                console.log("🔍 Manual trigger of fetchProducts");
+                fetchProducts();
+              }}
+            >
+              🔄 Reload Products
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                console.log("🔍 Current state:");
+                console.log("- User:", user);
+                console.log("- Token exists:", !!token);
+                console.log("- Clinic ID:", (user as any)?.clinicId);
+                console.log("- Loading:", loading);
+                console.log("- Error:", error);
+
+                const clinicId = (user as any)?.clinicId || "null";
+                const hasClinic = !!clinicId && clinicId !== "null";
 
                                 if (!hasClinic) {
                                     alert(`❌ Clinic ID Issue\n\nCurrent Clinic ID: ${clinicId}\nUser Role: ${(user as any)?.role}\n\n💡 Solutions:\n1. Log out and back in\n2. Clear browser cache\n3. Check if SQL update worked\n4. Contact support if persists`)
@@ -309,65 +330,82 @@ export default function Products() {
                     </div>
                 </div>
 
-                <div className="max-w-7xl mx-auto">
-                    {/* Header */}
-                    <div className="flex justify-between items-center mb-8">
-                        <div>
-                            <h1 className="text-3xl font-bold text-foreground mb-2">Products</h1>
-                            <p className="text-muted-foreground">Manage and monitor your clinic's product catalog</p>
-                        </div>
-                        <Button
-                            id="tutorial-step-4"
-                            onClick={() => router.push('/products/new')}
-                            disabled={!userWithClinic?.clinicId}
-                            title={!userWithClinic?.clinicId ? 'You need to be assigned to a clinic to add products' : 'Add new product'}
-                        >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Product
-                        </Button>
-                    </div>
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">
+                Products
+              </h1>
+              <p className="text-muted-foreground">
+                Manage and monitor your clinic's product catalog
+              </p>
+            </div>
+            <Button
+              onClick={() => router.push("/products/new")}
+              disabled={!userWithClinic?.clinicId}
+              title={
+                !userWithClinic?.clinicId
+                  ? "You need to be assigned to a clinic to add products"
+                  : "Add new product"
+              }
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Product
+            </Button>
+          </div>
 
-                    {/* Tabs */}
-                    <div className="mb-6 border-b">
-                        <div className="flex gap-6">
-                            <button
-                                className={`py-2 border-b-2 ${activeTab === 'my' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}
-                                onClick={() => setActiveTab('my')}
-                            >
-                                My Products
-                            </button>
-                            <button
-                                className={`py-2 border-b-2 ${activeTab === 'select' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'}`}
-                                onClick={() => setActiveTab('select')}
-                            >
-                                Select Products
-                            </button>
-                        </div>
-                    </div>
+          {/* Tabs */}
+          <div className="mb-6 border-b">
+            <div className="flex gap-6">
+              <button
+                className={`py-2 border-b-2 ${activeTab === "my" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+                onClick={() => setActiveTab("my")}
+              >
+                My Products
+              </button>
+              <button
+                id="tutorial-step-4"
+                className={`py-2 border-b-2 ${activeTab === "select" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+                onClick={() => setActiveTab("select")}
+              >
+                Select Products
+              </button>
+            </div>
+          </div>
 
-                    {/* Error Message */}
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-                            <div className="flex">
-                                <XCircle className="h-5 w-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
-                                <div className="flex-1">
-                                    <p className="text-red-700">{error}</p>
-                                    {(error.includes('Clinic Access Required') || error.includes('No products found')) && (
-                                        <div className="mt-2 text-sm text-red-600">
-                                            <p className="font-medium">🔧 Troubleshooting Steps:</p>
-                                            <ol className="list-decimal list-inside mt-1">
-                                                <li>Use the "📊 Show State" button above to check your clinic assignment</li>
-                                                <li>Try logging out and back in to refresh your session</li>
-                                                <li>Clear your browser cache and cookies</li>
-                                                <li>Check the browser console for detailed debug information</li>
-                                                <li>Contact support if the issue persists</li>
-                                            </ol>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+              <div className="flex">
+                <XCircle className="h-5 w-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-red-700">{error}</p>
+                  {(error.includes("Clinic Access Required") ||
+                    error.includes("No products found")) && (
+                    <div className="mt-2 text-sm text-red-600">
+                      <p className="font-medium">🔧 Troubleshooting Steps:</p>
+                      <ol className="list-decimal list-inside mt-1">
+                        <li>
+                          Use the "📊 Show State" button above to check your
+                          clinic assignment
+                        </li>
+                        <li>
+                          Try logging out and back in to refresh your session
+                        </li>
+                        <li>Clear your browser cache and cookies</li>
+                        <li>
+                          Check the browser console for detailed debug
+                          information
+                        </li>
+                        <li>Contact support if the issue persists</li>
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
                     {/* Products Grid */}
                     {visibleProducts.length > 0 ? (
