@@ -80,6 +80,9 @@ export default function Products() {
         }
         return false;
     })
+    const [quickEditMode, setQuickEditMode] = useState(false)
+    const [editingPrices, setEditingPrices] = useState<Map<string, string>>(new Map())
+    const [savingPrices, setSavingPrices] = useState(false)
     const { user, token } = useAuth()
     const router = useRouter()
 
@@ -372,6 +375,62 @@ export default function Products() {
         }
     }
 
+    const handleQuickEditSave = async () => {
+        if (editingPrices.size === 0) {
+            setQuickEditMode(false)
+            return
+        }
+
+        try {
+            setSavingPrices(true)
+            setError(null)
+
+            // Update each product price
+            const updates = Array.from(editingPrices.entries()).map(async ([productId, priceStr]) => {
+                const tenantProduct = tenantProducts.find(tp => tp.productId === productId)
+                if (!tenantProduct) return
+
+                const price = parseFloat(priceStr)
+                if (isNaN(price) || price <= 0) return
+
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        tenantProductId: tenantProduct.id,
+                        price
+                    })
+                })
+
+                if (response.ok) {
+                    return { success: true, productId, price }
+                }
+                return { success: false, productId }
+            })
+
+            await Promise.all(updates)
+            
+            // Refresh tenant products to get updated prices
+            await fetchTenantProductCount()
+            
+            setQuickEditMode(false)
+            setEditingPrices(new Map())
+            setError(null)
+        } catch (err) {
+            setError('Failed to update prices')
+        } finally {
+            setSavingPrices(false)
+        }
+    }
+
+    const handleQuickEditCancel = () => {
+        setQuickEditMode(false)
+        setEditingPrices(new Map())
+    }
+
     const visibleProducts = activeTab === 'my' ? products : allProducts
     
     // Apply category filter (case-insensitive)
@@ -532,6 +591,49 @@ export default function Products() {
                         </div>
                     )}
 
+                    {/* Quick Edit Mode Controls - Only show on My Products tab */}
+                    {activeTab === 'my' && displayedProducts.length > 0 && (
+                        <div className="mb-4 flex items-center justify-between">
+                            <div className="text-sm text-gray-600">
+                                {quickEditMode ? (
+                                    <span className="font-medium">Quick edit mode active - Update prices below</span>
+                                ) : (
+                                    <span>Quickly update customer pricing for all products</span>
+                                )}
+                            </div>
+                            <div className="flex gap-2">
+                                {quickEditMode ? (
+                                    <>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleQuickEditCancel}
+                                            disabled={savingPrices}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={handleQuickEditSave}
+                                            disabled={savingPrices || editingPrices.size === 0}
+                                        >
+                                            {savingPrices ? 'Saving...' : `Save ${editingPrices.size} Change${editingPrices.size !== 1 ? 's' : ''}`}
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setQuickEditMode(true)}
+                                    >
+                                        <Package className="h-4 w-4 mr-1.5" />
+                                        Quick Edit Pricing
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Products List */}
                     {displayedProducts.length > 0 ? (
                         <>
@@ -541,8 +643,8 @@ export default function Products() {
                                     return (
                                         <div 
                                             key={product.id} 
-                                            className={`flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer ${index !== 0 ? 'border-t border-gray-100' : ''}`}
-                                            onClick={() => router.push(`/products/${product.id}`)}
+                                            className={`flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors ${quickEditMode ? 'cursor-default' : 'cursor-pointer'} ${index !== 0 ? 'border-t border-gray-100' : ''}`}
+                                            onClick={() => !quickEditMode && router.push(`/products/${product.id}`)}
                                         >
                                         <div className="flex items-center gap-4 flex-1 min-w-0">
                                             {/* Avatar/Image */}
@@ -595,10 +697,33 @@ export default function Products() {
                                             </div>
 
                                             {/* Clinic Retail Price */}
-                                            <div className="flex-shrink-0 w-28">
+                                            <div className="flex-shrink-0 w-28" onClick={(e) => quickEditMode && e.stopPropagation()}>
                                                 <div className="text-xs text-gray-500 mb-0.5">Your Price</div>
                                                 {(() => {
                                                     const tenantProduct = tenantProducts.find(tp => tp.productId === product.id)
+                                                    
+                                                    if (quickEditMode && isEnabled) {
+                                                        const currentValue = editingPrices.get(product.id) ?? (tenantProduct?.price || '')
+                                                        return (
+                                                            <div className="relative">
+                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.01"
+                                                                    min="0"
+                                                                    value={currentValue}
+                                                                    onChange={(e) => {
+                                                                        const newPrices = new Map(editingPrices)
+                                                                        newPrices.set(product.id, e.target.value)
+                                                                        setEditingPrices(newPrices)
+                                                                    }}
+                                                                    placeholder="0.00"
+                                                                    className="w-24 pl-5 pr-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                                />
+                                                            </div>
+                                                        )
+                                                    }
+                                                    
                                                     return tenantProduct && tenantProduct.price > 0 ? (
                                                         <span className="text-sm font-medium text-gray-900">{formatPrice(tenantProduct.price)}</span>
                                                     ) : (
