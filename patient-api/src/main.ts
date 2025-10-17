@@ -13,6 +13,7 @@ import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
 import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
+import Subscription from "./models/Subscription";
 // import TenantProduct from "./models/TenantProduct";
 import { createJWTToken, authenticateJWT, getCurrentUser, extractTokenFromHeader, verifyJWTToken } from "./config/jwt";
 import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./config/s3";
