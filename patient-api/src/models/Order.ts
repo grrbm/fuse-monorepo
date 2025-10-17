@@ -230,7 +230,7 @@ export default class Order extends Entity {
   // Static method to generate order number
   /**
    * Generate platform-wide sequential order number
-   * Format: FUS-1-000-000
+   * Format: ORD-1-000-000
    * Uses OrderCounter table to ensure uniqueness across all tenants
    */
   public static async generateOrderNumber(): Promise<string> {

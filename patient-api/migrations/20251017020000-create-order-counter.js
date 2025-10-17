@@ -2,7 +2,7 @@
 
 /**
  * Migration: Create OrderCounter table for platform-wide sequential order numbering
- * Format: FUS-1-000-000
+ * Format: ORD-1-000-000
  */
 
 /** @type {import('sequelize-cli').Migration} */

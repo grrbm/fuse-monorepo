@@ -2,7 +2,7 @@ import { Table, Column, DataType, Model } from 'sequelize-typescript';
 
 /**
  * OrderCounter - Platform-wide sequential counter for order numbers
- * Format: FUS-1-000-000
+ * Format: ORD-1-000-000
  * 
  * This table contains a single row that tracks the global order count
  * across all tenants/clinics on the platform.
@@ -49,9 +49,9 @@ export default class OrderCounter extends Model {
 
         const orderNum = counterRecord.counter;
         
-        // Format: FUS-1-000-000 (pad to 6 digits)
+        // Format: ORD-1-000-000 (pad to 6 digits)
         const paddedNumber = orderNum.toString().padStart(6, '0');
-        return `FUS-1-${paddedNumber}`;
+        return `ORD-1-${paddedNumber}`;
     }
 }
 
