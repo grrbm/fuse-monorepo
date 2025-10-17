@@ -40,7 +40,7 @@ export default function App({ Component, pageProps }: AppProps & { showToast?: (
           <Component {...pageProps} showToast={showToast} />
         </ProtectedRoute>
       )}
-      <Analytics />
+      {process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === 'true' && <Analytics />}
     </div>
   )
 
