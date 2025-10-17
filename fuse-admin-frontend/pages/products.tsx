@@ -22,7 +22,9 @@ import {
     Trash2,
     ChevronRight,
     Filter,
-    X
+    X,
+    Loader2,
+    Check
 } from 'lucide-react'
 
 interface Product {
@@ -83,6 +85,7 @@ export default function Products() {
     const [quickEditMode, setQuickEditMode] = useState(false)
     const [editingPrices, setEditingPrices] = useState<Map<string, string>>(new Map())
     const [savingPrices, setSavingPrices] = useState(false)
+    const [showSaved, setShowSaved] = useState(false)
     const { user, token } = useAuth()
     const router = useRouter()
 
@@ -440,18 +443,26 @@ export default function Products() {
             // Refresh tenant products to get updated prices
             await fetchTenantProductCount()
             
-            setQuickEditMode(false)
-            setEditingPrices(new Map())
-            
             if (successCount > 0) {
-                setError(`✅ Successfully updated ${successCount} price${successCount !== 1 ? 's' : ''}${failCount > 0 ? ` (${failCount} failed)` : ''}`)
-                setTimeout(() => setError(null), 3000)
+                // Show success state
+                setShowSaved(true)
+                setEditingPrices(new Map())
+                
+                // After 2 seconds, exit edit mode
+                setTimeout(() => {
+                    setQuickEditMode(false)
+                    setShowSaved(false)
+                }, 2000)
             } else if (failCount > 0) {
                 setError(`Failed to update prices. Please try again or check individual products.`)
+                setQuickEditMode(false)
+                setEditingPrices(new Map())
             }
         } catch (err) {
             console.error('Quick edit save error:', err)
             setError('Failed to update prices')
+            setQuickEditMode(false)
+            setEditingPrices(new Map())
         } finally {
             setSavingPrices(false)
         }
@@ -460,6 +471,7 @@ export default function Products() {
     const handleQuickEditCancel = () => {
         setQuickEditMode(false)
         setEditingPrices(new Map())
+        setShowSaved(false)
     }
 
     const visibleProducts = activeTab === 'my' ? products : allProducts
@@ -610,8 +622,8 @@ export default function Products() {
                         </div>
                     </div>
 
-                    {/* Error Message */}
-                    {error && (
+                    {/* Error Message - Only show actual errors, not success messages */}
+                    {error && !error.includes('✅') && (
                         <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg">
                             <div className="flex">
                                 <XCircle className="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" />
@@ -639,16 +651,28 @@ export default function Products() {
                                             size="sm"
                                             variant="outline"
                                             onClick={handleQuickEditCancel}
-                                            disabled={savingPrices}
+                                            disabled={savingPrices || showSaved}
                                         >
                                             Cancel
                                         </Button>
                                         <Button
                                             size="sm"
                                             onClick={handleQuickEditSave}
-                                            disabled={savingPrices || editingPrices.size === 0}
+                                            disabled={savingPrices || showSaved || editingPrices.size === 0}
                                         >
-                                            {savingPrices ? 'Saving...' : `Save ${editingPrices.size} Change${editingPrices.size !== 1 ? 's' : ''}`}
+                                            {savingPrices ? (
+                                                <>
+                                                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                                    Saving...
+                                                </>
+                                            ) : showSaved ? (
+                                                <>
+                                                    <Check className="h-3 w-3 mr-1.5" />
+                                                    Saved
+                                                </>
+                                            ) : (
+                                                `Save ${editingPrices.size} Change${editingPrices.size !== 1 ? 's' : ''}`
+                                            )}
                                         </Button>
                                     </>
                                 ) : (
