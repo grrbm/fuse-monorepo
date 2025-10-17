@@ -10,7 +10,6 @@ import {
     ArrowLeft,
     CheckCircle,
     XCircle,
-    DollarSign,
     ShoppingCart,
     Users,
     FileText,
@@ -54,11 +53,11 @@ export default function ProductDetail() {
     const [savingPrice, setSavingPrice] = useState(false)
     const [enabledForms, setEnabledForms] = useState<any[]>([])
     const [enablingId, setEnablingId] = useState<string | null>(null)
-    const [productStats, setProductStats] = useState<{ totalOrders: number; activeSubscribers: number }>({ 
-        totalOrders: 0, 
-        activeSubscribers: 0 
+    const [productStats, setProductStats] = useState<{ totalOrders: number; activeSubscribers: number }>({
+        totalOrders: 0,
+        activeSubscribers: 0
     })
-    
+
     const { user, token } = useAuth()
     const router = useRouter()
     const { id } = router.query
@@ -141,7 +140,7 @@ export default function ProductDetail() {
                 if (ordersRes && ordersRes.ok) {
                     const ordersData = await ordersRes.json()
                     const allOrders = ordersData?.data?.orders || []
-                    const productOrders = allOrders.filter((order: any) => 
+                    const productOrders = allOrders.filter((order: any) =>
                         order.orderItems?.some((item: any) => item.productId === id)
                     )
                     setProductStats({
@@ -213,7 +212,7 @@ export default function ProductDetail() {
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ productId: id, questionnaireId })
             })
-            
+
             if (!res.ok) {
                 throw new Error('Failed to enable form')
             }
@@ -221,7 +220,7 @@ export default function ProductDetail() {
             const data = await res.json()
             if (data?.data) {
                 setEnabledForms(prev => [...prev.filter((f: any) => f?.questionnaireId !== questionnaireId), data.data])
-                
+
                 // Also create TenantProduct if needed
                 if (!tenantProduct) {
                     const tpRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update-selection`, {
@@ -249,7 +248,7 @@ export default function ProductDetail() {
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ productId: id, questionnaireId })
             })
-            
+
             if (!res.ok) {
                 throw new Error('Failed to disable form')
             }
@@ -319,16 +318,16 @@ export default function ProductDetail() {
                         <ArrowLeft className="h-4 w-4 mr-2" />
                         Back to Products
                     </Button>
-                    
+
                     <div className="flex items-start justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-semibold text-gray-900 mb-1">{product?.name}</h1>
-                            <p className="text-sm text-gray-500">{product.description}</p>
-                            {product.dosage && (
+                            <p className="text-sm text-gray-500">{product?.description}</p>
+                            {product?.dosage && (
                                 <p className="text-sm text-gray-600 mt-1">Dosage: {product.dosage}</p>
                             )}
                         </div>
-                        {getStatusBadge(product.active)}
+                        {product && getStatusBadge(product.active)}
                     </div>
 
                     {/* Success/Error Messages */}
@@ -344,7 +343,7 @@ export default function ProductDetail() {
                             <CardTitle>Pricing & Configuration</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            
+
                             {/* Pricing Section */}
                             <div>
                                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Pricing</h3>
@@ -354,7 +353,7 @@ export default function ProductDetail() {
                                         <div className="text-xs text-blue-600 font-medium mb-1">Pharmacy Wholesale Cost</div>
                                         <div className="text-xs text-blue-500 mb-2">What you pay</div>
                                         <div className="text-3xl font-bold text-blue-900">
-                                            {product.pharmacyWholesaleCost ? formatPrice(product.pharmacyWholesaleCost) : 'Not set'}
+                                            {product?.pharmacyWholesaleCost ? formatPrice(product.pharmacyWholesaleCost) : 'Not set'}
                                         </div>
                                     </div>
 
@@ -374,7 +373,7 @@ export default function ProductDetail() {
                                                 )}
                                             </div>
                                             <div className="text-xs text-green-500 mb-2">What customers pay</div>
-                                            
+
                                             {editingPrice ? (
                                                 <div>
                                                     <div className="flex gap-2 mb-2">
@@ -402,11 +401,11 @@ export default function ProductDetail() {
                                                             Cancel
                                                         </Button>
                                                     </div>
-                                                    {product.pharmacyWholesaleCost && (
+                                                    {product?.pharmacyWholesaleCost && (
                                                         <div className="text-xs text-green-700 mt-2">
                                                             {(() => {
                                                                 const price = parseFloat(newPrice) || 0
-                                                                const cost = product.pharmacyWholesaleCost || 0
+                                                                const cost = product?.pharmacyWholesaleCost || 0
                                                                 const profit = price - cost
                                                                 const margin = price > 0 ? ((profit / price) * 100) : 0
                                                                 return `Profit: ${formatPrice(profit)} (${margin.toFixed(1)}% margin)`
@@ -419,11 +418,11 @@ export default function ProductDetail() {
                                                     <div className="text-3xl font-bold text-green-900">
                                                         {formatPrice(tenantProduct.price)}
                                                     </div>
-                                                    {product.pharmacyWholesaleCost && (
+                                                    {product?.pharmacyWholesaleCost && (
                                                         <div className="text-xs text-green-700 mt-2">
                                                             {(() => {
                                                                 const price = tenantProduct.price
-                                                                const cost = product.pharmacyWholesaleCost
+                                                                const cost = product?.pharmacyWholesaleCost || 0
                                                                 const profit = price - cost
                                                                 const margin = price > 0 ? ((profit / price) * 100) : 0
                                                                 return `Profit: ${formatPrice(profit)} per unit (${margin.toFixed(1)}% margin)`
@@ -524,17 +523,17 @@ export default function ProductDetail() {
                             <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div>
                                     <span className="text-gray-500">Pharmacy Product ID:</span>
-                                    <p className="font-medium text-gray-900">{product.pharmacyProductId || 'Not assigned'}</p>
+                                    <p className="font-medium text-gray-900">{product?.pharmacyProductId || 'Not assigned'}</p>
                                 </div>
                                 <div>
                                     <span className="text-gray-500">Default Dosage:</span>
-                                    <p className="font-medium text-gray-900">{product.dosage || 'N/A'}</p>
+                                    <p className="font-medium text-gray-900">{product?.dosage || 'N/A'}</p>
                                 </div>
-                                {product.activeIngredients && product.activeIngredients.length > 0 && (
+                                {product?.activeIngredients && product.activeIngredients.length > 0 && (
                                     <div className="col-span-2">
                                         <span className="text-gray-500">Active Ingredients:</span>
                                         <div className="flex flex-wrap gap-2 mt-1">
-                                            {product.activeIngredients.map((ing, i) => (
+                                            {product?.activeIngredients.map((ing, i) => (
                                                 <Badge key={i} variant="outline" className="text-xs">{ing}</Badge>
                                             ))}
                                         </div>
