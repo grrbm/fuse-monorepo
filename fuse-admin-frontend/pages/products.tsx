@@ -385,41 +385,72 @@ export default function Products() {
             setSavingPrices(true)
             setError(null)
 
+            let successCount = 0
+            let failCount = 0
+
             // Update each product price
-            const updates = Array.from(editingPrices.entries()).map(async ([productId, priceStr]) => {
+            for (const [productId, priceStr] of editingPrices.entries()) {
                 const tenantProduct = tenantProducts.find(tp => tp.productId === productId)
-                if (!tenantProduct) return
+                
+                if (!tenantProduct) {
+                    console.error('No tenant product found for:', productId)
+                    failCount++
+                    continue
+                }
 
                 const price = parseFloat(priceStr)
-                if (isNaN(price) || price <= 0) return
-
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        tenantProductId: tenantProduct.id,
-                        price
-                    })
-                })
-
-                if (response.ok) {
-                    return { success: true, productId, price }
+                if (isNaN(price) || price <= 0) {
+                    console.error('Invalid price for product:', productId, priceStr)
+                    failCount++
+                    continue
                 }
-                return { success: false, productId }
-            })
 
-            await Promise.all(updates)
+                try {
+                    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            tenantProductId: tenantProduct.id,
+                            price
+                        })
+                    })
+
+                    if (response.ok) {
+                        const data = await response.json()
+                        if (data.success) {
+                            successCount++
+                        } else {
+                            console.error('API returned success=false for:', productId, data.message)
+                            failCount++
+                        }
+                    } else {
+                        const errorData = await response.json().catch(() => ({}))
+                        console.error('Failed to update price for:', productId, response.status, errorData)
+                        failCount++
+                    }
+                } catch (err) {
+                    console.error('Error updating price for:', productId, err)
+                    failCount++
+                }
+            }
             
             // Refresh tenant products to get updated prices
             await fetchTenantProductCount()
             
             setQuickEditMode(false)
             setEditingPrices(new Map())
-            setError(null)
+            
+            if (successCount > 0) {
+                setError(`✅ Successfully updated ${successCount} price${successCount !== 1 ? 's' : ''}${failCount > 0 ? ` (${failCount} failed)` : ''}`)
+                setTimeout(() => setError(null), 3000)
+            } else if (failCount > 0) {
+                setError(`Failed to update prices. Please try again or check individual products.`)
+            }
         } catch (err) {
+            console.error('Quick edit save error:', err)
             setError('Failed to update prices')
         } finally {
             setSavingPrices(false)
