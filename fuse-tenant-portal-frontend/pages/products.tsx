@@ -474,12 +474,10 @@ export default function Products() {
                         </div>
                       )}
 
-                      {product.pharmacyWholesaleCost && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Wholesale Cost:</span>
-                          <span className="font-medium text-amber-600">${product.pharmacyWholesaleCost.toFixed(2)}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Wholesale Cost:</span>
+                        <span className="font-medium text-amber-600">${product.price.toFixed(2)}</span>
+                      </div>
 
                       {product.suggestedRetailPrice && (
                         <div className="flex items-center justify-between">
@@ -488,11 +486,11 @@ export default function Products() {
                         </div>
                       )}
 
-                      {product.pharmacyWholesaleCost && product.suggestedRetailPrice && (
+                      {product.suggestedRetailPrice && (
                         <div className="flex items-center justify-between pt-2 border-t">
                           <span className="text-muted-foreground">Profit Margin:</span>
                           <span className="font-bold text-primary">
-                            {calculateProfitMargin(product.pharmacyWholesaleCost, product.suggestedRetailPrice)}%
+                            {calculateProfitMargin(product.price, product.suggestedRetailPrice)}%
                           </span>
                         </div>
                       )}
