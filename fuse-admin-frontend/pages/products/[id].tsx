@@ -359,7 +359,7 @@ export default function ProductDetail() {
                                         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Pharmacy Wholesale Cost</div>
                                         <div className="text-xs text-muted-foreground mb-3">What you pay</div>
                                         <div className="text-3xl font-semibold text-foreground">
-                                            {product.pharmacyWholesaleCost ? formatPrice(product.pharmacyWholesaleCost) : 'Not set'}
+                                            {formatPrice(product.price)}
                                         </div>
                                     </div>
 
@@ -412,34 +412,30 @@ export default function ProductDetail() {
                                                             Cancel
                                                         </Button>
                                                     </div>
-                                                    {product.pharmacyWholesaleCost && (
-                                                        <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
-                                                            {(() => {
-                                                                const price = parseFloat(newPrice) || 0
-                                                                const cost = product.pharmacyWholesaleCost || 0
-                                                                const profit = price - cost
-                                                                const margin = price > 0 ? ((profit / price) * 100) : 0
-                                                                return `Profit: ${formatPrice(profit)} (${margin.toFixed(1)}% margin)`
-                                                            })()}
-                                                        </div>
-                                                    )}
+                                                    <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+                                                        {(() => {
+                                                            const price = parseFloat(newPrice) || 0
+                                                            const cost = product.price || 0
+                                                            const profit = price - cost
+                                                            const margin = price > 0 ? ((profit / price) * 100) : 0
+                                                            return `Profit: ${formatPrice(profit)} (${margin.toFixed(1)}% margin)`
+                                                        })()}
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <div>
                                                     <div className="text-3xl font-semibold text-foreground">
                                                         {formatPrice(tenantProduct.price)}
                                                     </div>
-                                                    {product.pharmacyWholesaleCost && (
-                                                        <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
-                                                            {(() => {
-                                                                const price = tenantProduct.price
-                                                                const cost = product.pharmacyWholesaleCost
-                                                                const profit = price - cost
-                                                                const margin = price > 0 ? ((profit / price) * 100) : 0
-                                                                return `Profit: ${formatPrice(profit)} per unit (${margin.toFixed(1)}% margin)`
-                                                            })()}
-                                                        </div>
-                                                    )}
+                                                    <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+                                                        {(() => {
+                                                            const price = tenantProduct.price
+                                                            const cost = product.price || 0
+                                                            const profit = price - cost
+                                                            const margin = price > 0 ? ((profit / price) * 100) : 0
+                                                            return `Profit: ${formatPrice(profit)} per unit (${margin.toFixed(1)}% margin)`
+                                                        })()}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
