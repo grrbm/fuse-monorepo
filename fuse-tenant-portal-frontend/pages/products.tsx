@@ -51,9 +51,6 @@ export default function Products() {
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
-  const [quickEditMode, setQuickEditMode] = useState(false)
-  const [quickEditData, setQuickEditData] = useState<Record<string, { pharmacyWholesaleCost: number; pharmacyProvider: string }>>({})
-  const [savingProducts, setSavingProducts] = useState<Set<string>>(new Set())
 
   // Form state
   const [formData, setFormData] = useState({
@@ -334,82 +331,6 @@ export default function Products() {
     return ((retail - wholesale) / wholesale * 100).toFixed(1)
   }
 
-  const handleQuickEditSave = async (productId: string) => {
-    if (!token || !quickEditData[productId]) return
-
-    setSavingProducts(prev => new Set(prev).add(productId))
-
-    try {
-      const response = await fetch(`${baseUrl}/products-management/${productId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          id: productId,
-          pharmacyWholesaleCost: quickEditData[productId].pharmacyWholesaleCost,
-          pharmacyProvider: quickEditData[productId].pharmacyProvider
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to update product')
-      }
-
-      const data = await response.json()
-      
-      if (data.success) {
-        setProducts(prev => prev.map(p => 
-          p.id === productId 
-            ? { ...p, ...quickEditData[productId] }
-            : p
-        ))
-        
-        setQuickEditData(prev => {
-          const newData = { ...prev }
-          delete newData[productId]
-          return newData
-        })
-
-        setSaveMessage('Product updated successfully')
-        setTimeout(() => setSaveMessage(null), 3000)
-      } else {
-        throw new Error(data.message || 'Failed to update product')
-      }
-    } catch (error: any) {
-      alert(error.message || 'Failed to save changes')
-    } finally {
-      setSavingProducts(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(productId)
-        return newSet
-      })
-    }
-  }
-
-  const initializeQuickEditData = (product: Product) => {
-    if (!quickEditData[product.id]) {
-      setQuickEditData(prev => ({
-        ...prev,
-        [product.id]: {
-          pharmacyWholesaleCost: product.pharmacyWholesaleCost || 0,
-          pharmacyProvider: product.pharmacyProvider || 'absoluterx'
-        }
-      }))
-    }
-  }
-
-  const updateQuickEditField = (productId: string, field: 'pharmacyWholesaleCost' | 'pharmacyProvider', value: any) => {
-    setQuickEditData(prev => ({
-      ...prev,
-      [productId]: {
-        ...(prev[productId] || { pharmacyWholesaleCost: 0, pharmacyProvider: 'absoluterx' }),
-        [field]: value
-      }
-    }))
-  }
-
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
@@ -439,33 +360,19 @@ export default function Products() {
             </Card>
           )}
 
-          <div className="flex items-center justify-between border-b border-border">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setActiveTab('selected')}
-                className={`px-3 py-2 text-sm border-b-2 transition-colors ${activeTab === 'selected' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-              >
-                Selected Products
-              </button>
-              <button
-                onClick={() => setActiveTab('all')}
-                className={`px-3 py-2 text-sm border-b-2 transition-colors ${activeTab === 'all' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-              >
-                All Products
-              </button>
-            </div>
-            
-            {activeTab === 'selected' && products.length > 0 && (
-              <Button
-                variant={quickEditMode ? "default" : "outline"}
-                size="sm"
-                onClick={() => setQuickEditMode(!quickEditMode)}
-                className="text-xs font-medium mb-2"
-              >
-                <Edit2 className="h-3 w-3 mr-1.5" />
-                {quickEditMode ? 'Exit Quick Edit' : 'Quick Edit'}
-              </Button>
-            )}
+          <div className="flex items-center gap-4 border-b border-border">
+            <button
+              onClick={() => setActiveTab('selected')}
+              className={`px-3 py-2 text-sm border-b-2 transition-colors ${activeTab === 'selected' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              Selected Products
+            </button>
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-3 py-2 text-sm border-b-2 transition-colors ${activeTab === 'all' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              All Products
+            </button>
           </div>
 
           <div className="flex gap-4">
@@ -514,57 +421,32 @@ export default function Products() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {products.map((product) => {
-                // Initialize quick edit data when entering quick edit mode
-                if (quickEditMode && !quickEditData[product.id]) {
-                  initializeQuickEditData(product)
-                }
-                
-                const isSaving = savingProducts.has(product.id)
-                const hasChanges = quickEditData[product.id] && (
-                  quickEditData[product.id].pharmacyWholesaleCost !== (product.pharmacyWholesaleCost || 0) ||
-                  quickEditData[product.id].pharmacyProvider !== (product.pharmacyProvider || 'absoluterx')
-                )
-                
-                return (
-                  <Card key={product.id} className={!product.isActive ? "opacity-60" : ""}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg">{product.name}</CardTitle>
-                          <CardDescription className="line-clamp-2 mt-1">{product.description}</CardDescription>
-                        </div>
-                        <div className="flex gap-2 ml-2">
-                          {quickEditMode && hasChanges && (
-                            <Button
-                              size="sm"
-                              onClick={() => handleQuickEditSave(product.id)}
-                              disabled={isSaving}
-                            >
-                              {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
-                            </Button>
-                          )}
-                          {!quickEditMode && (
-                            <>
-                              <Button size="sm" variant={product.isActive ? "destructive" : "default"} onClick={() => handleToggleActive(product)}>
-                                {product.isActive ? 'Deactivate' : 'Activate'}
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleDeleteProduct(product.id)}
-                                disabled={!product.isActive}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
+              {products.map((product) => (
+                <Card key={product.id} className={!product.isActive ? "opacity-60" : ""}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg">{product.name}</CardTitle>
+                        <CardDescription className="line-clamp-2 mt-1">{product.description}</CardDescription>
                       </div>
-                    </CardHeader>
+                      <div className="flex gap-2 ml-2">
+                        <Button size="sm" variant={product.isActive ? "destructive" : "default"} onClick={() => handleToggleActive(product)}>
+                          {product.isActive ? 'Deactivate' : 'Activate'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteProduct(product.id)}
+                          disabled={!product.isActive}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
                   <CardContent className="space-y-3">
                     {product.category && (
                       <Badge variant="secondary">{CATEGORY_OPTIONS.find((c: { value: string; label: string }) => c.value === product.category)?.label || product.category}</Badge>
@@ -583,47 +465,21 @@ export default function Products() {
                         </div>
                       )}
 
-                      {/* Pharmacy Provider - Quick Edit or Display */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Pharmacy:</span>
-                        {quickEditMode ? (
-                          <select
-                            value={quickEditData[product.id]?.pharmacyProvider || product.pharmacyProvider || 'absoluterx'}
-                            onChange={(e) => updateQuickEditField(product.id, 'pharmacyProvider', e.target.value)}
-                            className="px-2 py-1 text-sm border border-border rounded-md bg-background w-32"
-                          >
-                            {pharmacyProviders.map(v => (
-                              <option key={v.id} value={v.id}>{v.name}</option>
-                            ))}
-                          </select>
-                        ) : (
+                      {product.pharmacyProvider && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Pharmacy:</span>
                           <span className="font-medium">
-                            {pharmacyProviders.find(v => v.id === product.pharmacyProvider)?.name || product.pharmacyProvider || 'Not set'}
+                            {pharmacyProviders.find(v => v.id === product.pharmacyProvider)?.name || product.pharmacyProvider}
                           </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
-                      {/* Wholesale Cost - Quick Edit or Display */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Wholesale Cost:</span>
-                        {quickEditMode ? (
-                          <div className="relative w-24">
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={quickEditData[product.id]?.pharmacyWholesaleCost ?? product.pharmacyWholesaleCost ?? 0}
-                              onChange={(e) => updateQuickEditField(product.id, 'pharmacyWholesaleCost', parseFloat(e.target.value) || 0)}
-                              className="w-full pl-5 pr-2 py-1 text-sm border border-border rounded-md bg-background"
-                            />
-                          </div>
-                        ) : (
-                          <span className="font-medium text-foreground">
-                            {product.pharmacyWholesaleCost ? `$${product.pharmacyWholesaleCost.toFixed(2)}` : 'Not set'}
-                          </span>
-                        )}
-                      </div>
+                      {product.pharmacyWholesaleCost && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Wholesale Cost:</span>
+                          <span className="font-medium text-amber-600">${product.pharmacyWholesaleCost.toFixed(2)}</span>
+                        </div>
+                      )}
 
                       {product.suggestedRetailPrice && (
                         <div className="flex items-center justify-between">
@@ -653,8 +509,7 @@ export default function Products() {
                     )}
                   </CardContent>
                 </Card>
-                )
-              })}
+              ))}
             </div>
           )}
         </main>
