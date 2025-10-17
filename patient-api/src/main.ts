@@ -3451,9 +3451,31 @@ app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 
         if (!customer) return null;
 
-        // Count orders for this customer
-        const orderCount = await Order.count({
-          where: { userId, clinicId }
+        // Get all orders for this customer with products
+        const customerOrders = await Order.findAll({
+          where: { userId, clinicId, status: 'paid' },
+          include: [{
+            model: OrderItem,
+            as: 'orderItems',
+            include: [{
+              model: Product,
+              as: 'product',
+              attributes: ['id', 'category']
+            }]
+          }]
+        });
+
+        // Calculate total revenue
+        const totalRevenue = customerOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+
+        // Get unique product categories this customer has ordered
+        const categories = new Set<string>();
+        customerOrders.forEach(order => {
+          order.orderItems?.forEach(item => {
+            if (item.product?.category) {
+              categories.add(item.product.category);
+            }
+          });
         });
 
         // Check for active subscription
@@ -3466,7 +3488,9 @@ app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 
         return {
           ...customer.toJSON(),
-          orderCount,
+          orderCount: customerOrders.length,
+          totalRevenue: Math.round(totalRevenue * 100) / 100,
+          categories: Array.from(categories),
           hasActiveSubscription: !!subscription
         };
       })

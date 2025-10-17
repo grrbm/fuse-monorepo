@@ -16,6 +16,8 @@ interface Customer {
     createdAt: string
     updatedAt: string
     orderCount?: number
+    totalRevenue?: number
+    categories?: string[]
     hasActiveSubscription?: boolean
 }
 
@@ -30,6 +32,8 @@ const MOCK_CUSTOMERS: Customer[] = [
         createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
         updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
         orderCount: 7,
+        totalRevenue: 2145.50,
+        categories: ['performance', 'wellness'],
         hasActiveSubscription: true
     },
     {
@@ -41,6 +45,8 @@ const MOCK_CUSTOMERS: Customer[] = [
         createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
         updatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
         orderCount: 12,
+        totalRevenue: 4280.00,
+        categories: ['weight_loss', 'wellness'],
         hasActiveSubscription: true
     },
     {
@@ -52,6 +58,8 @@ const MOCK_CUSTOMERS: Customer[] = [
         createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
         updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
         orderCount: 5,
+        totalRevenue: 1590.25,
+        categories: ['skincare', 'wellness'],
         hasActiveSubscription: false
     },
     {
@@ -63,6 +71,8 @@ const MOCK_CUSTOMERS: Customer[] = [
         createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
         updatedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
         orderCount: 3,
+        totalRevenue: 875.00,
+        categories: ['hair_growth'],
         hasActiveSubscription: true
     },
     {
@@ -74,6 +84,8 @@ const MOCK_CUSTOMERS: Customer[] = [
         createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
         updatedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
         orderCount: 15,
+        totalRevenue: 5890.75,
+        categories: ['weight_loss', 'skincare', 'wellness'],
         hasActiveSubscription: true
     },
     {
@@ -85,6 +97,8 @@ const MOCK_CUSTOMERS: Customer[] = [
         createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
         updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
         orderCount: 8,
+        totalRevenue: 2650.00,
+        categories: ['performance', 'sexual_health'],
         hasActiveSubscription: false
     },
 ]
@@ -153,6 +167,19 @@ export default function Customers() {
             month: 'short',
             day: 'numeric'
         })
+    }
+
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD'
+        }).format(amount)
+    }
+
+    const formatCategoryName = (category: string) => {
+        return category.split('_').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ')
     }
 
     const filteredCustomers = customers.filter(customer =>
@@ -303,7 +330,7 @@ export default function Customers() {
                                                             )}
                                                         </div>
 
-                                                        <div className="space-y-1">
+                                                        <div className="space-y-2">
                                                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                                 <Mail className="h-3.5 w-3.5" />
                                                                 <span>{customer.email}</span>
@@ -318,16 +345,35 @@ export default function Customers() {
                                                                 <Calendar className="h-3.5 w-3.5" />
                                                                 <span>Joined {formatDate(customer.createdAt)}</span>
                                                             </div>
+                                                            
+                                                            {/* Product Categories */}
+                                                            {customer.categories && customer.categories.length > 0 && (
+                                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                                    {customer.categories.map((category, idx) => (
+                                                                        <Badge key={idx} variant="outline" className="text-xs font-normal">
+                                                                            {formatCategoryName(category)}
+                                                                        </Badge>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
 
                                                     {/* Stats */}
-                                                    {customer.orderCount !== undefined && (
-                                                        <div className="text-right">
-                                                            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Orders</div>
-                                                            <div className="text-2xl font-semibold text-foreground">{customer.orderCount}</div>
-                                                        </div>
-                                                    )}
+                                                    <div className="flex flex-col gap-4">
+                                                        {customer.totalRevenue !== undefined && (
+                                                            <div className="text-right">
+                                                                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Total Revenue</div>
+                                                                <div className="text-xl font-semibold text-foreground">{formatCurrency(customer.totalRevenue)}</div>
+                                                            </div>
+                                                        )}
+                                                        {customer.orderCount !== undefined && (
+                                                            <div className="text-right">
+                                                                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Orders</div>
+                                                                <div className="text-xl font-semibold text-foreground">{customer.orderCount}</div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
