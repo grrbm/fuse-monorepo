@@ -3403,6 +3403,90 @@ app.post("/webhook/stripe", express.raw({ type: 'application/json' }), async (re
   }
 });
 
+// Get customers/users for a clinic
+app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const { clinicId } = req.params;
+
+    // Verify user has access to this clinic
+    const user = await User.findByPk(currentUser.id);
+    if (!user || user.clinicId !== clinicId) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied to this clinic"
+      });
+    }
+
+    // Fetch all users who have placed orders with this clinic
+    const orders = await Order.findAll({
+      where: { clinicId },
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'createdAt', 'updatedAt']
+      }],
+      attributes: ['userId'],
+      group: ['userId', 'user.id']
+    });
+
+    // Get unique users and count their orders
+    const userIds = new Set<string>();
+    orders.forEach(order => userIds.add(order.userId));
+
+    const customers = await Promise.all(
+      Array.from(userIds).map(async (userId) => {
+        const customer = await User.findByPk(userId, {
+          attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'createdAt', 'updatedAt']
+        });
+
+        if (!customer) return null;
+
+        // Count orders for this customer
+        const orderCount = await Order.count({
+          where: { userId, clinicId }
+        });
+
+        // Check for active subscription
+        const subscription = await Subscription.findOne({
+          where: { 
+            userId,
+            status: 'active'
+          }
+        });
+
+        return {
+          ...customer.toJSON(),
+          orderCount,
+          hasActiveSubscription: !!subscription
+        };
+      })
+    );
+
+    const validCustomers = customers.filter(c => c !== null);
+
+    res.status(200).json({
+      success: true,
+      data: validCustomers
+    });
+
+  } catch (error) {
+    console.error('Error fetching customers:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch customers"
+    });
+  }
+});
+
 // Get orders for a user
 app.get("/orders", authenticateJWT, async (req, res) => {
   try {
