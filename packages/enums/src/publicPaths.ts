@@ -8,5 +8,5 @@ export const PUBLIC_PATH_PATTERNS = [
   '/my-treatments/[slug]',
   '/treatments/[slug]',
   '/my-products/[slug]',
-] as const;
+];
 
