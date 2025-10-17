@@ -65,7 +65,7 @@ type StatusFilter = 'all' | 'pending' | 'paid' | 'shipped' | 'delivered' | 'canc
 const MOCK_ORDERS: Order[] = [
     {
         id: 'mock-order-1',
-        orderNumber: 'ORD-2025-001',
+        orderNumber: 'FUS-1-000001',
         status: 'paid',
         totalAmount: 450.00,
         createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 15).toISOString(),
@@ -103,7 +103,7 @@ const MOCK_ORDERS: Order[] = [
     },
     {
         id: 'mock-order-2',
-        orderNumber: 'ORD-2025-002',
+        orderNumber: 'FUS-1-000002',
         status: 'shipped',
         totalAmount: 680.00,
         createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 8).toISOString(),
@@ -152,7 +152,7 @@ const MOCK_ORDERS: Order[] = [
     },
     {
         id: 'mock-order-3',
-        orderNumber: 'ORD-2025-003',
+        orderNumber: 'FUS-1-000003',
         status: 'pending',
         totalAmount: 299.00,
         createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 12).toISOString(),
@@ -189,7 +189,7 @@ const MOCK_ORDERS: Order[] = [
     },
     {
         id: 'mock-order-4',
-        orderNumber: 'ORD-2025-004',
+        orderNumber: 'FUS-1-000004',
         status: 'delivered',
         totalAmount: 850.00,
         createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 3).toISOString(),
