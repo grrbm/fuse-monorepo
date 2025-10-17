@@ -97,48 +97,63 @@ export default function Products() {
     // Fetch ALL products regardless of clinic
 
     try {
-      // Fetch products for the clinic with timeout
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => {
-        console.log('⏰ Request timed out after 30 seconds')
-        controller.abort()
-      }, 30000) // 30 second timeout
+      // Fetch up to 500 products by paging with limit=100 (backend limit)
+      const aggregated: Product[] = []
+      const limit = 100
+      let page = 1
+      let fetched = 0
 
-      console.log('🔍 Making fetch request for ALL products...')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products-management?page=1&limit=100`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        signal: controller.signal
-      })
-      clearTimeout(timeoutId)
+      while (aggregated.length < 500) {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => {
+          console.log('⏰ Request timed out after 30 seconds')
+          controller.abort()
+        }, 30000)
 
-      console.log('🔍 📡 Response received!')
-      console.log('🔍 Response status:', response.status)
+        console.log(`🔍 Fetching products page=${page} limit=${limit} ...`)
+        const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products-management?page=${page}&limit=${limit}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          signal: controller.signal
+        })
+        clearTimeout(timeoutId)
 
-      if (response.ok) {
-        console.log('✅ Response OK, parsing JSON...')
-        const data = await response.json()
-        console.log('🔍 ✅ Response data received:', data)
-
-        if (data.success) {
-          console.log('✅ API call successful!')
-          const items: Product[] = (data.data && (data.data.products || data.data)) || []
-          console.log('🔍 Products count:', items.length)
-          setAllProducts(items)
-          // My Products are derived from TenantProductForm assignments; will be set after assignments load
-          console.log('✅ Products loaded successfully:', items.length, 'products')
-        } else {
-          console.error('❌ API returned success=false:', data.message)
-          setError(data.message || 'Failed to load products')
+        if (!resp.ok) {
+          const errorText = await resp.text().catch(() => '')
+          console.error('❌ HTTP error response:', resp.status, resp.statusText)
+          console.error('❌ Error body:', errorText)
+          setError(`Failed to load products: ${resp.status} ${resp.statusText}`)
+          break
         }
-      } else {
-        const errorText = await response.text()
-        console.error('❌ HTTP error response:', response.status, response.statusText)
-        console.error('❌ Error body:', errorText)
-        setError(`Failed to load products: ${response.status} ${response.statusText}`)
+
+        const json = await resp.json().catch(() => ({}))
+        if (!json?.success) {
+          console.error('❌ API returned success=false:', json?.message)
+          setError(json?.message || 'Failed to load products')
+          break
+        }
+
+        const pageItems: Product[] = (json.data && (json.data.products || json.data)) || []
+        aggregated.push(...pageItems)
+        fetched += pageItems.length
+        console.log(`🔍 Page ${page} fetched ${pageItems.length}, total so far ${aggregated.length}`)
+
+        if (pageItems.length < limit) {
+          // No more pages
+          break
+        }
+        page += 1
+        if (page > 10) {
+          // safety cap
+          break
+        }
       }
+
+      const capped = aggregated.slice(0, 500)
+      console.log('✅ Products loaded successfully:', capped.length, 'products (aggregated)')
+      setAllProducts(capped)
 
     } catch (err) {
       console.error('❌ Exception during fetch:', err)
