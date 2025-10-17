@@ -62,8 +62,6 @@ export default function Products() {
     category: "",
     medicationSize: "",
     pharmacyProvider: "",
-    pharmacyWholesaleCost: 0,
-    suggestedRetailPrice: 0,
     pharmacyProductId: "",
     requiredDoctorQuestions: [] as any[],
     isActive: true,
@@ -169,8 +167,6 @@ export default function Products() {
       category: "",
       medicationSize: "",
       pharmacyProvider: "",
-      pharmacyWholesaleCost: 0,
-      suggestedRetailPrice: 0,
       pharmacyProductId: "",
       requiredDoctorQuestions: [],
       isActive: true,
@@ -189,8 +185,6 @@ export default function Products() {
       category: product.category || "",
       medicationSize: product.medicationSize || "",
       pharmacyProvider: product.pharmacyProvider || "",
-      pharmacyWholesaleCost: product.pharmacyWholesaleCost || 0,
-      suggestedRetailPrice: product.suggestedRetailPrice || 0,
       pharmacyProductId: product.pharmacyProductId || "",
       requiredDoctorQuestions: product.requiredDoctorQuestions || [],
       isActive: product.isActive,
@@ -211,9 +205,6 @@ export default function Products() {
       // Clean up the data before sending
       const cleanedData: any = {
         ...formData,
-        // Remove fields with 0 values (optional fields)
-        pharmacyWholesaleCost: formData.pharmacyWholesaleCost > 0 ? formData.pharmacyWholesaleCost : undefined,
-        suggestedRetailPrice: formData.suggestedRetailPrice > 0 ? formData.suggestedRetailPrice : undefined,
         // Remove empty strings
         pharmacyProvider: formData.pharmacyProvider || undefined,
         pharmacyProductId: formData.pharmacyProductId || undefined,
@@ -476,24 +467,8 @@ export default function Products() {
 
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Wholesale Cost:</span>
-                        <span className="font-medium text-amber-600">${product.price.toFixed(2)}</span>
+                        <span className="font-medium text-foreground">${product.price.toFixed(2)}</span>
                       </div>
-
-                      {product.suggestedRetailPrice && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Suggested Retail:</span>
-                          <span className="font-medium text-green-600">${product.suggestedRetailPrice.toFixed(2)}</span>
-                        </div>
-                      )}
-
-                      {product.suggestedRetailPrice && (
-                        <div className="flex items-center justify-between pt-2 border-t">
-                          <span className="text-muted-foreground">Profit Margin:</span>
-                          <span className="font-bold text-primary">
-                            {calculateProfitMargin(product.price, product.suggestedRetailPrice)}%
-                          </span>
-                        </div>
-                      )}
                     </div>
 
                     {product.activeIngredients && product.activeIngredients.length > 0 && (
@@ -613,29 +588,7 @@ export default function Products() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Pharmacy Wholesale Cost</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.pharmacyWholesaleCost}
-                    onChange={(e) => setFormData({ ...formData, pharmacyWholesaleCost: parseFloat(e.target.value) || 0 })}
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Suggested Retail Price</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.suggestedRetailPrice}
-                    onChange={(e) => setFormData({ ...formData, suggestedRetailPrice: parseFloat(e.target.value) || 0 })}
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Your Selling Price *</label>
+                  <label className="text-sm font-medium">Pharmacy Wholesale Price *</label>
                   <Input
                     type="number"
                     step="0.01"
@@ -643,6 +596,7 @@ export default function Products() {
                     onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
                     placeholder="0.00"
                   />
+                  <p className="text-xs text-muted-foreground">The wholesale price from the pharmacy</p>
                 </div>
 
                 <div className="flex items-center space-x-2 md:col-span-2">
@@ -657,17 +611,6 @@ export default function Products() {
                     Product is active
                   </label>
                 </div>
-
-                {formData.pharmacyWholesaleCost > 0 && formData.suggestedRetailPrice > 0 && (
-                  <div className="md:col-span-2 p-4 rounded-lg bg-muted">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">Calculated Profit Margin:</span>
-                      <span className="text-lg font-bold text-primary">
-                        {calculateProfitMargin(formData.pharmacyWholesaleCost, formData.suggestedRetailPrice)}%
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="flex justify-end gap-3">
