@@ -48,7 +48,8 @@ export default function TemplateEditor() {
   const [copiedVariable, setCopiedVariable] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!templateId || !token) return
+    if (!token) return
+    if (typeof templateId !== 'string' || !templateId) return
 
     const fetchTemplate = async () => {
       setLoading(true)

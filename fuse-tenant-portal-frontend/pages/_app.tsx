@@ -32,7 +32,7 @@ export default function App({ Component, pageProps }: AppProps) {
                   <Component {...pageProps} />
                 </ProtectedRoute>
               )}
-              <Analytics />
+              {process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === 'true' && <Analytics />}
             </div>
           </TenantProvider>
         </AuthProvider>
