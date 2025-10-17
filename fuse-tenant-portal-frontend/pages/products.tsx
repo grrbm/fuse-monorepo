@@ -208,18 +208,39 @@ export default function Products() {
     const method = editingProduct ? "PUT" : "POST"
 
     try {
+      // Clean up the data before sending
+      const cleanedData: any = {
+        ...formData,
+        // Remove fields with 0 values (optional fields)
+        pharmacyWholesaleCost: formData.pharmacyWholesaleCost > 0 ? formData.pharmacyWholesaleCost : undefined,
+        suggestedRetailPrice: formData.suggestedRetailPrice > 0 ? formData.suggestedRetailPrice : undefined,
+        // Remove empty strings
+        pharmacyProvider: formData.pharmacyProvider || undefined,
+        pharmacyProductId: formData.pharmacyProductId || undefined,
+        medicationSize: formData.medicationSize || undefined,
+        category: formData.category || undefined,
+      }
+
+      console.log('📤 Sending product data:', cleanedData)
+      
       const response = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(cleanedData),
       })
 
-      if (!response.ok) throw new Error("Failed to save product")
-
       const data = await response.json()
+      console.log('📥 Server response:', data)
+
+      if (!response.ok) {
+        const errorMsg = data.message || data.error || "Failed to save product"
+        const validationErrors = data.errors ? JSON.stringify(data.errors) : ""
+        throw new Error(`${errorMsg} ${validationErrors}`)
+      }
+
       setSaveMessage(data.message || "Product saved successfully")
       setShowModal(false)
       fetchProducts()
@@ -272,6 +293,39 @@ export default function Products() {
     }
   }
 
+  const handleDeactivateAll = async () => {
+    if (!token) return
+    if (!confirm("Are you sure you want to deactivate ALL products? This will affect all products in the system.")) return
+
+    try {
+      const activeProducts = products.filter(p => p.isActive)
+      
+      if (activeProducts.length === 0) {
+        setSaveMessage("No active products to deactivate")
+        return
+      }
+
+      // Deactivate each product
+      const promises = activeProducts.map(product =>
+        fetch(`${baseUrl}/products-management/${product.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ isActive: false }),
+        })
+      )
+
+      await Promise.all(promises)
+      setSaveMessage(`Successfully deactivated ${activeProducts.length} products`)
+      fetchProducts()
+    } catch (error: any) {
+      console.error("❌ Error deactivating all products:", error)
+      setSaveMessage(error.message)
+    }
+  }
+
   const calculateProfitMargin = (wholesale: number, retail: number) => {
     if (!wholesale || !retail) return 0
     return ((retail - wholesale) / wholesale * 100).toFixed(1)
@@ -290,9 +344,14 @@ export default function Products() {
                 Manage your product catalog, pharmacy pricing, and medication details.
               </p>
             </div>
-            <Button onClick={handleCreateProduct}>
-              <Plus className="mr-2 h-4 w-4" /> Add Product
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="destructive" onClick={handleDeactivateAll}>
+                Deactivate All
+              </Button>
+              <Button onClick={handleCreateProduct}>
+                <Plus className="mr-2 h-4 w-4" /> Add Product
+              </Button>
+            </div>
           </div>
 
           {saveMessage && (

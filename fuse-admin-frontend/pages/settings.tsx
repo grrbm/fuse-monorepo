@@ -127,7 +127,14 @@ export default function Settings({
     authenticatedFetch,
   } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [runTutorial, setRunTutorial] = useState(true);
+  const [runTutorial, setRunTutorial] = useState(() => {
+    // Check if tutorial has been completed before
+    if (typeof window !== 'undefined') {
+      const tutorialCompleted = localStorage.getItem('tutorialCompleted');
+      return tutorialCompleted !== 'true';
+    }
+    return false;
+  });
 
   const [organizationData, setOrganizationData] = useState({
     businessName: "",

@@ -71,7 +71,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     email,
     password, // In production, this would be hashed
     name,
-    role: 'admin'
+    role: 'admin',
+    clinicId: `clinic-${Date.now()}` // Generate a unique clinic ID
   }
 
   // Add to mock database

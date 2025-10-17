@@ -11,6 +11,7 @@ interface User {
   companyName?: string
   phone?: string
   website?: string
+  clinicId?: string
 }
 
 interface Subscription {

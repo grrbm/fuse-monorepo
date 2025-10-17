@@ -34,11 +34,19 @@ const Tutorial = ({
     if (action === "next" && index === 5) {
       console.log('Tutorial completado');
       setRunTutorial(false);
+      // Mark tutorial as completed in localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tutorialCompleted', 'true');
+      }
       return;
     }
 
     if (status === "finished" || status === "skipped") {
       setRunTutorial(false);
+      // Mark tutorial as completed in localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tutorialCompleted', 'true');
+      }
     }
   };
 

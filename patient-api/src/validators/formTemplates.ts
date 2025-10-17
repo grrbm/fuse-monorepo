@@ -18,3 +18,4 @@ export const assignTemplatesSchema = z.object({
 export type ListTemplatesQuery = z.infer<typeof listTemplatesQuerySchema>
 export type AssignTemplatesInput = z.infer<typeof assignTemplatesSchema>
 
+

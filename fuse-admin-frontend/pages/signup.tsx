@@ -148,8 +148,8 @@ export default function SignUp() {
       console.log('Signup response:', { status: response.status, data })
 
       if (response.ok && data.success) {
-        // Show success message and redirect to plans (mandatory plan selection)
-        router.push('/plans?message=Account created successfully! Please select a plan to continue.')
+        // Show success message and redirect to dashboard
+        router.push('/?message=Account created successfully! Welcome to Fuse.')
       } else {
         // Handle different types of errors
         let errorMessage = 'Signup failed'
