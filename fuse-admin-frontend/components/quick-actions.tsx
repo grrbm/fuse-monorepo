@@ -8,17 +8,17 @@ export function QuickActions() {
 
   const actions = [
     {
-      title: "View Products",
-      description: "Manage your product catalog",
-      icon: Package,
-      onClick: () => router.push('/products'),
-      variant: "default" as const
-    },
-    {
       title: "View Orders",
       description: "Review customer orders",
       icon: FileText,
       onClick: () => router.push('/orders'),
+      variant: "default" as const
+    },
+    {
+      title: "Manage Products",
+      description: "Manage your product catalog",
+      icon: Package,
+      onClick: () => router.push('/products'),
       variant: "outline" as const
     },
     {
