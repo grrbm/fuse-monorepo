@@ -368,6 +368,7 @@ export default function ProductDetail() {
 
             if (response.ok) {
                 console.log('✅ Tutorial marked as finished')
+                document.getElementById("enable-product-btn")?.click();
             } else {
                 console.error('❌ Failed to mark tutorial as finished')
             }

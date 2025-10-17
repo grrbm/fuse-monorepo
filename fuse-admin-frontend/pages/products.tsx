@@ -411,7 +411,7 @@ export default function Products() {
           {visibleProducts.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {visibleProducts.map((product) => (
-                <Card key={product.id} className="hover:shadow-lg transition-shadow">
+                <Card key={product.id} className="hover:shadow-lg transition-shadow product-card">
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div className="flex items-center gap-3">
@@ -493,7 +493,7 @@ export default function Products() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="flex-1"
+                          className="flex-1 view-product"
                           onClick={() => router.push(`/products/${product.id}`)}
                         >
                           <Eye className="h-4 w-4 mr-1" />
