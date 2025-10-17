@@ -2847,7 +2847,7 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
     }
 
     // Create order
-    const orderNumber = Order.generateOrderNumber();
+    const orderNumber = await Order.generateOrderNumber();
     const order = await Order.create({
       orderNumber,
       userId: currentUser.id,
@@ -3066,7 +3066,7 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
 
 
     // Create order
-    const orderNumber = Order.generateOrderNumber();
+    const orderNumber = await Order.generateOrderNumber();
     const order = await Order.create({
       orderNumber,
       userId: currentUser.id,

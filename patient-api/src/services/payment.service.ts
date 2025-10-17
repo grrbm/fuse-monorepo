@@ -145,8 +145,9 @@ class PaymentService {
                 userId
             });
             // Create order
+            const orderNumber = await Order.generateOrderNumber();
             const order = await Order.create({
-                orderNumber: Order.generateOrderNumber(),
+                orderNumber,
                 userId: userId,
                 treatmentId: treatmentId,
                 treatmentPlanId: treatmentPlanId,
