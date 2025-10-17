@@ -1,47 +1,39 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/router'
+import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useAuth } from '@/contexts/AuthContext'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Layout from '@/components/Layout'
 import {
     ShoppingCart,
-    Eye,
-    CheckCircle,
-    XCircle,
-    Clock,
-    AlertCircle,
     DollarSign,
+    Clock,
+    TrendingUp,
+    Search,
+    ChevronDown,
+    ChevronRight,
     Package,
-    User,
-    Calendar
+    MapPin,
+    CreditCard,
+    Calendar,
+    User
 } from 'lucide-react'
 
 interface Order {
     id: string
     orderNumber: string
-    status: 'pending' | 'payment_processing' | 'paid' | 'payment_due' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded'
-    subtotalAmount: number
-    discountAmount: number
-    taxAmount: number
-    shippingAmount: number
+    status: string
     totalAmount: number
     createdAt: string
     shippedAt?: string
     deliveredAt?: string
-    user: {
+    user?: {
         id: string
         firstName: string
         lastName: string
         email: string
     }
-    treatment: {
-        id: string
-        name: string
-    }
-    orderItems: Array<{
+    orderItems?: Array<{
         id: string
         quantity: number
         unitPrice: number
@@ -49,247 +41,119 @@ interface Order {
         product: {
             id: string
             name: string
+            category?: string
         }
     }>
-    shippingAddress: {
-        id: string
+    shippingAddress?: {
         address: string
+        apartment?: string
         city: string
         state: string
         zipCode: string
         country: string
     }
+    payment?: {
+        status: string
+        paymentMethod: string
+    }
 }
+
+type StatusFilter = 'all' | 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled'
 
 export default function Orders() {
     const [orders, setOrders] = useState<Order[]>([])
-    const [loading, setLoading] = useState(false)  // Start with false, set to true when fetching
+    const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [searchTerm, setSearchTerm] = useState('')
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
     const { user, token } = useAuth()
-    const router = useRouter()
 
-    // Cast user to include clinicId property
-    const userWithClinic = user as any
+    useEffect(() => {
+        fetchOrders()
+    }, [token, user])
 
-    console.log('🔍 Orders component mounted')
-    console.log('🔍 Initial user data:', user)
-    console.log('🔍 Initial token:', token)
-    console.log('🔍 Initial clinic ID:', userWithClinic?.clinicId)
-
-    const fetchOrders = useCallback(async () => {
-        console.log('🔍 FetchOrders called - User data:', user)
-        console.log('🔍 FetchOrders called - Token:', token)
-        console.log('🔍 FetchOrders called - Clinic ID:', userWithClinic?.clinicId)
-
-        console.log('🔍 🔄 STARTING ORDERS FETCH PROCESS')
-        console.log('🔍 User data:', user)
-        console.log('🔍 Token:', token)
-        console.log('🔍 Clinic ID:', userWithClinic?.clinicId)
-
-        // Set loading to true at the start of the fetch process
-        setLoading(true)
-        setError(null)
-
-        if (!token) {
-            console.log('❌ No token available, skipping fetch')
-            setError('No authentication token found')
-            setLoading(false)
-            return
-        }
-
-        if (!userWithClinic?.clinicId) {
-            console.log('❌ No clinicId in user data, skipping fetch')
-            setError('❌ Clinic Access Required: Your account is not assigned to any clinic. Please contact support to get access to clinic data, or try logging out and back in if you recently joined a clinic.')
-            setLoading(false)
-            return
-        }
-
-        console.log('✅ Authentication passed, proceeding with fetch')
-
-        // Test basic connectivity first
-        try {
-            console.log('🔍 Testing basic connectivity to /auth/me...')
-            const testResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/me`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            })
-            console.log('🔍 Test response status:', testResponse.status)
-            if (testResponse.ok) {
-                const testData = await testResponse.json()
-                console.log('🔍 Test response data:', testData)
-                console.log('✅ Connectivity test PASSED')
-            } else {
-                const errorText = await testResponse.text()
-                console.error('❌ Test failed:', errorText)
-                console.error('❌ Connectivity test FAILED')
-            }
-        } catch (testError) {
-            console.error('❌ Connectivity test error:', testError)
-        }
-
-        console.log('🔍 🚀 STARTING ACTUAL ORDERS FETCH')
-        console.log('🔍 Target clinic ID:', userWithClinic.clinicId)
-        console.log('🔍 API URL:', `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/orders/by-clinic/${userWithClinic.clinicId}`)
+    const fetchOrders = async () => {
+        if (!token || !user) return
 
         try {
             setLoading(true)
-            console.log('🔍 Setting loading to true')
+            setError(null)
+            const userWithClinic: any = user
+            const clinicId = userWithClinic?.clinicId
 
-            // Fetch orders for the clinic with timeout
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => {
-                console.log('⏰ Request timed out after 30 seconds')
-                controller.abort()
-            }, 30000) // 10 second timeout
+            if (!clinicId) {
+                setError('No clinic access. Please contact support.')
+                return
+            }
 
-            console.log('🔍 Making fetch request...')
-            console.log('🔍 📡 Making API request...')
-            console.log('🔍 📡 Full URL:', `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/orders/by-clinic/${userWithClinic.clinicId}`)
-            console.log('🔍 📡 Headers:', {
-                'Authorization': `Bearer ${token.substring(0, 20)}...`, // Don't log full token
-                'Content-Type': 'application/json'
-            })
-
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/orders/by-clinic/${userWithClinic.clinicId}`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                signal: controller.signal
-            })
-            clearTimeout(timeoutId)
-
-            console.log('🔍 📡 Response received!')
-            console.log('🔍 Response status:', response.status)
-            console.log('🔍 Response statusText:', response.statusText)
-            console.log('🔍 Response headers:', Object.fromEntries(response.headers.entries()))
+            const response = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/orders/by-clinic/${clinicId}`,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            )
 
             if (response.ok) {
-                console.log('✅ Response OK, parsing JSON...')
                 const data = await response.json()
-                console.log('🔍 ✅ Response data received:', data)
-
                 if (data.success) {
-                    console.log('✅ API call successful!')
-                    const orders = data.data.orders || []
-                    console.log('🔍 Orders count:', orders.length)
-                    console.log('🔍 Setting orders state with:', orders.length, 'orders')
-
-                    setOrders(orders)
-
-                    if (orders.length === 0) {
-                        console.log('ℹ️ No orders found for this clinic')
-                        setError('No orders found for your clinic')
-                    } else {
-                        console.log('✅ Orders loaded successfully:', orders.length, 'orders')
-                    }
+                    setOrders(data.data.orders || [])
                 } else {
-                    console.error('❌ API returned success=false:', data.message)
                     setError(data.message || 'Failed to load orders')
                 }
             } else {
-                const errorText = await response.text()
-                console.error('❌ HTTP error response:', response.status, response.statusText)
-                console.error('❌ Error body:', errorText)
-                console.error('❌ Error body parsed:', JSON.parse(errorText) || errorText)
-
-                // Try to parse error as JSON
-                let errorDetails = errorText
-                try {
-                    const errorObj = JSON.parse(errorText)
-                    errorDetails = errorObj.message || errorObj.error || errorText
-                } catch (e) {
-                    // Not JSON, use raw text
-                }
-
-                setError(`❌ API Error ${response.status}: ${errorDetails}`)
-            }
-
-        } catch (err) {
-            console.error('❌ Exception during fetch:', err)
-            if (err instanceof Error && err.name === 'AbortError') {
-                console.error('⏰ Request was aborted due to timeout')
-                setError('Request timed out. Please try again.')
-            } else {
-                console.error('❌ Other error type:', err)
                 setError('Failed to load orders')
             }
+        } catch (err) {
+            setError('Failed to load orders')
         } finally {
-            console.log('🔍 Setting loading to false')
             setLoading(false)
-        }
-    }, [token, userWithClinic?.clinicId])
-
-    useEffect(() => {
-        console.log('🔍 useEffect running')
-        fetchOrders()
-    }, [fetchOrders])
-
-    // Debug: Check if component is working at all
-    useEffect(() => {
-        console.log('🔍 📄 ORDERS PAGE LOADED!')
-        console.log('🔍 User object:', user)
-        console.log('🔍 Token object:', token)
-        console.log('🔍 User clinicId:', (user as any)?.clinicId)
-
-        // Check after a short delay to see if auth state changes
-        const timer = setTimeout(() => {
-            console.log('🔍 ⏱️ After delay - User object:', user)
-            console.log('🔍 ⏱️ After delay - Token object:', token)
-            console.log('🔍 ⏱️ After delay - User clinicId:', (user as any)?.clinicId)
-
-            // Test if we can trigger fetchOrders manually
-            if (token && (user as any)?.clinicId) {
-                console.log('🔍 ⏱️ Auto-triggering fetchOrders after delay')
-                fetchOrders()
-            } else {
-                console.log('❌ Still no clinicId after delay - manual reload required')
-                console.log('💡 Try: 1) Log out and back in, or 2) Use the Debug Panel buttons')
-            }
-        }, 2000)
-
-        return () => clearTimeout(timer)
-    }, [])
-
-    const getStatusBadge = (status: Order['status']) => {
-        switch (status) {
-            case 'pending':
-                return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300"><Clock className="h-3 w-3 mr-1" /> Pending</Badge>
-            case 'payment_processing':
-                return <Badge className="bg-blue-100 text-blue-800 border-blue-300"><Clock className="h-3 w-3 mr-1" /> Payment Processing</Badge>
-            case 'paid':
-                return <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="h-3 w-3 mr-1" /> Paid</Badge>
-            case 'payment_due':
-                return <Badge className="bg-red-100 text-red-800 border-red-300"><AlertCircle className="h-3 w-3 mr-1" /> Payment Due</Badge>
-            case 'processing':
-                return <Badge className="bg-blue-100 text-blue-800 border-blue-300"><Clock className="h-3 w-3 mr-1" /> Processing</Badge>
-            case 'shipped':
-                return <Badge className="bg-purple-100 text-purple-800 border-purple-300"><Package className="h-3 w-3 mr-1" /> Shipped</Badge>
-            case 'delivered':
-                return <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="h-3 w-3 mr-1" /> Delivered</Badge>
-            case 'cancelled':
-                return <Badge className="bg-gray-100 text-gray-800 border-gray-300"><XCircle className="h-3 w-3 mr-1" /> Cancelled</Badge>
-            case 'refunded':
-                return <Badge className="bg-orange-100 text-orange-800 border-orange-300"><XCircle className="h-3 w-3 mr-1" /> Refunded</Badge>
-            default:
-                return <Badge className="bg-gray-100 text-gray-800 border-gray-300">{status}</Badge>
         }
     }
 
-    const formatPrice = (price: number) => {
+    // Calculate stats
+    const stats = {
+        totalOrders: orders.length,
+        totalRevenue: orders.filter(o => o.status === 'paid').reduce((sum, o) => sum + o.totalAmount, 0),
+        pendingOrders: orders.filter(o => o.status === 'pending' || o.status === 'payment_due').length,
+        avgOrderValue: orders.length > 0 ? orders.reduce((sum, o) => sum + o.totalAmount, 0) / orders.length : 0
+    }
+
+    // Filter orders
+    const filteredOrders = orders.filter(order => {
+        const matchesStatus = statusFilter === 'all' || order.status === statusFilter
+        const matchesSearch = searchTerm === '' || 
+            order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            `${order.user?.firstName} ${order.user?.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.user?.email.toLowerCase().includes(searchTerm.toLowerCase())
+        return matchesStatus && matchesSearch
+    })
+
+    const toggleRow = (orderId: string) => {
+        const newExpanded = new Set(expandedRows)
+        if (newExpanded.has(orderId)) {
+            newExpanded.delete(orderId)
+        } else {
+            newExpanded.add(orderId)
+        }
+        setExpandedRows(newExpanded)
+    }
+
+    const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'USD'
-        }).format(price)
+        }).format(amount)
     }
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric',
             month: 'short',
-            day: 'numeric'
+            day: 'numeric',
+            year: 'numeric'
         })
+    }
+
+    const getStatusBadge = (status: string) => {
+        return <Badge variant="outline" className="text-xs font-medium">{status}</Badge>
     }
 
     if (loading) {
@@ -309,199 +173,297 @@ export default function Orders() {
         <Layout>
             <Head>
                 <title>Orders - Fuse Admin</title>
-                <meta name="description" content="Manage and track your clinic orders" />
             </Head>
 
-            <div className="min-h-screen bg-background p-6">
-                {/* Debug Panel */}
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h3 className="text-sm font-semibold text-blue-800 mb-2">🔍 Debug Panel</h3>
-                    <div className="flex gap-2">
-                        <Button
-                            size="sm"
-                            onClick={() => {
-                                console.log('🔍 Manual trigger of fetchOrders')
-                                fetchOrders()
-                            }}
-                        >
-                            🔄 Reload Orders
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                                console.log('🔍 Current state:')
-                                console.log('- User:', user)
-                                console.log('- Token exists:', !!token)
-                                console.log('- Clinic ID:', (user as any)?.clinicId)
-                                console.log('- Loading:', loading)
-                                console.log('- Error:', error)
-
-                                const clinicId = (user as any)?.clinicId || 'null'
-                                const hasClinic = !!clinicId && clinicId !== 'null'
-
-                                if (!hasClinic) {
-                                    alert(`❌ Clinic ID Issue\n\nCurrent Clinic ID: ${clinicId}\n\n💡 Solutions:\n1. Log out and back in\n2. Clear browser cache\n3. Check if SQL update worked\n4. Contact support if persists`)
-                                } else {
-                                    alert(`✅ Clinic Access\n\nClinic ID: ${clinicId}\nLoading: ${loading}\nError: ${error || 'none'}`)
-                                }
-                            }}
-                        >
-                            📊 Show State
-                        </Button>
-                    </div>
-                </div>
+            <div className="min-h-screen bg-background p-8" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
-                    <div className="flex justify-between items-center mb-8">
-                        <div>
-                            <h1 className="text-3xl font-bold text-foreground mb-2">Orders</h1>
-                            <p className="text-muted-foreground">Track and manage patient orders</p>
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-semibold text-foreground mb-2">Orders</h1>
+                        <p className="text-sm text-muted-foreground">Track and manage customer orders</p>
+                    </div>
+
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <Card className="border-border shadow-sm">
+                            <CardContent className="p-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-lg bg-muted">
+                                        <ShoppingCart className="h-5 w-5 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Orders</p>
+                                        <p className="text-2xl font-semibold text-foreground mt-1">{stats.totalOrders}</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border shadow-sm">
+                            <CardContent className="p-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-lg bg-muted">
+                                        <DollarSign className="h-5 w-5 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Revenue</p>
+                                        <p className="text-2xl font-semibold text-foreground mt-1">{formatCurrency(stats.totalRevenue)}</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border shadow-sm">
+                            <CardContent className="p-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-lg bg-muted">
+                                        <Clock className="h-5 w-5 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pending Orders</p>
+                                        <p className="text-2xl font-semibold text-foreground mt-1">{stats.pendingOrders}</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-border shadow-sm">
+                            <CardContent className="p-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-lg bg-muted">
+                                        <TrendingUp className="h-5 w-5 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Avg Order Value</p>
+                                        <p className="text-2xl font-semibold text-foreground mt-1">{formatCurrency(stats.avgOrderValue)}</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Filters & Search */}
+                    <div className="mb-6 space-y-4">
+                        {/* Search Bar */}
+                        <div className="relative max-w-md">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <input
+                                type="text"
+                                placeholder="Search by order #, customer name, or email..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
+                            />
+                        </div>
+
+                        {/* Status Filters */}
+                        <div className="flex flex-wrap gap-2">
+                            {(['all', 'pending', 'paid', 'shipped', 'delivered', 'cancelled'] as StatusFilter[]).map((status) => (
+                                <button
+                                    key={status}
+                                    onClick={() => setStatusFilter(status)}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                                        statusFilter === status
+                                            ? 'bg-foreground text-background'
+                                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                                    }`}
+                                >
+                                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
                     {/* Error Message */}
                     {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-                            <div className="flex">
-                                <XCircle className="h-5 w-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
-                                <div className="flex-1">
-                                    <p className="text-red-700">{error}</p>
-                                    {error.includes('Clinic Access Required') && (
-                                        <div className="mt-2 text-sm text-red-600">
-                                            <p className="font-medium">🔧 Troubleshooting Steps:</p>
-                                            <ol className="list-decimal list-inside mt-1">
-                                                <li>Try logging out and back in to refresh your session</li>
-                                                <li>Clear your browser cache and cookies</li>
-                                                <li>Use the "📊 Show State" button above to verify your clinic ID</li>
-                                                <li>Contact support if the issue persists</li>
-                                            </ol>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                        <div className="mb-6 p-4 border border-red-200 rounded-md bg-background">
+                            <p className="text-red-600 text-sm">{error}</p>
                         </div>
                     )}
 
-                    {/* Orders List */}
-                    {orders.length > 0 ? (
-                        <div className="space-y-6">
-                            {orders.map((order) => (
-                                <Card key={order.id} className="hover:shadow-lg transition-shadow">
-                                    <CardHeader>
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-primary/10 rounded-lg">
-                                                    <ShoppingCart className="h-6 w-6 text-primary" />
-                                                </div>
-                                                <div>
-                                                    <CardTitle className="text-lg">{order.orderNumber}</CardTitle>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {order.user?.firstName || 'N/A'} {order.user?.lastName || 'N/A'} • {order.treatment?.name || 'N/A'}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                {getStatusBadge(order.status)}
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => router.push(`/orders/${order.id}`)}
-                                                >
-                                                    <Eye className="h-4 w-4 mr-1" />
-                                                    View
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </CardHeader>
-
-                                    <CardContent>
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            {/* Order Details */}
-                                            <div className="space-y-4">
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex items-center gap-2">
-                                                        <User className="h-4 w-4 text-muted-foreground" />
-                                                        <span className="text-sm text-muted-foreground">Customer</span>
-                                                    </div>
-                                                    <span className="font-semibold">{order.user?.firstName || 'N/A'} {order.user?.lastName || 'N/A'}</span>
-                                                </div>
-
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex items-center gap-2">
-                                                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                                                        <span className="text-sm text-muted-foreground">Created</span>
-                                                    </div>
-                                                    <span className="font-semibold">{formatDate(order.createdAt)}</span>
-                                                </div>
-
-                                                {order.shippedAt && (
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="flex items-center gap-2">
-                                                            <Package className="h-4 w-4 text-muted-foreground" />
-                                                            <span className="text-sm text-muted-foreground">Shipped</span>
-                                                        </div>
-                                                        <span className="font-semibold">{formatDate(order.shippedAt)}</span>
-                                                    </div>
-                                                )}
-
-                                                {order.deliveredAt && (
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="flex items-center gap-2">
-                                                            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                                                            <span className="text-sm text-muted-foreground">Delivered</span>
-                                                        </div>
-                                                        <span className="font-semibold">{formatDate(order.deliveredAt)}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Order Items */}
-                                            <div className="space-y-2">
-                                                <h4 className="font-semibold mb-3">Items</h4>
-                                                {(order.orderItems || []).slice(0, 2).map((item) => (
-                                                    <div key={item.id} className="flex justify-between items-center py-2">
-                                                        <div>
-                                                            <p className="font-medium">{item.product.name}</p>
-                                                            <p className="text-sm text-muted-foreground">
-                                                                Qty: {item.quantity} × {formatPrice(item.unitPrice)}
-                                                            </p>
-                                                        </div>
-                                                        <span className="font-semibold">{formatPrice(item.totalPrice)}</span>
-                                                    </div>
-                                                ))}
-                                                {(order.orderItems || []).length > 2 && (
-                                                    <p className="text-sm text-muted-foreground">
-                                                        +{(order.orderItems || []).length - 2} more items
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Order Summary */}
-                                        <div className="mt-6 pt-6 border-t">
-                                            <div className="flex justify-between items-center text-lg font-semibold">
-                                                <span>Total Amount</span>
-                                                <span className="text-primary">{formatPrice(order.totalAmount)}</span>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : (
-                        <Card className="p-12 text-center">
-                            <div className="flex flex-col items-center gap-4">
-                                <ShoppingCart className="h-12 w-12 text-muted-foreground" />
-                                <div>
-                                    <h3 className="text-lg font-semibold text-foreground mb-2">No orders found</h3>
-                                    <p className="text-muted-foreground">Orders will appear here when patients place them.</p>
+                    {/* Orders Table */}
+                    <Card className="border-border shadow-sm">
+                        <CardHeader className="border-b border-border">
+                            <CardTitle className="text-lg font-semibold">All Orders ({filteredOrders.length})</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            {filteredOrders.length === 0 ? (
+                                <div className="p-12 text-center">
+                                    <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                                    <h3 className="text-lg font-medium text-foreground mb-2">No orders found</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        {searchTerm || statusFilter !== 'all' ? 'Try adjusting your filters' : 'Orders will appear here when customers place them'}
+                                    </p>
                                 </div>
-                            </div>
-                        </Card>
-                    )}
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-muted/50 border-b border-border">
+                                            <tr>
+                                                <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Order #</th>
+                                                <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer</th>
+                                                <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
+                                                <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Items</th>
+                                                <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                                                <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</th>
+                                                <th className="w-10"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {filteredOrders.map((order) => {
+                                                const isExpanded = expandedRows.has(order.id)
+                                                return (
+                                                    <>
+                                                        <tr
+                                                            key={order.id}
+                                                            onClick={() => toggleRow(order.id)}
+                                                            className="hover:bg-muted/50 cursor-pointer transition-colors"
+                                                        >
+                                                            <td className="p-4">
+                                                                <span className="font-medium text-foreground">{order.orderNumber}</span>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <div>
+                                                                    <div className="font-medium text-foreground">
+                                                                        {order.user?.firstName} {order.user?.lastName}
+                                                                    </div>
+                                                                    <div className="text-xs text-muted-foreground">{order.user?.email}</div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <span className="text-sm text-foreground">{formatDate(order.createdAt)}</span>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <span className="text-sm text-muted-foreground">
+                                                                    {order.orderItems?.length || 0} item{order.orderItems?.length !== 1 ? 's' : ''}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                {getStatusBadge(order.status)}
+                                                            </td>
+                                                            <td className="p-4 text-right">
+                                                                <span className="font-semibold text-foreground">{formatCurrency(order.totalAmount)}</span>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                {isExpanded ? (
+                                                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                                ) : (
+                                                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                                )}
+                                                            </td>
+                                                        </tr>
+
+                                                        {/* Expanded Row Details */}
+                                                        {isExpanded && (
+                                                            <tr>
+                                                                <td colSpan={7} className="p-0">
+                                                                    <div className="bg-muted/30 p-6 border-t border-border">
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                            {/* Order Items */}
+                                                                            <div>
+                                                                                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Order Items</h4>
+                                                                                <div className="space-y-3">
+                                                                                    {order.orderItems?.map((item) => (
+                                                                                        <div key={item.id} className="flex justify-between items-start p-3 bg-card border border-border rounded-lg">
+                                                                                            <div className="flex-1">
+                                                                                                <div className="font-medium text-foreground">{item.product.name}</div>
+                                                                                                <div className="text-xs text-muted-foreground mt-1">
+                                                                                                    Qty: {item.quantity} × {formatCurrency(item.unitPrice)}
+                                                                                                </div>
+                                                                                                {item.product.category && (
+                                                                                                    <Badge variant="outline" className="text-xs font-normal mt-1">
+                                                                                                        {item.product.category.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                                                                                    </Badge>
+                                                                                                )}
+                                                                                            </div>
+                                                                                            <div className="font-semibold text-foreground">
+                                                                                                {formatCurrency(item.totalPrice)}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {/* Shipping & Payment Info */}
+                                                                            <div className="space-y-4">
+                                                                                {/* Shipping Address */}
+                                                                                {order.shippingAddress && (
+                                                                                    <div>
+                                                                                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Shipping Address</h4>
+                                                                                        <div className="p-3 bg-card border border-border rounded-lg">
+                                                                                            <div className="flex items-start gap-2">
+                                                                                                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                                                                <div className="text-sm text-foreground">
+                                                                                                    <div>{order.shippingAddress.address}</div>
+                                                                                                    {order.shippingAddress.apartment && <div>{order.shippingAddress.apartment}</div>}
+                                                                                                    <div>
+                                                                                                        {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
+                                                                                                    </div>
+                                                                                                    <div>{order.shippingAddress.country || 'US'}</div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+
+                                                                                {/* Payment Info */}
+                                                                                {order.payment && (
+                                                                                    <div>
+                                                                                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Payment</h4>
+                                                                                        <div className="p-3 bg-card border border-border rounded-lg">
+                                                                                            <div className="flex items-center gap-2 text-sm">
+                                                                                                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                                                                                                <span className="text-foreground">
+                                                                                                    {order.payment.paymentMethod || 'Card'} • {order.payment.status}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+
+                                                                                {/* Timeline */}
+                                                                                <div>
+                                                                                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Timeline</h4>
+                                                                                    <div className="space-y-2">
+                                                                                        <div className="flex items-center gap-2 text-sm">
+                                                                                            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                                            <span className="text-muted-foreground">Created:</span>
+                                                                                            <span className="font-medium text-foreground">{formatDate(order.createdAt)}</span>
+                                                                                        </div>
+                                                                                        {order.shippedAt && (
+                                                                                            <div className="flex items-center gap-2 text-sm">
+                                                                                                <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                                                <span className="text-muted-foreground">Shipped:</span>
+                                                                                                <span className="font-medium text-foreground">{formatDate(order.shippedAt)}</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {order.deliveredAt && (
+                                                                                            <div className="flex items-center gap-2 text-sm">
+                                                                                                <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                                                <span className="text-muted-foreground">Delivered:</span>
+                                                                                                <span className="font-medium text-foreground">{formatDate(order.deliveredAt)}</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </Layout>
     )
 }
+
