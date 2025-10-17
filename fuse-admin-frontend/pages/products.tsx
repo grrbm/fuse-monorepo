@@ -86,7 +86,7 @@ export default function Products() {
     const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
     const [tenantProductCount, setTenantProductCount] = useState<number>(0)
     const [enabledProductIds, setEnabledProductIds] = useState<Set<string>>(new Set())
-    const [tenantProducts, setTenantProducts] = useState<Array<{ id: string; productId: string }>>([])
+    const [tenantProducts, setTenantProducts] = useState<Array<{ id: string; productId: string; price: number }>>([])
     const [clinicName, setClinicName] = useState<string>("")
     const [retryLoading, setRetryLoading] = useState<boolean>(false)
     const [bannerMessage, setBannerMessage] = useState<string | null>(null)
@@ -204,7 +204,7 @@ export default function Products() {
             const rows = Array.isArray(data?.data) ? data.data : []
             setTenantProductCount(rows.length)
             setEnabledProductIds(new Set(rows.map((r: any) => r.productId).filter(Boolean)))
-            setTenantProducts(rows.map((r: any) => ({ id: r.id, productId: r.productId })))
+            setTenantProducts(rows.map((r: any) => ({ id: r.id, productId: r.productId, price: r.price || 0 })))
         } catch { }
     }, [token])
 
@@ -582,15 +582,29 @@ export default function Products() {
                                             </div>
 
                                             {/* Category Badge */}
-                                            <div className="flex-shrink-0">
+                                            <div className="flex-shrink-0 w-32">
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getCategoryBadgeColors(product.category)}`}>
                                                     {product.category ? PRODUCT_CATEGORIES.find(c => c.value === product.category)?.label || product.category : 'General'}
                                                 </span>
                                             </div>
 
-                                            {/* Price */}
-                                            <div className="flex-shrink-0 w-24 text-right">
+                                            {/* Pharmacy Wholesale Price */}
+                                            <div className="flex-shrink-0 w-28">
+                                                <div className="text-xs text-gray-500 mb-0.5">Pharmacy</div>
                                                 <span className="text-sm font-medium text-gray-900">{formatPrice(product.price)}</span>
+                                            </div>
+
+                                            {/* Clinic Retail Price */}
+                                            <div className="flex-shrink-0 w-28">
+                                                <div className="text-xs text-gray-500 mb-0.5">Your Price</div>
+                                                {(() => {
+                                                    const tenantProduct = tenantProducts.find(tp => tp.productId === product.id)
+                                                    return tenantProduct && tenantProduct.price > 0 ? (
+                                                        <span className="text-sm font-medium text-gray-900">{formatPrice(tenantProduct.price)}</span>
+                                                    ) : (
+                                                        <span className="text-sm text-gray-400">Not set</span>
+                                                    )
+                                                })()}
                                             </div>
 
                                             {/* Actions */}
