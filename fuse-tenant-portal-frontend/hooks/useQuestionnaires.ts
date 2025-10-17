@@ -39,10 +39,28 @@ export function useQuestionnaires(baseUrl: string) {
             const allData = await allRes.json().catch(() => ({}))
             const allList: any[] = Array.isArray(allData?.data) ? allData.data : []
 
+            // Fetch the global account questionnaire (formTemplateType=user_profile) regardless of owner
+            // This endpoint is public and returns the first available user_profile questionnaire
+            let publicAccount: any | null = null
+            try {
+                const publicRes = await fetch(`${baseUrl}/public/questionnaires/first-user-profile`)
+                if (publicRes.ok) {
+                    const publicData = await publicRes.json().catch(() => ({}))
+                    if (publicData?.success && publicData?.data) {
+                        publicAccount = publicData.data
+                    }
+                }
+            } catch {
+                // ignore public fetch errors; not critical
+            }
+
             // Merge by id, prefer non-template records for user_profile
             const byId = new Map<string, any>()
             for (const q of [...templatesList, ...allList]) {
                 if (!byId.has(q.id)) byId.set(q.id, q)
+            }
+            if (publicAccount && !byId.has(publicAccount.id)) {
+                byId.set(publicAccount.id, publicAccount)
             }
 
             setQuestionnaires(Array.from(byId.values()))

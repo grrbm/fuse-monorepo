@@ -14,7 +14,7 @@ import { useQuestionnaires } from "@/hooks/useQuestionnaires"
 import { useAuth } from "@/contexts/AuthContext"
 import { CATEGORY_OPTIONS, STATUS_OPTIONS, SORT_OPTIONS } from "@fuse/enums"
 
- 
+
 
 export default function Forms() {
   const router = useRouter()
@@ -136,8 +136,8 @@ export default function Forms() {
   }, [assignments, searchQuery, selectedCategory, selectedStatus, selectedSort])
 
   const accountQuestionnaire = useMemo(() => {
-    const list = (questionnaires || []).filter((q: any) => q.formTemplateType === 'user_profile')
-    return list.sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())[0] || null
+    // Pick the first questionnaire that is marked as user_profile (global account template)
+    return (questionnaires || []).find((q: any) => q.formTemplateType === 'user_profile') || null
   }, [questionnaires])
 
   const handleEditForm = (assignmentId: string) => {

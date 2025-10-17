@@ -80,6 +80,8 @@ export default class Questionnaire extends Entity {
         defaultValue: null,
     })
     //NOTE: Master template should only be assigned for a SINGLE Questionnaire !!!
+    //NOTE2: Don't confuse the master template with the user_profile template !!! the master_template is just a template and is never editable.
+    //But the user_profile template is editable and can be cloned to create a new questionnaire.
     declare formTemplateType: 'normal' | 'user_profile' | 'doctor' | 'master_template' | 'standardized_template' | null;
 
     @Column({
