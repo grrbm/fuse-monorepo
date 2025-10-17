@@ -127,7 +127,15 @@ export default function Settings({
     authenticatedFetch,
   } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [runTutorial, setRunTutorial] = useState(false);
+  const [runTutorial, setRunTutorial] = useState(() => {
+    // Check if tutorial has been completed before
+    if (typeof window !== 'undefined') {
+      const tutorialCompleted = localStorage.getItem('tutorialCompleted');
+      return tutorialCompleted !== 'true';
+    }
+    return false;
+  });
+
   const [organizationData, setOrganizationData] = useState({
     businessName: "",
     businessType: "",
@@ -445,7 +453,7 @@ export default function Settings({
     } catch (error) {
       alert(
         "Error saving plan selection: " +
-          (error instanceof Error ? error.message : String(error))
+        (error instanceof Error ? error.message : String(error))
       );
       setCreatingPlan(null);
     }
@@ -636,7 +644,7 @@ export default function Settings({
                     <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-border bg-muted transition-all group-hover:border-primary">
                       {logoPreview || organizationData.logo ? (
                         logoPreview?.endsWith(".pdf") ||
-                        organizationData.logo?.endsWith(".pdf") ? (
+                          organizationData.logo?.endsWith(".pdf") ? (
                           <div className="w-full h-full flex items-center justify-center bg-gray-100">
                             <div className="text-center">
                               <Upload className="h-8 w-8 text-gray-400 mx-auto mb-1" />
@@ -798,8 +806,8 @@ export default function Settings({
                             {typeof window === "undefined"
                               ? "Preparing address suggestions…"
                               : window.google &&
-                                  window.google.maps &&
-                                  window.google.maps.places
+                                window.google.maps &&
+                                window.google.maps.places
                                 ? "Autocomplete suggestions powered by Google Places"
                                 : "Type to search for your address"}
                           </p>
@@ -1064,7 +1072,7 @@ export default function Settings({
                                   <span className="font-medium text-foreground">
                                     {formatCurrency(
                                       currentPlan?.price ??
-                                        subscriptionData.plan?.price
+                                      subscriptionData.plan?.price
                                     )}
                                   </span>
                                 </div>
@@ -1214,11 +1222,10 @@ export default function Settings({
                               return (
                                 <Card
                                   key={plan.id}
-                                  className={`relative group transition-all duration-300 flex flex-col ${
-                                    isPopular
+                                  className={`relative group transition-all duration-300 flex flex-col ${isPopular
                                       ? "border-primary shadow-lg hover:shadow-2xl hover:scale-[1.02]"
                                       : "border-border hover:border-primary/60 hover:shadow-xl hover:scale-[1.01]"
-                                  } ${creatingPlan ? "opacity-75" : ""}`}
+                                    } ${creatingPlan ? "opacity-75" : ""}`}
                                 >
                                   {isPopular && (
                                     <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
@@ -1329,13 +1336,12 @@ export default function Settings({
                                     </ul>
 
                                     <Button
-                                      className={`w-full mt-auto ${
-                                        isCurrentPlan && isActive
+                                      className={`w-full mt-auto ${isCurrentPlan && isActive
                                           ? "bg-emerald-600 text-white hover:bg-emerald-700"
                                           : isPopular
                                             ? "bg-blue-600 hover:bg-blue-700 text-white"
                                             : "bg-white border border-gray-300 text-foreground hover:bg-gray-50"
-                                      }`}
+                                        }`}
                                       onClick={() => handlePlanSelect(plan)}
                                       disabled={
                                         (isCurrentPlan && isActive) ||

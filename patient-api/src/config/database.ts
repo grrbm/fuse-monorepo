@@ -92,8 +92,9 @@ export async function initializeDatabase() {
 
     console.log("Syncing...")
     // Sync all models to database (safer sync mode)
-    // await sequelize.sync({ alter: { drop: false } });
-    await sequelize.sync({ alter: true });
+    // Temporarily using alter: { drop: false } to avoid constraint conflicts
+    await sequelize.sync({ alter: { drop: false } });
+    // await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
 
     // Ensure optional columns are nullable even if previous schema had NOT NULL

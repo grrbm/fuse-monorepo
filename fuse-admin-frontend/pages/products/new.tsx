@@ -25,12 +25,29 @@ import Tutorial from '@/components/ui/tutorial'
 import { tutorialSteps } from '@/utils/tutorialSteps'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const PRODUCT_CATEGORIES = [
+    { value: 'weight_loss', label: 'Weight Loss' },
+    { value: 'hair_growth', label: 'Hair Growth' },
+    { value: 'performance', label: 'Performance' },
+    { value: 'sexual_health', label: 'Sexual Health' },
+    { value: 'skincare', label: 'Skincare' },
+    { value: 'wellness', label: 'Wellness' },
+    { value: 'other', label: 'Other' },
+]
 
 export default function CreateProduct() {
     const [loading, setLoading] = useState(false)
     const [uploadingImage, setUploadingImage] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [imageFile, setImageFile] = useState<File | null>(null)
+    const [runTutorial, setRunTutorial] = useState(() => {
+        // Check if tutorial has been completed before
+        if (typeof window !== 'undefined') {
+            const tutorialCompleted = localStorage.getItem('tutorialCompleted');
+            return tutorialCompleted !== 'true';
+        }
+        return false;
+    })
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [imageConfirmed, setImageConfirmed] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -40,6 +57,7 @@ export default function CreateProduct() {
         description: '',
         pharmacyProductId: '',
         dosage: '',
+        category: 'other',
         activeIngredients: [] as string[],
         active: true
     })
@@ -104,7 +122,7 @@ export default function CreateProduct() {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({...formData, price: 20})
+                body: JSON.stringify({ ...formData, price: 20 })
             })
 
             if (response.ok) {
@@ -140,7 +158,7 @@ export default function CreateProduct() {
         }
     }
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target
         setFormData(prev => ({
             ...prev,
@@ -357,6 +375,26 @@ export default function CreateProduct() {
                                                     className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                                                     placeholder="e.g., 500mg, 2 tablets daily"
                                                 />
+                                            </div>
+
+                                            <div>
+                                                <label htmlFor="category" className="block text-sm font-medium text-foreground mb-2">
+                                                    Category *
+                                                </label>
+                                                <select
+                                                    id="category"
+                                                    name="category"
+                                                    value={formData.category}
+                                                    onChange={handleInputChange}
+                                                    required
+                                                    className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                                                >
+                                                    {PRODUCT_CATEGORIES.map((cat) => (
+                                                        <option key={cat.value} value={cat.value}>
+                                                            {cat.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
                                             </div>
 
                                             {/* Status Toggle */}

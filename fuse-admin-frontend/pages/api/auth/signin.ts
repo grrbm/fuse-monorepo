@@ -7,14 +7,16 @@ const MOCK_USERS = [
     email: 'admin@demo.com',
     password: 'demo123', // In production, this would be hashed
     name: 'Demo Admin',
-    role: 'admin'
+    role: 'admin',
+    clinicId: 'demo-clinic-id'
   },
   {
     id: '2',
     email: 'admin@example.com',
     password: 'password123',
     name: 'Admin User',
-    role: 'admin'
+    role: 'admin',
+    clinicId: 'example-clinic-id'
   }
 ]
 

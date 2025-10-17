@@ -16,27 +16,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       return
     }
 
-    const subscriptionOptionalRoutes = new Set([
-      '/plans',
-      '/checkout',
-      '/checkout/success',
-      '/checkout/cancel',
-      '/settings',
-      '/settings/subscription',
-      '/settings?message=You already have an active subscription.',
-      // Allow product management flows without forcing plan selection
-      '/products',
-      '/products/[id]'
-    ])
-
-    if (
-      !isLoading &&
-      user &&
-      !hasActiveSubscription &&
-      !subscriptionOptionalRoutes.has(router.pathname)
-    ) {
-      router.push('/plans?message=Please select a plan to continue using the platform.')
-    }
+    // Users can access the platform without an active subscription
+    // They can manage their subscription through Settings -> Subscription & Billing
+    // No forced redirect to /plans page
   }, [user, isLoading, hasActiveSubscription, router])
 
   if (isLoading) {

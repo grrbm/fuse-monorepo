@@ -10,14 +10,12 @@ import {
   ShoppingCart,
   Package,
   Gift,
-  Network,
-  Building2,
-  CreditCard,
   Settings,
   ChevronDown,
   LogOut,
   Crown,
   Lock,
+  CreditCard,
 } from "lucide-react"
 
 const navigation = [
@@ -27,20 +25,13 @@ const navigation = [
 ]
 
 const operations = [
-  { name: "Treatments", icon: Stethoscope, current: false, href: "/treatments" },
+  { name: "Treatments", icon: Stethoscope, current: false, href: "#", comingSoon: true },
   // { name: "Offerings", icon: Gift, current: false, href: "/offerings" },
   { name: "Products", icon: Package, current: false, href: "/products", id: "tutorial-step-3" },
   { name: "Orders", icon: ShoppingCart, current: false, href: "/orders", hasSubmenu: true },
 ]
 
-const networks = [
-  { name: "Provider Networks", icon: Network, current: false },
-  { name: "Pharmacies", icon: Building2, current: false },
-  { name: "Coupon Codes", icon: Gift, current: false },
-  { name: "Payments", icon: CreditCard, current: false },
-]
-
-const services: { name: string; icon: any; current: boolean; href?: string; hasSubmenu?: boolean }[] = [
+const services: { name: string; icon: any; current: boolean; href?: string; hasSubmenu?: boolean; comingSoon?: boolean }[] = [
   // Add services here when needed
 ]
 
@@ -81,23 +72,34 @@ export function Sidebar() {
   const handleDisabledClick = (e: React.MouseEvent, itemName: string) => {
     e.preventDefault()
     if (!hasActiveSubscription && itemName !== 'Plans' && itemName !== 'Settings') {
-      // Don't redirect away during product selection flows
-      if (itemName === 'Products') {
-        return
-      }
-      router.push('/plans?message=Please select a plan to access this feature.')
+      // Redirect to settings instead of plans for subscription management
+      router.push('/settings?tab=subscription&message=Please subscribe to access this feature.')
     }
   }
 
   // Helper function to render a sidebar item
-  const renderSidebarItem = (item: { name: string; icon: any; current: boolean; href?: string; hasSubmenu?: boolean, id?: string }, _section: string) => {
+  const renderSidebarItem = (item: { name: string; icon: any; current: boolean; href?: string; hasSubmenu?: boolean, id?: string, comingSoon?: boolean }, _section: string) => {
     const isActive = router.pathname === item.href
     const disabled = isItemDisabled(item.name)
     const isHovered = hoveredItem === item.name
 
     return (
       <div key={item.name} className="relative" id={item.id}>
-        {disabled && !hasActiveSubscription ? (
+        {item.comingSoon ? (
+          <div
+            className={cn(
+              "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all cursor-not-allowed opacity-60"
+            )}
+          >
+            <div className="flex items-center flex-1">
+              <item.icon className="mr-3 h-4 w-4 opacity-50" />
+              <span className="opacity-75">{item.name}</span>
+            </div>
+            <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+              Coming Soon
+            </span>
+          </div>
+        ) : disabled && !hasActiveSubscription ? (
           <div
             className={cn(
               "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all cursor-pointer opacity-60 grayscale",
@@ -137,7 +139,7 @@ export function Sidebar() {
         {/* Tooltip for disabled items */}
         {disabled && isHovered && !hasActiveSubscription && (
           <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg z-50 whitespace-nowrap">
-            Live Plan Required
+            Subscription Required
           </div>
         )}
       </div>
@@ -173,14 +175,6 @@ export function Sidebar() {
           <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Services</h3>
           <div className="space-y-1">
             {services.map((item) => renderSidebarItem(item, 'services'))}
-          </div>
-        </div>
-
-        {/* Networks Section */}
-        <div className="pt-6">
-          <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Networks</h3>
-          <div className="space-y-1">
-            {networks.map((item) => renderSidebarItem(item, 'networks'))}
           </div>
         </div>
 
