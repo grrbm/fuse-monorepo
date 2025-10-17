@@ -31,26 +31,26 @@ export function QuickActions() {
   ];
 
   return (
-    <Card className="bg-card border-border">
-      <CardHeader>
+    <Card className="bg-card border-border shadow-sm">
+      <CardHeader className="border-b border-border">
         <CardTitle className="text-lg font-semibold text-foreground">Quick Actions</CardTitle>
-        <p className="text-sm text-muted-foreground">Common tasks and shortcuts</p>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 gap-3">
+      <CardContent className="p-4">
+        <div className="space-y-2">
           {actions.map((action) => (
-            <Button
+            <button
               key={action.title}
-              variant={action.variant}
-              className="w-full justify-start h-auto py-4"
               onClick={action.onClick}
+              className="w-full p-4 border border-border rounded-lg hover:shadow-sm hover:border-muted-foreground/20 transition-all text-left bg-card"
             >
-              <action.icon className="h-5 w-5 mr-3" />
-              <div className="text-left">
-                <div className="font-medium">{action.title}</div>
-                <div className="text-xs text-muted-foreground">{action.description}</div>
+              <div className="flex items-center gap-3">
+                <action.icon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div>
+                  <div className="font-medium text-foreground">{action.title}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{action.description}</div>
+                </div>
               </div>
-            </Button>
+            </button>
           ))}
         </div>
       </CardContent>
