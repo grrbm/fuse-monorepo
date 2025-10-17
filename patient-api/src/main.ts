@@ -1428,6 +1428,8 @@ app.get("/products/:id", async (req, res) => {
       slug: product.slug || null,
       price: product.price,
       pharmacyProductId: product.pharmacyProductId,
+      pharmacyWholesaleCost: (product as any).pharmacyWholesaleCost || null,
+      suggestedRetailPrice: (product as any).suggestedRetailPrice || null,
       dosage: product.dosage,
       description: product.description,
       activeIngredients: product.activeIngredients,
