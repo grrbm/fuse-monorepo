@@ -61,14 +61,15 @@ interface Order {
 type StatusFilter = 'all' | 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled'
 
 // Mock orders for initial setup - automatically replaced when real orders exist
+// All dates are within the current month to populate "This Month" stats
 const MOCK_ORDERS: Order[] = [
     {
         id: 'mock-order-1',
         orderNumber: 'ORD-2025-001',
         status: 'paid',
         totalAmount: 450.00,
-        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        shippedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 15).toISOString(),
+        shippedAt: new Date(new Date().getFullYear(), new Date().getMonth(), 16).toISOString(),
         user: {
             id: 'mock-user-1',
             firstName: 'James',
@@ -105,8 +106,8 @@ const MOCK_ORDERS: Order[] = [
         orderNumber: 'ORD-2025-002',
         status: 'shipped',
         totalAmount: 680.00,
-        createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-        shippedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 8).toISOString(),
+        shippedAt: new Date(new Date().getFullYear(), new Date().getMonth(), 10).toISOString(),
         user: {
             id: 'mock-user-2',
             firstName: 'Marie',
@@ -154,7 +155,7 @@ const MOCK_ORDERS: Order[] = [
         orderNumber: 'ORD-2025-003',
         status: 'pending',
         totalAmount: 299.00,
-        createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 12).toISOString(),
         user: {
             id: 'mock-user-3',
             firstName: 'Leonardo',
@@ -191,9 +192,9 @@ const MOCK_ORDERS: Order[] = [
         orderNumber: 'ORD-2025-004',
         status: 'delivered',
         totalAmount: 850.00,
-        createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-        shippedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
-        deliveredAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 3).toISOString(),
+        shippedAt: new Date(new Date().getFullYear(), new Date().getMonth(), 5).toISOString(),
+        deliveredAt: new Date(new Date().getFullYear(), new Date().getMonth(), 7).toISOString(),
         user: {
             id: 'mock-user-4',
             firstName: 'Cleopatra',
@@ -281,12 +282,18 @@ export default function Orders() {
         }
     }
 
-    // Calculate stats
+    // Calculate stats for this month only
+    const now = new Date()
+    const thisMonthOrders = orders.filter(order => {
+        const orderDate = new Date(order.createdAt)
+        return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear()
+    })
+
     const stats = {
-        totalOrders: orders.length,
-        totalRevenue: orders.filter(o => o.status === 'paid').reduce((sum, o) => sum + o.totalAmount, 0),
-        pendingOrders: orders.filter(o => o.status === 'pending' || o.status === 'payment_due').length,
-        avgOrderValue: orders.length > 0 ? orders.reduce((sum, o) => sum + o.totalAmount, 0) / orders.length : 0
+        totalOrders: thisMonthOrders.length,
+        totalRevenue: thisMonthOrders.filter(o => o.status === 'paid').reduce((sum, o) => sum + o.totalAmount, 0),
+        pendingOrders: thisMonthOrders.filter(o => o.status === 'pending' || o.status === 'payment_due').length,
+        avgOrderValue: thisMonthOrders.length > 0 ? thisMonthOrders.reduce((sum, o) => sum + o.totalAmount, 0) / thisMonthOrders.length : 0
     }
 
     // Filter orders
@@ -355,7 +362,10 @@ export default function Orders() {
                         <p className="text-sm text-muted-foreground">Track and manage customer orders</p>
                     </div>
 
-                    {/* Stats Cards */}
+                    {/* Stats Cards - This Month */}
+                    <div className="mb-3">
+                        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">This Month</h2>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                         <Card className="border-border shadow-sm">
                             <CardContent className="p-6">
