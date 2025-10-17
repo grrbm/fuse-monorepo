@@ -269,8 +269,8 @@ export default function ProductDetail() {
 
     const getStatusBadge = (active: boolean) => {
         return active
-            ? <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="h-3 w-3 mr-1" /> Active</Badge>
-            : <Badge className="bg-red-100 text-red-800 border-red-300"><XCircle className="h-3 w-3 mr-1" /> Inactive</Badge>
+            ? <Badge variant="outline" className="text-xs font-medium"><CheckCircle className="h-3 w-3 mr-1" /> Active</Badge>
+            : <Badge variant="outline" className="text-xs font-medium text-muted-foreground"><XCircle className="h-3 w-3 mr-1" /> Inactive</Badge>
     }
 
     if (loading) {
@@ -312,20 +312,24 @@ export default function ProductDetail() {
                 <title>{product?.name || 'Product'} - Fuse Admin</title>
             </Head>
 
-            <div className="min-h-screen bg-gray-50 p-6">
-                <div className="max-w-5xl mx-auto">
+            <div className="min-h-screen bg-background p-8" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <div className="max-w-6xl mx-auto">
                     {/* Header */}
-                    <Button variant="outline" onClick={() => router.push('/products')} className="mb-4">
+                    <Button 
+                        variant="outline" 
+                        onClick={() => router.push('/products')} 
+                        className="mb-6 text-sm font-medium"
+                    >
                         <ArrowLeft className="h-4 w-4 mr-2" />
                         Back to Products
                     </Button>
                     
-                    <div className="flex items-start justify-between mb-6">
+                    <div className="flex items-start justify-between mb-8">
                         <div>
-                            <h1 className="text-2xl font-semibold text-gray-900 mb-1">{product?.name}</h1>
-                            <p className="text-sm text-gray-500">{product.description}</p>
+                            <h1 className="text-3xl font-semibold text-foreground mb-2">{product?.name}</h1>
+                            <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">{product.description}</p>
                             {product.dosage && (
-                                <p className="text-sm text-gray-600 mt-1">Dosage: {product.dosage}</p>
+                                <p className="text-sm text-muted-foreground mt-1">Dosage: <span className="font-medium">{product.dosage}</span></p>
                             )}
                         </div>
                         {getStatusBadge(product.active)}
@@ -333,60 +337,66 @@ export default function ProductDetail() {
 
                     {/* Success/Error Messages */}
                     {error && (
-                        <div className={`mb-6 p-4 border rounded-lg ${error.includes('✅') ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                            <p className={error.includes('✅') ? 'text-green-700' : 'text-red-700'}>{error}</p>
+                        <div className={`mb-6 p-4 border rounded-md ${error.includes('✅') ? 'bg-background border-border' : 'bg-background border-red-200'}`}>
+                            <p className={error.includes('✅') ? 'text-foreground' : 'text-red-600 text-sm'}>{error}</p>
                         </div>
                     )}
 
                     {/* PRIORITY 1: Pricing & Configuration */}
-                    <Card className="mb-6">
-                        <CardHeader>
-                            <CardTitle>Pricing & Configuration</CardTitle>
+                    <Card className="mb-6 border-border shadow-sm">
+                        <CardHeader className="border-b border-border">
+                            <CardTitle className="text-lg font-semibold">Pricing & Configuration</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-6">
+                        <CardContent className="p-6 space-y-8">
                             
                             {/* Pricing Section */}
                             <div>
-                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Pricing</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Pricing</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    
                                     {/* Pharmacy Cost */}
-                                    <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-                                        <div className="text-xs text-blue-600 font-medium mb-1">Pharmacy Wholesale Cost</div>
-                                        <div className="text-xs text-blue-500 mb-2">What you pay</div>
-                                        <div className="text-3xl font-bold text-blue-900">
+                                    <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
+                                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Pharmacy Wholesale Cost</div>
+                                        <div className="text-xs text-muted-foreground mb-3">What you pay</div>
+                                        <div className="text-3xl font-semibold text-foreground">
                                             {product.pharmacyWholesaleCost ? formatPrice(product.pharmacyWholesaleCost) : 'Not set'}
                                         </div>
                                     </div>
 
                                     {/* Retail Price */}
                                     {tenantProduct ? (
-                                        <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg">
+                                        <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
                                             <div className="flex items-center justify-between mb-1">
-                                                <div className="text-xs text-green-600 font-medium">Your Retail Price</div>
+                                                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Your Retail Price</div>
                                                 {!editingPrice && (
-                                                    <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => {
-                                                        setEditingPrice(true)
-                                                        setNewPrice(tenantProduct.price.toString())
-                                                    }}>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="ghost" 
+                                                        className="h-7 px-2 text-xs font-medium hover:bg-muted" 
+                                                        onClick={() => {
+                                                            setEditingPrice(true)
+                                                            setNewPrice(tenantProduct.price.toString())
+                                                        }}
+                                                    >
                                                         <Edit className="h-3 w-3 mr-1" />
                                                         Edit
                                                     </Button>
                                                 )}
                                             </div>
-                                            <div className="text-xs text-green-500 mb-2">What customers pay</div>
+                                            <div className="text-xs text-muted-foreground mb-3">What customers pay</div>
                                             
                                             {editingPrice ? (
                                                 <div>
-                                                    <div className="flex gap-2 mb-2">
-                                                        <div className="relative flex-1">
-                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-gray-500">$</span>
+                                                    <div className="mb-3">
+                                                        <div className="relative">
+                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-muted-foreground">$</span>
                                                             <input
                                                                 type="number"
                                                                 step="0.01"
                                                                 min="0"
                                                                 value={newPrice}
                                                                 onChange={(e) => setNewPrice(e.target.value)}
-                                                                className="w-full pl-8 pr-3 py-2 text-2xl font-bold border-2 border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                                className="w-full pl-8 pr-3 py-2 text-2xl font-semibold border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
                                                                 autoFocus
                                                             />
                                                         </div>
@@ -403,7 +413,7 @@ export default function ProductDetail() {
                                                         </Button>
                                                     </div>
                                                     {product.pharmacyWholesaleCost && (
-                                                        <div className="text-xs text-green-700 mt-2">
+                                                        <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
                                                             {(() => {
                                                                 const price = parseFloat(newPrice) || 0
                                                                 const cost = product.pharmacyWholesaleCost || 0
@@ -416,11 +426,11 @@ export default function ProductDetail() {
                                                 </div>
                                             ) : (
                                                 <div>
-                                                    <div className="text-3xl font-bold text-green-900">
+                                                    <div className="text-3xl font-semibold text-foreground">
                                                         {formatPrice(tenantProduct.price)}
                                                     </div>
                                                     {product.pharmacyWholesaleCost && (
-                                                        <div className="text-xs text-green-700 mt-2">
+                                                        <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
                                                             {(() => {
                                                                 const price = tenantProduct.price
                                                                 const cost = product.pharmacyWholesaleCost
@@ -434,8 +444,8 @@ export default function ProductDetail() {
                                             )}
                                         </div>
                                     ) : (
-                                        <div className="p-4 bg-gray-50 border-2 border-gray-200 rounded-lg flex items-center justify-center">
-                                            <p className="text-sm text-gray-600 text-center">
+                                        <div className="p-5 border border-dashed border-border rounded-lg bg-muted/30 flex items-center justify-center">
+                                            <p className="text-sm text-muted-foreground text-center">
                                                 Enable this product to set custom pricing
                                             </p>
                                         </div>
@@ -445,25 +455,26 @@ export default function ProductDetail() {
 
                             {/* Forms Section */}
                             <div>
-                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Product Forms</h3>
+                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Product Forms</h3>
                                 {templates.length === 0 ? (
-                                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
-                                        <p className="text-sm text-gray-600">No forms available for this product</p>
+                                    <div className="p-6 border border-dashed border-border rounded-lg text-center bg-muted/20">
+                                        <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                                        <p className="text-sm text-muted-foreground">No forms available for this product</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3">
                                         {templates.map(t => {
                                             const isEnabled = enabledForms.some((f: any) => f?.questionnaireId === t.id)
                                             return (
-                                                <div key={t.id} className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
+                                                <div key={t.id} className="p-4 border border-border rounded-lg hover:shadow-sm transition-all bg-card">
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex-1">
-                                                            <div className="font-medium text-gray-900">{t.title}</div>
-                                                            <div className="text-xs text-gray-500 mt-0.5">{t.formTemplateType || 'Standard Form'}</div>
+                                                            <div className="font-medium text-foreground">{t.title}</div>
+                                                            <div className="text-xs text-muted-foreground mt-0.5">{t.formTemplateType || 'Standard Form'}</div>
                                                         </div>
                                                         {isEnabled ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <Badge className="bg-green-100 text-green-800 border-green-300">
+                                                            <div className="flex items-center gap-3">
+                                                                <Badge variant="outline" className="text-xs font-medium">
                                                                     <CheckCircle className="h-3 w-3 mr-1" /> Enabled
                                                                 </Badge>
                                                                 <Button size="sm" variant="outline" onClick={() => disableTemplate(t.id)}>
@@ -472,7 +483,7 @@ export default function ProductDetail() {
                                                             </div>
                                                         ) : (
                                                             <Button size="sm" onClick={() => enableTemplate(t.id)} disabled={enablingId === t.id}>
-                                                                {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
+                                                                {enablingId === t.id ? 'Enabling...' : 'Enable'}
                                                             </Button>
                                                         )}
                                                     </div>
@@ -485,57 +496,58 @@ export default function ProductDetail() {
                         </CardContent>
                     </Card>
 
-                    {/* PRIORITY 2: Product Statistics */}
-                    <Card className="mb-6">
-                        <CardHeader>
-                            <CardTitle>Product Performance</CardTitle>
+                    {/* PRIORITY 2: Product Performance */}
+                    <Card className="mb-6 border-border shadow-sm">
+                        <CardHeader className="border-b border-border">
+                            <CardTitle className="text-lg font-semibold">Product Performance</CardTitle>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="p-6">
                             <div className="grid grid-cols-2 gap-6">
+                                
                                 {/* Total Orders */}
-                                <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <ShoppingCart className="h-4 w-4 text-purple-600" />
-                                        <span className="text-xs font-medium text-purple-600 uppercase">Total Orders</span>
+                                <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Orders</span>
                                     </div>
-                                    <div className="text-3xl font-bold text-purple-900">{productStats.totalOrders}</div>
-                                    <p className="text-xs text-purple-600 mt-1">All-time orders for this product</p>
+                                    <div className="text-3xl font-semibold text-foreground">{productStats.totalOrders}</div>
+                                    <p className="text-xs text-muted-foreground mt-2">All-time orders for this product</p>
                                 </div>
 
                                 {/* Active Subscribers */}
-                                <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Users className="h-4 w-4 text-indigo-600" />
-                                        <span className="text-xs font-medium text-indigo-600 uppercase">Active Subscribers</span>
+                                <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Users className="h-4 w-4 text-muted-foreground" />
+                                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Active Subscribers</span>
                                     </div>
-                                    <div className="text-3xl font-bold text-indigo-900">{productStats.activeSubscribers}</div>
-                                    <p className="text-xs text-indigo-600 mt-1">Customers with active subscriptions</p>
+                                    <div className="text-3xl font-semibold text-foreground">{productStats.activeSubscribers}</div>
+                                    <p className="text-xs text-muted-foreground mt-2">Customers with active subscriptions</p>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* Additional Product Info */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Product Details</CardTitle>
+                    {/* Product Details */}
+                    <Card className="border-border shadow-sm">
+                        <CardHeader className="border-b border-border">
+                            <CardTitle className="text-lg font-semibold">Product Details</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
+                        <CardContent className="p-6">
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
                                 <div>
-                                    <span className="text-gray-500">Pharmacy Product ID:</span>
-                                    <p className="font-medium text-gray-900">{product.pharmacyProductId || 'Not assigned'}</p>
+                                    <span className="text-muted-foreground text-xs uppercase tracking-wide">Pharmacy Product ID</span>
+                                    <p className="font-medium text-foreground mt-1">{product.pharmacyProductId || 'Not assigned'}</p>
                                 </div>
                                 <div>
-                                    <span className="text-gray-500">Default Dosage:</span>
-                                    <p className="font-medium text-gray-900">{product.dosage || 'N/A'}</p>
+                                    <span className="text-muted-foreground text-xs uppercase tracking-wide">Default Dosage</span>
+                                    <p className="font-medium text-foreground mt-1">{product.dosage || 'N/A'}</p>
                                 </div>
                                 {product.activeIngredients && product.activeIngredients.length > 0 && (
                                     <div className="col-span-2">
-                                        <span className="text-gray-500">Active Ingredients:</span>
-                                        <div className="flex flex-wrap gap-2 mt-1">
+                                        <span className="text-muted-foreground text-xs uppercase tracking-wide">Active Ingredients</span>
+                                        <div className="flex flex-wrap gap-2 mt-2">
                                             {product.activeIngredients.map((ing, i) => (
-                                                <Badge key={i} variant="outline" className="text-xs">{ing}</Badge>
+                                                <Badge key={i} variant="outline" className="text-xs font-normal">{ing}</Badge>
                                             ))}
                                         </div>
                                     </div>
