@@ -18,18 +18,26 @@ export const tutorialSteps = [
   },
   {
     target: "#tutorial-step-4",
-    content: "Perfect! Here you can add new products to your catalog. This is where you'll manage all your treatments and services.",
-    placement: "left" as const,
+    content: "Cool! Now let's select your products.",
+    placement: "right" as const,
   },
   {
-    target: "#tutorial-step-5",
-    content: "Here you can configure a new product. Fill out the form with your product details.",
+    target: ".product-card",
+    content: "Perfect! Here you can add new products to your catalog. Let's open view!",
     placement: "top" as const,
+  },
+  {
+    target: "#view-product",
+    content: "hey",
+    placement: "right" as const,
+  },
+];
+
+export const enableProductSteps = [
+  {
+    target: "#enable-product-for-clinic",
+    content: "Perfect! Now let's enable the product for your clinic.",
+    placement: "right" as const,
     disableBeacon: true,
-  },
-  {
-    target: "#tutorial-step-6",
-    content: "Excellent! When you're ready, click 'Save' to create your first product. Congratulations on completing the setup!",
-    placement: "top" as const,
   },
 ];

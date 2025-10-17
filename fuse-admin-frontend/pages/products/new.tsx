@@ -24,12 +24,13 @@ import {
 import Tutorial from '@/components/ui/tutorial'
 import { tutorialSteps } from '@/utils/tutorialSteps'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
 export default function CreateProduct() {
     const [loading, setLoading] = useState(false)
     const [uploadingImage, setUploadingImage] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [imageFile, setImageFile] = useState<File | null>(null)
-    const [runTutorial, setRunTutorial] = useState(true)
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [imageConfirmed, setImageConfirmed] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -42,7 +43,7 @@ export default function CreateProduct() {
         activeIngredients: [] as string[],
         active: true
     })
-    const { user, token } = useAuth()
+    const { user, token, authenticatedFetch } = useAuth()
     const router = useRouter()
 
     const uploadProductImage = async (productId: string) => {
@@ -103,7 +104,7 @@ export default function CreateProduct() {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({...formData, price: 20})
             })
 
             if (response.ok) {
@@ -227,7 +228,6 @@ export default function CreateProduct() {
                 <title>Create Product - Fuse Admin</title>
                 <meta name="description" content="Create a new product for your clinic" />
             </Head>
-            <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} steps={tutorialSteps.slice(-2)} />
             <div className="min-h-screen bg-background p-6">
                 <div className="max-w-4xl mx-auto">
                     {/* Header */}

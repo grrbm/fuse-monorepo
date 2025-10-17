@@ -127,8 +127,7 @@ export default function Settings({
     authenticatedFetch,
   } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [runTutorial, setRunTutorial] = useState(true);
-
+  const [runTutorial, setRunTutorial] = useState(false);
   const [organizationData, setOrganizationData] = useState({
     businessName: "",
     businessType: "",
@@ -187,6 +186,7 @@ export default function Settings({
       fetchOrganizationData();
       fetchSubscriptionData();
       fetchPlans();
+      fetchSubscriptionBasicInfo();
     }
   }, [user]);
 
@@ -248,6 +248,27 @@ export default function Settings({
       setSubscriptionData(null);
     } finally {
       setSubscriptionLoading(false);
+    }
+  };
+
+  const fetchSubscriptionBasicInfo = async () => {
+    try {
+      const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/basic-info`, {
+        method: "GET",
+        skipLogoutOn401: true,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          console.log("data.data", data.data);
+          const needsTutorial = data.data.tutorialFinished === false && data.data.status === "active" && data.data.stripeCustomerId !== null;
+          console.log("needsTutorial", needsTutorial);
+          setRunTutorial(needsTutorial);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching subscription basic info:", error);
     }
   };
 
