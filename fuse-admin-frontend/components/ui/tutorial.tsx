@@ -38,11 +38,6 @@ const Tutorial = ({
       return;
     }
 
-    if (action === "next" && index === 6) {
-      document.getElementById("enable-product-for-clinic")?.click();
-      return;
-    }
-
     if (status === "finished" || status === "skipped") {
       setRunTutorial?.(false);
       onFinish?.();
