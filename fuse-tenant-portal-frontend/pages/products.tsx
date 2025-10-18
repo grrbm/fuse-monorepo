@@ -213,7 +213,7 @@ export default function Products() {
       }
 
       console.log('📤 Sending product data:', cleanedData)
-      
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -284,13 +284,39 @@ export default function Products() {
     }
   }
 
+  const handleUpdateCategory = async (productId: string, newCategory: string) => {
+    if (!token) return
+    // Optimistic update
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, category: newCategory || undefined } : p))
+    try {
+      const response = await fetch(`${baseUrl}/products-management/${productId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ category: newCategory || undefined }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to update category')
+      }
+      setSaveMessage('Category updated')
+      setTimeout(() => setSaveMessage(null), 3000)
+    } catch (error: any) {
+      console.error("❌ Error updating category:", error)
+      setSaveMessage(error.message)
+      // Revert by refetching
+      fetchProducts()
+    }
+  }
+
   const handleDeactivateAll = async () => {
     if (!token) return
     if (!confirm("Are you sure you want to deactivate ALL products? This will affect all products in the system.")) return
 
     try {
       const activeProducts = products.filter(p => p.isActive)
-      
+
       if (activeProducts.length === 0) {
         setSaveMessage("No active products to deactivate")
         return
@@ -439,9 +465,19 @@ export default function Products() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {product.category && (
-                      <Badge variant="secondary">{CATEGORY_OPTIONS.find((c: { value: string; label: string }) => c.value === product.category)?.label || product.category}</Badge>
-                    )}
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Category</label>
+                      <select
+                        value={product.category || ""}
+                        onChange={(e) => handleUpdateCategory(product.id, e.target.value)}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">No Category</option>
+                        {CATEGORY_OPTIONS.filter((c: { value: string }) => c.value !== "").map((cat: { value: string; label: string }) => (
+                          <option key={cat.value} value={cat.value}>{cat.label}</option>
+                        ))}
+                      </select>
+                    </div>
 
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center justify-between">
