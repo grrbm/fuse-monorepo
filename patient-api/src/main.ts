@@ -6258,6 +6258,70 @@ app.post("/organization/verify-domain", authenticateJWT, async (req, res) => {
   }
 });
 
+// Get clinic slug by custom domain
+app.post("/clinic/by-custom-domain", async (req, res) => {
+  try {
+    const { domain } = req.body;
+    console.log('clinic/by-custom-domain Edu', domain);
+    if (!domain) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Domain is required" 
+      });
+    }
+
+    // Extract base URL (remove path, query params, etc)
+    let baseDomain = domain;
+    try {
+      const url = new URL(domain.startsWith('http') ? domain : `https://${domain}`);
+      baseDomain = url.hostname;
+    } catch (e) {
+      // If URL parsing fails, use the domain as is
+      baseDomain = domain.split('/')[0].split('?')[0];
+    }
+
+    console.log(`🔍 Looking for clinic with custom domain: ${baseDomain}`);
+
+    // Search for clinic with matching customDomain
+    const clinic = await Clinic.findOne({
+      where: { 
+        customDomain: baseDomain,
+        isCustomDomain: true 
+      },
+      attributes: ['id', 'slug', 'name', 'logo', 'customDomain']
+    });
+
+    if (!clinic) {
+      return res.status(404).json({
+        success: false,
+        message: "No clinic found with this custom domain",
+        domain: baseDomain
+      });
+    }
+
+    console.log(`✅ Found clinic: ${clinic.name} with slug: ${clinic.slug}`);
+
+    res.json({
+      success: true,
+      slug: clinic.slug,
+      clinic: {
+        id: clinic.id,
+        name: clinic.name,
+        slug: clinic.slug,
+        logo: clinic.logo,
+        customDomain: clinic.customDomain
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error finding clinic by custom domain:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
+  }
+});
+
 // Upload logo endpoint
 app.post("/upload/logo", authenticateJWT, upload.single('logo'), async (req, res) => {
   try {
@@ -7071,32 +7135,20 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
       return res.status(404).json({ success: false, message: "Clinic not found" });
     }
 
+    console.log('Public: get product form by clinic slug + product slug Edu', clinicSlug, slug);
     // First try legacy enablement via TenantProduct (selected products)
     const tenantProduct = await TenantProduct.findOne({
-      where: { clinicId: clinic.id },
+      where: { clinicId: clinic.id, productId: slug },
       include: [
         {
           model: Product,
-          required: true,
-          where: { slug },
         },
         {
           model: Questionnaire,
-          required: false,
-          include: [
-            {
-              model: QuestionnaireStep,
-              include: [
-                {
-                  model: Question,
-                  include: [QuestionOption],
-                },
-              ],
-            },
-          ],
         },
       ],
     });
+    console.log('Public: tenantProduct Edu', tenantProduct);
 
     if (tenantProduct && tenantProduct.product) {
       const product = tenantProduct.product as any;
