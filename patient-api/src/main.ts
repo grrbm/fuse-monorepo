@@ -6995,6 +6995,12 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
 
     if (tenantProduct && tenantProduct.product) {
       const product = tenantProduct.product as any;
+      // Try to resolve currentFormVariant from TenantProductForm for the same clinic/product
+      let currentFormVariant: string | null = null;
+      try {
+        const tpf = await TenantProductForm.findOne({ where: { clinicId: clinic.id, productId: product.id } as any });
+        currentFormVariant = (tpf as any)?.currentFormVariant ?? null;
+      } catch { }
       return res.status(200).json({
         success: true,
         data: {
@@ -7004,6 +7010,7 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
           questionnaireId: tenantProduct.questionnaireId || null,
           clinicSlug: clinic.slug,
           category: product.category || null,
+          currentFormVariant,
         },
       });
     }
@@ -7031,6 +7038,7 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
           questionnaireId: tenantProductForm.questionnaireId || null,
           clinicSlug: clinic.slug,
           category: product.category || null,
+          currentFormVariant: (tenantProductForm as any).currentFormVariant ?? null,
         },
       });
     }

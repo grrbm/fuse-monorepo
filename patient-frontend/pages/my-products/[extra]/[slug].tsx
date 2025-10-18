@@ -11,6 +11,7 @@ interface PublicProduct {
     slug: string
     questionnaireId: string | null
     category?: string | null
+    currentFormVariant?: string | null
 }
 
 export default function PublicProductPage() {
@@ -24,20 +25,34 @@ export default function PublicProductPage() {
 
     useEffect(() => {
         if (typeof slug === 'string') {
-            loadProduct(slug)
+            const expectedVariant = typeof extra === 'string' ? extra : null
+            console.log('[PublicProduct] route params', { extra, slug, expectedVariant })
+            loadProduct(slug, expectedVariant)
         }
-    }, [slug])
+    }, [slug, extra])
 
-    const loadProduct = async (productSlug: string) => {
+    const loadProduct = async (productSlug: string, expectedVariant: string | null) => {
         setStatus('loading')
         setError(null)
 
         try {
             const res = await fetch(`/api/public/brand-products/${encodeURIComponent(productSlug)}`)
             const data = await res.json().catch(() => null)
+            console.log('[PublicProduct] api response', data)
 
             if (!res.ok || !data?.success || !data?.data) {
                 setError(data?.message || 'This product is not currently available. Please contact the brand for assistance.')
+                setStatus('idle')
+                return
+            }
+
+            // Optional: API may include currentFormVariant
+            const currentFormVariant: string | null = data.data.currentFormVariant ?? null
+
+            // If a specific variant is requested, ensure it matches the enabled one
+            if (expectedVariant && currentFormVariant && currentFormVariant !== expectedVariant) {
+                console.warn('[PublicProduct] variant mismatch', { expectedVariant, currentFormVariant })
+                setError('Form variant not enabled')
                 setStatus('idle')
                 return
             }
@@ -48,6 +63,7 @@ export default function PublicProductPage() {
                 slug: data.data.slug,
                 questionnaireId: data.data.questionnaireId,
                 category: data.data.category || null,
+                currentFormVariant,
             })
             setIsModalOpen(true)
         } catch (err) {
