@@ -16,7 +16,7 @@ export const productCreateSchema = z.object({
   pharmacyWholesaleCost: z.number().positive('Pharmacy wholesale cost must be positive').optional(),
   pharmacyProductId: z.string().optional(),
   medicationSize: z.string().optional(),
-  category: z.string().optional(),
+  category: z.string().nullable().optional(),
   requiredDoctorQuestions: z.array(z.any()).optional(),
   suggestedRetailPrice: z.number().positive('Suggested retail price must be positive').optional(),
   isActive: z.boolean().optional().default(true),
