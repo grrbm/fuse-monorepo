@@ -7,6 +7,7 @@ import { TenantProvider } from '@/contexts/TenantContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import "../styles/globals.css"
+import { Toaster } from "sonner"
 
 const publicPages = ['/signin', '/signup']
 
@@ -32,6 +33,7 @@ export default function App({ Component, pageProps }: AppProps) {
                   <Component {...pageProps} />
                 </ProtectedRoute>
               )}
+              <Toaster richColors position="top-right" />
               {process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === 'true' && <Analytics />}
             </div>
           </TenantProvider>

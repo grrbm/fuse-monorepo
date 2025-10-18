@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Loader2, Plus, Edit2, Trash2, Package, DollarSign, Building2, FileText } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
+import { toast } from "sonner"
 
 interface Product {
   id: string
@@ -284,8 +285,13 @@ export default function Products() {
     }
   }
 
-  const handleUpdateCategory = async (productId: string, newCategory: string) => {
+  const handleUpdateCategory = async (productId: string, newCategory: string, prevCategory?: string) => {
     if (!token) return
+    // If "No Category" is selected, do nothing and revert UI
+    if (newCategory === "") {
+      setProducts(prev => prev.map(p => p.id === productId ? { ...p, category: prevCategory } : p))
+      return
+    }
     // Optimistic update
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, category: newCategory || undefined } : p))
     try {
@@ -295,16 +301,15 @@ export default function Products() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ category: newCategory || undefined }),
+        body: JSON.stringify({ category: newCategory === "" ? null : newCategory }),
       })
       if (!response.ok) {
         throw new Error('Failed to update category')
       }
-      setSaveMessage('Category updated')
-      setTimeout(() => setSaveMessage(null), 3000)
+      toast.success('Category saved')
     } catch (error: any) {
       console.error("❌ Error updating category:", error)
-      setSaveMessage(error.message)
+      toast.error(error.message || 'Failed to update category')
       // Revert by refetching
       fetchProducts()
     }
@@ -469,7 +474,7 @@ export default function Products() {
                       <label className="text-xs text-muted-foreground">Category</label>
                       <select
                         value={product.category || ""}
-                        onChange={(e) => handleUpdateCategory(product.id, e.target.value)}
+                        onChange={(e) => handleUpdateCategory(product.id, e.target.value, product.category)}
                         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                       >
                         <option value="">No Category</option>
