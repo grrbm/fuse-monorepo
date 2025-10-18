@@ -548,11 +548,8 @@ export default function Products() {
                                 const tooltipDisabled = `You can only retry once per billing cycle.${nextBilling ? ` Next cycle begins ${new Date(nextBilling).toLocaleString()}.` : ''}`
                                 return (
                                     <div className="flex items-center gap-3">
-                                        <div className="text-sm text-amber-700">
-                                            Limit reached. <a href="/plans" className="underline">Upgrade plan</a>
-                                        </div>
                                         <button
-                                            className={`px-3 py-1.5 rounded-md text-sm font-medium border ${canRetry ? 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600' : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'}`}
+                                            className={`${canRetry ? 'border py-0 px-2 rounded-sm border-amber-700 text-amber-700 hover:underline' : 'border-0 text-gray-400 cursor-not-allowed'} text-sm font-medium p-0 m-0 bg-transparent`}
                                             title={canRetry ? tooltipEnabled : tooltipDisabled}
                                             disabled={!canRetry || retryLoading}
                                             onClick={async () => {
@@ -569,7 +566,6 @@ export default function Products() {
                                                     if (!res.ok || !json?.success) {
                                                         setError(json?.message || 'Failed to retry selection')
                                                     } else {
-                                                        // Refresh subscription and tenant products
                                                         await Promise.all([fetchSubscription(), fetchTenantProductCount()])
                                                     }
                                                 } catch (e) {
@@ -579,8 +575,11 @@ export default function Products() {
                                                 }
                                             }}
                                         >
-                                            {retryLoading ? 'Retrying...' : 'Retry selection'}
+                                            {retryLoading ? 'Retrying…' : 'Retry selection'}
                                         </button>
+                                        <div className="text-sm text-amber-700">
+                                            Limit reached. <a href="/plans" className="underline">Upgrade plan</a>
+                                        </div>
                                     </div>
                                 )
                             })()}
