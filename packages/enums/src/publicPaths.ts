@@ -7,6 +7,6 @@ export const PUBLIC_PATH_PATTERNS = [
   '/treatments/weightloss',
   '/my-treatments/[slug]',
   '/treatments/[slug]',
-  '/my-products/[slug]',
+  '/my-products/[extra]/[slug]',
 ] as const;
 
