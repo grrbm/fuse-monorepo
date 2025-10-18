@@ -529,13 +529,13 @@ export default function Products() {
                             <div className="flex items-center gap-2">
                                 <span className="text-gray-600">Product Slots:</span>
                                 <span className="font-medium text-gray-900">
-                                    {subscription?.productsChangedAmountOnCurrentCycle ?? tenantProductCount} / {subscription?.plan?.maxProducts === -1 || subscription?.plan?.maxProducts === undefined ? 'Unlimited' : subscription?.plan?.maxProducts}
+                                    {subscription?.productsChangedAmountOnCurrentCycle ?? 0} / {subscription?.plan?.maxProducts === -1 || subscription?.plan?.maxProducts === undefined ? 'Unlimited' : subscription?.plan?.maxProducts}
                                 </span>
                             </div>
                             {(() => {
                                 const max = subscription?.plan?.maxProducts
                                 const isUnlimited = max === -1 || max === undefined
-                                const used = subscription?.productsChangedAmountOnCurrentCycle ?? tenantProductCount
+                                const used = subscription?.productsChangedAmountOnCurrentCycle ?? 0
                                 const reached = !isUnlimited && used >= (max as number)
                                 if (!reached) return null
                                 return (
@@ -575,8 +575,8 @@ export default function Products() {
                             <button
                                 onClick={() => setSelectedCategory(null)}
                                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedCategory === null
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                     }`}
                             >
                                 All
@@ -586,8 +586,8 @@ export default function Products() {
                                     key={category.value}
                                     onClick={() => setSelectedCategory(category.value)}
                                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedCategory === category.value
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                         }`}
                                 >
                                     {category.label}

@@ -30,6 +30,7 @@ interface Product {
     updatedAt: string
     pharmacyWholesaleCost?: number
     suggestedRetailPrice?: number
+    slug?: string | null
 }
 
 interface TenantProductData {
@@ -59,6 +60,7 @@ export default function ProductDetail() {
     })
 
     const { user, token } = useAuth()
+    const [copiedPreview, setCopiedPreview] = useState<boolean>(false)
     const router = useRouter()
     const { id } = router.query
 
@@ -210,28 +212,26 @@ export default function ProductDetail() {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId: id, questionnaireId })
+                body: JSON.stringify({ productId: String(id), questionnaireId })
             })
 
             if (!res.ok) {
-                throw new Error('Failed to enable form')
+                const text = await res.text().catch(() => '')
+                try {
+                    const json = JSON.parse(text)
+                    throw new Error(json?.message || `Failed to enable form (${res.status})`)
+                } catch {
+                    throw new Error(text || `Failed to enable form (${res.status})`)
+                }
             }
 
-            const data = await res.json()
-            if (data?.data) {
+            const data = await res.json().catch(() => ({} as any))
+            if (data?.success && data?.data) {
                 setEnabledForms(prev => [...prev.filter((f: any) => f?.questionnaireId !== questionnaireId), data.data])
-
-                // Also create TenantProduct if needed
-                if (!tenantProduct) {
-                    const tpRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/update-selection`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ products: [{ productId: id, questionnaireId }] })
-                    })
-                    if (tpRes.ok) {
-                        window.location.reload() // Reload to get tenant product data
-                    }
-                }
+                // TenantProduct creation is ensured by the backend before creating the form
+                window.location.reload()
+            } else {
+                throw new Error(data?.message || 'Failed to enable form')
             }
         } catch (e: any) {
             setError(e?.message || 'Failed to enable form')
@@ -270,6 +270,22 @@ export default function ProductDetail() {
         return active
             ? <Badge variant="outline" className="text-xs font-medium"><CheckCircle className="h-3 w-3 mr-1" /> Active</Badge>
             : <Badge variant="outline" className="text-xs font-medium text-muted-foreground"><XCircle className="h-3 w-3 mr-1" /> Inactive</Badge>
+    }
+
+    const patientBaseUrl = process.env.NEXT_PUBLIC_PATIENT_BASE_URL || 'http://limitless.localhost:3000'
+    const buildPreviewUrl = () => {
+        if (!product?.slug) return null
+        return `${patientBaseUrl}/my-products/${product.slug}`
+    }
+
+    const handleCopyPreview = async () => {
+        const url = buildPreviewUrl()
+        if (!url) return
+        try {
+            await navigator.clipboard.writeText(url)
+            setCopiedPreview(true)
+            setTimeout(() => setCopiedPreview(false), 1500)
+        } catch { }
     }
 
     if (loading) {
@@ -478,10 +494,26 @@ export default function ProductDetail() {
                                                             </div>
                                                         ) : (
                                                             <Button size="sm" onClick={() => enableTemplate(t.id)} disabled={enablingId === t.id}>
-                                                                {enablingId === t.id ? 'Enabling...' : 'Enable'}
+                                                                {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
                                                             </Button>
                                                         )}
                                                     </div>
+                                                    {/* Preview URL and actions */}
+                                                    {buildPreviewUrl() && (
+                                                        <div className="mt-3 flex items-center justify-between">
+                                                            <div className="text-xs text-muted-foreground truncate">
+                                                                Preview URL: <span className="text-foreground">{buildPreviewUrl()}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <Button size="sm" variant="outline" onClick={() => {
+                                                                    const url = buildPreviewUrl(); if (url) window.open(url, '_blank')
+                                                                }}>Preview</Button>
+                                                                <Button size="sm" variant="outline" onClick={handleCopyPreview}>
+                                                                    {copiedPreview ? 'Copied' : 'Copy'}
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )
                                         })}

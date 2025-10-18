@@ -176,11 +176,18 @@ class TenantProductService {
         //     throw new Error(`You can only change products once per billing cycle. Try again after ${nextChangeDate}.`);
         // }
 
-        // Validate subscription limits based on final total products (existing + incoming)
+        // Validate subscription limits based on slots used this cycle (changes), not total enabled
+        // Compute how many new products are being added in this request (not already enabled)
         const existing = await getTenantProductsByClinic(clinicId);
         const existingProductIds = new Set<string>(existing.map(tp => tp.productId));
-        const finalProductIds = new Set<string>([...existingProductIds, ...productIds as string[]]);
-        await this.validateSubscriptionLimits(userId, finalProductIds.size);
+        const newAdds = new Set<string>((productIds as string[]).filter(pid => !existingProductIds.has(pid)));
+
+        // productsChangedAmountOnCurrentCycle tracks how many product selections were made this cycle
+        const usedSoFar = subscription.productsChangedAmountOnCurrentCycle || 0;
+        const usedNext = usedSoFar + newAdds.size;
+
+        // Enforce plan limits using the cycle counter
+        await this.validateSubscriptionLimits(userId, usedNext);
 
         // 4. Validate products exist
         await this.validateProducts(productIds);
@@ -223,7 +230,7 @@ class TenantProductService {
         try {
             await subscription.update({
                 lastProductChangeAt: new Date(),
-                productsChangedAmountOnCurrentCycle: (subscription.productsChangedAmountOnCurrentCycle || 0) + 1,
+                productsChangedAmountOnCurrentCycle: usedNext,
             } as any)
         } catch (e) {
             console.warn('Failed to update product change tracking fields on subscription', e);
