@@ -240,6 +240,68 @@ export default function ProductDetail() {
         }
     }
 
+    const enableTemplateWithVariant = async (questionnaireId: string, currentFormVariant: string) => {
+        if (!token || !id) return
+        setEnablingId(questionnaireId)
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId: String(id), questionnaireId, currentFormVariant })
+            })
+
+            if (!res.ok) {
+                const text = await res.text().catch(() => '')
+                try {
+                    const json = JSON.parse(text)
+                    throw new Error(json?.message || `Failed to enable form (${res.status})`)
+                } catch {
+                    throw new Error(text || `Failed to enable form (${res.status})`)
+                }
+            }
+
+            const data = await res.json().catch(() => ({} as any))
+            if (data?.success && data?.data) {
+                setEnabledForms(prev => [...prev.filter((f: any) => f?.questionnaireId !== questionnaireId), data.data])
+                window.location.reload()
+            } else {
+                throw new Error(data?.message || 'Failed to enable form')
+            }
+        } catch (e: any) {
+            setError(e?.message || 'Failed to enable form')
+        } finally {
+            setEnablingId(null)
+        }
+    }
+
+    const switchToVariant = async (questionnaireId: string, currentFormVariant: string) => {
+        if (!token || !id) return
+        setEnablingId(questionnaireId)
+        try {
+            // Disable current mapping first
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId: String(id), questionnaireId })
+            })
+            // Re-enable with new variant
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId: String(id), questionnaireId, currentFormVariant })
+            })
+            if (!res.ok) {
+                const text = await res.text().catch(() => '')
+                try { const json = JSON.parse(text); throw new Error(json?.message || `Failed to switch variant (${res.status})`) } catch { throw new Error(text || `Failed to switch variant (${res.status})`) }
+            }
+            window.location.reload()
+        } catch (e: any) {
+            setError(e?.message || 'Failed to switch variant')
+        } finally {
+            setEnablingId(null)
+        }
+    }
+
     const disableTemplate = async (questionnaireId: string) => {
         if (!token || !id) return
         try {
@@ -475,45 +537,62 @@ export default function ProductDetail() {
                                 ) : (
                                     <div className="space-y-3">
                                         {templates.map(t => {
-                                            const isEnabled = enabledForms.some((f: any) => f?.questionnaireId === t.id)
+                                            const existingForm = enabledForms.find((f: any) => f?.questionnaireId === t.id)
+                                            const currentVariant: string | null = existingForm?.currentFormVariant ?? null
                                             return (
-                                                <div key={t.id} className="p-4 border border-border rounded-lg hover:shadow-sm transition-all bg-card">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex-1">
-                                                            <div className="font-medium text-foreground">{t.title}</div>
-                                                            <div className="text-xs text-muted-foreground mt-0.5">{t.formTemplateType || 'Standard Form'}</div>
-                                                        </div>
-                                                        {isEnabled ? (
-                                                            <div className="flex items-center gap-3">
-                                                                <Badge variant="outline" className="text-xs font-medium">
-                                                                    <CheckCircle className="h-3 w-3 mr-1" /> Enabled
-                                                                </Badge>
-                                                                <Button size="sm" variant="outline" onClick={() => disableTemplate(t.id)}>
-                                                                    Disable
-                                                                </Button>
+                                                <div key={t.id} className="p-4 border border-border rounded-lg hover:shadow-sm transition-all bg-card space-y-3">
+                                                    {[1, 2].map((variantNum) => {
+                                                        const pv = buildPreviewUrl()
+                                                        const previewUrl = pv ? pv.replace('/my-products/', `/my-products/${variantNum}/`) : null
+                                                        const variantKey = String(variantNum)
+                                                        const isVariantEnabled = !!existingForm && currentVariant === variantKey
+                                                        const hasAnyEnabled = !!existingForm
+                                                        return (
+                                                            <div key={`${t.id}-${variantNum}`} className="border border-dashed border-border rounded-md p-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex-1">
+                                                                        <div className="font-medium text-foreground">{t.title}</div>
+                                                                        <div className="text-xs text-muted-foreground mt-0.5">{t.formTemplateType || 'Standard Form'} • Variant {variantNum}</div>
+                                                                    </div>
+                                                                    {hasAnyEnabled ? (
+                                                                        <div className="flex items-center gap-3">
+                                                                            {isVariantEnabled ? (
+                                                                                <>
+                                                                                    {/* <Badge variant="outline" className="text-xs font-medium">
+                                                                                        <CheckCircle className="h-3 w-3 mr-1" /> Enabled
+                                                                                    </Badge> */}
+                                                                                    <Button size="sm" variant="outline" onClick={() => disableTemplate(t.id)}>
+                                                                                        Disable
+                                                                                    </Button>
+                                                                                </>
+                                                                            ) : (
+                                                                                <Button size="sm" onClick={() => switchToVariant(t.id, String(variantNum))} disabled={enablingId === t.id}>
+                                                                                    {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
+                                                                                </Button>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <Button size="sm" onClick={() => enableTemplateWithVariant(t.id, String(variantNum))} disabled={enablingId === t.id}>
+                                                                            {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                                {previewUrl && (
+                                                                    <div className="mt-3 flex items-center justify-between">
+                                                                        <div className="text-xs text-muted-foreground truncate">
+                                                                            Preview URL: <span className="text-foreground">{previewUrl}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, '_blank')}>Preview</Button>
+                                                                            <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
+                                                                                Copy
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        ) : (
-                                                            <Button size="sm" onClick={() => enableTemplate(t.id)} disabled={enablingId === t.id}>
-                                                                {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                    {/* Preview URL and actions */}
-                                                    {buildPreviewUrl() && (
-                                                        <div className="mt-3 flex items-center justify-between">
-                                                            <div className="text-xs text-muted-foreground truncate">
-                                                                Preview URL: <span className="text-foreground">{buildPreviewUrl()}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Button size="sm" variant="outline" onClick={() => {
-                                                                    const url = buildPreviewUrl(); if (url) window.open(url, '_blank')
-                                                                }}>Preview</Button>
-                                                                <Button size="sm" variant="outline" onClick={handleCopyPreview}>
-                                                                    {copiedPreview ? 'Copied' : 'Copy'}
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                        )
+                                                    })}
                                                 </div>
                                             )
                                         })}

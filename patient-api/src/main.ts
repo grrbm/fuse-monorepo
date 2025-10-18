@@ -4618,7 +4618,7 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "User clinic not found" });
     }
 
-    const { productId, questionnaireId } = req.body || {};
+    const { productId, questionnaireId, currentFormVariant } = req.body || {};
     if (!productId || !questionnaireId) {
       return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
     }
@@ -4641,6 +4641,7 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       layoutTemplate: 'layout_a',
       themeId: null,
       lockedUntil: null,
+      currentFormVariant: currentFormVariant ?? null,
     });
 
     res.status(201).json({ success: true, data: record });

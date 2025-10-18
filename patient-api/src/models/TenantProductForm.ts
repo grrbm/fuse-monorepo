@@ -93,5 +93,11 @@ export default class TenantProductForm extends Entity {
   })
   declare lastPublishedAt?: Date | null
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare currentFormVariant?: string | null
+
 }
 
