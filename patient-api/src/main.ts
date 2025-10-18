@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import multer from "multer";
+import dns from "dns/promises";
 import { initializeDatabase } from "./config/database";
 import { MailsSender } from "./services/mailsSender";
 import Treatment from "./models/Treatment";
@@ -6093,7 +6094,10 @@ app.get("/organization", authenticateJWT, async (req, res) => {
       city: user.city || '',
       state: user.state || '',
       zipCode: user.zipCode || '',
-      logo: clinic?.logo || ''
+      logo: clinic?.logo || '',
+      slug: clinic?.slug || '',
+      isCustomDomain: (clinic as any)?.isCustomDomain || false,
+      customDomain: (clinic as any)?.customDomain || ''
     });
   } catch (error) {
     console.error('Error fetching organization:', error);
@@ -6119,7 +6123,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { businessName, phone, address, city, state, zipCode, website } = validation.data;
+    const { businessName, phone, address, city, state, zipCode, website, isCustomDomain, customDomain } = req.body;
 
     const user = await User.findByPk(currentUser.id);
     if (!user) {
@@ -6136,19 +6140,120 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       website: website !== undefined ? website : user.website
     });
 
-    // Update clinic name if exists (Clinic only has name, slug, logo, active, status)
-    if (user.clinicId && businessName) {
+    // Update clinic fields (Clinic has name, slug, logo, active, status, isCustomDomain, customDomain)
+    if (user.clinicId) {
       const clinic = await Clinic.findByPk(user.clinicId);
       if (clinic) {
-        await clinic.update({
-          name: businessName
-        });
+        const updateData: any = {};
+        
+        if (businessName) {
+          updateData.name = businessName;
+        }
+        
+        if (isCustomDomain !== undefined) {
+          updateData.isCustomDomain = isCustomDomain;
+        }
+        
+        if (customDomain !== undefined) {
+          updateData.customDomain = customDomain;
+        }
+        
+        await clinic.update(updateData);
       }
     }
 
     res.json({ success: true, message: "Organization updated successfully" });
   } catch (error) {
     console.error('Error updating organization:', error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// Verify custom domain CNAME
+app.post("/organization/verify-domain", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { customDomain } = req.body;
+    
+    if (!customDomain) {
+      return res.status(400).json({ success: false, message: "Custom domain is required" });
+    }
+
+    // Get user's clinic
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: Clinic, as: 'clinic' }]
+    });
+
+    if (!user || !user.clinic) {
+      return res.status(404).json({ success: false, message: "Clinic not found" });
+    }
+
+    const expectedCname = `${user.clinic.slug}.fuse.health`;
+
+    try {
+      // Try to get CNAME records for the custom domain
+      const cnameRecords = await dns.resolveCname(customDomain);
+      
+      if (cnameRecords && cnameRecords.length > 0) {
+        const actualCname = cnameRecords[0];
+        
+        // Check if CNAME points to the correct subdomain
+        if (actualCname === expectedCname || actualCname === `${expectedCname}.`) {
+          return res.json({
+            success: true,
+            verified: true,
+            message: "Domain verified successfully!",
+            actualCname: actualCname,
+            expectedCname: expectedCname
+          });
+        } else {
+          // CNAME exists but points to different domain
+          return res.json({
+            success: true,
+            verified: false,
+            message: `CNAME is configured but points to a different domain`,
+            actualCname: actualCname,
+            expectedCname: expectedCname,
+            error: "CNAME_MISMATCH"
+          });
+        }
+      } else {
+        return res.json({
+          success: true,
+          verified: false,
+          message: "No CNAME record found for this domain",
+          expectedCname: expectedCname,
+          error: "NO_CNAME"
+        });
+      }
+    } catch (dnsError: any) {
+      // DNS lookup failed - domain doesn't exist or no CNAME configured
+      console.log('DNS lookup error:', dnsError.code);
+      
+      if (dnsError.code === 'ENODATA' || dnsError.code === 'ENOTFOUND') {
+        return res.json({
+          success: true,
+          verified: false,
+          message: "No CNAME record found. Please configure your DNS.",
+          expectedCname: expectedCname,
+          error: "NO_CNAME"
+        });
+      }
+      
+      return res.json({
+        success: true,
+        verified: false,
+        message: "Unable to verify domain. Please try again later.",
+        expectedCname: expectedCname,
+        error: "DNS_ERROR"
+      });
+    }
+  } catch (error) {
+    console.error('Error verifying domain:', error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
