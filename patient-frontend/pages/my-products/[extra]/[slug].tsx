@@ -108,6 +108,7 @@ export default function PublicProductPage() {
                     questionnaireId={product.questionnaireId}
                     productName={product.name}
                     productCategory={product.category || undefined}
+                    productFormVariant={typeof extra === 'string' ? extra : undefined}
                 />
             )}
         </div>
