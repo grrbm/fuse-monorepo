@@ -56,6 +56,19 @@ export default class Clinic extends Entity {
       })
       declare status: PaymentStatus;
 
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false
+    })
+    declare isCustomDomain: boolean;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare customDomain?: string;
+
     @HasOne(() => Subscription)
     declare subscription?: Subscription;
 

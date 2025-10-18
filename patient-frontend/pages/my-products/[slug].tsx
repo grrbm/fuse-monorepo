@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
-import { QuestionnaireModal } from '../../../components/QuestionnaireModal'
+import { QuestionnaireModal } from '../../components/QuestionnaireModal'
 
 type Status = 'idle' | 'loading'
 
@@ -15,6 +15,7 @@ interface PublicProduct {
 }
 
 export default function PublicProductPage() {
+    console.log('PublicProductPage Edu')
     const router = useRouter()
     const { extra, slug } = router.query
 

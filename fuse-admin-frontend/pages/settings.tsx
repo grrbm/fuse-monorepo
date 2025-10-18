@@ -25,6 +25,11 @@ import {
   Calendar,
   Shield,
   ArrowRight,
+  Globe,
+  Link,
+  AlertCircle,
+  Copy,
+  X,
 } from "lucide-react";
 import Tutorial from "@/components/ui/tutorial";
 
@@ -146,10 +151,21 @@ export default function Settings({
     state: "",
     zipCode: "",
     logo: "",
+    slug: "",
+    isCustomDomain: false,
+    customDomain: "",
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isHoveringLogo, setIsHoveringLogo] = useState(false);
+  const [showCNAMEInstructions, setShowCNAMEInstructions] = useState(false);
+  const [verifyingDomain, setVerifyingDomain] = useState(false);
+  const [domainVerificationStatus, setDomainVerificationStatus] = useState<{
+    verified: boolean | null;
+    message: string;
+    actualCname?: string;
+    error?: string;
+  }>({ verified: null, message: "" });
 
   const [profileData, setProfileData] = useState({
     firstName: "",
@@ -197,6 +213,13 @@ export default function Settings({
       fetchSubscriptionBasicInfo();
     }
   }, [user]);
+
+  // Show CNAME instructions if custom domain is already configured
+  useEffect(() => {
+    if (organizationData.isCustomDomain && organizationData.customDomain) {
+      setShowCNAMEInstructions(true);
+    }
+  }, [organizationData.isCustomDomain, organizationData.customDomain]);
 
   const fetchPlans = async () => {
     setPlansLoading(true);
@@ -304,6 +327,9 @@ export default function Settings({
           state: data.state || "",
           zipCode: data.zipCode || "",
           logo: data.logo || "",
+          slug: data.slug || "",
+          isCustomDomain: data.isCustomDomain || false,
+          customDomain: data.customDomain || "",
         });
         if (data.logo) {
           setLogoPreview(data.logo);
@@ -506,8 +532,68 @@ export default function Settings({
     }
   };
 
+  const handleVerifyDomain = async () => {
+    if (!organizationData.customDomain || organizationData.customDomain === "app.") {
+      showToast("error", "Please enter a valid custom domain first");
+      return;
+    }
+
+    setVerifyingDomain(true);
+    setDomainVerificationStatus({ verified: null, message: "" });
+
+    try {
+      const response = await fetch(`${API_URL}/organization/verify-domain`, {
+        method: "POST",
+        headers: buildAuthHeaders({ "Content-Type": "application/json" }),
+        credentials: "include",
+        body: JSON.stringify({ customDomain: organizationData.customDomain }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        setDomainVerificationStatus({
+          verified: data.verified,
+          message: data.message,
+          actualCname: data.actualCname,
+          error: data.error
+        });
+
+        if (data.error === "CNAME_MISMATCH") {
+          showToast("error", `This domain is already in use by ${data.actualCname}`);
+        } else {
+          showToast("success", "Domain is available! " + (data.verified ? "Verified successfully!" : "Ready to configure."));
+        }
+      } else {
+        showToast("error", "Failed to verify domain");
+      }
+    } catch (error) {
+      showToast("error", "An error occurred while verifying domain");
+    } finally {
+      setVerifyingDomain(false);
+    }
+  };
+
   const handleOrganizationUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate custom domain if selected
+    if (organizationData.isCustomDomain) {
+      const trimmedDomain = organizationData.customDomain.trim();
+      
+      // Check if domain is empty, only "app.", or doesn't have content after "app."
+      if (!trimmedDomain || trimmedDomain === "app." || trimmedDomain.length <= 4) {
+        showToast("error", "Please enter a valid custom domain (e.g., app.yourdomain.com)");
+        return;
+      }
+      
+      // Check if domain only contains "app." without a valid domain after
+      if (trimmedDomain.startsWith("app.") && trimmedDomain.substring(4).trim() === "") {
+        showToast("error", "Please enter a valid domain after 'app.' (e.g., app.yourdomain.com)");
+        return;
+      }
+    }
+    
     setLoading(true);
 
     try {
@@ -520,6 +606,11 @@ export default function Settings({
 
       if (response.ok) {
         showToast("success", "Organization settings updated successfully!");
+        
+        // Show CNAME instructions if custom domain is enabled
+        if (organizationData.isCustomDomain && organizationData.customDomain) {
+          setShowCNAMEInstructions(true);
+        }
       } else {
         showToast("error", "Failed to update organization settings");
       }
@@ -863,6 +954,299 @@ export default function Settings({
                           />
                         </div>
                       </div>
+
+                      {/* Domain Configuration Section */}
+                      <div className="pt-8 border-t">
+                        <h3 className="text-lg font-medium mb-4">Domain Configuration</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Subdomain Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all duration-200 ${
+                              !organizationData.isCustomDomain 
+                                ? 'border-primary bg-primary/5' 
+                                : 'border-border hover:border-primary/50'
+                            }`}
+                            onClick={() => {
+                              setOrganizationData(prev => ({
+                                ...prev,
+                                isCustomDomain: false,
+                                customDomain: ""
+                              }));
+                            }}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg ${
+                                  !organizationData.isCustomDomain 
+                                    ? 'bg-primary text-primary-foreground' 
+                                    : 'bg-muted text-muted-foreground'
+                                }`}>
+                                  <Link className="h-4 w-4" />
+                                </div>
+                              <div>
+                                <CardTitle className="text-base">Subdomain</CardTitle>
+                                <CardDescription className="text-xs">
+                                  Use a subdomain like {organizationData.slug || 'clinic-slug'}.fuse.health
+                                </CardDescription>
+                              </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-3 h-3 rounded-full border-2 ${
+                                    !organizationData.isCustomDomain 
+                                      ? 'border-primary bg-primary' 
+                                      : 'border-muted-foreground'
+                                  }`}>
+                                    {!organizationData.isCustomDomain && (
+                                      <div className="w-1 h-1 bg-white rounded-full m-0.5"></div>
+                                    )}
+                                  </div>
+                                <span className="text-xs font-medium">
+                                  {organizationData.slug ? 
+                                    `${organizationData.slug}.fuse.health` : 
+                                    'clinic-slug.fuse.health'
+                                  }
+                                </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Quick setup, no additional configuration required
+                                </p>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Custom Domain Card */}
+                          <Card 
+                            className={`cursor-pointer transition-all duration-200 ${
+                              organizationData.isCustomDomain 
+                                ? 'border-primary bg-primary/5' 
+                                : 'border-border hover:border-primary/50'
+                            }`}
+                            onClick={() => {
+                              setOrganizationData(prev => ({
+                                ...prev,
+                                isCustomDomain: true,
+                                customDomain: prev.customDomain || "app."
+                              }));
+                            }}
+                          >
+                            <CardHeader className="pb-3">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg ${
+                                  organizationData.isCustomDomain 
+                                    ? 'bg-primary text-primary-foreground' 
+                                    : 'bg-muted text-muted-foreground'
+                                }`}>
+                                  <Globe className="h-4 w-4" />
+                                </div>
+                                <div>
+                                  <CardTitle className="text-base">Custom Domain</CardTitle>
+                                  <CardDescription className="text-xs">
+                                    Use your own domain like app.clinic.com
+                                  </CardDescription>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-3 h-3 rounded-full border-2 ${
+                                    organizationData.isCustomDomain 
+                                      ? 'border-primary bg-primary' 
+                                      : 'border-muted-foreground'
+                                  }`}>
+                                    {organizationData.isCustomDomain && (
+                                      <div className="w-1 h-1 bg-white rounded-full m-0.5"></div>
+                                    )}
+                                  </div>
+                                  <span className="text-xs font-medium">
+                                    {organizationData.customDomain || 'app.yourdomain.com'}
+                                  </span>
+                                </div>
+                                {organizationData.isCustomDomain && (
+                                  <div className="space-y-1">
+                                    <div className="flex">
+                                      <input
+                                        type="text"
+                                        value={organizationData.customDomain}
+                                        onChange={(e) => {
+                                          const value = e.target.value;
+                                          if (value.startsWith("app.") || value === "") {
+                                            setOrganizationData(prev => ({
+                                              ...prev,
+                                              customDomain: value
+                                            }));
+                                          }
+                                        }}
+                                        className="flex-1 px-3 py-2 border border-input rounded-l-md text-xs bg-background border-r-0"
+                                        placeholder="app.yourdomain.com"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="px-4 py-2 h-auto text-xs rounded-l-none bg-background border-primary text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleVerifyDomain();
+                                        }}
+                                        disabled={verifyingDomain}
+                                      >
+                                        {verifyingDomain ? "Verifying..." : "Verify"}
+                                      </Button>
+                                    </div>
+                                    
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                      Must start with "app." - DNS configuration required
+                                    </p>
+                                  </div>
+                                )}
+                                {!organizationData.isCustomDomain && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Requires DNS configuration and domain verification
+                                  </p>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </div>
+
+                      {/* CNAME Instructions */}
+                      {showCNAMEInstructions && organizationData.isCustomDomain && (
+                        <div className={`mt-6 p-6 border rounded-xl relative shadow-sm ${
+                          domainVerificationStatus.error === 'CNAME_MISMATCH'
+                            ? 'border-red-300 bg-gradient-to-br from-red-50 to-red-100/50'
+                            : domainVerificationStatus.verified !== null
+                            ? 'border-green-300 bg-gradient-to-br from-green-50 to-green-100/50'
+                            : 'border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50'
+                        }`}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setShowCNAMEInstructions(false);
+                            }}
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                          
+                          <div className="flex items-start gap-3 mb-5">
+                            <div className="p-2 bg-blue-600 rounded-lg">
+                              <AlertCircle className="h-5 w-5 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-base font-semibold text-blue-900 mb-1">
+                                DNS Configuration Required
+                              </h4>
+                              <p className="text-sm text-blue-800">
+                                To use your custom domain, add the following CNAME record to your DNS provider:
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                            {/* Type */}
+                            <div className="bg-white border border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</p>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText("CNAME");
+                                    showToast("success", "Copied to clipboard!");
+                                  }}
+                                  className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                                  title="Copy to clipboard"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </button>
+                              </div>
+                              <code className="text-sm font-mono font-semibold text-blue-900 bg-blue-50 px-3 py-2 rounded-md block text-center">
+                                CNAME
+                              </code>
+                            </div>
+
+                            {/* Name / Host */}
+                            <div className="bg-white border border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Name / Host</p>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(organizationData.customDomain);
+                                    showToast("success", "Copied to clipboard!");
+                                  }}
+                                  className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                                  title="Copy to clipboard"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </button>
+                              </div>
+                              <code className="text-sm font-mono font-semibold text-blue-900 bg-blue-50 px-3 py-2 rounded-md block break-all text-center">
+                                {organizationData.customDomain}
+                              </code>
+                            </div>
+
+                            {/* Value / Points to */}
+                            <div className="bg-white border border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Value / Points to</p>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const cnameValue = organizationData.slug ? `${organizationData.slug}.fuse.health` : 'your-subdomain.fuse.health';
+                                    navigator.clipboard.writeText(cnameValue);
+                                    showToast("success", "Copied to clipboard!");
+                                  }}
+                                  className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                                  title="Copy to clipboard"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </button>
+                              </div>
+                              <code className="text-sm font-mono font-semibold text-blue-900 bg-blue-50 px-3 py-2 rounded-md block break-all text-center">
+                                {organizationData.slug ? `${organizationData.slug}.fuse.health` : 'your-subdomain.fuse.health'}
+                              </code>
+                            </div>
+                          </div>
+
+                          {/* Warning only if CNAME is being used by another domain */}
+                          {domainVerificationStatus.error === 'CNAME_MISMATCH' && domainVerificationStatus.actualCname && (
+                            <div className="mt-4 p-4 bg-red-100 border border-red-300 rounded-lg">
+                              <div className="flex items-start gap-3">
+                                <AlertCircle className="h-5 w-5 text-red-700 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <h5 className="text-sm font-semibold text-red-900 mb-1">
+                                    This domain is already in use
+                                  </h5>
+                                  <p className="text-xs text-red-800">
+                                    This custom domain is pointing to: <strong>{domainVerificationStatus.actualCname}</strong>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-start gap-2 bg-blue-100/50 border border-blue-300/50 rounded-lg p-3 mt-4">
+                            <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-blue-800">
+                              <strong>Note:</strong> DNS changes can take up to 48 hours to propagate. Once configured, click the "Verify" button to check if your domain is properly set up.
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="flex justify-end pt-4">
                         <Button type="submit" disabled={loading}>
