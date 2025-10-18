@@ -3480,7 +3480,7 @@ app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 
         // Check for active subscription
         const subscription = await Subscription.findOne({
-          where: { 
+          where: {
             userId,
             status: 'active'
           }
@@ -4710,6 +4710,53 @@ app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('❌ Error disabling tenant product form:', error);
     res.status(500).json({ success: false, message: 'Failed to disable product form' });
+  }
+});
+
+// Retry product selection: clears TenantProduct and TenantProductForm for current clinic, once per cycle
+app.post("/tenant-products/retry-selection", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(400).json({ success: false, message: "User clinic not found" });
+    }
+
+    const subscription = await BrandSubscription.findOne({
+      where: { userId: currentUser.id, status: BrandSubscriptionStatus.ACTIVE },
+      order: [["createdAt", "DESC"]]
+    });
+    if (!subscription) {
+      return res.status(400).json({ success: false, message: "No active subscription found" });
+    }
+
+    const periodStart = subscription.currentPeriodStart ? new Date(subscription.currentPeriodStart) : null;
+    const periodEnd = subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd) : null;
+    if (
+      (subscription as any).retriedProductSelectionForCurrentCycle &&
+      periodStart && periodEnd && new Date() >= periodStart && new Date() < periodEnd
+    ) {
+      return res.status(400).json({ success: false, message: "You already retried once for this billing cycle." });
+    }
+
+    // Hard delete all mappings for this clinic
+    await (await import('./models/TenantProduct')).default.destroy({ where: { clinicId: user.clinicId } as any, force: true } as any);
+    await (await import('./models/TenantProductForm')).default.destroy({ where: { clinicId: user.clinicId } as any, force: true } as any);
+
+    await subscription.update({
+      productsChangedAmountOnCurrentCycle: 0,
+      retriedProductSelectionForCurrentCycle: true,
+      lastProductChangeAt: new Date(),
+    } as any)
+
+    res.status(200).json({ success: true, message: "Selections cleared. You can choose products again." });
+  } catch (error) {
+    console.error('❌ Error retrying product selection:', error);
+    res.status(500).json({ success: false, message: "Failed to retry product selection" });
   }
 });
 

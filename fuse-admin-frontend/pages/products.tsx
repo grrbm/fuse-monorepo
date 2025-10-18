@@ -87,6 +87,7 @@ export default function Products() {
     const [tenantProducts, setTenantProducts] = useState<Array<{ id: string; productId: string; price: number }>>([])
     const [, setClinicName] = useState<string>("")
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+    const [retryLoading, setRetryLoading] = useState<boolean>(false)
 
     // Cast user to include clinicId property
     const userWithClinic = user as any
@@ -348,8 +349,11 @@ export default function Products() {
                 const data = await response.json()
                 if (data.success) {
                     console.log('✅ Product enabled successfully')
-                    // Refresh the tenant products list
-                    fetchTenantProductCount()
+                    // Refresh counters immediately
+                    await Promise.all([
+                        fetchSubscription(),
+                        fetchTenantProductCount()
+                    ])
                 } else {
                     setError(data.message || 'Failed to enable product')
                 }
@@ -538,9 +542,45 @@ export default function Products() {
                                 const used = subscription?.productsChangedAmountOnCurrentCycle ?? 0
                                 const reached = !isUnlimited && used >= (max as number)
                                 if (!reached) return null
+                                const canRetry = subscription && (subscription as any).retriedProductSelectionForCurrentCycle === false
+                                const nextBilling = subscription?.nextBillingDate
+                                const tooltipEnabled = `Clear all enabled products and reset your product choices for this billing cycle.${nextBilling ? ` Next cycle begins ${new Date(nextBilling).toLocaleString()}.` : ''}`
+                                const tooltipDisabled = `You can only retry once per billing cycle.${nextBilling ? ` Next cycle begins ${new Date(nextBilling).toLocaleString()}.` : ''}`
                                 return (
-                                    <div className="text-sm text-amber-700">
-                                        Limit reached. <a href="/plans" className="underline">Upgrade plan</a>
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-sm text-amber-700">
+                                            Limit reached. <a href="/plans" className="underline">Upgrade plan</a>
+                                        </div>
+                                        <button
+                                            className={`px-3 py-1.5 rounded-md text-sm font-medium border ${canRetry ? 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600' : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'}`}
+                                            title={canRetry ? tooltipEnabled : tooltipDisabled}
+                                            disabled={!canRetry || retryLoading}
+                                            onClick={async () => {
+                                                if (!canRetry || retryLoading) return
+                                                if (!confirm('Retry product selection? This will clear all your current selections for this cycle.')) return
+                                                try {
+                                                    setRetryLoading(true)
+                                                    setError(null)
+                                                    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products/retry-selection`, {
+                                                        method: 'POST',
+                                                        headers: { 'Authorization': `Bearer ${token}` }
+                                                    })
+                                                    const json = await res.json().catch(() => ({}))
+                                                    if (!res.ok || !json?.success) {
+                                                        setError(json?.message || 'Failed to retry selection')
+                                                    } else {
+                                                        // Refresh subscription and tenant products
+                                                        await Promise.all([fetchSubscription(), fetchTenantProductCount()])
+                                                    }
+                                                } catch (e) {
+                                                    setError('Failed to retry selection')
+                                                } finally {
+                                                    setRetryLoading(false)
+                                                }
+                                            }}
+                                        >
+                                            {retryLoading ? 'Retrying...' : 'Retry selection'}
+                                        </button>
                                     </div>
                                 )
                             })()}
