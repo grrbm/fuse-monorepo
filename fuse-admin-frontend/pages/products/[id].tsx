@@ -58,11 +58,35 @@ export default function ProductDetail() {
         totalOrders: 0,
         activeSubscribers: 0
     })
+    const [clinicSlug, setClinicSlug] = useState<string | null>(null)
 
     const { user, token } = useAuth()
     const [copiedPreview, setCopiedPreview] = useState<boolean>(false)
     const router = useRouter()
     const { id } = router.query
+
+    // Fetch clinic information
+    useEffect(() => {
+        const fetchClinic = async () => {
+            if (!token || !user?.clinicId) return
+
+            try {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/clinic/${user.clinicId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+
+                if (response.ok) {
+                    const data = await response.json()
+                    if (data.success && data.data) {
+                        setClinicSlug(data.data.slug)
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load clinic:', err)
+            }
+        }
+        fetchClinic()
+    }, [token, user?.clinicId])
 
     // Fetch product data
     useEffect(() => {
@@ -334,10 +358,16 @@ export default function ProductDetail() {
             : <Badge variant="outline" className="text-xs font-medium text-muted-foreground"><XCircle className="h-3 w-3 mr-1" /> Inactive</Badge>
     }
 
-    const patientBaseUrl = process.env.NEXT_PUBLIC_PATIENT_BASE_URL || 'http://limitless.localhost:3000'
     const buildPreviewUrl = () => {
-        if (!product?.slug) return null
-        return `${patientBaseUrl}/my-products/${product.slug}`
+        if (!product?.slug || !clinicSlug) return null
+        
+        // Build dynamic subdomain URL based on user's clinic
+        const isLocalhost = process.env.NODE_ENV !== 'production'
+        const baseUrl = isLocalhost 
+            ? `http://${clinicSlug}.localhost:3000`
+            : `https://${clinicSlug}.fuse.health`
+        
+        return `${baseUrl}/my-products/${product.slug}`
     }
 
     const handleCopyPreview = async () => {

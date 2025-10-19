@@ -293,7 +293,62 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             console.warn('Failed to adjust standardized steps:', e)
           }
 
-          // No clinic variables available without treatment context; use as-is
+          // Fetch clinic data for variable replacement
+          try {
+            // Get clinic slug from hostname
+            const hostname = window.location.hostname;
+            let clinicSlug: string | null = null;
+
+            if (process.env.NODE_ENV === 'production') {
+              // Production: clinicSlug.fuse.health
+              const parts = hostname.split('.fuse.health');
+              clinicSlug = parts.length > 1 ? parts[0] : null;
+            } else {
+              // Development: clinicSlug.localhost
+              const parts = hostname.split('.localhost');
+              clinicSlug = parts.length > 1 ? parts[0] : null;
+            }
+
+            if (clinicSlug) {
+              // Fetch clinic data
+              const clinicRes = await fetch(`/api/public/clinic/${encodeURIComponent(clinicSlug)}`);
+              const clinicData = await clinicRes.json().catch(() => null);
+
+              if (clinicRes.ok && clinicData?.success && clinicData?.data) {
+                const clinic = clinicData.data;
+                const variables = getVariablesFromClinic(clinic);
+
+                // Replace variables in all step titles, descriptions, and questions
+                if (questionnaireData.steps && questionnaireData.steps.length > 0) {
+                  questionnaireData.steps = questionnaireData.steps.map((step: any) => ({
+                    ...step,
+                    title: replaceVariables(step.title || '', variables),
+                    description: replaceVariables(step.description || '', variables),
+                    questions: step.questions?.map((question: any) => ({
+                      ...question,
+                      questionText: replaceVariables(question.questionText || '', variables),
+                      placeholder: replaceVariables(question.placeholder || '', variables),
+                      options: question.options?.map((opt: any) => {
+                        if (typeof opt === 'string') {
+                          return replaceVariables(opt, variables);
+                        }
+                        if (opt && typeof opt === 'object') {
+                          return {
+                            ...opt,
+                            optionText: replaceVariables(opt.optionText || '', variables),
+                          };
+                        }
+                        return opt;
+                      }),
+                    })),
+                  }));
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to load clinic data for variable replacement:', e);
+          }
+
           setQuestionnaire(questionnaireData)
           setLoading(false)
           return
