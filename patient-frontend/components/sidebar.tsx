@@ -99,6 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
   const baseNavItems = [
     { id: "dashboard", label: "Dashboard", icon: "lucide:layout-dashboard" },
     { id: "treatments", label: "Treatments", icon: "lucide:pill" },
+    { id: "orders", label: "My Orders", icon: "lucide:package" },
     { id: "messenger", label: "Messenger", icon: "lucide:message-square" },
     { id: "account", label: "Account", icon: "lucide:user" },
   ];
@@ -106,9 +107,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
   // Add Branding item for doctors
   const navItems = user?.role === 'doctor'
     ? [
-      ...baseNavItems.slice(0, 3), // dashboard, treatments, messenger
+      ...baseNavItems.slice(0, 4), // dashboard, treatments, orders, messenger
       { id: "branding", label: "Branding", icon: "lucide:palette" },
-      ...baseNavItems.slice(3), // account
+      ...baseNavItems.slice(4), // account
     ]
     : baseNavItems;
 

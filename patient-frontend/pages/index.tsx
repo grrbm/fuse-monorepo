@@ -5,6 +5,7 @@ import { Header } from "../components/header";
 import { Dashboard } from "../components/dashboard";
 import { MessengerPage } from "../components/messenger-page";
 import { TreatmentsPage } from "../components/treatments-page";
+import { OrdersPage } from "../components/orders-page";
 import { AccountPage } from "../components/account-page";
 import { BrandingPage } from "../components/branding-page";
 import { Button, Avatar } from "@heroui/react";
@@ -95,6 +96,7 @@ function HomePage() {
           >
             {activeTab === "dashboard" && <Dashboard />}
             {activeTab === "treatments" && <TreatmentsPage />}
+            {activeTab === "orders" && <OrdersPage />}
             {activeTab === "messenger" && <MessengerPage isMobileView={isMobileView} />}
             {activeTab === "branding" && <BrandingPage />}
             {activeTab === "account" && <AccountPage />}
@@ -105,6 +107,7 @@ function HomePage() {
             {[
               { id: "dashboard", icon: "lucide:layout-dashboard" },
               { id: "treatments", icon: "lucide:pill" },
+              { id: "orders", icon: "lucide:package" },
               { id: "messenger", icon: "lucide:message-square" },
               { id: "account", icon: "lucide:user" }
             ].map((item) => (
