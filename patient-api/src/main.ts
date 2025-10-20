@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import multer from "multer";
+import dns from "dns/promises";
 import { initializeDatabase } from "./config/database";
 import { MailsSender } from "./services/mailsSender";
 import Treatment from "./models/Treatment";
@@ -6093,7 +6094,10 @@ app.get("/organization", authenticateJWT, async (req, res) => {
       city: user.city || '',
       state: user.state || '',
       zipCode: user.zipCode || '',
-      logo: clinic?.logo || ''
+      logo: clinic?.logo || '',
+      slug: clinic?.slug || '',
+      isCustomDomain: (clinic as any)?.isCustomDomain || false,
+      customDomain: (clinic as any)?.customDomain || ''
     });
   } catch (error) {
     console.error('Error fetching organization:', error);
@@ -6119,7 +6123,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { businessName, phone, address, city, state, zipCode, website } = validation.data;
+    const { businessName, phone, address, city, state, zipCode, website, isCustomDomain, customDomain } = req.body;
 
     const user = await User.findByPk(currentUser.id);
     if (!user) {
@@ -6136,13 +6140,25 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       website: website !== undefined ? website : user.website
     });
 
-    // Update clinic name if exists (Clinic only has name, slug, logo, active, status)
-    if (user.clinicId && businessName) {
+    // Update clinic fields (Clinic has name, slug, logo, active, status, isCustomDomain, customDomain)
+    if (user.clinicId) {
       const clinic = await Clinic.findByPk(user.clinicId);
       if (clinic) {
-        await clinic.update({
-          name: businessName
-        });
+        const updateData: any = {};
+        
+        if (businessName) {
+          updateData.name = businessName;
+        }
+        
+        if (isCustomDomain !== undefined) {
+          updateData.isCustomDomain = isCustomDomain;
+        }
+        
+        if (customDomain !== undefined) {
+          updateData.customDomain = customDomain;
+        }
+        
+        await clinic.update(updateData);
       }
     }
 
@@ -6150,6 +6166,159 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
   } catch (error) {
     console.error('Error updating organization:', error);
     res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// Verify custom domain CNAME
+app.post("/organization/verify-domain", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { customDomain } = req.body;
+    
+    if (!customDomain) {
+      return res.status(400).json({ success: false, message: "Custom domain is required" });
+    }
+
+    // Get user's clinic
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: Clinic, as: 'clinic' }]
+    });
+
+    if (!user || !user.clinic) {
+      return res.status(404).json({ success: false, message: "Clinic not found" });
+    }
+
+    const expectedCname = `${user.clinic.slug}.fuse.health`;
+
+    try {
+      // Try to get CNAME records for the custom domain
+      const cnameRecords = await dns.resolveCname(customDomain);
+      
+      if (cnameRecords && cnameRecords.length > 0) {
+        const actualCname = cnameRecords[0];
+        
+        // Check if CNAME points to the correct subdomain
+        if (actualCname === expectedCname || actualCname === `${expectedCname}.`) {
+          return res.json({
+            success: true,
+            verified: true,
+            message: "Domain verified successfully!",
+            actualCname: actualCname,
+            expectedCname: expectedCname
+          });
+        } else {
+          // CNAME exists but points to different domain
+          return res.json({
+            success: true,
+            verified: false,
+            message: `CNAME is configured but points to a different domain`,
+            actualCname: actualCname,
+            expectedCname: expectedCname,
+            error: "CNAME_MISMATCH"
+          });
+        }
+      } else {
+        return res.json({
+          success: true,
+          verified: false,
+          message: "No CNAME record found for this domain",
+          expectedCname: expectedCname,
+          error: "NO_CNAME"
+        });
+      }
+    } catch (dnsError: any) {
+      // DNS lookup failed - domain doesn't exist or no CNAME configured
+      console.log('DNS lookup error:', dnsError.code);
+      
+      if (dnsError.code === 'ENODATA' || dnsError.code === 'ENOTFOUND') {
+        return res.json({
+          success: true,
+          verified: false,
+          message: "No CNAME record found. Please configure your DNS.",
+          expectedCname: expectedCname,
+          error: "NO_CNAME"
+        });
+      }
+      
+      return res.json({
+        success: true,
+        verified: false,
+        message: "Unable to verify domain. Please try again later.",
+        expectedCname: expectedCname,
+        error: "DNS_ERROR"
+      });
+    }
+  } catch (error) {
+    console.error('Error verifying domain:', error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// Get clinic slug by custom domain
+app.post("/clinic/by-custom-domain", async (req, res) => {
+  try {
+    const { domain } = req.body;
+    console.log('clinic/by-custom-domain Edu', domain);
+    if (!domain) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Domain is required" 
+      });
+    }
+
+    // Extract base URL (remove path, query params, etc)
+    let baseDomain = domain;
+    try {
+      const url = new URL(domain.startsWith('http') ? domain : `https://${domain}`);
+      baseDomain = url.hostname;
+    } catch (e) {
+      // If URL parsing fails, use the domain as is
+      baseDomain = domain.split('/')[0].split('?')[0];
+    }
+
+    console.log(`🔍 Looking for clinic with custom domain: ${baseDomain}`);
+
+    // Search for clinic with matching customDomain
+    const clinic = await Clinic.findOne({
+      where: { 
+        customDomain: baseDomain,
+        isCustomDomain: true 
+      },
+      attributes: ['id', 'slug', 'name', 'logo', 'customDomain']
+    });
+
+    if (!clinic) {
+      return res.status(404).json({
+        success: false,
+        message: "No clinic found with this custom domain",
+        domain: baseDomain
+      });
+    }
+
+    console.log(`✅ Found clinic: ${clinic.name} with slug: ${clinic.slug}`);
+
+    res.json({
+      success: true,
+      slug: clinic.slug,
+      clinic: {
+        id: clinic.id,
+        name: clinic.name,
+        slug: clinic.slug,
+        logo: clinic.logo,
+        customDomain: clinic.customDomain
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error finding clinic by custom domain:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
   }
 });
 
@@ -6966,32 +7135,20 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
       return res.status(404).json({ success: false, message: "Clinic not found" });
     }
 
+    console.log('Public: get product form by clinic slug + product slug Edu', clinicSlug, slug);
     // First try legacy enablement via TenantProduct (selected products)
     const tenantProduct = await TenantProduct.findOne({
-      where: { clinicId: clinic.id },
+      where: { clinicId: clinic.id, productId: slug },
       include: [
         {
           model: Product,
-          required: true,
-          where: { slug },
         },
         {
           model: Questionnaire,
-          required: false,
-          include: [
-            {
-              model: QuestionnaireStep,
-              include: [
-                {
-                  model: Question,
-                  include: [QuestionOption],
-                },
-              ],
-            },
-          ],
         },
       ],
     });
+    console.log('Public: tenantProduct Edu', tenantProduct);
 
     if (tenantProduct && tenantProduct.product) {
       const product = tenantProduct.product as any;
