@@ -5,7 +5,7 @@ import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
+import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../QuestionEditor"
 
@@ -59,15 +59,23 @@ export default function TemplateEditor() {
   const [showVariables, setShowVariables] = useState(false)
   const [draggedStepId, setDraggedStepId] = useState<string | null>(null)
   const [copiedVariable, setCopiedVariable] = useState<string | null>(null)
-  const [addingConditionalFor, setAddingConditionalFor] = useState<{stepId: string, questionId: string, parentQuestion: Question} | null>(null)
-  const [conditionalConfig, setConditionalConfig] = useState<{
-    triggerOption: string
+  const [showConditionalModal, setShowConditionalModal] = useState(false)
+  const [selectedQuestionForConditional, setSelectedQuestionForConditional] = useState<{
+    stepId: string
+    questionId: string
     questionText: string
     options: string[]
+  } | null>(null)
+  const [conditionalRules, setConditionalRules] = useState<Array<{
+    triggerOption: string
+    followUpQuestion: string
+  }>>([])
+  const [newConditionalRule, setNewConditionalRule] = useState<{
+    triggerOption: string
+    followUpQuestion: string
   }>({
     triggerOption: '',
-    questionText: '',
-    options: ['Yes', 'No']
+    followUpQuestion: ''
   })
 
   useEffect(() => {
@@ -346,10 +354,24 @@ export default function TemplateEditor() {
     }
   }
 
-  const handleAddConditionalQuestion = async () => {
-    if (!addingConditionalFor || !token || !templateId) return
-    if (!conditionalConfig.triggerOption || !conditionalConfig.questionText) {
-      alert('Please select a trigger option and enter a question')
+  const handleOpenConditionalModal = (stepId: string, question: Question) => {
+    setSelectedQuestionForConditional({
+      stepId,
+      questionId: question.id,
+      questionText: question.questionText,
+      options: question.options || []
+    })
+    setNewConditionalRule({
+      triggerOption: question.options?.[0] || '',
+      followUpQuestion: ''
+    })
+    setShowConditionalModal(true)
+  }
+
+  const handleAddConditionalRule = async () => {
+    if (!selectedQuestionForConditional || !token || !templateId) return
+    if (!newConditionalRule.triggerOption || !newConditionalRule.followUpQuestion) {
+      alert('Please select a trigger option and enter a follow-up question')
       return
     }
 
@@ -359,18 +381,17 @@ export default function TemplateEditor() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          stepId: addingConditionalFor.stepId,
-          questionText: conditionalConfig.questionText,
+          stepId: selectedQuestionForConditional.stepId,
+          questionText: newConditionalRule.followUpQuestion,
           answerType: 'radio',
           isRequired: true,
-          conditionalLogic: `answer_equals:${conditionalConfig.triggerOption}`,
+          conditionalLogic: `answer_equals:${newConditionalRule.triggerOption}`,
           conditionalLevel: 1,
-          parentQuestionId: addingConditionalFor.questionId,
-          options: conditionalConfig.options.map((text, idx) => ({
-            optionText: text,
-            optionValue: text.toLowerCase().replace(/\s+/g, '_'),
-            optionOrder: idx + 1
-          }))
+          parentQuestionId: selectedQuestionForConditional.questionId,
+          options: [
+            { optionText: 'Yes', optionValue: 'yes', optionOrder: 1 },
+            { optionText: 'No', optionValue: 'no', optionOrder: 2 }
+          ]
         })
       })
 
@@ -388,7 +409,7 @@ export default function TemplateEditor() {
         title: String(s.title || ''),
         description: String(s.description || ''),
         stepOrder: Number(s.stepOrder || 0),
-        category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info' | 'user_profile',
+        category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
         stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
         questions: (s.questions || []).map((q: any) => ({
           id: String(q.id),
@@ -402,13 +423,13 @@ export default function TemplateEditor() {
       })) as Step[]
       setSteps(loadedSteps)
 
-      // Reset form and close dialog
-      setAddingConditionalFor(null)
-      setConditionalConfig({
-        triggerOption: '',
-        questionText: '',
-        options: ['Yes', 'No']
+      // Reset form
+      setNewConditionalRule({
+        triggerOption: selectedQuestionForConditional.options[0] || '',
+        followUpQuestion: ''
       })
+      setShowConditionalModal(false)
+      setSelectedQuestionForConditional(null)
     } catch (e: any) {
       console.error('❌ Failed to add conditional question', e)
       alert(e.message || 'Failed to add conditional question')
@@ -785,96 +806,18 @@ export default function TemplateEditor() {
                                       }}
                                     />
                                     
-                                    {/* Add Conditional Logic Section */}
-                                    {!addingConditionalFor && q.options && q.options.length > 0 && (
+                                    {/* Add Conditional Logic Button */}
+                                    {q.options && q.options.length > 0 && (
                                       <div className="mt-4 pt-4 border-t">
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          onClick={() => {
-                                            setAddingConditionalFor({
-                                              stepId: step.id,
-                                              questionId: q.id,
-                                              parentQuestion: q
-                                            })
-                                            setConditionalConfig({
-                                              triggerOption: q.options?.[0] || '',
-                                              questionText: '',
-                                              options: ['Yes', 'No']
-                                            })
-                                          }}
+                                          onClick={() => handleOpenConditionalModal(step.id, q)}
                                           className="w-full"
                                         >
-                                          <Plus className="mr-2 h-4 w-4" />
+                                          <GitBranch className="mr-2 h-4 w-4" />
                                           Add Conditional Logic
                                         </Button>
-                                      </div>
-                                    )}
-
-                                    {/* Conditional Logic Builder */}
-                                    {addingConditionalFor && addingConditionalFor.questionId === q.id && (
-                                      <div className="mt-4 pt-4 border-t space-y-4 bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
-                                        <div>
-                                          <h4 className="text-sm font-medium mb-3">Add Follow-up Question</h4>
-                                          <p className="text-xs text-muted-foreground mb-3">
-                                            This question will appear only when a specific option is selected
-                                          </p>
-                                        </div>
-
-                                        {/* Trigger Option Selector */}
-                                        <div>
-                                          <label className="text-sm font-medium block mb-2">
-                                            Show this question when answer is:
-                                          </label>
-                                          <select
-                                            value={conditionalConfig.triggerOption}
-                                            onChange={(e) => setConditionalConfig({...conditionalConfig, triggerOption: e.target.value})}
-                                            className="w-full px-3 py-2 border rounded-md bg-background"
-                                          >
-                                            {addingConditionalFor.parentQuestion.options?.map((opt, idx) => (
-                                              <option key={idx} value={opt}>{opt}</option>
-                                            ))}
-                                          </select>
-                                        </div>
-
-                                        {/* Follow-up Question Text */}
-                                        <div>
-                                          <label className="text-sm font-medium block mb-2">
-                                            Follow-up question:
-                                          </label>
-                                          <input
-                                            type="text"
-                                            value={conditionalConfig.questionText}
-                                            onChange={(e) => setConditionalConfig({...conditionalConfig, questionText: e.target.value})}
-                                            placeholder="e.g., Please provide more details..."
-                                            className="w-full px-3 py-2 border rounded-md bg-background"
-                                          />
-                                        </div>
-
-                                        {/* Action Buttons */}
-                                        <div className="flex gap-2">
-                                          <Button
-                                            size="sm"
-                                            onClick={handleAddConditionalQuestion}
-                                          >
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Add Follow-up Question
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                              setAddingConditionalFor(null)
-                                              setConditionalConfig({
-                                                triggerOption: '',
-                                                questionText: '',
-                                                options: ['Yes', 'No']
-                                              })
-                                            }}
-                                          >
-                                            Cancel
-                                          </Button>
-                                        </div>
                                       </div>
                                     )}
 
@@ -892,49 +835,80 @@ export default function TemplateEditor() {
                                 ))}
                               </div>
                             ) : (
-                              <div>
+                              <div className="relative">
                                 {step.stepType === "question" && step.questions && step.questions.length > 0 && (
                                   <div className="space-y-4">
                                     {/* Main question */}
-                                    {step.questions.filter(q => q.conditionalLevel === 0 || !q.conditionalLevel).map((mainQ, mainIdx) => (
-                                      <div key={mainQ.id}>
-                                        <p className="font-medium text-base mb-3">{mainQ.questionText}</p>
-                                        {mainQ.options && mainQ.options.length > 0 && (
-                                          <div className="space-y-2">
-                                            {mainQ.options.map((option, i) => (
-                                              <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                <div className="w-4 h-4 rounded-full border-2 border-muted-foreground"></div>
-                                                {option}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )}
+                                    {step.questions.filter(q => q.conditionalLevel === 0 || !q.conditionalLevel).map((mainQ, mainIdx) => {
+                                      const hasConditionals = step.questions?.some(q => (q.conditionalLevel || 0) > 0)
+                                      
+                                      return (
+                                        <div key={mainQ.id} className="relative">
+                                          {/* Visual connection indicator */}
+                                          {hasConditionals && (
+                                            <div className="absolute -right-8 top-0 bottom-0 w-1 flex items-center justify-center">
+                                              <div className="w-full h-full bg-gradient-to-b from-yellow-400 via-yellow-400 to-blue-400 rounded-full" />
+                                              <div className="absolute top-1/2 right-0 w-3 h-3 bg-yellow-400 rounded-full" />
+                                            </div>
+                                          )}
+                                          
+                                          <p className="font-medium text-base mb-3">{mainQ.questionText}</p>
+                                          {mainQ.options && mainQ.options.length > 0 && (
+                                            <div className="space-y-2">
+                                              {mainQ.options.map((option, i) => {
+                                                const hasConditionalForThis = step.questions?.some(q => 
+                                                  (q.conditionalLevel || 0) > 0 && 
+                                                  q.questionText.includes('REQUIRES:' + option)
+                                                )
+                                                
+                                                return (
+                                                  <div key={i} className={`flex items-center gap-2 text-sm ${
+                                                    hasConditionalForThis ? 'text-yellow-600 font-medium' : 'text-muted-foreground'
+                                                  }`}>
+                                                    <div className={`w-4 h-4 rounded-full border-2 ${
+                                                      hasConditionalForThis ? 'border-yellow-500 bg-yellow-100' : 'border-muted-foreground'
+                                                    }`}></div>
+                                                    {option}
+                                                  </div>
+                                                )
+                                              })}
+                                            </div>
+                                          )}
                                         
-                                        {/* Show conditional sub-questions for this main question */}
-                                        {step.questions && step.questions.filter(q => (q.conditionalLevel || 0) > 0).length > 0 && (
-                                          <div className="ml-6 mt-3 pl-4 border-l-2 border-blue-300 space-y-2">
-                                            {step.questions
-                                              .filter(q => (q.conditionalLevel || 0) > 0)
-                                              .map((subQ, subIdx) => (
-                                                <div key={subQ.id} className="bg-blue-50 dark:bg-blue-950 p-3 rounded">
-                                                  <Badge variant="outline" className="text-xs mb-2">Conditional</Badge>
-                                                  <p className="text-sm font-medium">{subQ.questionText}</p>
-                                                  {subQ.options && (
-                                                    <div className="mt-2 space-y-1">
-                                                      {subQ.options.map((opt, i) => (
-                                                        <div key={i} className="text-xs text-muted-foreground flex items-center gap-1">
-                                                          <div className="w-3 h-3 rounded-full border border-muted-foreground"></div>
-                                                          {opt}
-                                                        </div>
-                                                      ))}
+                                          {/* Show conditional sub-questions for this main question */}
+                                          {step.questions && step.questions.filter(q => (q.conditionalLevel || 0) > 0).length > 0 && (
+                                            <div className="ml-6 mt-3 pl-4 border-l-2 border-blue-300 space-y-2 relative">
+                                              {/* Connection line */}
+                                              <div className="absolute -left-4 top-0 w-3 h-3 bg-blue-400 rounded-full" />
+                                              
+                                              {step.questions
+                                                .filter(q => (q.conditionalLevel || 0) > 0)
+                                                .map((subQ, subIdx) => (
+                                                  <div key={subQ.id} className="bg-blue-50 dark:bg-blue-950 p-3 rounded border border-blue-200">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                      <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
+                                                        <GitBranch className="h-3 w-3 mr-1" />
+                                                        Conditional
+                                                      </Badge>
                                                     </div>
-                                                  )}
-                                                </div>
-                                              ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
+                                                    <p className="text-sm font-medium">{subQ.questionText}</p>
+                                                    {subQ.options && (
+                                                      <div className="mt-2 space-y-1">
+                                                        {subQ.options.map((opt, i) => (
+                                                          <div key={i} className="text-xs text-muted-foreground flex items-center gap-1">
+                                                            <div className="w-3 h-3 rounded-full border border-muted-foreground"></div>
+                                                            {opt}
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
                                   </div>
                                 )}
                                 {step.stepType === "info" && (
@@ -1018,6 +992,106 @@ export default function TemplateEditor() {
           </div>
         </main>
       </div>
+
+      {/* Conditional Logic Modal */}
+      {showConditionalModal && selectedQuestionForConditional && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-2xl mb-2">Question Rules</CardTitle>
+                  <CardDescription>
+                    Create rules for when to display this question. All rules must match in order for this questions to show up.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowConditionalModal(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              {/* Rule Builder */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-2xl font-medium text-muted-foreground">1.</span>
+                  
+                  {/* Parent Question Display (read-only) */}
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="px-3 py-2 border rounded-md bg-muted text-sm">
+                      {selectedQuestionForConditional.questionText}
+                    </div>
+                  </div>
+
+                  <span className="text-sm font-medium text-muted-foreground">is</span>
+
+                  {/* Answer Option Selector */}
+                  <div className="flex-1 min-w-[150px]">
+                    <select
+                      value={newConditionalRule.triggerOption}
+                      onChange={(e) => setNewConditionalRule({...newConditionalRule, triggerOption: e.target.value})}
+                      className="w-full px-3 py-2 border rounded-md bg-background"
+                    >
+                      {selectedQuestionForConditional.options.map((option, idx) => (
+                        <option key={idx} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Follow-up Question Input */}
+                <div className="pl-12">
+                  <label className="text-sm font-medium block mb-2">
+                    Then show this follow-up question:
+                  </label>
+                  <input
+                    type="text"
+                    value={newConditionalRule.followUpQuestion}
+                    onChange={(e) => setNewConditionalRule({...newConditionalRule, followUpQuestion: e.target.value})}
+                    placeholder="e.g., Please provide more details about your condition..."
+                    className="w-full px-3 py-2 border rounded-md bg-background"
+                  />
+                </div>
+
+                {/* Visual indicator of conditional connection */}
+                {newConditionalRule.triggerOption && newConditionalRule.followUpQuestion && (
+                  <div className="pl-12 text-sm bg-blue-50 dark:bg-blue-950 p-4 rounded-md border border-blue-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <GitBranch className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium text-blue-800 dark:text-blue-300">Conditional Flow Preview:</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      When user selects "<span className="font-semibold text-blue-900 dark:text-blue-200">{newConditionalRule.triggerOption}</span>", 
+                      the question "<span className="font-semibold text-blue-900 dark:text-blue-200">{newConditionalRule.followUpQuestion}</span>" will appear.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 justify-end pt-4 border-t">
+                <Button variant="outline" onClick={() => setShowConditionalModal(false)}>
+                  Close
+                </Button>
+                <Button 
+                  onClick={handleAddConditionalRule}
+                  disabled={!newConditionalRule.triggerOption || !newConditionalRule.followUpQuestion}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Conditional Question
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
