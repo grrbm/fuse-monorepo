@@ -6123,7 +6123,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { businessName, phone, address, city, state, zipCode, website, isCustomDomain, customDomain } = req.body;
+    const { businessName, phone, address, city, state, zipCode, website, isCustomDomain, customDomain } = validation.data;
 
     const user = await User.findByPk(currentUser.id);
     if (!user) {
@@ -6145,19 +6145,19 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       const clinic = await Clinic.findByPk(user.clinicId);
       if (clinic) {
         const updateData: any = {};
-        
+
         if (businessName) {
           updateData.name = businessName;
         }
-        
+
         if (isCustomDomain !== undefined) {
           updateData.isCustomDomain = isCustomDomain;
         }
-        
+
         if (customDomain !== undefined) {
           updateData.customDomain = customDomain;
         }
-        
+
         await clinic.update(updateData);
       }
     }
@@ -6178,7 +6178,7 @@ app.post("/organization/verify-domain", authenticateJWT, async (req, res) => {
     }
 
     const { customDomain } = req.body;
-    
+
     if (!customDomain) {
       return res.status(400).json({ success: false, message: "Custom domain is required" });
     }
@@ -6197,10 +6197,10 @@ app.post("/organization/verify-domain", authenticateJWT, async (req, res) => {
     try {
       // Try to get CNAME records for the custom domain
       const cnameRecords = await dns.resolveCname(customDomain);
-      
+
       if (cnameRecords && cnameRecords.length > 0) {
         const actualCname = cnameRecords[0];
-        
+
         // Check if CNAME points to the correct subdomain
         if (actualCname === expectedCname || actualCname === `${expectedCname}.`) {
           return res.json({
@@ -6233,7 +6233,7 @@ app.post("/organization/verify-domain", authenticateJWT, async (req, res) => {
     } catch (dnsError: any) {
       // DNS lookup failed - domain doesn't exist or no CNAME configured
       console.log('DNS lookup error:', dnsError.code);
-      
+
       if (dnsError.code === 'ENODATA' || dnsError.code === 'ENOTFOUND') {
         return res.json({
           success: true,
@@ -6243,7 +6243,7 @@ app.post("/organization/verify-domain", authenticateJWT, async (req, res) => {
           error: "NO_CNAME"
         });
       }
-      
+
       return res.json({
         success: true,
         verified: false,
@@ -6264,9 +6264,9 @@ app.post("/clinic/by-custom-domain", async (req, res) => {
     const { domain } = req.body;
     console.log('clinic/by-custom-domain Edu', domain);
     if (!domain) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Domain is required" 
+      return res.status(400).json({
+        success: false,
+        message: "Domain is required"
       });
     }
 
@@ -6284,9 +6284,9 @@ app.post("/clinic/by-custom-domain", async (req, res) => {
 
     // Search for clinic with matching customDomain
     const clinic = await Clinic.findOne({
-      where: { 
+      where: {
         customDomain: baseDomain,
-        isCustomDomain: true 
+        isCustomDomain: true
       },
       attributes: ['id', 'slug', 'name', 'logo', 'customDomain']
     });
@@ -6315,9 +6315,9 @@ app.post("/clinic/by-custom-domain", async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error finding clinic by custom domain:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 });
@@ -7137,14 +7137,29 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
 
     console.log('Public: get product form by clinic slug + product slug Edu', clinicSlug, slug);
     // First try legacy enablement via TenantProduct (selected products)
+    // First try legacy enablement via TenantProduct (selected products)
     const tenantProduct = await TenantProduct.findOne({
-      where: { clinicId: clinic.id, productId: slug },
+      where: { clinicId: clinic.id },
       include: [
         {
           model: Product,
+          required: true,
+          where: { slug },
         },
         {
           model: Questionnaire,
+          required: false,
+          include: [
+            {
+              model: QuestionnaireStep,
+              include: [
+                {
+                  model: Question,
+                  include: [QuestionOption],
+                },
+              ],
+            },
+          ],
         },
       ],
     });

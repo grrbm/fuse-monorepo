@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             clinicSlug = parts.length > 1 ? parts[0] : null
         } else {
             // Expect host like "limitless.health.localhost:3000"
-            const parts = hostname.split('.health.localhost')
+            const parts = hostname.split('.localhost')
             clinicSlug = parts.length > 1 ? parts[0] : null
         }
 

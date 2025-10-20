@@ -8,4 +8,6 @@ export const organizationUpdateSchema = z.object({
   state: z.string().optional(),
   zipCode: z.string().regex(/^\d{5}(-\d{4})?$/, 'Invalid zip code format').optional(),
   website: z.string().optional(),
+  isCustomDomain: z.boolean().optional(),
+  customDomain: z.string().optional(),
 });
