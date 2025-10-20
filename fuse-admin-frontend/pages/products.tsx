@@ -70,7 +70,7 @@ export default function Products() {
     const [editingPrices, setEditingPrices] = useState<Map<string, string>>(new Map())
     const [savingPrices, setSavingPrices] = useState(false)
     const [showSaved, setShowSaved] = useState(false)
-    const { user, token, authenticatedFetch } = useAuth()
+    const { user, token } = useAuth()
     const router = useRouter()
 
     const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
