@@ -5208,7 +5208,7 @@ app.post("/questions", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = validation.data;
+    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, conditionalLogic, conditionalLevel, subQuestionOrder, parentQuestionId, options } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -5216,7 +5216,7 @@ app.post("/questions", authenticateJWT, async (req, res) => {
     // Create question
     const newQuestion = await questionService.createQuestion(
       stepId,
-      { questionText, answerType, isRequired, placeholder, helpText, footerNote, options },
+      { questionText, answerType, isRequired, placeholder, helpText, footerNote, conditionalLogic, conditionalLevel, subQuestionOrder, parentQuestionId, options },
       currentUser.id
     );
 

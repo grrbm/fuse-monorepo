@@ -1999,6 +1999,29 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               if (!conditionalLogic) return true;
 
                               try {
+                                // Support new format: "answer_equals:optionValue"
+                                if (conditionalLogic.startsWith('answer_equals:')) {
+                                  const requiredAnswer = conditionalLogic.replace('answer_equals:', '');
+                                  
+                                  // Find the parent question (conditionalLevel 0) in this step
+                                  const parentQuestion = currentStep.questions?.find(q => 
+                                    (q as any).conditionalLevel === 0 || !(q as any).conditionalLevel
+                                  );
+                                  
+                                  if (parentQuestion) {
+                                    const parentAnswer = answers[parentQuestion.id];
+                                    
+                                    // Handle array answers (for checkboxes/multiple choice)
+                                    if (Array.isArray(parentAnswer)) {
+                                      return parentAnswer.includes(requiredAnswer);
+                                    }
+                                    
+                                    return parentAnswer === requiredAnswer;
+                                  }
+                                  return false;
+                                }
+
+                                // Support old format: "question:2,answer:yes"
                                 const parts = conditionalLogic.split(',');
                                 const targetQuestionOrder = parseInt(parts[0].split(':')[1]);
                                 const answerPart = parts.slice(1).join(',');

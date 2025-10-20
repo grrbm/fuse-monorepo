@@ -36,6 +36,7 @@ interface QuestionEditorProps {
     baseUrl: string
     onQuestionSaved: (question: QuestionnaireQuestionTemplate) => void
     restrictStructuralEdits?: boolean
+    autoEdit?: boolean
 }
 
 export function QuestionEditor({
@@ -44,10 +45,11 @@ export function QuestionEditor({
     token,
     baseUrl,
     onQuestionSaved,
-    restrictStructuralEdits = false
+    restrictStructuralEdits = false,
+    autoEdit = false
 }: QuestionEditorProps) {
     const editable = Boolean(token)
-    const [isEditing, setIsEditing] = useState(false)
+    const [isEditing, setIsEditing] = useState(autoEdit)
     const [questionText, setQuestionText] = useState(question.questionText)
     const [answerType, setAnswerType] = useState<string>(question.answerType || 'radio')
     const [helpText, setHelpText] = useState(question.helpText || '')
@@ -62,6 +64,12 @@ export function QuestionEditor({
     )
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (autoEdit) {
+            setIsEditing(true)
+        }
+    }, [autoEdit])
 
     useEffect(() => {
         if (!isEditing) {
@@ -241,30 +249,10 @@ export function QuestionEditor({
                             <p className="text-xs text-muted-foreground italic">{question.helpText}</p>
                         )
                     )}
-                    {!restrictStructuralEdits ? (
-                        <div className="text-xs tracking-wide text-muted-foreground flex items-center gap-2">
-                            <span className="uppercase">Type:</span>
-                            {isEditing ? (
-                                <select
-                                    className="border border-input bg-background rounded px-2 py-1 text-xs"
-                                    value={answerType}
-                                    onChange={(e) => setAnswerType(e.target.value)}
-                                >
-                                    <option value="radio">radio</option>
-                                    <option value="select">select</option>
-                                </select>
-                            ) : (
-                                <span className="font-medium text-foreground">{question.answerType || 'radio'}</span>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                            Type: {question.answerType || 'radio'}
-                        </div>
-                    )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                {!autoEdit && (
+                  <div className="flex items-center gap-2">
                     {editable && (
                         <div className="flex items-center gap-2">
                             {isEditing ? (
@@ -300,7 +288,8 @@ export function QuestionEditor({
                             )}
                         </div>
                     )}
-                </div>
+                  </div>
+                )}
             </div>
 
             {error && (

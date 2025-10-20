@@ -14,9 +14,10 @@ interface Step {
   title: string
   description: string
   stepOrder: number
-  category: "normal" | "info"
+  category: "normal" | "info" | "user_profile"
   stepType: "question" | "info"
   questions?: Question[]
+  conditionalQuestions?: ConditionalQuestion[]
 }
 
 interface Question {
@@ -24,6 +25,18 @@ interface Question {
   type: "single-choice" | "multi-choice" | "text" | "textarea"
   questionText: string
   required: boolean
+  options?: string[]
+  conditionalLevel?: number
+  subQuestionOrder?: number
+}
+
+interface ConditionalQuestion {
+  id: string
+  questionText: string
+  conditionalLogic: string
+  triggerOptionValue: string
+  conditionalLevel: number
+  subQuestionOrder: number
   options?: string[]
 }
 
@@ -46,6 +59,16 @@ export default function TemplateEditor() {
   const [showVariables, setShowVariables] = useState(false)
   const [draggedStepId, setDraggedStepId] = useState<string | null>(null)
   const [copiedVariable, setCopiedVariable] = useState<string | null>(null)
+  const [addingConditionalFor, setAddingConditionalFor] = useState<{stepId: string, questionId: string, parentQuestion: Question} | null>(null)
+  const [conditionalConfig, setConditionalConfig] = useState<{
+    triggerOption: string
+    questionText: string
+    options: string[]
+  }>({
+    triggerOption: '',
+    questionText: '',
+    options: ['Yes', 'No']
+  })
 
   useEffect(() => {
     if (!token) return
@@ -77,7 +100,7 @@ export default function TemplateEditor() {
           title: String(s.title || ''),
           description: String(s.description || ''),
           stepOrder: Number(s.stepOrder || 0),
-          category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info',
+          category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
           stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
           questions: (s.questions || []).map((q: any) => ({
             id: String(q.id),
@@ -85,6 +108,8 @@ export default function TemplateEditor() {
             questionText: String(q.questionText || ''),
             required: Boolean(q.isRequired),
             options: (q.options || []).map((o: any) => String(o.optionText || '')),
+            conditionalLevel: Number(q.conditionalLevel || 0),
+            subQuestionOrder: Number(q.subQuestionOrder || 0)
           })),
         })) as Step[]
         setSteps(loadedSteps)
@@ -321,6 +346,75 @@ export default function TemplateEditor() {
     }
   }
 
+  const handleAddConditionalQuestion = async () => {
+    if (!addingConditionalFor || !token || !templateId) return
+    if (!conditionalConfig.triggerOption || !conditionalConfig.questionText) {
+      alert('Please select a trigger option and enter a question')
+      return
+    }
+
+    try {
+      // Create the conditional question
+      const res = await fetch(`${baseUrl}/questions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          stepId: addingConditionalFor.stepId,
+          questionText: conditionalConfig.questionText,
+          answerType: 'radio',
+          isRequired: true,
+          conditionalLogic: `answer_equals:${conditionalConfig.triggerOption}`,
+          conditionalLevel: 1,
+          parentQuestionId: addingConditionalFor.questionId,
+          options: conditionalConfig.options.map((text, idx) => ({
+            optionText: text,
+            optionValue: text.toLowerCase().replace(/\s+/g, '_'),
+            optionOrder: idx + 1
+          }))
+        })
+      })
+
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create conditional question')
+
+      // Reload template to show the new conditional question
+      const refRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const refData = await refRes.json()
+      setTemplate(refData.data)
+      
+      const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
+        id: String(s.id),
+        title: String(s.title || ''),
+        description: String(s.description || ''),
+        stepOrder: Number(s.stepOrder || 0),
+        category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info' | 'user_profile',
+        stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        questions: (s.questions || []).map((q: any) => ({
+          id: String(q.id),
+          type: 'single-choice',
+          questionText: String(q.questionText || ''),
+          required: Boolean(q.isRequired),
+          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          conditionalLevel: Number(q.conditionalLevel || 0),
+          subQuestionOrder: Number(q.subQuestionOrder || 0)
+        })),
+      })) as Step[]
+      setSteps(loadedSteps)
+
+      // Reset form and close dialog
+      setAddingConditionalFor(null)
+      setConditionalConfig({
+        triggerOption: '',
+        questionText: '',
+        options: ['Yes', 'No']
+      })
+    } catch (e: any) {
+      console.error('❌ Failed to add conditional question', e)
+      alert(e.message || 'Failed to add conditional question')
+    }
+  }
+
   const handleSave = async () => {
     if (!template || saving) return
 
@@ -412,31 +506,132 @@ export default function TemplateEditor() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Header */}
-          <div className="flex items-start justify-between">
-            <div>
-              <Button variant="ghost" size="sm" onClick={handleBack} className="mb-3">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Forms
-              </Button>
-              <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-semibold text-foreground">{template.title}</h1>
-                {template.category && (
-                  <Badge variant="outline">{template.category}</Badge>
-                )}
+          {/* Back Button */}
+          <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+
+          {/* Header Section */}
+          <div className="border-b pb-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left: Title and Description */}
+              <div>
+                <h1 className="text-3xl font-semibold mb-3">Intake Form</h1>
+                <p className="text-muted-foreground text-sm">
+                  {template.description || "Generate a voucher to start using this intake form for patient sign up."}
+                </p>
               </div>
-              {template.description && (
-                <p className="text-muted-foreground mt-2">{template.description}</p>
-              )}
+              
+              {/* Right: Metadata Grid */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Name</p>
+                    <p className="font-medium text-foreground">{template.title}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Status</p>
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+                      Ready
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">ID</p>
+                    <p className="font-mono text-xs text-foreground break-all">{template.id}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Created At</p>
+                    <p className="text-sm text-foreground">
+                      {new Date(template.createdAt).toLocaleDateString('en-US', { 
+                        month: '2-digit', 
+                        day: '2-digit', 
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Action Buttons */}
+                <div className="flex gap-3">
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Manage"
+                    )}
+                  </Button>
+                  <Button variant="outline">
+                    Add Voucher
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              {saveMessage && (
-                <span className="text-sm text-muted-foreground">{saveMessage}</span>
-              )}
-              {productCategory === 'weight_loss' && (
-                <Button
-                  variant="outline"
-                  onClick={async () => {
+          </div>
+
+          {/* Main Content - Two Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Left Column - Add Step Controls */}
+            <div className="lg:col-span-1 space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Add New Step</CardTitle>
+                  <CardDescription>Create a new question or info step</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button 
+                    onClick={() => handleAddStep("question")} 
+                    className="w-full justify-start"
+                    variant="outline"
+                    disabled={isAccountTemplate}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Question Step
+                  </Button>
+                  
+                  <Button 
+                    onClick={() => handleAddStep("info")} 
+                    className="w-full justify-start"
+                    variant="outline"
+                    disabled={isAccountTemplate}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Information Step
+                  </Button>
+                  
+                  {isAccountTemplate && (
+                    <p className="text-xs text-muted-foreground text-center mt-3">
+                      Account templates cannot be modified
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Save Actions */}
+              <Card>
+                <CardContent className="pt-6 space-y-3">
+                  <Button onClick={handleSave} disabled={saving} className="w-full">
+                    {saving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
+                  {productCategory === 'weight_loss' && (
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
                     if (!token || !templateId) return
                     if (!confirm('This will delete all steps in this questionnaire and rebuild from the master doctor template. Continue?')) return
                     try {
@@ -501,76 +696,26 @@ export default function TemplateEditor() {
                     }
                   }}
                   disabled={rebuilding}
+                  className="w-full"
                 >
                   <RefreshCw className="mr-2 h-4 w-4" /> {rebuilding ? 'Rebuilding...' : 'Rebuild from Template'}
                 </Button>
               )}
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
-              </Button>
+                </CardContent>
+              </Card>
             </div>
-          </div>
 
-          {/* Add Step Buttons */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Add New Step</CardTitle>
-              <CardDescription>Choose the type of step you want to create</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="border-2 border-dashed hover:border-primary cursor-pointer transition-colors" onClick={() => handleAddStep("question")}>
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <MessageSquare className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">Question Step</CardTitle>
-                        <CardDescription className="text-xs">
-                          Question with multiple choice options
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </Card>
-                <Card className="border-2 border-dashed hover:border-primary cursor-pointer transition-colors" onClick={() => handleAddStep("info")}>
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                        <Info className="h-5 w-5 text-blue-500" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">Information Step</CardTitle>
-                        <CardDescription className="text-xs">
-                          Display information with continue button
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </Card>
+            {/* Right Column - Steps List */}
+            <div className="lg:col-span-3 space-y-6">
+              {/* Questions Section Header */}
+              <div>
+                <h2 className="text-2xl font-semibold mb-2">Questions</h2>
+                <p className="text-sm text-muted-foreground">
+                  These are the intake form questions. Some questions will be automatically added to every form when needed.
+                </p>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Steps List */}
-          {steps.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Template Steps ({steps.length})</CardTitle>
-                <CardDescription>Click on a step to edit its details</CardDescription>
-              </CardHeader>
-              <CardContent>
+              {steps.length > 0 ? (
                 <div className="space-y-4">
                   {steps.map((step, index) => (
                     <Card
@@ -585,117 +730,39 @@ export default function TemplateEditor() {
                       onDragOver={(e) => handleDragOver(e, step.id)}
                       onDragEnd={handleDragEnd}
                     >
-                      <CardHeader>
-                        <div className="flex items-start gap-3">
-                          <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab active:cursor-grabbing mt-1" />
+                      <CardHeader className="pb-4">
+                        <div className="flex items-start gap-4">
+                          {/* Icon */}
+                          <div className={`flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center ${
+                            step.stepType === "info" ? "bg-blue-100 dark:bg-blue-900" : "bg-gray-100 dark:bg-gray-800"
+                          }`}>
+                            {step.stepType === "info" ? (
+                              <Info className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                            ) : (
+                              <MessageSquare className="h-6 w-6 text-gray-600 dark:text-gray-400" />
+                            )}
+                          </div>
+                          
                           <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Badge variant="outline">Step {index + 1}</Badge>
-                              <Badge variant={step.stepType === "info" ? "secondary" : "default"}>
-                                {step.stepType === "info" ? (
-                                  <><Info className="mr-1 h-3 w-3" /> Info</>
-                                ) : (
-                                  <><MessageSquare className="mr-1 h-3 w-3" /> Question</>
-                                )}
-                              </Badge>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="text-xs">Step {index + 1}</Badge>
+                              {step.category === 'user_profile' && (
+                                <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800">
+                                  Auto-added
+                                </Badge>
+                              )}
                             </div>
                             {editingStepId === step.id ? (
                               <div className="space-y-4">
-                                {/* Title Input */}
-                                <div>
-                                  <div className="flex items-center justify-between mb-1">
-                                    <label className="text-sm font-medium">Title</label>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => setShowVariables(!showVariables)}
-                                      className="h-7 text-xs"
-                                    >
-                                      <Code2 className="mr-1 h-3 w-3" />
-                                      Dynamic Variables
-                                      {showVariables ? (
-                                        <ChevronUp className="ml-1 h-3 w-3" />
-                                      ) : (
-                                        <ChevronDown className="ml-1 h-3 w-3" />
-                                      )}
-                                    </Button>
-                                  </div>
-                                  {showVariables && (
-                                    <div className="mb-2 p-2 bg-muted/50 rounded-md border text-xs space-y-1">
-                                      <div className="flex items-center gap-2">
-                                        <code
-                                          className="bg-background px-2 py-0.5 rounded border font-mono cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors relative group"
-                                          onClick={() => handleCopyVariable('{{companyName}}')}
-                                          title="Click to copy"
-                                        >
-                                          {`{{companyName}}`}
-                                          {copiedVariable === '{{companyName}}' && (
-                                            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs whitespace-nowrap">
-                                              Copied!
-                                            </span>
-                                          )}
-                                        </code>
-                                        <span className="text-muted-foreground">Your company name</span>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <code
-                                          className="bg-background px-2 py-0.5 rounded border font-mono cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors relative group"
-                                          onClick={() => handleCopyVariable('{{clinicName}}')}
-                                          title="Click to copy"
-                                        >
-                                          {`{{clinicName}}`}
-                                          {copiedVariable === '{{clinicName}}' && (
-                                            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs whitespace-nowrap">
-                                              Copied!
-                                            </span>
-                                          )}
-                                        </code>
-                                        <span className="text-muted-foreground">Your clinic name</span>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <code
-                                          className="bg-background px-2 py-0.5 rounded border font-mono cursor-pointer hover:bg-primary/10 hover:border-primary transition-colors relative group"
-                                          onClick={() => handleCopyVariable('{{patientName}}')}
-                                          title="Click to copy"
-                                        >
-                                          {`{{patientName}}`}
-                                          {copiedVariable === '{{patientName}}' && (
-                                            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground px-2 py-1 rounded text-xs whitespace-nowrap">
-                                              Copied!
-                                            </span>
-                                          )}
-                                        </code>
-                                        <span className="text-muted-foreground">Patient's first name</span>
-                                      </div>
-                                    </div>
-                                  )}
-                                  <input
-                                    type="text"
-                                    value={step.title}
-                                    onChange={(e) => handleUpdateStep(step.id, { title: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-md bg-background"
-                                    placeholder="e.g., What is your main goal with {{companyName}} medication?"
-                                  />
-                                </div>
-                                {/* Description Input */}
-                                <div>
-                                  <label className="text-sm font-medium mb-1 block">Description</label>
-                                  <textarea
-                                    value={step.description}
-                                    onChange={(e) => handleUpdateStep(step.id, { description: e.target.value })}
-                                    className="w-full px-3 py-2 border rounded-md bg-background min-h-[80px]"
-                                    placeholder="e.g., At {{companyName}}, we help patients achieve their goals."
-                                  />
-                                </div>
                                 {/* Question Options (only for question type) */}
                                 {step.stepType === "question" && (step.questions || []).map((q) => (
-                                  <div key={q.id} className="mt-3">
+                                  <div key={q.id} className="space-y-3">
                                     <QuestionEditor
                                       question={{
                                         id: q.id,
                                         stepId: step.id,
                                         questionText: q.questionText,
-                                        answerType: 'select',
+                                        answerType: 'radio',
                                         questionOrder: 1,
                                         isRequired: true,
                                         options: (q.options || []).map((text, idx) => ({ id: undefined as any, optionText: text, optionValue: text, optionOrder: idx + 1 } as any)),
@@ -704,6 +771,7 @@ export default function TemplateEditor() {
                                       token={token}
                                       baseUrl={baseUrl}
                                       restrictStructuralEdits={template?.formTemplateType === 'user_profile'}
+                                      autoEdit={true}
                                       onQuestionSaved={(updated) => {
                                         setSteps((prev) => prev.map((s) => s.id === step.id ? {
                                           ...s,
@@ -713,80 +781,241 @@ export default function TemplateEditor() {
                                             options: (updated.options || []).map((o: any) => o.optionText),
                                           } : oldQ)
                                         } : s))
+                                        setEditingStepId(null)
                                       }}
                                     />
+                                    
+                                    {/* Add Conditional Logic Section */}
+                                    {!addingConditionalFor && q.options && q.options.length > 0 && (
+                                      <div className="mt-4 pt-4 border-t">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setAddingConditionalFor({
+                                              stepId: step.id,
+                                              questionId: q.id,
+                                              parentQuestion: q
+                                            })
+                                            setConditionalConfig({
+                                              triggerOption: q.options?.[0] || '',
+                                              questionText: '',
+                                              options: ['Yes', 'No']
+                                            })
+                                          }}
+                                          className="w-full"
+                                        >
+                                          <Plus className="mr-2 h-4 w-4" />
+                                          Add Conditional Logic
+                                        </Button>
+                                      </div>
+                                    )}
+
+                                    {/* Conditional Logic Builder */}
+                                    {addingConditionalFor && addingConditionalFor.questionId === q.id && (
+                                      <div className="mt-4 pt-4 border-t space-y-4 bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
+                                        <div>
+                                          <h4 className="text-sm font-medium mb-3">Add Follow-up Question</h4>
+                                          <p className="text-xs text-muted-foreground mb-3">
+                                            This question will appear only when a specific option is selected
+                                          </p>
+                                        </div>
+
+                                        {/* Trigger Option Selector */}
+                                        <div>
+                                          <label className="text-sm font-medium block mb-2">
+                                            Show this question when answer is:
+                                          </label>
+                                          <select
+                                            value={conditionalConfig.triggerOption}
+                                            onChange={(e) => setConditionalConfig({...conditionalConfig, triggerOption: e.target.value})}
+                                            className="w-full px-3 py-2 border rounded-md bg-background"
+                                          >
+                                            {addingConditionalFor.parentQuestion.options?.map((opt, idx) => (
+                                              <option key={idx} value={opt}>{opt}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+
+                                        {/* Follow-up Question Text */}
+                                        <div>
+                                          <label className="text-sm font-medium block mb-2">
+                                            Follow-up question:
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={conditionalConfig.questionText}
+                                            onChange={(e) => setConditionalConfig({...conditionalConfig, questionText: e.target.value})}
+                                            placeholder="e.g., Please provide more details..."
+                                            className="w-full px-3 py-2 border rounded-md bg-background"
+                                          />
+                                        </div>
+
+                                        {/* Action Buttons */}
+                                        <div className="flex gap-2">
+                                          <Button
+                                            size="sm"
+                                            onClick={handleAddConditionalQuestion}
+                                          >
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Add Follow-up Question
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                              setAddingConditionalFor(null)
+                                              setConditionalConfig({
+                                                triggerOption: '',
+                                                questionText: '',
+                                                options: ['Yes', 'No']
+                                              })
+                                            }}
+                                          >
+                                            Cancel
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Auto-edit mode buttons */}
+                                    <div className="flex gap-2 justify-end pt-3 border-t mt-4">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setEditingStepId(null)}
+                                      >
+                                        Done Editing
+                                      </Button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
                             ) : (
                               <div>
-                                <h3 className="font-semibold text-lg mb-1">{step.title}</h3>
-                                <p className="text-sm text-muted-foreground">{step.description}</p>
-                                {step.stepType === "question" && step.questions?.[0]?.options && (
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    {step.questions[0].options.map((option, i) => (
-                                      <Badge key={i} variant="secondary">{option}</Badge>
+                                {step.stepType === "question" && step.questions && step.questions.length > 0 && (
+                                  <div className="space-y-4">
+                                    {/* Main question */}
+                                    {step.questions.filter(q => q.conditionalLevel === 0 || !q.conditionalLevel).map((mainQ, mainIdx) => (
+                                      <div key={mainQ.id}>
+                                        <p className="font-medium text-base mb-3">{mainQ.questionText}</p>
+                                        {mainQ.options && mainQ.options.length > 0 && (
+                                          <div className="space-y-2">
+                                            {mainQ.options.map((option, i) => (
+                                              <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                <div className="w-4 h-4 rounded-full border-2 border-muted-foreground"></div>
+                                                {option}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        
+                                        {/* Show conditional sub-questions for this main question */}
+                                        {step.questions && step.questions.filter(q => (q.conditionalLevel || 0) > 0).length > 0 && (
+                                          <div className="ml-6 mt-3 pl-4 border-l-2 border-blue-300 space-y-2">
+                                            {step.questions
+                                              .filter(q => (q.conditionalLevel || 0) > 0)
+                                              .map((subQ, subIdx) => (
+                                                <div key={subQ.id} className="bg-blue-50 dark:bg-blue-950 p-3 rounded">
+                                                  <Badge variant="outline" className="text-xs mb-2">Conditional</Badge>
+                                                  <p className="text-sm font-medium">{subQ.questionText}</p>
+                                                  {subQ.options && (
+                                                    <div className="mt-2 space-y-1">
+                                                      {subQ.options.map((opt, i) => (
+                                                        <div key={i} className="text-xs text-muted-foreground flex items-center gap-1">
+                                                          <div className="w-3 h-3 rounded-full border border-muted-foreground"></div>
+                                                          {opt}
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ))}
+                                          </div>
+                                        )}
+                                      </div>
                                     ))}
+                                  </div>
+                                )}
+                                {step.stepType === "info" && (
+                                  <div>
+                                    <p className="font-medium text-base mb-1">{step.title}</p>
+                                    <p className="text-sm text-muted-foreground">{step.description}</p>
                                   </div>
                                 )}
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
+                          
+                          {/* Action Icons */}
+                          <div className="flex items-start gap-1 flex-shrink-0">
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8"
                               onClick={() => setEditingStepId(editingStepId === step.id ? null : step.id)}
+                              title="Edit step"
                             >
-                              <Edit className="h-4 w-4" />
+                              <Edit className="h-4 w-4 text-primary" />
                             </Button>
                             {!isAccountTemplate && (
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                 onClick={() => handleDeleteStep(step.id)}
-                                className="text-destructive hover:text-destructive"
+                                title="Delete step"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             )}
+                            <div 
+                              className="h-8 w-8 flex items-center justify-center cursor-grab active:cursor-grabbing"
+                              title="Drag to reorder"
+                            >
+                              <GripVertical className="h-5 w-5 text-muted-foreground" />
+                            </div>
                           </div>
                         </div>
                       </CardHeader>
                     </Card>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              ) : (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Info className="h-12 w-12 text-muted-foreground mb-3" />
+                    <p className="text-muted-foreground mb-2 text-center">No steps added yet</p>
+                    <p className="text-sm text-muted-foreground text-center">
+                      Use the "Add New Step" panel on the left to get started.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
 
-          {steps.length === 0 && (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <p className="text-muted-foreground mb-4">No steps added yet. Choose a step type above to get started.</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Help Card */}
-          <Card className="border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950">
-            <CardHeader>
-              <CardTitle className="text-base">🌐 Global Template - All Tenants</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm space-y-2">
-              <p>
-                <strong>This is a master template used by ALL tenants across the entire platform.</strong>
-              </p>
-              <p>
-                {template.category
-                  ? `All ${template.category} products from every tenant will use these questions.`
-                  : 'All products from every tenant will use these questions.'}
-              </p>
-              <p className="text-purple-700 dark:text-purple-300 font-medium">
-                ⚠️ Changes here affect all tenants instantly. Use dynamic variables like {`{{companyName}}`} for personalization.
-              </p>
-            </CardContent>
-          </Card>
+              {/* Help Card */}
+              {template.formTemplateType === 'master_template' && (
+                <Card className="border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950">
+                  <CardHeader>
+                    <CardTitle className="text-base">🌐 Global Template - All Tenants</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm space-y-2">
+                    <p>
+                      <strong>This is a master template used by ALL tenants across the entire platform.</strong>
+                    </p>
+                    <p>
+                      {template.category
+                        ? `All ${template.category} products from every tenant will use these questions.`
+                        : 'All products from every tenant will use these questions.'}
+                    </p>
+                    <p className="text-purple-700 dark:text-purple-300 font-medium">
+                      ⚠️ Changes here affect all tenants instantly. Use dynamic variables like {`{{companyName}}`} for personalization.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
         </main>
       </div>
     </div>

@@ -12,6 +12,10 @@ export const questionCreateSchema = z.object({
   placeholder: z.string().optional(),
   helpText: z.string().optional(),
   footerNote: z.string().optional(),
+  conditionalLogic: z.string().optional(),
+  conditionalLevel: z.number().int().nonnegative().optional().default(0),
+  subQuestionOrder: z.number().int().nonnegative().optional(),
+  parentQuestionId: z.string().uuid().optional(),
   options: z.array(z.object({
     optionText: z.string().min(1, 'Option text is required'),
     optionValue: z.string().optional(),
@@ -26,6 +30,10 @@ export const questionUpdateSchema = z.object({
   placeholder: z.string().optional(),
   helpText: z.string().optional(),
   footerNote: z.string().optional(),
+  conditionalLogic: z.string().optional(),
+  conditionalLevel: z.number().int().nonnegative().optional(),
+  subQuestionOrder: z.number().int().nonnegative().optional(),
+  parentQuestionId: z.string().uuid().optional(),
   options: z.array(z.object({
     id: z.string().uuid('Invalid option ID').optional(),
     optionText: z.string().min(1, 'Option text is required'),
