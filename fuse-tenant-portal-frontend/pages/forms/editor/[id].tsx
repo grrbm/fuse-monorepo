@@ -127,6 +127,26 @@ export default function TemplateEditor() {
     router.push("/forms?tab=templates")
   }
 
+  const getFormStatus = () => {
+    if (template?.publishedAt) return "Ready"
+    if (steps.length > 0) return "In Progress"
+    return "Pending"
+  }
+
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return 'N/A'
+    }
+  }
+
   const handleAddStep = async (stepType: "question" | "info") => {
     if (isAccountTemplate) return
     if (!token || !templateId) return
@@ -412,23 +432,38 @@ export default function TemplateEditor() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Header */}
-          <div className="flex items-start justify-between">
-            <div>
-              <Button variant="ghost" size="sm" onClick={handleBack} className="mb-3">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Forms
-              </Button>
-              <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-semibold text-foreground">{template.title}</h1>
-                {template.category && (
-                  <Badge variant="outline">{template.category}</Badge>
-                )}
-              </div>
-              {template.description && (
-                <p className="text-muted-foreground mt-2">{template.description}</p>
-              )}
-            </div>
+          {/* Back Button */}
+          <Button variant="ghost" size="sm" onClick={handleBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Forms
+          </Button>
+
+          {/* Header Info Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="space-y-4 flex-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">Name</div>
+                      <div className="text-lg font-semibold">{template.title}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">ID</div>
+                      <div className="text-sm font-mono text-foreground break-all">{templateId}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">Status</div>
+                      <Badge variant={getFormStatus() === "Ready" ? "default" : "secondary"}>
+                        {getFormStatus()}
+                      </Badge>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-1">Created At</div>
+                      <div className="text-sm text-foreground">{formatDate(template.createdAt || new Date().toISOString())}</div>
+                    </div>
+                  </div>
+                </div>
             <div className="flex items-center gap-3">
               {saveMessage && (
                 <span className="text-sm text-muted-foreground">{saveMessage}</span>
@@ -519,58 +554,47 @@ export default function TemplateEditor() {
                 )}
               </Button>
             </div>
-          </div>
-
-          {/* Add Step Buttons */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Add New Step</CardTitle>
-              <CardDescription>Choose the type of step you want to create</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="border-2 border-dashed hover:border-primary cursor-pointer transition-colors" onClick={() => handleAddStep("question")}>
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <MessageSquare className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">Question Step</CardTitle>
-                        <CardDescription className="text-xs">
-                          Question with multiple choice options
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </Card>
-                <Card className="border-2 border-dashed hover:border-primary cursor-pointer transition-colors" onClick={() => handleAddStep("info")}>
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                        <Info className="h-5 w-5 text-blue-500" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">Information Step</CardTitle>
-                        <CardDescription className="text-xs">
-                          Display information with continue button
-                        </CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                </Card>
               </div>
-            </CardContent>
+            </CardHeader>
           </Card>
 
-          {/* Steps List */}
-          {steps.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Template Steps ({steps.length})</CardTitle>
-                <CardDescription>Click on a step to edit its details</CardDescription>
-              </CardHeader>
-              <CardContent>
+          {/* Step Management Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Form Steps {steps.length > 0 && `(${steps.length})`}</CardTitle>
+                  <CardDescription>Manage the steps in your intake form</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const stepType = e.target.value as "question" | "info"
+                      if (stepType) {
+                        handleAddStep(stepType)
+                        e.target.value = "" // Reset selection
+                      }
+                    }}
+                  >
+                    <option value="" disabled>Select step type to add...</option>
+                    <option value="question">➕ Question Step</option>
+                    <option value="info">➕ Information Step</option>
+                  </select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {steps.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
+                  <Info className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-medium mb-1">No steps added yet</p>
+                  <p className="text-sm">Select a step type above to get started building your form</p>
+                </div>
+              )}
+              
+              {steps.length > 0 && (
                 <div className="space-y-4">
                   {steps.map((step, index) => (
                     <Card
@@ -756,17 +780,9 @@ export default function TemplateEditor() {
                     </Card>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {steps.length === 0 && (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <p className="text-muted-foreground mb-4">No steps added yet. Choose a step type above to get started.</p>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
 
           {/* Help Card */}
           <Card className="border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950">
