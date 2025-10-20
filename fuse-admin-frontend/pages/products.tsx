@@ -66,19 +66,11 @@ export default function Products() {
     const [, setAssignments] = useState<Array<{ productId: string; questionnaireId: string }>>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [runTutorial, setRunTutorial] = useState(() => {
-        // Check if tutorial has been completed before
-        if (typeof window !== 'undefined') {
-            const tutorialCompleted = localStorage.getItem('tutorialCompleted');
-            return tutorialCompleted !== 'true';
-        }
-        return false;
-    })
     const [quickEditMode, setQuickEditMode] = useState(false)
     const [editingPrices, setEditingPrices] = useState<Map<string, string>>(new Map())
     const [savingPrices, setSavingPrices] = useState(false)
     const [showSaved, setShowSaved] = useState(false)
-    const { user, token } = useAuth()
+    const { user, token, authenticatedFetch } = useAuth()
     const router = useRouter()
 
     const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
@@ -502,7 +494,6 @@ export default function Products() {
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
             </Head>
-            <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} />
             <div className="min-h-screen bg-gray-50" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="max-w-7xl mx-auto px-6 py-8">
                     {/* Header */}
@@ -590,12 +581,14 @@ export default function Products() {
                     <div className="mb-6 border-b border-gray-200">
                         <div className="flex gap-8">
                             <button
+                                id="my-products-btn"
                                 className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'my' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                                 onClick={() => setActiveTab('my')}
                             >
                                 My Products
                             </button>
                             <button
+                                id="select-products-btn"
                                 className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'select' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                                 onClick={() => setActiveTab('select')}
                             >
@@ -714,7 +707,7 @@ export default function Products() {
                     {/* Products List */}
                     {displayedProducts.length > 0 ? (
                         <>
-                            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden product-card">
                                 {displayedProducts.map((product, index) => {
                                     const isEnabled = enabledProductIds.has(product.id)
                                     return (
@@ -840,7 +833,7 @@ export default function Products() {
                                                                 e.stopPropagation();
                                                                 handleEnableProduct(product.id);
                                                             }}
-                                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                                            className="bg-green-600 hover:bg-green-700 text-white enable-product-btn"
                                                         >
                                                             Activate
                                                         </Button>
