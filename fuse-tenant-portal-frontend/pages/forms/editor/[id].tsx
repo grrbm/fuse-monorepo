@@ -707,8 +707,8 @@ export default function TemplateEditor() {
     }
     if (editingConditionalStep.rules.length === 0) {
       alert('Please add at least one rule')
-          return
-        }
+      return
+    }
 
     try {
       // Validate: all rules must reference the same parent question (for now)
@@ -756,9 +756,9 @@ export default function TemplateEditor() {
             
             // Update question to move to new step and change conditionalLevel
             const res = await fetch(`${baseUrl}/questions/${editingConditionalStep.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
                 stepId: newStepId,
                 conditionalLevel: 0,
                 parentQuestionId: null,
@@ -805,7 +805,7 @@ export default function TemplateEditor() {
             
             // TODO: Delete the now-empty step if it has no other questions
           }
-        } else {
+      } else {
           // No placement change, just update the question
           const updatePayload: any = {
             questionText: editingConditionalStep.text,
@@ -842,7 +842,7 @@ export default function TemplateEditor() {
         // If placement is 'new-step', create a new step first
         if (editingConditionalStep.placement === 'new-step') {
           const stepRes = await fetch(`${baseUrl}/questionnaires/step`, {
-            method: 'POST',
+          method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ questionnaireId: templateId }),
           })
@@ -857,8 +857,8 @@ export default function TemplateEditor() {
           // Update the new step's title to be descriptive
           await fetch(`${baseUrl}/questionnaires/step`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ 
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
               stepId: targetStepId, 
               title: editingConditionalStep.text.substring(0, 50), // Use question text as step title
               description: 'Conditional step - shows when rules match'
@@ -871,9 +871,17 @@ export default function TemplateEditor() {
           questionText: editingConditionalStep.text,
           conditionalLogic,
           conditionalLevel: editingConditionalStep.placement === 'inline' ? 1 : 0, // 0 for new step (main question), 1 for inline
-          parentQuestionId: editingConditionalStep.placement === 'inline' ? selectedQuestionForConditional.questionId : null,
           isRequired: true,
-          helpText: editingConditionalStep.helpText || null
+        }
+        
+        // Only add parentQuestionId if placement is inline (don't send null)
+        if (editingConditionalStep.placement === 'inline') {
+          payload.parentQuestionId = selectedQuestionForConditional.questionId
+        }
+        
+        // Only add helpText if it exists
+        if (editingConditionalStep.helpText) {
+          payload.helpText = editingConditionalStep.helpText
         }
 
         // Configure based on step type
@@ -884,19 +892,17 @@ export default function TemplateEditor() {
               ? editingConditionalStep.options.map((opt, idx) => ({
                   optionText: opt.optionText,
                   optionValue: opt.optionValue,
-                  optionOrder: idx + 1
                 }))
               : [
-                  { optionText: 'Option 1', optionValue: 'option_1', optionOrder: 1 },
-                  { optionText: 'Option 2', optionValue: 'option_2', optionOrder: 2 }
+                  { optionText: 'Option 1', optionValue: 'option_1' },
+                  { optionText: 'Option 2', optionValue: 'option_2' }
                 ]
             break
           case 'yesno':
             payload.answerType = 'radio'
-            payload.questionSubtype = 'yesno'
             payload.options = [
-              { optionText: 'Yes', optionValue: 'yes', optionOrder: 1 },
-              { optionText: 'No', optionValue: 'no', optionOrder: 2 }
+              { optionText: 'Yes', optionValue: 'yes' },
+              { optionText: 'No', optionValue: 'no' }
             ]
             break
           case 'multi':
@@ -905,22 +911,25 @@ export default function TemplateEditor() {
               ? editingConditionalStep.options.map((opt, idx) => ({
                   optionText: opt.optionText,
                   optionValue: opt.optionValue,
-                  optionOrder: idx + 1
                 }))
               : [
-                  { optionText: 'Option 1', optionValue: 'option_1', optionOrder: 1 },
-                  { optionText: 'Option 2', optionValue: 'option_2', optionOrder: 2 },
-                  { optionText: 'Option 3', optionValue: 'option_3', optionOrder: 3 }
+                  { optionText: 'Option 1', optionValue: 'option_1' },
+                  { optionText: 'Option 2', optionValue: 'option_2' },
+                  { optionText: 'Option 3', optionValue: 'option_3' }
                 ]
             break
           case 'textarea':
             payload.answerType = 'textarea'
-            payload.placeholder = editingConditionalStep.placeholder || 'Enter your response here...'
+            if (editingConditionalStep.placeholder) {
+              payload.placeholder = editingConditionalStep.placeholder
+            }
             break
           case 'info':
             payload.answerType = 'textarea'
             payload.isRequired = false
-            payload.placeholder = editingConditionalStep.placeholder || 'No response needed - informational only'
+            if (editingConditionalStep.placeholder) {
+              payload.placeholder = editingConditionalStep.placeholder
+            }
             break
         }
 
@@ -1170,15 +1179,15 @@ export default function TemplateEditor() {
                       disabled={saving}
                       className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
                     >
-                      {saving ? (
-                        <>
+                    {saving ? (
+                      <>
                           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
+                        Saving...
+                      </>
+                    ) : (
                         "Save Changes"
-                      )}
-                    </Button>
+                    )}
+                  </Button>
                   )}
                   
                   <Button 
@@ -1459,8 +1468,8 @@ export default function TemplateEditor() {
                                   const fullQuestion = fullStep?.questions?.find((fq: any) => fq.id === q.id)
                                   const hasConditionalLogic = !!fullQuestion?.conditionalLogic
                                   const isConditional = (q.conditionalLevel || 0) > 0 || hasConditionalLogic
-                                  
-                                  return (
+                                    
+                                    return (
                                   <div key={q.id} className="space-y-3">
                                     {/* Show conditional steps (both inline and new-step) */}
                                     {isConditional && (() => {
@@ -1474,8 +1483,8 @@ export default function TemplateEditor() {
                                           <div className="flex items-start justify-between gap-3 mb-3">
                                             <div className="flex items-center gap-2 flex-wrap">
                                               <GitBranch className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                              <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
-                                                Conditional
+                                                <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
+                                                  Conditional
                                               </Badge>
                                               <Badge variant="outline" className="text-[10px] bg-blue-100 dark:bg-blue-800 border-blue-300">
                                                 {q.answerType === 'checkbox' ? 'Multi' :
@@ -1782,7 +1791,7 @@ export default function TemplateEditor() {
                       <Plus className="mr-1 h-3 w-3" />
                       Add Rule
                     </Button>
-                  </div>
+                    </div>
 
                   {editingConditionalStep.rules.length === 0 && (
                     <p className="text-xs text-muted-foreground text-center py-2 bg-muted/30 rounded">
@@ -1808,70 +1817,78 @@ export default function TemplateEditor() {
                     
                     return (
                       <div key={index} className="space-y-2 bg-background rounded-md p-3 border">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-muted-foreground w-5">{index + 1}.</span>
+                        <div className="grid grid-cols-12 items-center gap-2">
+                          <span className="text-sm font-medium text-muted-foreground col-span-1">{index + 1}.</span>
                           
-                          {/* Question Selector */}
-                    <select
-                            value={rule.questionId}
-                            onChange={(e) => {
-                              const selected = allPrevQuestions.find(q => q.id === e.target.value)
-                              if (selected) {
-                                const newRules = [...editingConditionalStep.rules]
-                                newRules[index] = { 
-                                  ...rule, 
-                                  questionId: selected.id,
-                                  questionText: selected.questionText,
-                                  questionNumber: selected.questionNumber,
-                                  triggerOption: selected.options?.[0] || ''
+                          {/* Question Selector - Fixed width */}
+                          <div className="col-span-5">
+                            <select
+                              value={rule.questionId}
+                              onChange={(e) => {
+                                const selected = allPrevQuestions.find(q => q.id === e.target.value)
+                                if (selected) {
+                                  const newRules = [...editingConditionalStep.rules]
+                                  newRules[index] = { 
+                                    ...rule, 
+                                    questionId: selected.id,
+                                    questionText: selected.questionText,
+                                    questionNumber: selected.questionNumber,
+                                    triggerOption: selected.options?.[0] || ''
+                                  }
+                                  setEditingConditionalStep({...editingConditionalStep, rules: newRules})
                                 }
+                              }}
+                              className="w-full px-2 py-1.5 border rounded-md bg-background text-xs truncate"
+                              title={rule.questionText} // Show full text on hover
+                            >
+                              {allPrevQuestions.map((q) => (
+                                <option key={q.id} value={q.id} title={q.questionText}>
+                                  {q.questionNumber}. {q.questionText.length > 30 ? q.questionText.substring(0, 30) + '...' : q.questionText}
+                                </option>
+                              ))}
+                            </select>
+                  </div>
+
+                          <span className="text-xs font-medium text-muted-foreground col-span-1 text-center">is</span>
+
+                          {/* Answer Selector - Fixed width */}
+                          <div className="col-span-4">
+                    <select
+                              value={rule.triggerOption}
+                              onChange={(e) => {
+                                const newRules = [...editingConditionalStep.rules]
+                                newRules[index] = { ...rule, triggerOption: e.target.value }
                                 setEditingConditionalStep({...editingConditionalStep, rules: newRules})
-                              }
-                            }}
-                            className="flex-1 px-2 py-1.5 border rounded-md bg-background text-xs"
-                          >
-                            {allPrevQuestions.map((q) => (
-                              <option key={q.id} value={q.id}>
-                                {q.questionNumber}. {q.questionText}
-                              </option>
-                            ))}
-                          </select>
-
-                          <span className="text-xs font-medium text-muted-foreground">is</span>
-
-                          {/* Answer Selector */}
-                          <select
-                            value={rule.triggerOption}
-                            onChange={(e) => {
-                              const newRules = [...editingConditionalStep.rules]
-                              newRules[index] = { ...rule, triggerOption: e.target.value }
-                              setEditingConditionalStep({...editingConditionalStep, rules: newRules})
-                            }}
-                            className="flex-1 px-2 py-1.5 border rounded-md bg-background text-xs"
-                          >
-                            {(selectedQ?.options || []).map((option, idx) => (
+                              }}
+                              className="w-full px-2 py-1.5 border rounded-md bg-background text-xs"
+                            >
+                              {(selectedQ?.options || []).map((option, idx) => (
                         <option key={idx} value={option}>
                           {option}
                         </option>
                       ))}
                     </select>
-
-                          {editingConditionalStep.rules.length > 1 && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setEditingConditionalStep({
-                                  ...editingConditionalStep,
-                                  rules: editingConditionalStep.rules.filter((_, i) => i !== index)
-                                })
-                              }}
-                              className="text-destructive hover:text-destructive h-7 w-7 p-0"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
                   </div>
+
+                          {/* Delete Rule Button */}
+                          <div className="col-span-1 flex justify-end">
+                            {editingConditionalStep.rules.length > 1 && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditingConditionalStep({
+                                    ...editingConditionalStep,
+                                    rules: editingConditionalStep.rules.filter((_, i) => i !== index)
+                                  })
+                                }}
+                                className="text-destructive hover:text-destructive h-7 w-7 p-0"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                  </div>
+                </div>
 
                         {index < editingConditionalStep.rules.length - 1 && (
                           <div className="flex items-center gap-2 pl-7">
