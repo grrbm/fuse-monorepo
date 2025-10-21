@@ -29,7 +29,7 @@ interface Question {
   required: boolean
   placeholder?: string | null
   helpText?: string | null
-  options?: string[]
+  options?: Array<{optionText: string, optionValue: string}>
   conditionalLevel?: number
   subQuestionOrder?: number
 }
@@ -72,7 +72,7 @@ export default function TemplateEditor() {
     stepId: string
     questionId: string
     questionText: string
-    options: string[]
+    options: Array<{optionText: string, optionValue: string}>
     isEditingExisting?: boolean
     existingConditionalQuestionId?: string
   } | null>(null)
@@ -144,7 +144,10 @@ export default function TemplateEditor() {
             required: Boolean(q.isRequired),
             placeholder: q.placeholder || null,
             helpText: q.helpText || null,
-            options: (q.options || []).map((o: any) => String(o.optionText || '')),
+            options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || '')
+          })),
             conditionalLevel: Number(q.conditionalLevel || 0),
             subQuestionOrder: Number(q.subQuestionOrder || 0)
           })),
@@ -304,7 +307,10 @@ export default function TemplateEditor() {
           required: Boolean(q.isRequired),
           placeholder: q.placeholder || null,
           helpText: q.helpText || null,
-          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || '')
+          })),
         })),
       })) as Step[]
       setSteps(loadedSteps)
@@ -369,7 +375,10 @@ export default function TemplateEditor() {
           required: Boolean(q.isRequired),
           placeholder: q.placeholder || null,
           helpText: q.helpText || null,
-          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || '')
+          })),
           conditionalLevel: Number(q.conditionalLevel || 0),
           subQuestionOrder: Number(q.subQuestionOrder || 0)
         })),
@@ -397,9 +406,13 @@ export default function TemplateEditor() {
         ...s,
         questions: s.questions?.map(q => {
           if (q.id !== questionId) return q
+          const newOptionText = `Option ${(q.options?.length || 0) + 1}`
           return {
             ...q,
-            options: [...(q.options || []), `Option ${(q.options?.length || 0) + 1}`]
+            options: [...(q.options || []), {
+              optionText: newOptionText,
+              optionValue: newOptionText.toLowerCase().replace(/ /g, '_')
+            }]
           }
         })
       }
@@ -414,7 +427,10 @@ export default function TemplateEditor() {
         questions: s.questions?.map(q => {
           if (q.id !== questionId) return q
           const newOptions = [...(q.options || [])]
-          newOptions[optionIndex] = newValue
+          newOptions[optionIndex] = {
+            optionText: newValue,
+            optionValue: newValue.toLowerCase().replace(/ /g, '_')
+          }
           return { ...q, options: newOptions }
         })
       }
@@ -536,7 +552,7 @@ export default function TemplateEditor() {
         questionId: parentQuestion.id,
         questionText: parentQuestion.questionText,
         questionNumber: parentQuestion.questionNumber,
-        triggerOption: parentQuestion.options?.[0] || '',
+        triggerOption: parentQuestion.options?.[0]?.optionValue || '',
         operator: 'OR'
       }] : []
     })
@@ -616,14 +632,14 @@ export default function TemplateEditor() {
       stepType,
       placement: currentPlacement,
       options: (conditionalQuestion.options || []).map(opt => ({
-        optionText: opt,
-        optionValue: opt
+        optionText: opt.optionText,
+        optionValue: opt.optionValue
       })),
       rules: parsedRules.length > 0 ? parsedRules : [{
         questionId: parentQuestionId,
         questionText: parentQuestion.questionText,
         questionNumber: currentStepIdx + 1,
-        triggerOption: parentQuestion.options?.[0] || '',
+        triggerOption: parentQuestion.options?.[0]?.optionValue || '',
         operator: 'OR'
       }]
     })
@@ -683,7 +699,10 @@ export default function TemplateEditor() {
           required: Boolean(q.isRequired),
           placeholder: q.placeholder || null,
           helpText: q.helpText || null,
-          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || '')
+          })),
           conditionalLevel: Number(q.conditionalLevel || 0),
           subQuestionOrder: Number(q.subQuestionOrder || 0)
         })),
@@ -965,7 +984,10 @@ export default function TemplateEditor() {
           required: Boolean(q.isRequired),
           placeholder: q.placeholder || null,
           helpText: q.helpText || null,
-          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || '')
+          })),
           conditionalLevel: Number(q.conditionalLevel || 0),
           subQuestionOrder: Number(q.subQuestionOrder || 0)
         })),
@@ -1413,7 +1435,10 @@ export default function TemplateEditor() {
                             required: Boolean(q.isRequired),
                             placeholder: q.placeholder || null,
                             helpText: q.helpText || null,
-                            options: (q.options || []).map((o: any) => String(o.optionText || '')),
+                            options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || '')
+          })),
                           })),
                         })) as Step[]
                         setSteps(loadedSteps)
@@ -1632,7 +1657,7 @@ export default function TemplateEditor() {
                                                     ? 'border-teal-500 rounded' 
                                                     : 'border-teal-500'
                                                     }`}></div>
-                                                {opt}
+                                                {opt.optionText}
                                                   </div>
                                             ))}
                                             </div>
@@ -1809,7 +1834,7 @@ export default function TemplateEditor() {
                               questionId: defaultQ.id,
                               questionText: defaultQ.questionText,
                               questionNumber: defaultQ.questionNumber,
-                              triggerOption: defaultQ.options?.[0] || '',
+                              triggerOption: defaultQ.options?.[0]?.optionValue || '',
                               operator: editingConditionalStep.rules.length > 0 ? editingConditionalStep.rules[editingConditionalStep.rules.length - 1].operator : 'OR'
                             }]
                           })
@@ -1862,7 +1887,7 @@ export default function TemplateEditor() {
                                     questionId: selected.id,
                                     questionText: selected.questionText,
                                     questionNumber: selected.questionNumber,
-                                    triggerOption: selected.options?.[0] || ''
+                                    triggerOption: selected.options?.[0]?.optionValue || ''
                                   }
                                   setEditingConditionalStep({...editingConditionalStep, rules: newRules})
                                 }
@@ -1892,8 +1917,8 @@ export default function TemplateEditor() {
                               className="w-full px-2 py-1.5 border rounded-md bg-background text-xs"
                             >
                               {(selectedQ?.options || []).map((option, idx) => (
-                        <option key={idx} value={option}>
-                          {option}
+                        <option key={idx} value={option.optionValue}>
+                          {option.optionText}
                         </option>
                       ))}
                     </select>
@@ -2363,10 +2388,10 @@ export default function TemplateEditor() {
                   isRequired: editingQuestion.required,
                   placeholder: editingQuestion.placeholder || null,
                   helpText: editingQuestion.helpText || null,
-                  options: (editingQuestion.options || []).map((text, idx) => ({ 
+                  options: (editingQuestion.options || []).map((opt, idx) => ({ 
                     id: undefined as any, 
-                    optionText: text, 
-                    optionValue: text, 
+                    optionText: opt.optionText, 
+                    optionValue: opt.optionValue, 
                     optionOrder: idx + 1 
                   } as any)),
                 } as any}
@@ -2384,7 +2409,10 @@ export default function TemplateEditor() {
                       answerType: updated.answerType || oldQ.answerType,
                       placeholder: updated.placeholder || oldQ.placeholder,
                       helpText: updated.helpText || oldQ.helpText,
-                      options: (updated.options || []).map((o: any) => o.optionText),
+                      options: (updated.options || []).map((o: any) => ({
+                        optionText: o.optionText,
+                        optionValue: o.optionValue || o.optionText
+                      })),
                     } : oldQ)
                   } : s))
                   handleCloseEditModal()
