@@ -24,6 +24,12 @@ export default class QuestionOption extends Entity {
     })
     declare optionOrder: number;
 
+    @Column({
+        type: DataType.ENUM('safe', 'review', 'reject'),
+        allowNull: true,
+    })
+    declare riskLevel?: 'safe' | 'review' | 'reject' | null;
+
     @ForeignKey(() => Question)
     @Column({
         type: DataType.UUID,

@@ -37,8 +37,9 @@ export const questionnaireStepUpdateSchema = z.object({
   stepId: z.string().uuid('Invalid step ID'),
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
-}).refine(data => data.title !== undefined || data.description !== undefined, {
-  message: 'At least one field (title or description) must be provided'
+  isDeadEnd: z.boolean().optional(),
+}).refine(data => data.title !== undefined || data.description !== undefined || data.isDeadEnd !== undefined, {
+  message: 'At least one field (title, description, or isDeadEnd) must be provided'
 });
 
 export const questionnaireStepOrderSchema = z.object({
