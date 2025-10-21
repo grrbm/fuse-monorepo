@@ -1934,18 +1934,23 @@ export default function TemplateEditor() {
                     <select
                               value={rule.triggerOption}
                               onChange={(e) => {
-                                console.log('Dropdown changed:', e.target.value)
+                                console.log('Dropdown changed:', e.target.value, 'for rule', index)
+                                console.log('Available options:', selectedQ?.options)
                                 const newRules = [...editingConditionalStep.rules]
                                 newRules[index] = { ...rule, triggerOption: e.target.value }
                                 setEditingConditionalStep({...editingConditionalStep, rules: newRules})
+                                console.log('Updated rules:', newRules)
                               }}
                               className="w-full px-2 py-1.5 border rounded-md bg-background text-xs"
                             >
-                              {(selectedQ?.options || []).map((option, optIdx) => (
-                        <option key={`rule-${index}-opt-${optIdx}-${option.optionValue}`} value={option.optionValue}>
-                          {option.optionText}
-                        </option>
-                      ))}
+                              {(selectedQ?.options || []).map((option, optIdx) => {
+                                console.log(`Option ${optIdx}:`, option.optionText, '=', option.optionValue)
+                                return (
+                                  <option key={`rule-${index}-opt-${optIdx}-${option.optionValue}`} value={option.optionValue}>
+                                    {option.optionText}
+                                  </option>
+                                )
+                              })}
                     </select>
                   </div>
 
