@@ -8,6 +8,7 @@ interface QuestionnaireOptionTemplate {
     optionText: string
     optionValue?: string | null
     optionOrder: number
+    riskLevel?: 'safe' | 'review' | 'reject' | null
 }
 
 interface QuestionnaireQuestionTemplate {
@@ -28,6 +29,7 @@ type EditableOption = {
     optionText: string
     optionValue: string
     optionOrder: number
+    riskLevel?: 'safe' | 'review' | 'reject' | null
     localKey: string
 }
 
@@ -62,6 +64,7 @@ export function QuestionEditor({
             optionText: option.optionText ?? '',
             optionValue: option.optionValue ?? option.optionText ?? '',
             optionOrder: option.optionOrder ?? index + 1,
+            riskLevel: option.riskLevel ?? null,
             localKey: option.id ?? `existing-${index}`,
         }))
     )
@@ -91,6 +94,7 @@ export function QuestionEditor({
                     optionText: option.optionText ?? '',
                     optionValue: option.optionValue ?? option.optionText ?? '',
                     optionOrder: option.optionOrder ?? index + 1,
+                    riskLevel: option.riskLevel ?? null,
                     localKey: option.id ?? `existing-${index}`,
                 }))
             )
@@ -117,6 +121,16 @@ export function QuestionEditor({
         )
     }
 
+    const handleRiskLevelChange = (localKey: string, riskLevel: 'safe' | 'review' | 'reject' | null) => {
+        setOptions((prev) =>
+            prev.map((option) =>
+                option.localKey === localKey
+                    ? { ...option, riskLevel }
+                    : option
+            )
+        )
+    }
+
     const handleAddOption = () => {
         if (restrictOptionEdits) return
         setOptions((prev) => (
@@ -125,6 +139,7 @@ export function QuestionEditor({
                 optionText: '',
                 optionValue: '',
                 optionOrder: prev.length + 1,
+                riskLevel: null,
                 localKey: `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             }]
         ))
@@ -176,6 +191,7 @@ export function QuestionEditor({
                     optionText: trimmedText,
                     optionValue: trimmedValue.length > 0 ? trimmedValue : trimmedText,
                     optionOrder: index + 1,
+                    riskLevel: option.riskLevel || null,
                 }
             })
             .filter((option) => option.optionText.length > 0)
@@ -226,6 +242,7 @@ export function QuestionEditor({
                         optionText: option.optionText ?? '',
                         optionValue: option.optionValue ?? option.optionText ?? '',
                         optionOrder: option.optionOrder ?? index + 1,
+                        riskLevel: option.riskLevel ?? null,
                         localKey: option.id ?? `existing-${index}`,
                     }))
                 )
@@ -453,6 +470,43 @@ export function QuestionEditor({
                                                 className="text-xs h-8"
                                                 disabled={restrictOptionEdits}
                                             />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="block text-[10px] font-medium text-muted-foreground">
+                                                Risk Level <span className="opacity-70">(for workflow automation)</span>
+                                            </label>
+                                            <div className="flex gap-1">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={option.riskLevel === 'safe' ? 'default' : 'outline'}
+                                                    onClick={() => handleRiskLevelChange(option.localKey, option.riskLevel === 'safe' ? null : 'safe')}
+                                                    className={`flex-1 h-7 text-[10px] ${option.riskLevel === 'safe' ? 'bg-green-500 hover:bg-green-600 text-white' : 'border-green-300 text-green-700 hover:bg-green-50'}`}
+                                                    disabled={restrictOptionEdits}
+                                                >
+                                                    ✓ Safe
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={option.riskLevel === 'review' ? 'default' : 'outline'}
+                                                    onClick={() => handleRiskLevelChange(option.localKey, option.riskLevel === 'review' ? null : 'review')}
+                                                    className={`flex-1 h-7 text-[10px] ${option.riskLevel === 'review' ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : 'border-yellow-300 text-yellow-700 hover:bg-yellow-50'}`}
+                                                    disabled={restrictOptionEdits}
+                                                >
+                                                    ⚠ Review
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={option.riskLevel === 'reject' ? 'default' : 'outline'}
+                                                    onClick={() => handleRiskLevelChange(option.localKey, option.riskLevel === 'reject' ? null : 'reject')}
+                                                    className={`flex-1 h-7 text-[10px] ${option.riskLevel === 'reject' ? 'bg-red-500 hover:bg-red-600 text-white' : 'border-red-300 text-red-700 hover:bg-red-50'}`}
+                                                    disabled={restrictOptionEdits}
+                                                >
+                                                    ✕ Reject
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

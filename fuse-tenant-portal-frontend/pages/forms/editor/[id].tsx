@@ -5,7 +5,7 @@ import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye } from "lucide-react"
+import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../QuestionEditor"
 
@@ -16,6 +16,7 @@ interface Step {
   stepOrder: number
   category: "normal" | "info" | "user_profile"
   stepType: "question" | "info"
+  isDeadEnd?: boolean
   questions?: Question[]
   conditionalQuestions?: ConditionalQuestion[]
 }
@@ -29,7 +30,7 @@ interface Question {
   required: boolean
   placeholder?: string | null
   helpText?: string | null
-  options?: Array<{optionText: string, optionValue: string}>
+  options?: Array<{optionText: string, optionValue: string, riskLevel?: 'safe' | 'review' | 'reject' | null}>
   conditionalLevel?: number
   subQuestionOrder?: number
 }
@@ -146,7 +147,8 @@ export default function TemplateEditor() {
             helpText: q.helpText || null,
             options: (q.options || []).map((o: any) => ({
             optionText: String(o.optionText || ''),
-            optionValue: String(o.optionValue || o.optionText || '')
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
           })),
             conditionalLevel: Number(q.conditionalLevel || 0),
             subQuestionOrder: Number(q.subQuestionOrder || 0)
@@ -192,7 +194,7 @@ export default function TemplateEditor() {
     router.push("/forms?tab=templates")
   }
 
-  const handleAddStep = async (stepType: "question" | "info" | "yesno" | "multi" | "textarea") => {
+  const handleAddStep = async (stepType: "question" | "info" | "yesno" | "multi" | "textarea" | "deadend") => {
     if (isAccountTemplate) return
     if (!token || !templateId) return
     try {
@@ -284,6 +286,32 @@ export default function TemplateEditor() {
           }),
         })
         if (!qRes.ok) throw new Error((await qRes.json().catch(() => ({}))).message || 'Failed to create text question')
+      } else if (stepType === 'deadend' && newStepId) {
+        // Dead End - Informational step that terminates form
+        const qRes = await fetch(`${baseUrl}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            questionText: 'Unfortunately, you do not qualify at this time.',
+            answerType: 'textarea',
+            isRequired: false,
+            placeholder: 'No response needed - informational only',
+          }),
+        })
+        if (!qRes.ok) throw new Error((await qRes.json().catch(() => ({}))).message || 'Failed to create dead end step')
+        
+        // Mark the step as dead end
+        await fetch(`${baseUrl}/questionnaires/step`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            title: 'Form Ended',
+            description: 'This step terminates the form',
+            isDeadEnd: true
+          }),
+        })
       }
 
       const ref = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
@@ -309,7 +337,8 @@ export default function TemplateEditor() {
           helpText: q.helpText || null,
           options: (q.options || []).map((o: any) => ({
             optionText: String(o.optionText || ''),
-            optionValue: String(o.optionValue || o.optionText || '')
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
           })),
         })),
       })) as Step[]
@@ -366,6 +395,7 @@ export default function TemplateEditor() {
         stepOrder: Number(s.stepOrder || 0),
         category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
         stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        isDeadEnd: Boolean(s.isDeadEnd),
         questions: (s.questions || []).map((q: any) => ({
           id: String(q.id),
           type: q.answerType || 'single-choice',
@@ -377,7 +407,8 @@ export default function TemplateEditor() {
           helpText: q.helpText || null,
           options: (q.options || []).map((o: any) => ({
             optionText: String(o.optionText || ''),
-            optionValue: String(o.optionValue || o.optionText || '')
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
           })),
           conditionalLevel: Number(q.conditionalLevel || 0),
           subQuestionOrder: Number(q.subQuestionOrder || 0)
@@ -690,6 +721,7 @@ export default function TemplateEditor() {
         stepOrder: Number(s.stepOrder || 0),
         category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
         stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        isDeadEnd: Boolean(s.isDeadEnd),
         questions: (s.questions || []).map((q: any) => ({
           id: String(q.id),
           type: q.answerType || 'single-choice',
@@ -701,7 +733,8 @@ export default function TemplateEditor() {
           helpText: q.helpText || null,
           options: (q.options || []).map((o: any) => ({
             optionText: String(o.optionText || ''),
-            optionValue: String(o.optionValue || o.optionText || '')
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
           })),
           conditionalLevel: Number(q.conditionalLevel || 0),
           subQuestionOrder: Number(q.subQuestionOrder || 0)
@@ -975,6 +1008,7 @@ export default function TemplateEditor() {
         stepOrder: Number(s.stepOrder || 0),
         category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
         stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        isDeadEnd: Boolean(s.isDeadEnd),
         questions: (s.questions || []).map((q: any) => ({
           id: String(q.id),
           type: q.answerType || 'single-choice',
@@ -986,7 +1020,8 @@ export default function TemplateEditor() {
           helpText: q.helpText || null,
           options: (q.options || []).map((o: any) => ({
             optionText: String(o.optionText || ''),
-            optionValue: String(o.optionValue || o.optionText || '')
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
           })),
           conditionalLevel: Number(q.conditionalLevel || 0),
           subQuestionOrder: Number(q.subQuestionOrder || 0)
@@ -1333,6 +1368,23 @@ export default function TemplateEditor() {
                       </div>
                     </div>
                   </Button>
+
+                  <Button 
+                    onClick={() => handleAddStep("deadend")} 
+                    className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-red-200 hover:border-red-300 hover:bg-red-50/50 transition-all"
+                    variant="outline"
+                    disabled={isAccountTemplate}
+                  >
+                    <div className="flex items-center gap-4 w-full">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
+                        <StopCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-base mb-0.5">Dead End</div>
+                        <div className="text-xs text-muted-foreground">Terminates form automatically</div>
+                      </div>
+                    </div>
+                  </Button>
                   
                   {isAccountTemplate && (
                     <p className="text-xs text-muted-foreground text-center mt-4 py-3 bg-muted/30 rounded-lg">
@@ -1437,7 +1489,8 @@ export default function TemplateEditor() {
                             helpText: q.helpText || null,
                             options: (q.options || []).map((o: any) => ({
             optionText: String(o.optionText || ''),
-            optionValue: String(o.optionValue || o.optionText || '')
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
           })),
                           })),
                         })) as Step[]
@@ -1475,7 +1528,8 @@ export default function TemplateEditor() {
                     <div
                       key={step.id}
                       className={`
-                        bg-card rounded-2xl shadow-sm border border-border/40 overflow-hidden transition-all
+                        bg-card rounded-2xl shadow-sm overflow-hidden transition-all
+                        ${step.isDeadEnd ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10" : "border border-border/40"}
                         ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-md" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
                       `}
@@ -1489,6 +1543,7 @@ export default function TemplateEditor() {
                           {/* Icon based on question type */}
                           {(() => {
                             const firstQuestion = step.questions?.[0]
+                            const isDeadEnd = step.isDeadEnd
                             const isInfo = step.stepType === "info"
                             const isYesNo = firstQuestion?.questionSubtype === 'yesno'
                             const isMulti = firstQuestion?.answerType === 'checkbox'
@@ -1498,7 +1553,11 @@ export default function TemplateEditor() {
                             let iconColor = "text-teal-600 dark:text-teal-400"
                             let icon = <MessageSquare className="h-7 w-7" />
                             
-                            if (isInfo) {
+                            if (isDeadEnd) {
+                              bgColor = "bg-red-50 dark:bg-red-900/20"
+                              iconColor = "text-red-600 dark:text-red-400"
+                              icon = <StopCircle className="h-7 w-7" />
+                            } else if (isInfo) {
                               bgColor = "bg-gray-100 dark:bg-gray-800"
                               iconColor = "text-gray-600 dark:text-gray-400"
                               icon = <Info className="h-7 w-7" />
@@ -1531,6 +1590,12 @@ export default function TemplateEditor() {
                               {step.category === 'user_profile' && (
                                 <Badge variant="secondary" className="text-xs rounded-full px-3 py-1 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800">
                                   Auto-added
+                                </Badge>
+                              )}
+                              {step.isDeadEnd && (
+                                <Badge variant="destructive" className="text-xs rounded-full px-3 py-1 bg-red-500 text-white border-red-600">
+                                  <StopCircle className="h-3 w-3 mr-1" />
+                                  DEAD END
                                 </Badge>
                               )}
                             </div>
@@ -1681,7 +1746,16 @@ export default function TemplateEditor() {
                                                     ? 'border-teal-500 rounded' 
                                                     : 'border-teal-500'
                                                     }`}></div>
-                                                {opt.optionText}
+                                                <span className="flex-1">{opt.optionText}</span>
+                                                {opt.riskLevel && (
+                                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                                    opt.riskLevel === 'safe' ? 'bg-green-100 text-green-700 border border-green-300' :
+                                                    opt.riskLevel === 'review' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                                                    'bg-red-100 text-red-700 border border-red-300'
+                                                  }`}>
+                                                    {opt.riskLevel === 'safe' ? '✓ SAFE' : opt.riskLevel === 'review' ? '⚠ REVIEW' : '✕ REJECT'}
+                                                  </span>
+                                                )}
                                                   </div>
                                             ))}
                                             </div>

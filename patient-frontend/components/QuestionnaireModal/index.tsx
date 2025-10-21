@@ -2138,21 +2138,31 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
                       {/* Continue button for regular steps */}
                       {!(isCheckoutStep() && paymentStatus !== 'succeeded') && (
-                        <button
-                          onClick={handleNext}
-                          disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
-                          className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                          style={{
-                            backgroundColor: theme.primary,
-                            ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
-                          }}
-                        >
-                          {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
-                            (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
-                              isProductSelectionStep() ? 'Continue to Checkout' :
-                                isCheckoutStep() ? 'Complete Order' : 'Continue'}
-                          <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
-                        </button>
+                        currentStep?.isDeadEnd ? (
+                          <button
+                            onClick={onClose}
+                            className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
+                          >
+                            Close Form
+                            <Icon icon="lucide:x" className="ml-2 h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleNext}
+                            disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
+                            className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            style={{
+                              backgroundColor: theme.primary,
+                              ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
+                            }}
+                          >
+                            {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
+                              (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
+                                isProductSelectionStep() ? 'Continue to Checkout' :
+                                  isCheckoutStep() ? 'Complete Order' : 'Continue'}
+                            <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
+                          </button>
+                        )
                       )}
                     </>
                   )}
