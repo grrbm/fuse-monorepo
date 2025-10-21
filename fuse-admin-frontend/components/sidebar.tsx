@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import Link from "next/link"
 import { useRouter } from "next/router"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   BarChart3,
   Users,
@@ -17,6 +17,7 @@ import {
   Lock,
   CreditCard,
 } from "lucide-react"
+import Tutorial from "./ui/tutorial"
 
 const navigation = [
   { name: "Overview", icon: BarChart3, current: true, href: "/" },
@@ -37,11 +38,45 @@ const services: { name: string; icon: any; current: boolean; href?: string; hasS
 
 const configuration = [{ name: "Settings", icon: Settings, current: false, href: "/settings" }]
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
 export function Sidebar() {
-  const { user, logout, hasActiveSubscription, refreshSubscription } = useAuth()
+  const { user, logout, hasActiveSubscription, refreshSubscription, authenticatedFetch } = useAuth()
   const router = useRouter()
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [runTutorial, setRunTutorial] = useState(() => {
+    // Check if tutorial has been completed before
+    if (typeof window !== 'undefined') {
+      const tutorialCompleted = localStorage.getItem('tutorialCompleted');
+      return tutorialCompleted !== 'true';
+    }
+    return false;
+  });
+  const fetchSubscriptionBasicInfo = async () => {
+    try {
+      const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/basic-info`, {
+        method: "GET",
+        skipLogoutOn401: true,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          console.log("data.data", data.data);
+          const needsTutorial = data.data.tutorialFinished === false && data.data.status === "active" && data.data.stripeCustomerId !== null;
+          console.log("needsTutorial", needsTutorial);
+          setRunTutorial(needsTutorial);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching subscription basic info:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubscriptionBasicInfo()
+  }, [])
 
   const handleRefreshSubscription = async () => {
     if (isRefreshing) return
@@ -148,6 +183,7 @@ export function Sidebar() {
 
   return (
     <div className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
+      <Tutorial runTutorial={runTutorial} setRunTutorial={setRunTutorial} />
       {/* Logo */}
       <div className="p-6">
         <h1 className="text-xl font-bold text-sidebar-foreground">Fuse</h1>

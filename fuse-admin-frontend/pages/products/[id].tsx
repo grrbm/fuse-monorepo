@@ -43,6 +43,8 @@ interface TenantProductData {
     active: boolean
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
 export default function ProductDetail() {
     const [product, setProduct] = useState<Product | null>(null)
     const [loading, setLoading] = useState(true)
@@ -60,7 +62,7 @@ export default function ProductDetail() {
     })
     const [clinicSlug, setClinicSlug] = useState<string | null>(null)
 
-    const { user, token } = useAuth()
+    const { user, token, authenticatedFetch } = useAuth()
     const [copiedPreview, setCopiedPreview] = useState<boolean>(false)
     const router = useRouter()
     const { id } = router.query
