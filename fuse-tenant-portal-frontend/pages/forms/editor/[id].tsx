@@ -82,7 +82,7 @@ export default function TemplateEditor() {
     text: string
     helpText: string
     placeholder: string
-    stepType: 'single' | 'yesno' | 'multi' | 'textarea' | 'info' | null
+    stepType: 'single' | 'yesno' | 'multi' | 'textarea' | 'info' | 'deadend' | null
     placement: 'inline' | 'new-step' // Where to show the conditional step
     options: Array<{optionText: string, optionValue: string}>
     rules: Array<{
@@ -643,7 +643,12 @@ export default function TemplateEditor() {
     }
     
     // Determine step type from answerType
-    const stepType = conditionalQuestion.answerType === 'textarea' && !conditionalQuestion.placeholder?.includes('informational') ? 'textarea' :
+    // Check if the step itself is a dead end step
+    const containingStep = template?.steps?.find((s: any) => s.id === stepId)
+    const isStepDeadEnd = containingStep?.isDeadEnd
+    
+    const stepType = isStepDeadEnd && conditionalQuestion.answerType === 'textarea' ? 'deadend' :
+                     conditionalQuestion.answerType === 'textarea' && !conditionalQuestion.placeholder?.includes('informational') ? 'textarea' :
                      conditionalQuestion.answerType === 'textarea' ? 'info' :
                      conditionalQuestion.answerType === 'checkbox' ? 'multi' :
                      conditionalQuestion.questionSubtype === 'yesno' ? 'yesno' :
@@ -983,6 +988,13 @@ export default function TemplateEditor() {
               payload.placeholder = editingConditionalStep.placeholder
             }
             break
+          case 'deadend':
+            payload.answerType = 'textarea'
+            payload.isRequired = false
+            if (editingConditionalStep.placeholder) {
+              payload.placeholder = editingConditionalStep.placeholder
+            }
+            break
         }
 
         const res = await fetch(`${baseUrl}/questions`, {
@@ -992,6 +1004,18 @@ export default function TemplateEditor() {
         })
 
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create conditional step')
+        
+        // If it's a dead end step on a new-step placement, mark the step as dead end
+        if (editingConditionalStep.stepType === 'deadend' && editingConditionalStep.placement === 'new-step' && targetStepId) {
+          await fetch(`${baseUrl}/questionnaires/step`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              stepId: targetStepId,
+              isDeadEnd: true
+            }),
+          }).catch(() => { }) // Non-critical, continue if fails
+        }
       }
 
       // Reload template to show the new conditional questions
@@ -2204,15 +2228,29 @@ export default function TemplateEditor() {
                       </Button>
                       <Button
                         variant="outline"
-                        className="h-auto py-2.5 flex flex-col items-center gap-1 col-span-2"
+                        className="h-auto py-2.5 flex flex-col items-center gap-1"
                         onClick={() => setEditingConditionalStep({
                           ...editingConditionalStep, 
                           stepType: 'info',
+                          text: 'Important information to note',
                           placeholder: 'No response needed - informational only'
                         })}
                       >
                         <Info className="h-4 w-4 text-gray-600" />
                         <div className="text-[10px] font-medium">Information</div>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-auto py-2.5 flex flex-col items-center gap-1 border-red-200 hover:border-red-300 hover:bg-red-50"
+                        onClick={() => setEditingConditionalStep({
+                          ...editingConditionalStep, 
+                          stepType: 'deadend',
+                          text: 'Unfortunately, you do not qualify at this time.',
+                          placeholder: 'No response needed - form will end here'
+                        })}
+                      >
+                        <StopCircle className="h-4 w-4 text-red-600" />
+                        <div className="text-[10px] font-medium">Dead End</div>
                       </Button>
                     </div>
                   ) : (
@@ -2224,11 +2262,13 @@ export default function TemplateEditor() {
                           {editingConditionalStep.stepType === 'multi' && <MessageSquare className="h-4 w-4 text-purple-600" />}
                           {editingConditionalStep.stepType === 'textarea' && <Edit className="h-4 w-4 text-orange-600" />}
                           {editingConditionalStep.stepType === 'info' && <Info className="h-4 w-4 text-gray-600" />}
+                          {editingConditionalStep.stepType === 'deadend' && <StopCircle className="h-4 w-4 text-red-600" />}
                           <span className="font-medium text-xs">
                             {editingConditionalStep.stepType === 'single' ? 'Single Option' :
                              editingConditionalStep.stepType === 'yesno' ? 'Yes/No' :
                              editingConditionalStep.stepType === 'multi' ? 'Multi Option' :
                              editingConditionalStep.stepType === 'textarea' ? 'Multi Line Text' :
+                             editingConditionalStep.stepType === 'deadend' ? 'Dead End' :
                              'Information'}
                           </span>
                         </div>
@@ -2261,7 +2301,9 @@ export default function TemplateEditor() {
                         {/* Question Text */}
                         <div className="space-y-1.5">
                           <label className="block text-xs font-semibold text-foreground">
-                            {editingConditionalStep.stepType === 'info' ? 'Information Text' : 'Question Text'} <span className="text-destructive">*</span>
+                            {editingConditionalStep.stepType === 'info' ? 'Information Text' : 
+                             editingConditionalStep.stepType === 'deadend' ? 'Disqualification Message' :
+                             'Question Text'} <span className="text-destructive">*</span>
                   </label>
                   <input
                     type="text"
@@ -2270,6 +2312,7 @@ export default function TemplateEditor() {
                             placeholder={
                               editingConditionalStep.stepType === 'textarea' ? "e.g., Please describe your symptoms in detail" :
                               editingConditionalStep.stepType === 'info' ? "e.g., Important: Please consult your doctor" :
+                              editingConditionalStep.stepType === 'deadend' ? "e.g., Unfortunately, you do not qualify at this time" :
                               "e.g., What other medication are you taking?"
                             }
                             className="w-full px-3 py-2 border rounded-md bg-background text-sm h-9"
@@ -2291,7 +2334,7 @@ export default function TemplateEditor() {
                     </div>
                         
                         {/* Placeholder for textarea types */}
-                        {(editingConditionalStep.stepType === 'textarea' || editingConditionalStep.stepType === 'info') && (
+                        {(editingConditionalStep.stepType === 'textarea' || editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend') && (
                           <div className="space-y-1.5">
                             <label className="block text-xs font-medium text-muted-foreground">
                               Placeholder <span className="text-xs">(optional)</span>
@@ -2307,7 +2350,7 @@ export default function TemplateEditor() {
                         )}
                         
                         {/* Options Editor for question types */}
-                        {editingConditionalStep.stepType && editingConditionalStep.stepType !== 'textarea' && editingConditionalStep.stepType !== 'info' && (
+                        {editingConditionalStep.stepType && editingConditionalStep.stepType !== 'textarea' && editingConditionalStep.stepType !== 'info' && editingConditionalStep.stepType !== 'deadend' && (
                           <div className="space-y-2 pt-3 border-t">
                             <div className="flex items-center justify-between">
                               <label className="block text-xs font-semibold text-foreground">
