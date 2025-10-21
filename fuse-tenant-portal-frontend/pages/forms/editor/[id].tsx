@@ -1941,8 +1941,8 @@ export default function TemplateEditor() {
                               }}
                               className="w-full px-2 py-1.5 border rounded-md bg-background text-xs"
                             >
-                              {(selectedQ?.options || []).map((option) => (
-                        <option key={`${rule.questionId}-${option.optionValue}`} value={option.optionValue}>
+                              {(selectedQ?.options || []).map((option, optIdx) => (
+                        <option key={`rule-${index}-opt-${optIdx}-${option.optionValue}`} value={option.optionValue}>
                           {option.optionText}
                         </option>
                       ))}
@@ -2382,12 +2382,12 @@ export default function TemplateEditor() {
                   <CardTitle className="text-2xl mb-2">
                     Edit Question
                   </CardTitle>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {getQuestionTypeLabel()}
+                    </Badge>
+                  </div>
                   <CardDescription>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="secondary" className="text-xs">
-                        {getQuestionTypeLabel()}
-                      </Badge>
-                    </div>
                     Update the question text, options, and settings.
                   </CardDescription>
                 </div>
