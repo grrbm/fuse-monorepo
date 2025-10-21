@@ -407,46 +407,50 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 );
             }
 
+            // Use radio button UI for all select questions (no dropdown)
             return (
-                <div key={question.id} className="space-y-3">
-                    <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
-                        {question.questionText}
-                        {question.isRequired && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    <select
-                        value={value}
-                        onChange={(e) => onAnswerChange(question.id, e.target.value)}
-                        className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
-                            ? "border-red-300 bg-red-50"
-                            : "border-gray-200 bg-white hover:border-gray-300"
-                            } outline-none`}
-                        style={hasError ? undefined : {
-                            borderColor: theme.primaryLight,
-                            color: "#111827"
-                        }}
-                        onFocus={(e) => {
-                            if (!hasError) {
-                                e.currentTarget.style.borderColor = theme.primary;
-                                e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.primaryLight}`;
-                                e.currentTarget.style.backgroundColor = theme.primaryLighter;
-                            }
-                        }}
-                        onBlur={(e) => {
-                            if (!hasError) {
-                                e.currentTarget.style.borderColor = theme.primaryLight;
-                                e.currentTarget.style.boxShadow = "none";
-                                e.currentTarget.style.backgroundColor = "#FFFFFF";
-                            }
-                        }}
-                    >
-                        <option value="">{question.placeholder || "Select an option"}</option>
-                        {question.options?.map((option) => (
-                            <option key={option.id} value={option.optionValue}>
-                                {option.optionText}
-                            </option>
-                        ))}
-                    </select>
-                    {question.helpText && <p className="text-sm text-gray-600">{question.helpText}</p>}
+                <div key={question.id} className="space-y-4">
+                    <div>
+                        <h3 className="text-2xl font-medium text-gray-900 mb-3">
+                            {question.questionText}
+                            {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                        </h3>
+                        {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
+                    </div>
+
+                    <div className="space-y-3">
+                        {question.options?.map((option) => {
+                            const isSelected = value === option.optionValue;
+                            return (
+                                <label
+                                    key={option.id}
+                                    className={`block w-full p-4 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? "" : "bg-white border-gray-200 hover:border-gray-300"}`}
+                                    style={isSelected ? { backgroundColor: theme.primaryLight, borderColor: theme.primary } : undefined}
+                                >
+                                    <div className="flex items-center">
+                                        <div className="relative">
+                                            <input
+                                                type="radio"
+                                                name={question.id}
+                                                value={option.optionValue}
+                                                checked={isSelected}
+                                                onChange={(e) => onRadioChange(question.id, e.target.value)}
+                                                className="sr-only"
+                                            />
+                                            <div
+                                                className="w-5 h-5 rounded-full border-2 flex items-center justify-center"
+                                                style={isSelected ? { borderColor: theme.primary, backgroundColor: theme.primary } : undefined}
+                                            >
+                                                {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                                            </div>
+                                        </div>
+                                        <span className="ml-3 text-gray-900 font-medium">{option.optionText}</span>
+                                    </div>
+                                </label>
+                            );
+                        })}
+                    </div>
+
                     {hasError && <p className="text-sm text-red-600">{errors[question.id]}</p>}
                 </div>
             );
