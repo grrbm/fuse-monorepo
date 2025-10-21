@@ -287,29 +287,29 @@ export default function TemplateEditor() {
         })
         if (!qRes.ok) throw new Error((await qRes.json().catch(() => ({}))).message || 'Failed to create text question')
       } else if (stepType === 'deadend' && newStepId) {
-        // Dead End - Informational step that terminates form
-        const qRes = await fetch(`${baseUrl}/questions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            stepId: newStepId,
-            questionText: 'Unfortunately, you do not qualify at this time.',
-            answerType: 'textarea',
-            isRequired: false,
-            placeholder: 'No response needed - informational only',
-          }),
-        })
-        if (!qRes.ok) throw new Error((await qRes.json().catch(() => ({}))).message || 'Failed to create dead end step')
-        
-        // Mark the step as dead end
+        // Dead End - Informational step (no question) that terminates form
+        // Don't create a question - dead end is just title + description like info step
+        // Mark the step as dead end and set default title/description
         await fetch(`${baseUrl}/questionnaires/step`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             stepId: newStepId,
-            title: 'Form Ended',
-            description: 'This step terminates the form',
+            title: 'Disqualification Notice',
+            description: 'Unfortunately, you do not qualify at this time. Thank you for your interest.',
             isDeadEnd: true
+          }),
+        })
+      } else if (stepType === 'info' && newStepId) {
+        // Information - Just title + description, no question
+        // Set default title for info steps
+        await fetch(`${baseUrl}/questionnaires/step`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            title: 'Information',
+            description: 'Important information for you to review.'
           }),
         })
       }
@@ -989,30 +989,36 @@ export default function TemplateEditor() {
             }
             break
           case 'deadend':
-            payload.answerType = 'textarea'
-            payload.isRequired = false
-            if (editingConditionalStep.placeholder) {
-              payload.placeholder = editingConditionalStep.placeholder
-            }
+            // Dead End is information-only (no question), just update step
+            // Skip question creation entirely
+            break
+          case 'info':
+            // Info is also information-only (no question)
+            // Skip question creation entirely
             break
         }
 
-        const res = await fetch(`${baseUrl}/questions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(payload)
-        })
+        // Only create a question if stepType is NOT info or deadend
+        if (editingConditionalStep.stepType !== 'info' && editingConditionalStep.stepType !== 'deadend') {
+          const res = await fetch(`${baseUrl}/questions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify(payload)
+          })
 
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create conditional step')
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create conditional step')
+        }
         
-        // If it's a dead end step on a new-step placement, mark the step as dead end
-        if (editingConditionalStep.stepType === 'deadend' && editingConditionalStep.placement === 'new-step' && targetStepId) {
+        // Update step title and description for info/deadend types
+        if ((editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend') && targetStepId) {
           await fetch(`${baseUrl}/questionnaires/step`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({
               stepId: targetStepId,
-              isDeadEnd: true
+              title: editingConditionalStep.text.substring(0, 100) || (editingConditionalStep.stepType === 'deadend' ? 'Disqualification Notice' : 'Information'),
+              description: editingConditionalStep.helpText || editingConditionalStep.text,
+              isDeadEnd: editingConditionalStep.stepType === 'deadend'
             }),
           }).catch(() => { }) // Non-critical, continue if fails
         }
