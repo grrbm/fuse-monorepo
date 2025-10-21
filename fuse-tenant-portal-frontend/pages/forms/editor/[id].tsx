@@ -251,6 +251,56 @@ export default function TemplateEditor() {
     }
   }
 
+  const handleDeleteConditionalQuestion = async (stepId: string, questionId: string) => {
+    if (isAccountTemplate) return
+    if (!token || !templateId) return
+    if (!confirm("Are you sure you want to delete this conditional question?")) return
+    
+    try {
+      const res = await fetch(`${baseUrl}/questions`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ questionId }),
+      })
+      
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to delete conditional question')
+      
+      // Reload template to reflect deletion
+      const refRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const refData = await refRes.json()
+      setTemplate(refData.data)
+      
+      const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
+        id: String(s.id),
+        title: String(s.title || ''),
+        description: String(s.description || ''),
+        stepOrder: Number(s.stepOrder || 0),
+        category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
+        stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        questions: (s.questions || []).map((q: any) => ({
+          id: String(q.id),
+          type: 'single-choice',
+          questionText: String(q.questionText || ''),
+          required: Boolean(q.isRequired),
+          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          conditionalLevel: Number(q.conditionalLevel || 0),
+          subQuestionOrder: Number(q.subQuestionOrder || 0)
+        })),
+      })) as Step[]
+      setSteps(loadedSteps)
+      
+      // Close editing if we were editing this question
+      if (editingQuestionId === questionId) {
+        setEditingQuestionId(null)
+      }
+    } catch (e: any) {
+      console.error('❌ Failed to delete conditional question', e)
+      alert(e.message || 'Failed to delete conditional question')
+    }
+  }
+
   const handleUpdateStep = (stepId: string, updates: Partial<Step>) => {
     setSteps(steps.map(s => s.id === stepId ? { ...s, ...updates } : s))
   }
@@ -877,10 +927,11 @@ export default function TemplateEditor() {
                                           <h4 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
                                             REQUIRES
                                           </h4>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => {
+                                          <div className="flex gap-1">
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => {
                                               // Find parent question to get its options
                                               const parentQ = step.questions?.find(pq => (pq.conditionalLevel || 0) === 0)
                                               if (parentQ) {
@@ -922,6 +973,16 @@ export default function TemplateEditor() {
                                           >
                                             Edit Rule
                                           </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleDeleteConditionalQuestion(step.id, q.id)}
+                                            className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                                            title="Delete conditional question"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
                                         </div>
                                         <div className="text-sm text-yellow-800 dark:text-yellow-200">
                                           (20) {step.questions?.find(pq => (pq.conditionalLevel || 0) === 0)?.questionText || 'Parent Question'}
