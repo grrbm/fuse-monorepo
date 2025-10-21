@@ -1486,18 +1486,42 @@ export default function TemplateEditor() {
                     >
                       <div className="p-6">
                         <div className="flex items-start gap-5">
-                          {/* Icon */}
-                          <div className={`flex-shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center ${
-                            step.stepType === "info" 
-                              ? "bg-blue-50 dark:bg-blue-900/20" 
-                              : "bg-teal-50 dark:bg-teal-900/20"
-                          }`}>
-                            {step.stepType === "info" ? (
-                              <Info className="h-7 w-7 text-blue-600 dark:text-blue-400" />
-                            ) : (
-                              <MessageSquare className="h-7 w-7 text-teal-600 dark:text-teal-400" />
-                            )}
-                          </div>
+                          {/* Icon based on question type */}
+                          {(() => {
+                            const firstQuestion = step.questions?.[0]
+                            const isInfo = step.stepType === "info"
+                            const isYesNo = firstQuestion?.questionSubtype === 'yesno'
+                            const isMulti = firstQuestion?.answerType === 'checkbox'
+                            const isTextarea = firstQuestion?.answerType === 'textarea'
+                            
+                            let bgColor = "bg-teal-50 dark:bg-teal-900/20"
+                            let iconColor = "text-teal-600 dark:text-teal-400"
+                            let icon = <MessageSquare className="h-7 w-7" />
+                            
+                            if (isInfo) {
+                              bgColor = "bg-gray-100 dark:bg-gray-800"
+                              iconColor = "text-gray-600 dark:text-gray-400"
+                              icon = <Info className="h-7 w-7" />
+                            } else if (isYesNo) {
+                              bgColor = "bg-blue-50 dark:bg-blue-900/20"
+                              iconColor = "text-blue-600 dark:text-blue-400"
+                            } else if (isMulti) {
+                              bgColor = "bg-purple-50 dark:bg-purple-900/20"
+                              iconColor = "text-purple-600 dark:text-purple-400"
+                            } else if (isTextarea) {
+                              bgColor = "bg-orange-50 dark:bg-orange-900/20"
+                              iconColor = "text-orange-600 dark:text-orange-400"
+                              icon = <Edit className="h-7 w-7" />
+                            }
+                            
+                            return (
+                              <div className={`flex-shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center ${bgColor}`}>
+                                <div className={iconColor}>
+                                  {icon}
+                                </div>
+                              </div>
+                            )
+                          })()}
                           
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-3">
