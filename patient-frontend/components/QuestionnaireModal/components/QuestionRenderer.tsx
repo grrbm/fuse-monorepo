@@ -165,11 +165,11 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                         {question.isRequired && <span className="text-red-500 ml-1">*</span>}
                     </label>
                     <textarea
-                        placeholder={question.placeholder}
+                        placeholder={question.placeholder || "Type your detailed response here..."}
                         value={value}
                         onChange={(e) => onAnswerChange(question.id, e.target.value)}
-                        rows={4}
-                        className={`w-full p-4 rounded-2xl border-2 transition-all resize-none ${hasError
+                        rows={8}
+                        className={`w-full p-4 rounded-2xl border-2 transition-all resize-y min-h-[150px] ${hasError
                             ? "border-red-300 bg-red-50"
                             : "border-gray-200 bg-white hover:border-gray-300"
                             } outline-none`}

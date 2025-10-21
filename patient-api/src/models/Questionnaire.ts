@@ -141,6 +141,13 @@ export default class Questionnaire extends Entity {
     })
     declare color: string | null;
 
+    @Column({
+        type: DataType.ENUM('in_progress', 'ready_for_review', 'ready'),
+        allowNull: false,
+        defaultValue: 'in_progress',
+    })
+    declare status: 'in_progress' | 'ready_for_review' | 'ready';
+
     // productId and product already declared above; duplicate declarations removed
 
     @HasMany(() => QuestionnaireStep)

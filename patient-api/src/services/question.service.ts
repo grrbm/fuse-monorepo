@@ -65,6 +65,10 @@ class QuestionService {
         placeholder?: string;
         helpText?: string;
         footerNote?: string;
+        conditionalLogic?: string;
+        conditionalLevel?: number;
+        subQuestionOrder?: number;
+        parentQuestionId?: string;
         options?: Array<{ optionText: string; optionValue?: string }>;
     }, userId: string) {
         // Validate question operation permission
@@ -79,6 +83,19 @@ class QuestionService {
 
         const nextQuestionOrder = existingQuestions.length > 0 && existingQuestions[0]?.questionOrder ? existingQuestions[0].questionOrder + 1 : 1;
 
+        // If this is a sub-question, get the next sub-question order
+        let subQuestionOrder = questionData.subQuestionOrder;
+        if (questionData.parentQuestionId && !subQuestionOrder) {
+            const existingSubQuestions = await Question.findAll({
+                where: { stepId, conditionalLevel: questionData.conditionalLevel || 1 },
+                order: [['subQuestionOrder', 'DESC']],
+                limit: 1
+            });
+            subQuestionOrder = existingSubQuestions.length > 0 && existingSubQuestions[0]?.subQuestionOrder 
+                ? existingSubQuestions[0].subQuestionOrder + 1 
+                : 1;
+        }
+
         // Create the question
         const question = await Question.create({
             questionText: questionData.questionText,
@@ -88,7 +105,10 @@ class QuestionService {
             stepId: stepId,
             placeholder: questionData.placeholder || null,
             helpText: questionData.helpText || null,
-            footerNote: questionData.footerNote || null
+            footerNote: questionData.footerNote || null,
+            conditionalLogic: questionData.conditionalLogic || null,
+            conditionalLevel: questionData.conditionalLevel || 0,
+            subQuestionOrder: subQuestionOrder || null
         });
 
         // Create options if provided
@@ -124,6 +144,10 @@ class QuestionService {
         placeholder?: string;
         helpText?: string;
         footerNote?: string;
+        conditionalLogic?: string;
+        conditionalLevel?: number;
+        subQuestionOrder?: number;
+        parentQuestionId?: string;
         options?: Array<{ id?: string; optionText: string; optionValue?: string }>;
     }, userId: string) {
         const question = await Question.findByPk(questionId);
@@ -149,7 +173,10 @@ class QuestionService {
                 ...(updateData.isRequired !== undefined && { isRequired: updateData.isRequired }),
                 ...(updateData.placeholder !== undefined && { placeholder: updateData.placeholder }),
                 ...(updateData.helpText !== undefined && { helpText: updateData.helpText }),
-                ...(updateData.footerNote !== undefined && { footerNote: updateData.footerNote })
+                ...(updateData.footerNote !== undefined && { footerNote: updateData.footerNote }),
+                ...(updateData.conditionalLogic !== undefined && { conditionalLogic: updateData.conditionalLogic }),
+                ...(updateData.conditionalLevel !== undefined && { conditionalLevel: updateData.conditionalLevel }),
+                ...(updateData.subQuestionOrder !== undefined && { subQuestionOrder: updateData.subQuestionOrder })
             }, { transaction });
 
             // Update options if provided
