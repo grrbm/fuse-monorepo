@@ -15,17 +15,45 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 
+// Extend base public paths locally for patient-frontend only
+const PATIENT_PUBLIC_PATH_PATTERNS = [
+  ...PUBLIC_PATH_PATTERNS,
+  '/my-products',
+  '/my-products/[...rest]',
+] as const
+
 const matchesPublicPattern = (pattern: string, pathname: string, asPath: string) => {
-  if (!pattern.includes('[')) {
-    return pattern === pathname || pattern === asPath
+  const cleanPattern = pattern.trim()
+  if (!cleanPattern.includes('[')) {
+    const ok = cleanPattern === pathname || cleanPattern === asPath
+    console.log('[AuthContext] matchesPublicPattern static', { pattern: cleanPattern, pathname, asPath, ok })
+    return ok
   }
 
-  const regex = new RegExp(`^${pattern.replace(/\[.*?\]/g, '[^/]+')}$`)
-  return regex.test(pathname) || regex.test(asPath)
+  // Support Next.js style dynamic segments including catch-all and optional catch-all
+  // [[...param]] => optional catch-all
+  // [...param] => required catch-all
+  // [param] => single segment
+  const source = cleanPattern
+    .replace(/\[\[\.\.\.(.+?)\]\]/g, '(?:.*)?')
+    .replace(/\[\.\.\.(.+?)\]/g, '.+')
+    .replace(/\[(.+?)\]/g, '[^/]+')
+
+  const regex = new RegExp(`^${source}$`)
+  const ok = regex.test(pathname) || regex.test(asPath)
+  console.log('[AuthContext] matchesPublicPattern dynamic', { pattern: cleanPattern, source, regex: regex.toString(), pathname, asPath, ok })
+  return ok
 }
 
 const isPublicRoute = (pathname: string, asPath: string) => {
-  return PUBLIC_PATH_PATTERNS.some((pattern) => matchesPublicPattern(pattern, pathname, asPath))
+  console.log('[AuthContext] isPublicRoute input', { pathname, asPath })
+  if (pathname.includes('/my-products') || asPath.includes('/my-products')) {
+    console.log('[AuthContext] public via contains /my-products')
+    return true
+  }
+  const result = PATIENT_PUBLIC_PATH_PATTERNS.some((pattern) => matchesPublicPattern(pattern as string, pathname, asPath))
+  console.log('[AuthContext] isPublicRoute result', { result })
+  return result
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -94,9 +122,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       const publicRoute = isPublicRoute(router.pathname, router.asPath.split('?')[0])
+      console.log('[AuthContext] initAuth', { pathname: router.pathname, asPath: router.asPath, publicRoute })
 
       if (!publicRoute) {
+        console.log('[AuthContext] initAuth -> protected route, refreshing user')
         await refreshUser();
+      } else {
+        console.log('[AuthContext] initAuth -> public route, skipping refreshUser')
       }
       setLoading(false);
     };
@@ -107,7 +139,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Redirect to signin if user becomes unauthenticated
   useEffect(() => {
     const publicRoute = isPublicRoute(router.pathname, router.asPath.split('?')[0])
+    console.log('[AuthContext] redirect check', { pathname: router.pathname, asPath: router.asPath, loading, hasUser: !!user, publicRoute })
     if (!loading && !user && !publicRoute) {
+      console.log('[AuthContext] redirecting to /signin')
       router.push('/signin');
     }
   }, [user, loading, router]);

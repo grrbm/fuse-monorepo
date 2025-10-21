@@ -20,14 +20,21 @@ export function ProtectedRouteProvider({ children }: ProviderProps) {
         const asPath = router.asPath.split('?')[0]
         const pathname = router.pathname
 
-        const isUnprotected = UNPROTECTED_PATHS.some((pattern) => {
-            const cleanPattern = pattern.trim()
+        const LOCAL_UNPROTECTED = [
+            ...UNPROTECTED_PATHS,
+            '/my-products',
+            '/my-products/[...rest]',
+        ] as const
+
+        console.log('[ProtectedRouteProvider] inputs', { pathname, asPath })
+        const isUnprotected = (pathname.includes('/my-products') || asPath.includes('/my-products')) || LOCAL_UNPROTECTED.some((pattern) => {
+            const cleanPattern = (pattern as string).trim()
             console.log('[ProtectedRouteProvider] Checking pattern:', cleanPattern, {
                 pathname,
                 asPath,
             })
 
-            if (!pattern.includes('[')) {
+            if (!cleanPattern.includes('[')) {
                 const match = cleanPattern === pathname || cleanPattern === asPath
                 if (match) {
                     console.log('[ProtectedRouteProvider] Matched static pattern:', cleanPattern)
@@ -35,7 +42,12 @@ export function ProtectedRouteProvider({ children }: ProviderProps) {
                 return match
             }
 
-            const regex = new RegExp(`^${cleanPattern.replace(/\[.*?\]/g, '[^/]+')}$`)
+            const source = cleanPattern
+                .replace(/\[\[\.\.\.(.+?)\]\]/g, '(?:.*)?')
+                .replace(/\[\.\.\.(.+?)\]/g, '.+')
+                .replace(/\[(.+?)\]/g, '[^/]+')
+
+            const regex = new RegExp(`^${source}$`)
             const match = regex.test(pathname) || regex.test(asPath)
             if (match) {
                 console.log('[ProtectedRouteProvider] Matched dynamic pattern:', cleanPattern)

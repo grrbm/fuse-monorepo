@@ -37,8 +37,13 @@ export default function PublicProductPage() {
         setError(null)
 
         try {
-            const res = await fetch(`/api/public/brand-products/${encodeURIComponent(productSlug)}`)
-            const data = await res.json().catch(() => null)
+            const apiUrl = `/api/public/brand-products/${encodeURIComponent(productSlug)}`
+            console.log('[PublicProduct] fetching', { apiUrl })
+            const res = await fetch(apiUrl)
+            const raw = await res.text()
+            let data: any
+            try { data = JSON.parse(raw) } catch { data = raw }
+            console.log('[PublicProduct] api response', { status: res.status, data })
             console.log('[PublicProduct] api response', data)
 
             if (!res.ok || !data?.success || !data?.data) {
