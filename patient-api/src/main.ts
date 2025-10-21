@@ -4560,7 +4560,7 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
     }
 
     const { id } = req.params;
-    const { name, description, schema } = req.body;
+    const { name, description, schema, status } = req.body;
 
     if (!id) {
       return res.status(400).json({ success: false, message: 'Template ID is required' });
@@ -4569,6 +4569,7 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
     const template = await questionnaireService.updateTemplate(id, {
       title: name,
       description,
+      status,
     });
 
     res.status(200).json({ success: true, data: template });
@@ -5219,7 +5220,7 @@ app.post("/questions", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = validation.data;
+    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, conditionalLogic, conditionalLevel, subQuestionOrder, parentQuestionId, options } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -5227,7 +5228,7 @@ app.post("/questions", authenticateJWT, async (req, res) => {
     // Create question
     const newQuestion = await questionService.createQuestion(
       stepId,
-      { questionText, answerType, isRequired, placeholder, helpText, footerNote, options },
+      { questionText, answerType, isRequired, placeholder, helpText, footerNote, conditionalLogic, conditionalLevel, subQuestionOrder, parentQuestionId, options },
       currentUser.id
     );
 

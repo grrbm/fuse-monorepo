@@ -1999,6 +1999,70 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               if (!conditionalLogic) return true;
 
                               try {
+                                // Find the parent question (conditionalLevel 0) in this step
+                                const parentQuestion = currentStep.questions?.find(q => 
+                                  (q as any).conditionalLevel === 0 || !(q as any).conditionalLevel
+                                );
+                                
+                                if (!parentQuestion) return false;
+                                const parentAnswer = answers[parentQuestion.id];
+
+                                // Helper to check if a single condition is met
+                                const checkCondition = (conditionStr: string): boolean => {
+                                  if (conditionStr.startsWith('answer_equals:')) {
+                                    const requiredValue = conditionStr.replace('answer_equals:', '').trim();
+                                    
+                                    // Handle array answers (for checkboxes/multiple choice)
+                                    if (Array.isArray(parentAnswer)) {
+                                      return parentAnswer.includes(requiredValue);
+                                    }
+                                    
+                                    return parentAnswer === requiredValue;
+                                  }
+                                  return false;
+                                };
+
+                                // Parse complex logic with AND/OR operators
+                                // Format: "answer_equals:value1 OR answer_equals:value2 AND answer_equals:value3"
+                                if (conditionalLogic.includes(' OR ') || conditionalLogic.includes(' AND ')) {
+                                  const tokens = conditionalLogic.split(' ');
+                                  const conditions: Array<{check: boolean, operator?: 'OR' | 'AND'}> = [];
+                                  
+                                  for (let i = 0; i < tokens.length; i++) {
+                                    const token = tokens[i];
+                                    if (token.startsWith('answer_equals:')) {
+                                      const isTrue = checkCondition(token);
+                                      // Look ahead for operator
+                                      const nextToken = tokens[i + 1];
+                                      const operator = (nextToken === 'OR' || nextToken === 'AND') ? nextToken as 'OR' | 'AND' : undefined;
+                                      conditions.push({ check: isTrue, operator });
+                                    }
+                                  }
+                                  
+                                  // Evaluate the conditions with proper precedence (AND has higher precedence than OR)
+                                  // First, group AND conditions
+                                  let result = conditions[0]?.check ?? false;
+                                  let currentOperator: 'OR' | 'AND' | undefined = conditions[0]?.operator;
+                                  
+                                  for (let i = 1; i < conditions.length; i++) {
+                                    const cond = conditions[i];
+                                    if (currentOperator === 'AND') {
+                                      result = result && cond.check;
+                                    } else if (currentOperator === 'OR') {
+                                      result = result || cond.check;
+                                    }
+                                    currentOperator = cond.operator;
+                                  }
+                                  
+                                  return result;
+                                }
+
+                                // Simple single condition: "answer_equals:optionValue"
+                                if (conditionalLogic.startsWith('answer_equals:')) {
+                                  return checkCondition(conditionalLogic);
+                                }
+
+                                // Support legacy format: "question:2,answer:yes"
                                 const parts = conditionalLogic.split(',');
                                 const targetQuestionOrder = parseInt(parts[0].split(':')[1]);
                                 const answerPart = parts.slice(1).join(',');
