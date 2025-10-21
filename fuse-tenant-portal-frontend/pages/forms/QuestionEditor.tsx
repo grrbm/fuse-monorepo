@@ -251,42 +251,32 @@ export function QuestionEditor({
                     )}
                 </div>
 
-                {!autoEdit && (
+                {/* Show Save/Cancel buttons when editing (always, even in autoEdit mode) */}
+                {editable && isEditing && (
                   <div className="flex items-center gap-2">
-                    {editable && (
-                        <div className="flex items-center gap-2">
-                            {isEditing ? (
-                                <>
-                                    <Button
-                                        size="sm"
-                                        onClick={handleSave}
-                                        disabled={isSaving}
-                                    >
-                                        {isSaving ? (
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Save className="mr-2 h-4 w-4" />
-                                        )}
-                                        Save
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={resetEditingState}
-                                        disabled={isSaving}
-                                    >
-                                        <X className="mr-2 h-4 w-4" />
-                                        Cancel
-                                    </Button>
-                                </>
-                            ) : (
-                                <Button size="sm" variant="ghost" onClick={() => setIsEditing(true)}>
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit
-                                </Button>
-                            )}
-                        </div>
+                    <Button
+                        size="sm"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                    >
+                        {isSaving ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Save
+                    </Button>
+                    {!autoEdit && (
+                      <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={resetEditingState}
+                          disabled={isSaving}
+                      >
+                          <X className="mr-2 h-4 w-4" />
+                          Cancel
+                      </Button>
                     )}
                   </div>
                 )}
