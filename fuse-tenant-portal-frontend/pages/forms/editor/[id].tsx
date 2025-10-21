@@ -56,6 +56,7 @@ export default function TemplateEditor() {
   const [productCategory, setProductCategory] = useState<string | null>(null)
   const isAccountTemplate = useMemo(() => template?.formTemplateType === 'user_profile', [template?.formTemplateType])
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
   const [showVariables, setShowVariables] = useState(false)
   const [draggedStepId, setDraggedStepId] = useState<string | null>(null)
   const [copiedVariable, setCopiedVariable] = useState<string | null>(null)
@@ -406,6 +407,9 @@ export default function TemplateEditor() {
 
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create conditional question')
 
+      const createdData = await res.json()
+      const newQuestionId = createdData?.data?.id
+
       // Reload template to show the new conditional question
       const refRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -432,7 +436,18 @@ export default function TemplateEditor() {
       })) as Step[]
       setSteps(loadedSteps)
 
-      // Reset form
+      // Close the parent question's edit mode and open the new conditional question
+      if (newQuestionId) {
+        // Keep the step open but switch to editing the new conditional question
+        setEditingStepId(selectedQuestionForConditional.stepId)
+        setEditingQuestionId(newQuestionId)
+      } else {
+        // If we don't have the new question ID, just close edit mode
+        setEditingStepId(null)
+        setEditingQuestionId(null)
+      }
+
+      // Reset form and close modal
       setNewConditionalRule({
         triggerOption: selectedQuestionForConditional.options[0] || '',
         followUpQuestion: ''
@@ -785,7 +800,52 @@ export default function TemplateEditor() {
                             {editingStepId === step.id ? (
                               <div className="space-y-4">
                                 {/* Question Options (only for question type) */}
-                                {step.stepType === "question" && (step.questions || []).map((q) => (
+                                {step.stepType === "question" && (step.questions || []).map((q) => {
+                                  // Only show this question in edit mode if:
+                                  // 1. No specific question is being edited (editingQuestionId is null), OR
+                                  // 2. This is the question being edited
+                                  const shouldShowEdit = !editingQuestionId || editingQuestionId === q.id
+                                  
+                                  if (!shouldShowEdit) {
+                                    // Show collapsed view for non-edited questions
+                                    const isConditional = (q.conditionalLevel || 0) > 0
+                                    
+                                    return (
+                                      <div key={q.id} className={`p-4 border rounded-lg ${
+                                        isConditional 
+                                          ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 ml-6' 
+                                          : 'bg-muted/30'
+                                      }`}>
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              {isConditional && (
+                                                <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
+                                                  <GitBranch className="h-3 w-3 mr-1" />
+                                                  Conditional
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            <p className="font-medium text-sm mb-2">{q.questionText}</p>
+                                            <div className="flex gap-2 flex-wrap">
+                                              {q.options?.map((opt, i) => (
+                                                <Badge key={i} variant="secondary" className="text-xs">{opt}</Badge>
+                                              ))}
+                                            </div>
+                                          </div>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setEditingQuestionId(q.id)}
+                                          >
+                                            <Edit className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )
+                                  }
+                                  
+                                  return (
                                   <div key={q.id} className="space-y-3">
                                     <QuestionEditor
                                       question={{
@@ -811,7 +871,6 @@ export default function TemplateEditor() {
                                             options: (updated.options || []).map((o: any) => o.optionText),
                                           } : oldQ)
                                         } : s))
-                                        setEditingStepId(null)
                                       }}
                                     />
                                     
@@ -835,13 +894,17 @@ export default function TemplateEditor() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        onClick={() => setEditingStepId(null)}
+                                        onClick={() => {
+                                          setEditingStepId(null)
+                                          setEditingQuestionId(null)
+                                        }}
                                       >
                                         Done Editing
                                       </Button>
                                     </div>
                                   </div>
-                                ))}
+                                  )
+                                })}
                               </div>
                             ) : (
                               <div className="relative">
@@ -936,7 +999,17 @@ export default function TemplateEditor() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() => setEditingStepId(editingStepId === step.id ? null : step.id)}
+                              onClick={() => {
+                                if (editingStepId === step.id) {
+                                  setEditingStepId(null)
+                                  setEditingQuestionId(null)
+                                } else {
+                                  setEditingStepId(step.id)
+                                  // Auto-select first main question (not conditional)
+                                  const firstMainQuestion = step.questions?.find(q => (q.conditionalLevel || 0) === 0)
+                                  setEditingQuestionId(firstMainQuestion?.id || null)
+                                }
+                              }}
                               title="Edit step"
                             >
                               <Edit className="h-4 w-4 text-primary" />
