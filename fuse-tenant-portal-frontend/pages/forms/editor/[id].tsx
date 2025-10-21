@@ -354,15 +354,24 @@ export default function TemplateEditor() {
     }
   }
 
-  const handleOpenConditionalModal = (stepId: string, question: Question) => {
+  const handleOpenConditionalModal = (stepId: string, questionId: string) => {
+    // Get the latest question data from state to ensure we have updated options
+    const currentStep = steps.find(s => s.id === stepId)
+    const currentQuestion = currentStep?.questions?.find(q => q.id === questionId)
+    
+    if (!currentQuestion) {
+      console.error('Question not found for conditional logic')
+      return
+    }
+
     setSelectedQuestionForConditional({
       stepId,
-      questionId: question.id,
-      questionText: question.questionText,
-      options: question.options || []
+      questionId: currentQuestion.id,
+      questionText: currentQuestion.questionText,
+      options: currentQuestion.options || []
     })
     setNewConditionalRule({
-      triggerOption: question.options?.[0] || '',
+      triggerOption: currentQuestion.options?.[0] || '',
       followUpQuestion: ''
     })
     setShowConditionalModal(true)
@@ -812,7 +821,7 @@ export default function TemplateEditor() {
                                         <Button
                                           size="sm"
                                           variant="outline"
-                                          onClick={() => handleOpenConditionalModal(step.id, q)}
+                                          onClick={() => handleOpenConditionalModal(step.id, q.id)}
                                           className="w-full"
                                         >
                                           <GitBranch className="mr-2 h-4 w-4" />
