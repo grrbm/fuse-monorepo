@@ -239,12 +239,26 @@ export function QuestionEditor({
         }
     }
 
+    // Get question type label for display
+    const getQuestionTypeLabel = () => {
+        if (question.questionSubtype === 'yesno') return 'Yes/No Question'
+        if (answerType === 'textarea' || question.answerType === 'textarea') return 'Multi-Line Text'
+        if (answerType === 'checkbox') return 'Multi-Choice Question'
+        if (answerType === 'radio') return 'Single-Choice Question'
+        if (answerType === 'text') return 'Short Text'
+        if (answerType === 'select') return 'Select Dropdown'
+        return 'Question'
+    }
+
     return (
         <div className="rounded-lg border border-border bg-card p-4 shadow-sm space-y-4">
             {/* Header with Save Button */}
             {editable && isEditing && (
                 <div className="flex items-center justify-between pb-3 border-b">
-                    <h3 className="text-sm font-semibold text-foreground">Edit Question</h3>
+                    <div className="flex flex-col gap-1">
+                        <h3 className="text-sm font-semibold text-foreground">Edit Question</h3>
+                        <span className="text-xs text-muted-foreground font-medium">{getQuestionTypeLabel()}</span>
+                    </div>
                     <div className="flex items-center gap-2">
                         <Button
                             size="sm"

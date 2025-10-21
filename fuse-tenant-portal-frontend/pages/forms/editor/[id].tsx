@@ -2311,7 +2311,19 @@ export default function TemplateEditor() {
       )}
 
       {/* Edit Question Modal */}
-      {showEditModal && editingQuestion && editingStepId && (
+      {showEditModal && editingQuestion && editingStepId && (() => {
+        // Get question type label
+        const getQuestionTypeLabel = () => {
+          if (editingQuestion.questionSubtype === 'yesno') return 'Yes/No Question'
+          if (editingQuestion.answerType === 'textarea') return 'Multi-Line Text'
+          if (editingQuestion.answerType === 'checkbox') return 'Multi-Choice Question'
+          if (editingQuestion.answerType === 'radio') return 'Single-Choice Question'
+          if (editingQuestion.answerType === 'text') return 'Short Text'
+          if (editingQuestion.answerType === 'select') return 'Select Dropdown'
+          return 'Question'
+        }
+        
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
@@ -2321,6 +2333,11 @@ export default function TemplateEditor() {
                     Edit Question
                   </CardTitle>
                   <CardDescription>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="secondary" className="text-xs">
+                        {getQuestionTypeLabel()}
+                      </Badge>
+                    </div>
                     Update the question text, options, and settings.
                   </CardDescription>
                 </div>
@@ -2382,7 +2399,8 @@ export default function TemplateEditor() {
             </CardContent>
           </Card>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
