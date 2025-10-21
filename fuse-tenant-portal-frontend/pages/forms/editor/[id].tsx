@@ -136,6 +136,7 @@ export default function TemplateEditor() {
           stepOrder: Number(s.stepOrder || 0),
           category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
           stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+          isDeadEnd: Boolean(s.isDeadEnd),
           questions: (s.questions || []).map((q: any) => ({
             id: String(q.id),
             type: q.answerType || 'single-choice', // Use actual answerType from backend
