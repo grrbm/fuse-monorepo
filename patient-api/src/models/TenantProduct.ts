@@ -51,7 +51,7 @@ export default class TenantProduct extends Entity {
         allowNull: false,
         defaultValue: true,
     })
-    declare active: boolean;
+    declare isActive: boolean;
 
     @Column({
         type: DataType.FLOAT,

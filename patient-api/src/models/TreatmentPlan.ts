@@ -48,7 +48,7 @@ export default class TreatmentPlan extends Entity {
         allowNull: false,
         defaultValue: true,
     })
-    declare active: boolean;
+    declare isActive: boolean;
 
     @Column({
         type: DataType.BOOLEAN,
