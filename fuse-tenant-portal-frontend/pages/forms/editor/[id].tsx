@@ -1817,27 +1817,71 @@ export default function TemplateEditor() {
                               
                                 {step.stepType === "info" && (
                                 <div className="bg-card rounded-lg border border-border/40 p-5">
-                                  <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1">
-                                      <p className="font-medium text-base mb-1">{step.title || 'Information Step'}</p>
-                                      <p className="text-sm text-muted-foreground">{step.description || 'No description provided'}</p>
+                                  {editingStepId === step.id ? (
+                                    // Edit mode
+                                    <div className="space-y-4">
+                                      <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-foreground">Step Title</label>
+                                        <input
+                                          type="text"
+                                          value={step.title}
+                                          onChange={(e) => {
+                                            const newSteps = steps.map(s => s.id === step.id ? {...s, title: e.target.value} : s)
+                                            setSteps(newSteps)
+                                          }}
+                                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                                          placeholder="Enter step title"
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-foreground">Description</label>
+                                        <textarea
+                                          value={step.description}
+                                          onChange={(e) => {
+                                            const newSteps = steps.map(s => s.id === step.id ? {...s, description: e.target.value} : s)
+                                            setSteps(newSteps)
+                                          }}
+                                          className="w-full px-3 py-2 border rounded-md bg-background text-sm resize-none"
+                                          rows={3}
+                                          placeholder="Enter description or information text"
+                                        />
+                                      </div>
+                                      <div className="flex gap-2 justify-end pt-2 border-t">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => setEditingStepId(null)}
+                                        >
+                                          Done
+                                        </Button>
+                                      </div>
                                     </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => setEditingStepId(step.id)}
-                                      className="flex-shrink-0 rounded-lg"
-                                    >
-                                      <Edit className="h-4 w-4 mr-1.5" />
-                                      Edit
-                                    </Button>
-                                  </div>
-                                  {step.isDeadEnd && (
-                                    <div className="mt-3 pt-3 border-t">
-                                      <p className="text-xs text-red-600 font-medium">
-                                        ⚠ This step will terminate the form
-                                      </p>
-                                    </div>
+                                  ) : (
+                                    // View mode
+                                    <>
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1">
+                                          <p className="font-medium text-base mb-1">{step.title || 'Information Step'}</p>
+                                          <p className="text-sm text-muted-foreground">{step.description || 'No description provided'}</p>
+                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => setEditingStepId(step.id)}
+                                          className="flex-shrink-0 rounded-lg"
+                                        >
+                                          <Edit className="h-4 w-4 mr-1.5" />
+                                          Edit
+                                        </Button>
+                                      </div>
+                                      {step.isDeadEnd && (
+                                        <div className="mt-3 pt-3 border-t">
+                                          <p className="text-xs text-red-600 font-medium">
+                                            ⚠ This step will terminate the form
+                                          </p>
+                                        </div>
+                                      )}
+                                    </>
                                   )}
                               </div>
                             )}
