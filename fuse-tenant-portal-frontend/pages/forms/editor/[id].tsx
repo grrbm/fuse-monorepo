@@ -1816,9 +1816,29 @@ export default function TemplateEditor() {
                                   </div>
                               
                                 {step.stepType === "info" && (
-                                <div className="bg-card rounded-lg border border-border/40 p-4">
-                                    <p className="font-medium text-base mb-1">{step.title}</p>
-                                    <p className="text-sm text-muted-foreground">{step.description}</p>
+                                <div className="bg-card rounded-lg border border-border/40 p-5">
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1">
+                                      <p className="font-medium text-base mb-1">{step.title || 'Information Step'}</p>
+                                      <p className="text-sm text-muted-foreground">{step.description || 'No description provided'}</p>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setEditingStepId(step.id)}
+                                      className="flex-shrink-0 rounded-lg"
+                                    >
+                                      <Edit className="h-4 w-4 mr-1.5" />
+                                      Edit
+                                    </Button>
+                                  </div>
+                                  {step.isDeadEnd && (
+                                    <div className="mt-3 pt-3 border-t">
+                                      <p className="text-xs text-red-600 font-medium">
+                                        ⚠ This step will terminate the form
+                                      </p>
+                                    </div>
+                                  )}
                               </div>
                             )}
                           </div>
