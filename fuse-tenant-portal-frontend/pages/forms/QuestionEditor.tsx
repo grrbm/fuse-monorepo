@@ -15,9 +15,11 @@ interface QuestionnaireQuestionTemplate {
     stepId: string
     questionText: string
     answerType: string
+    questionSubtype?: string | null
     questionOrder: number
     isRequired?: boolean
     helpText?: string | null
+    placeholder?: string | null
     options?: QuestionnaireOptionTemplate[]
 }
 
@@ -53,6 +55,7 @@ export function QuestionEditor({
     const [questionText, setQuestionText] = useState(question.questionText)
     const [answerType, setAnswerType] = useState<string>(question.answerType || 'radio')
     const [helpText, setHelpText] = useState(question.helpText || '')
+    const [placeholder, setPlaceholder] = useState(question.placeholder || '')
     const [options, setOptions] = useState<EditableOption[]>(() =>
         (question.options ?? []).map((option, index) => ({
             id: option.id,
@@ -64,6 +67,11 @@ export function QuestionEditor({
     )
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    
+    // Computed values that update with state
+    const isYesNoType = question.questionSubtype === 'yesno'
+    const isTextArea = answerType === 'textarea' || question.answerType === 'textarea'
+    const restrictOptionEdits = restrictStructuralEdits || isYesNoType
 
     useEffect(() => {
         if (autoEdit) {
@@ -76,6 +84,7 @@ export function QuestionEditor({
             setQuestionText(question.questionText)
             setAnswerType(question.answerType || 'radio')
             setHelpText(question.helpText || '')
+            setPlaceholder(question.placeholder || '')
             setOptions(
                 (question.options ?? []).map((option, index) => ({
                     id: option.id,
@@ -109,7 +118,7 @@ export function QuestionEditor({
     }
 
     const handleAddOption = () => {
-        if (restrictStructuralEdits) return
+        if (restrictOptionEdits) return
         setOptions((prev) => (
             [...prev, {
                 id: undefined,
@@ -122,7 +131,7 @@ export function QuestionEditor({
     }
 
     const handleRemoveOption = (localKey: string) => {
-        if (restrictStructuralEdits) return
+        if (restrictOptionEdits) return
         setOptions((prev) =>
             prev
                 .filter((option) => option.localKey !== localKey)
@@ -135,6 +144,7 @@ export function QuestionEditor({
         setError(null)
         setQuestionText(question.questionText)
         setHelpText(question.helpText || '')
+        setPlaceholder(question.placeholder || '')
         setOptions(
             (question.options ?? []).map((option, index) => ({
                 id: option.id,
@@ -155,7 +165,8 @@ export function QuestionEditor({
             return
         }
 
-        const cleanedOptions = options
+        // Only process options for non-textarea questions
+        const cleanedOptions = isTextArea ? [] : options
             .map((option, index) => {
                 const trimmedText = (option.optionText || '').trim()
                 const trimmedValue = (option.optionValue || '').trim()
@@ -173,18 +184,29 @@ export function QuestionEditor({
         setError(null)
 
         try {
+            const payload: any = {
+                questionText: trimmedQuestionText,
+                answerType: answerType || 'radio',
+                helpText: helpText.trim() || null,
+            }
+            
+            // Only include options for non-textarea questions
+            if (!isTextArea) {
+                payload.options = cleanedOptions
+            }
+            
+            // Only include placeholder for textarea questions
+            if (isTextArea) {
+                payload.placeholder = placeholder.trim() || null
+            }
+
             const response = await fetch(`${baseUrl}/questions/${question.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({
-                    questionText: trimmedQuestionText,
-                    answerType: answerType || 'radio',
-                    helpText: helpText.trim() || null,
-                    options: cleanedOptions,
-                }),
+                body: JSON.stringify(payload),
             })
 
             if (!response.ok) {
@@ -218,135 +240,216 @@ export function QuestionEditor({
     }
 
     return (
-        <div className="rounded-md border border-border/60 bg-background/80 p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-                <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-3 text-sm">
-                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
-                            {question.questionOrder ?? 0}
-                        </span>
-                        {isEditing ? (
-                            <Input
-                                value={questionText}
-                                onChange={(event) => setQuestionText(event.target.value)}
-                                placeholder="Question text"
-                                className="text-sm"
-                            />
-                        ) : (
-                            <span className="font-medium text-foreground">{question.questionText}</span>
+        <div className="rounded-lg border border-border bg-card p-4 shadow-sm space-y-4">
+            {/* Header with Save Button */}
+            {editable && isEditing && (
+                <div className="flex items-center justify-between pb-3 border-b">
+                    <h3 className="text-sm font-semibold text-foreground">Edit Question</h3>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            onClick={handleSave}
+                            disabled={isSaving}
+                        >
+                            {isSaving ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <Save className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Save
+                        </Button>
+                        {!autoEdit && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={resetEditingState}
+                                disabled={isSaving}
+                            >
+                                <X className="mr-1.5 h-3.5 w-3.5" />
+                                Cancel
+                            </Button>
                         )}
                     </div>
-                    {isEditing ? (
-                        <textarea
-                            value={helpText}
-                            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setHelpText(e.target.value)}
-                            placeholder="Help text (optional)"
-                            className="w-full px-3 py-2 text-xs border border-input bg-background rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                            rows={2}
-                        />
-                    ) : (
-                        question.helpText && (
-                            <p className="text-xs text-muted-foreground italic">{question.helpText}</p>
-                        )
-                    )}
                 </div>
+            )}
 
-                {/* Show Save/Cancel buttons when editing (always, even in autoEdit mode) */}
-                {editable && isEditing && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                        size="sm"
-                        onClick={handleSave}
-                        disabled={isSaving}
-                    >
-                        {isSaving ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Save className="mr-2 h-4 w-4" />
-                        )}
-                        Save
-                    </Button>
-                    {!autoEdit && (
-                      <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={resetEditingState}
-                          disabled={isSaving}
-                      >
-                          <X className="mr-2 h-4 w-4" />
-                          Cancel
-                      </Button>
-                    )}
-                  </div>
+            {/* Question Text */}
+            <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-foreground">
+                    Question Text {isEditing && <span className="text-destructive">*</span>}
+                </label>
+                {isEditing ? (
+                    <Input
+                        value={questionText}
+                        onChange={(event) => setQuestionText(event.target.value)}
+                        placeholder="Enter your question here..."
+                        className="text-sm h-9"
+                    />
+                ) : (
+                    <p className="text-sm font-medium text-foreground">{question.questionText}</p>
                 )}
             </div>
 
+            {/* Help Text */}
+            <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-muted-foreground">
+                    Help Text <span className="text-xs">(optional)</span>
+                </label>
+                {isEditing ? (
+                    <textarea
+                        value={helpText}
+                        onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setHelpText(e.target.value)}
+                        placeholder="Add context or instructions..."
+                        className="w-full px-2.5 py-2 text-xs border border-input bg-background rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring focus:border-transparent"
+                        rows={2}
+                    />
+                ) : (
+                    question.helpText ? (
+                        <p className="text-xs text-muted-foreground">{question.helpText}</p>
+                    ) : (
+                        <p className="text-xs text-muted-foreground italic">No help text</p>
+                    )
+                )}
+            </div>
+
+            {/* Placeholder (for textarea types) */}
+            {isTextArea && (
+                <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-muted-foreground">
+                        Placeholder <span className="text-xs">(optional)</span>
+                    </label>
+                    {isEditing ? (
+                        <Input
+                            value={placeholder}
+                            onChange={(e) => setPlaceholder(e.target.value)}
+                            placeholder="e.g., Enter your response..."
+                            className="text-xs h-8"
+                        />
+                    ) : (
+                        question.placeholder ? (
+                            <p className="text-xs text-muted-foreground">{question.placeholder}</p>
+                        ) : (
+                            <p className="text-xs text-muted-foreground italic">No placeholder</p>
+                        )
+                    )}
+                </div>
+            )}
+
+            {/* Textarea Preview (for textarea types) */}
+            {isTextArea && (
+                <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-foreground">
+                        Patient View Preview
+                    </label>
+                    <div className="relative">
+                        <textarea
+                            disabled
+                            placeholder={placeholder || "Type your detailed response here..."}
+                            className="w-full px-3 py-2.5 text-sm border-2 border-border rounded-lg bg-muted/30 text-muted-foreground resize-none cursor-not-allowed"
+                            rows={6}
+                        />
+                        <div className="absolute top-2 right-2">
+                            <span className="text-[10px] text-muted-foreground bg-background px-2 py-0.5 rounded-full border border-border/50">
+                                Preview
+                            </span>
+                        </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                        This is what patients will see. Placeholder text disappears when they start typing.
+                    </p>
+                </div>
+            )}
+
             {error && (
-                <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                     {error}
                 </div>
             )}
 
-            {question.options && question.options.length > 0 && !isEditing && (
-                <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                    {question.options
-                        ?.slice()
-                        .sort((a, b) => (a.optionOrder ?? 0) - (b.optionOrder ?? 0))
-                        .map((option) => (
-                            <div key={option.id ?? option.optionOrder} className="flex items-center gap-2">
-                                <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-muted text-[10px] font-medium">
-                                    {option.optionOrder ?? 0}
-                                </span>
-                                <span className="font-medium text-foreground">{option.optionText}</span>
-                                <span className="text-muted-foreground">({option.optionValue})</span>
-                            </div>
-                        ))}
+            {/* Options - Read Only (Hide for textarea) */}
+            {!isTextArea && question.options && question.options.length > 0 && !isEditing && (
+                <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-foreground">
+                        Options
+                        {isYesNoType && (
+                            <span className="ml-2 text-xs font-normal text-muted-foreground">(Yes/No)</span>
+                        )}
+                    </label>
+                    <div className="space-y-1.5">
+                        {question.options
+                            ?.slice()
+                            .sort((a, b) => (a.optionOrder ?? 0) - (b.optionOrder ?? 0))
+                            .map((option) => (
+                                <div key={option.id ?? option.optionOrder} className="flex items-center gap-2 p-2 rounded-md bg-muted/40 border border-border/40">
+                                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary flex-shrink-0">
+                                        {option.optionOrder ?? 0}
+                                    </span>
+                                    <span className="text-xs font-medium text-foreground">{option.optionText}</span>
+                                </div>
+                            ))}
+                    </div>
                 </div>
             )}
 
-            {isEditing && (
-                <div className="mt-3 space-y-3">
-                    <div className="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                        <span>Options</span>
-                        {!restrictStructuralEdits && (
-                            <Button type="button" variant="outline" size="sm" onClick={handleAddOption}>
-                                + Add option
+            {/* Options - Editing (Hide for textarea) */}
+            {!isTextArea && isEditing && (
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <label className="block text-xs font-semibold text-foreground">
+                            Options
+                            {isYesNoType && (
+                                <span className="ml-1 text-[10px] font-normal text-muted-foreground">(Fixed)</span>
+                            )}
+                        </label>
+                        {!restrictOptionEdits && (
+                            <Button type="button" variant="outline" size="sm" onClick={handleAddOption} className="h-7 text-xs">
+                                + Add
                             </Button>
                         )}
                     </div>
                     <div className="space-y-2">
                         {options.map((option) => (
-                            <div key={option.localKey} className="flex flex-col gap-2 rounded border border-border/60 p-3 text-xs">
-                                <div className="flex items-center gap-2">
-                                    <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-muted text-[10px] font-medium text-foreground">
+                            <div key={option.localKey} className="rounded-md border border-border p-2.5 bg-muted/20">
+                                <div className="flex items-start gap-2">
+                                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary mt-1 flex-shrink-0">
                                         {option.optionOrder}
                                     </span>
-                                    <Input
-                                        value={option.optionText}
-                                        onChange={(event: ChangeEvent<HTMLInputElement>) => handleOptionTextChange(option.localKey, event.target.value)}
-                                        placeholder="Option text"
-                                        className="text-xs"
-                                    />
+                                    <div className="flex-1 space-y-2">
+                                        <div className="space-y-1">
+                                            <label className="block text-[10px] font-medium text-muted-foreground">
+                                                Text
+                                            </label>
+                                            <Input
+                                                value={option.optionText}
+                                                onChange={(event: ChangeEvent<HTMLInputElement>) => handleOptionTextChange(option.localKey, event.target.value)}
+                                                placeholder="e.g., Yes"
+                                                className="text-xs h-8"
+                                                disabled={restrictOptionEdits}
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="block text-[10px] font-medium text-muted-foreground">
+                                                Value <span className="opacity-70">(for logic)</span>
+                                            </label>
+                                            <Input
+                                                value={option.optionValue}
+                                                onChange={(event: ChangeEvent<HTMLInputElement>) => handleOptionValueChange(option.localKey, event.target.value)}
+                                                placeholder="e.g., yes"
+                                                className="text-xs h-8"
+                                                disabled={restrictOptionEdits}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-muted text-[10px] font-medium text-foreground opacity-0">
-                                        {option.optionOrder}
-                                    </span>
-                                    <Input
-                                        value={option.optionValue}
-                                        onChange={(event: ChangeEvent<HTMLInputElement>) => handleOptionValueChange(option.localKey, event.target.value)}
-                                        placeholder="Option value"
-                                        className="text-xs"
-                                    />
-                                </div>
-                                {options.length > 1 && !restrictStructuralEdits && (
-                                    <div className="flex justify-end">
+                                {options.length > 1 && !restrictOptionEdits && (
+                                    <div className="flex justify-end pt-1.5 mt-1.5 border-t">
                                         <Button
                                             type="button"
                                             size="sm"
                                             variant="ghost"
                                             onClick={() => handleRemoveOption(option.localKey)}
+                                            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-6 text-[10px] px-2"
                                         >
                                             Remove
                                         </Button>

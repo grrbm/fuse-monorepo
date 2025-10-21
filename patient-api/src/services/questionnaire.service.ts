@@ -146,6 +146,7 @@ class QuestionnaireService {
         personalizationQuestionsSetup?: boolean;
         createAccountQuestionsSetup?: boolean;
         doctorQuestionsSetup?: boolean;
+        status?: 'in_progress' | 'ready_for_review' | 'ready';
     }) {
         const template = await Questionnaire.findOne({ where: { id, isTemplate: true } });
 
@@ -159,6 +160,7 @@ class QuestionnaireService {
             personalizationQuestionsSetup: updates.personalizationQuestionsSetup ?? template.personalizationQuestionsSetup,
             createAccountQuestionsSetup: updates.createAccountQuestionsSetup ?? template.createAccountQuestionsSetup,
             doctorQuestionsSetup: updates.doctorQuestionsSetup ?? template.doctorQuestionsSetup,
+            ...(updates.status !== undefined && { status: updates.status }),
         });
 
         return this.getTemplateById(id);
