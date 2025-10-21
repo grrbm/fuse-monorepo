@@ -50,7 +50,7 @@ export const verifyJWTToken = (token: string): JWTPayload | null => {
     // Fallback: try without issuer/audience for backwards compatibility with old tokens
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
-      
+
       // Map old token format to new format if needed
       return {
         userId: decoded.userId,
@@ -77,6 +77,11 @@ export const extractTokenFromHeader = (authHeader: string | undefined): string |
 
 // Middleware to authenticate JWT requests
 export const authenticateJWT = (req: any, res: any, next: any) => {
+  // Allowlist public endpoints that must not require auth (e.g., Caddy on-demand TLS ask)
+  if (req && (req.path === '/clinic/allow-custom-domain')) {
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
   const token = extractTokenFromHeader(authHeader);
 
