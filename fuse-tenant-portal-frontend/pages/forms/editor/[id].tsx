@@ -871,9 +871,17 @@ export default function TemplateEditor() {
           questionText: editingConditionalStep.text,
           conditionalLogic,
           conditionalLevel: editingConditionalStep.placement === 'inline' ? 1 : 0, // 0 for new step (main question), 1 for inline
-          parentQuestionId: editingConditionalStep.placement === 'inline' ? selectedQuestionForConditional.questionId : null,
-            isRequired: true,
-          helpText: editingConditionalStep.helpText || null
+          isRequired: true,
+        }
+        
+        // Only add parentQuestionId if placement is inline (don't send null)
+        if (editingConditionalStep.placement === 'inline') {
+          payload.parentQuestionId = selectedQuestionForConditional.questionId
+        }
+        
+        // Only add helpText if it exists
+        if (editingConditionalStep.helpText) {
+          payload.helpText = editingConditionalStep.helpText
         }
 
         // Configure based on step type
@@ -884,19 +892,17 @@ export default function TemplateEditor() {
               ? editingConditionalStep.options.map((opt, idx) => ({
                   optionText: opt.optionText,
                   optionValue: opt.optionValue,
-                  optionOrder: idx + 1
                 }))
               : [
-                  { optionText: 'Option 1', optionValue: 'option_1', optionOrder: 1 },
-                  { optionText: 'Option 2', optionValue: 'option_2', optionOrder: 2 }
+                  { optionText: 'Option 1', optionValue: 'option_1' },
+                  { optionText: 'Option 2', optionValue: 'option_2' }
                 ]
             break
           case 'yesno':
             payload.answerType = 'radio'
-            payload.questionSubtype = 'yesno'
             payload.options = [
-              { optionText: 'Yes', optionValue: 'yes', optionOrder: 1 },
-              { optionText: 'No', optionValue: 'no', optionOrder: 2 }
+              { optionText: 'Yes', optionValue: 'yes' },
+              { optionText: 'No', optionValue: 'no' }
             ]
             break
           case 'multi':
@@ -905,22 +911,25 @@ export default function TemplateEditor() {
               ? editingConditionalStep.options.map((opt, idx) => ({
                   optionText: opt.optionText,
                   optionValue: opt.optionValue,
-                  optionOrder: idx + 1
                 }))
               : [
-                  { optionText: 'Option 1', optionValue: 'option_1', optionOrder: 1 },
-                  { optionText: 'Option 2', optionValue: 'option_2', optionOrder: 2 },
-                  { optionText: 'Option 3', optionValue: 'option_3', optionOrder: 3 }
+                  { optionText: 'Option 1', optionValue: 'option_1' },
+                  { optionText: 'Option 2', optionValue: 'option_2' },
+                  { optionText: 'Option 3', optionValue: 'option_3' }
                 ]
             break
           case 'textarea':
             payload.answerType = 'textarea'
-            payload.placeholder = editingConditionalStep.placeholder || 'Enter your response here...'
+            if (editingConditionalStep.placeholder) {
+              payload.placeholder = editingConditionalStep.placeholder
+            }
             break
           case 'info':
             payload.answerType = 'textarea'
             payload.isRequired = false
-            payload.placeholder = editingConditionalStep.placeholder || 'No response needed - informational only'
+            if (editingConditionalStep.placeholder) {
+              payload.placeholder = editingConditionalStep.placeholder
+            }
             break
         }
 
@@ -1878,7 +1887,7 @@ export default function TemplateEditor() {
                                 <X className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                          </div>
+                  </div>
                 </div>
 
                         {index < editingConditionalStep.rules.length - 1 && (
