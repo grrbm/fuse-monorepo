@@ -5,7 +5,7 @@ import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch } from "lucide-react"
+import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../QuestionEditor"
 
@@ -1193,6 +1193,20 @@ export default function TemplateEditor() {
                   <Button 
                     variant="outline" 
                     className="rounded-full px-6 border-border/60 shadow-sm hover:bg-muted/50"
+                    onClick={() => {
+                      if (!templateId) return
+                      const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
+                      const previewUrl = `${patientFrontendUrl}/preview/questionnaire/${templateId}`
+                      window.open(previewUrl, '_blank')
+                    }}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Preview
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="rounded-full px-6 border-border/60 shadow-sm hover:bg-muted/50"
                   >
                     Add Voucher
                   </Button>
@@ -1325,6 +1339,21 @@ export default function TemplateEditor() {
                       </>
                     )}
                   </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="w-full rounded-full py-6 border-border/60 shadow-sm hover:bg-muted/50"
+                    onClick={() => {
+                      if (!templateId) return
+                      const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
+                      const previewUrl = `${patientFrontendUrl}/preview/questionnaire/${templateId}`
+                      window.open(previewUrl, '_blank')
+                    }}
+                  >
+                    <Eye className="mr-2 h-5 w-5" />
+                    Preview Form
+                  </Button>
+                  
                   {productCategory === 'weight_loss' && (
                     <Button
                       variant="outline"
