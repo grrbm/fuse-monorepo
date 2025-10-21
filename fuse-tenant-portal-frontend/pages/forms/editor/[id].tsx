@@ -66,6 +66,8 @@ export default function TemplateEditor() {
     questionId: string
     questionText: string
     options: string[]
+    isEditingExisting?: boolean
+    existingConditionalQuestionId?: string
   } | null>(null)
   const [conditionalRules, setConditionalRules] = useState<Array<{
     triggerOption: string
@@ -380,35 +382,56 @@ export default function TemplateEditor() {
 
   const handleAddConditionalRule = async () => {
     if (!selectedQuestionForConditional || !token || !templateId) return
-    if (!newConditionalRule.triggerOption || !newConditionalRule.followUpQuestion) {
-      alert('Please select a trigger option and enter a follow-up question')
+    if (!newConditionalRule.triggerOption) {
+      alert('Please select a trigger option')
       return
     }
 
     try {
-      // Create the conditional question
-      const res = await fetch(`${baseUrl}/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          stepId: selectedQuestionForConditional.stepId,
-          questionText: newConditionalRule.followUpQuestion,
-          answerType: 'radio',
-          isRequired: true,
-          conditionalLogic: `answer_equals:${newConditionalRule.triggerOption}`,
-          conditionalLevel: 1,
-          parentQuestionId: selectedQuestionForConditional.questionId,
-          options: [
-            { optionText: 'Yes', optionValue: 'yes', optionOrder: 1 },
-            { optionText: 'No', optionValue: 'no', optionOrder: 2 }
-          ]
+      let newQuestionId = selectedQuestionForConditional.existingConditionalQuestionId
+
+      if (selectedQuestionForConditional.isEditingExisting && selectedQuestionForConditional.existingConditionalQuestionId) {
+        // UPDATE existing conditional question's rule
+        const res = await fetch(`${baseUrl}/questions/${selectedQuestionForConditional.existingConditionalQuestionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            conditionalLogic: `answer_equals:${newConditionalRule.triggerOption}`,
+            questionText: newConditionalRule.followUpQuestion
+          })
         })
-      })
 
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create conditional question')
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to update conditional rule')
+      } else {
+        // CREATE new conditional question
+        if (!newConditionalRule.followUpQuestion) {
+          alert('Please enter a follow-up question')
+          return
+        }
 
-      const createdData = await res.json()
-      const newQuestionId = createdData?.data?.id
+        const res = await fetch(`${baseUrl}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: selectedQuestionForConditional.stepId,
+            questionText: newConditionalRule.followUpQuestion,
+            answerType: 'radio',
+            isRequired: true,
+            conditionalLogic: `answer_equals:${newConditionalRule.triggerOption}`,
+            conditionalLevel: 1,
+            parentQuestionId: selectedQuestionForConditional.questionId,
+            options: [
+              { optionText: 'Yes', optionValue: 'yes', optionOrder: 1 },
+              { optionText: 'No', optionValue: 'no', optionOrder: 2 }
+            ]
+          })
+        })
+
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create conditional question')
+
+        const createdData = await res.json()
+        newQuestionId = createdData?.data?.id
+      }
 
       // Reload template to show the new conditional question
       const refRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
@@ -847,6 +870,65 @@ export default function TemplateEditor() {
                                   
                                   return (
                                   <div key={q.id} className="space-y-3">
+                                    {/* Show REQUIRES section for conditional questions */}
+                                    {(q.conditionalLevel || 0) > 0 && (
+                                      <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-300 rounded-lg p-4">
+                                        <div className="flex items-center justify-between mb-3">
+                                          <h4 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
+                                            REQUIRES
+                                          </h4>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                              // Find parent question to get its options
+                                              const parentQ = step.questions?.find(pq => (pq.conditionalLevel || 0) === 0)
+                                              if (parentQ) {
+                                                // Parse the current trigger from conditionalLogic stored in backend
+                                                // We need to fetch the full question data to get conditionalLogic
+                                                fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+                                                  headers: { Authorization: `Bearer ${token}` }
+                                                })
+                                                .then(res => res.json())
+                                                .then(data => {
+                                                  const fullStep = data.data?.steps?.find((s: any) => s.id === step.id)
+                                                  const fullQuestion = fullStep?.questions?.find((fq: any) => fq.id === q.id)
+                                                  const conditionalLogic = fullQuestion?.conditionalLogic || ''
+                                                  
+                                                  // Parse: "answer_equals:No" -> "No"
+                                                  let currentTrigger = parentQ.options?.[0] || ''
+                                                  if (conditionalLogic.startsWith('answer_equals:')) {
+                                                    currentTrigger = conditionalLogic.replace('answer_equals:', '')
+                                                  }
+                                                  
+                                                  setSelectedQuestionForConditional({
+                                                    stepId: step.id,
+                                                    questionId: parentQ.id,
+                                                    questionText: parentQ.questionText,
+                                                    options: parentQ.options || [],
+                                                    isEditingExisting: true,
+                                                    existingConditionalQuestionId: q.id
+                                                  })
+                                                  setNewConditionalRule({
+                                                    triggerOption: currentTrigger,
+                                                    followUpQuestion: q.questionText
+                                                  })
+                                                  setShowConditionalModal(true)
+                                                })
+                                                .catch(err => console.error('Failed to load question details:', err))
+                                              }
+                                            }}
+                                            className="h-7 text-xs"
+                                          >
+                                            Edit Rule
+                                          </Button>
+                                        </div>
+                                        <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                                          (20) {step.questions?.find(pq => (pq.conditionalLevel || 0) === 0)?.questionText || 'Parent Question'}
+                                        </div>
+                                      </div>
+                                    )}
+
                                     <QuestionEditor
                                       question={{
                                         id: q.id,
@@ -1082,9 +1164,13 @@ export default function TemplateEditor() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-2xl mb-2">Question Rules</CardTitle>
+                  <CardTitle className="text-2xl mb-2">
+                    {selectedQuestionForConditional.isEditingExisting ? 'Edit Question Rule' : 'Question Rules'}
+                  </CardTitle>
                   <CardDescription>
-                    Create rules for when to display this question. All rules must match in order for this questions to show up.
+                    {selectedQuestionForConditional.isEditingExisting
+                      ? 'Update the rule that controls when this question appears.'
+                      : 'Create rules for when to display this question. All rules must match in order for this questions to show up.'}
                   </CardDescription>
                 </div>
                 <Button
@@ -1164,10 +1250,19 @@ export default function TemplateEditor() {
                 </Button>
                 <Button 
                   onClick={handleAddConditionalRule}
-                  disabled={!newConditionalRule.triggerOption || !newConditionalRule.followUpQuestion}
+                  disabled={!newConditionalRule.triggerOption || (!selectedQuestionForConditional.isEditingExisting && !newConditionalRule.followUpQuestion)}
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Conditional Question
+                  {selectedQuestionForConditional.isEditingExisting ? (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Update Rule
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Conditional Question
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>
