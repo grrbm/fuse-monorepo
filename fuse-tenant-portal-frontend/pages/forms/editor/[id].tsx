@@ -2368,12 +2368,10 @@ export default function TemplateEditor() {
                     {/* Show a temporary question editor for the conditional step */}
                     <div className="bg-background rounded-lg border p-4">
                       <div className="space-y-4">
-                        {/* Question Text */}
+                        {/* Title/Question Text */}
                         <div className="space-y-1.5">
                           <label className="block text-xs font-semibold text-foreground">
-                            {editingConditionalStep.stepType === 'info' ? 'Information Text' : 
-                             editingConditionalStep.stepType === 'deadend' ? 'Disqualification Message' :
-                             'Question Text'} <span className="text-destructive">*</span>
+                            {editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend' ? 'Step Title' : 'Question Text'} <span className="text-destructive">*</span>
                   </label>
                   <input
                     type="text"
@@ -2381,30 +2379,34 @@ export default function TemplateEditor() {
                             onChange={(e) => setEditingConditionalStep({...editingConditionalStep, text: e.target.value})}
                             placeholder={
                               editingConditionalStep.stepType === 'textarea' ? "e.g., Please describe your symptoms in detail" :
-                              editingConditionalStep.stepType === 'info' ? "e.g., Important: Please consult your doctor" :
-                              editingConditionalStep.stepType === 'deadend' ? "e.g., Unfortunately, you do not qualify at this time" :
+                              editingConditionalStep.stepType === 'info' ? "e.g., Important Notice" :
+                              editingConditionalStep.stepType === 'deadend' ? "e.g., Disqualification Notice" :
                               "e.g., What other medication are you taking?"
                             }
                             className="w-full px-3 py-2 border rounded-md bg-background text-sm h-9"
                   />
                 </div>
 
-                        {/* Help Text */}
+                        {/* Description (for info/deadend) or Help Text (for questions) */}
                         <div className="space-y-1.5">
                           <label className="block text-xs font-medium text-muted-foreground">
-                            Help Text <span className="text-xs">(optional)</span>
+                            {editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend' ? 'Description' : 'Help Text'} <span className="text-xs">(optional)</span>
                           </label>
                           <textarea
                             value={editingConditionalStep.helpText}
                             onChange={(e) => setEditingConditionalStep({...editingConditionalStep, helpText: e.target.value})}
-                            placeholder="Add context or instructions..."
+                            placeholder={
+                              editingConditionalStep.stepType === 'info' ? "Information for patients to review..." :
+                              editingConditionalStep.stepType === 'deadend' ? "Explain why they don't qualify..." :
+                              "Add context or instructions..."
+                            }
                             className="w-full px-2.5 py-2 text-xs border border-input bg-background rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-                            rows={2}
+                            rows={3}
                           />
                     </div>
                         
-                        {/* Placeholder for textarea types */}
-                        {(editingConditionalStep.stepType === 'textarea' || editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend') && (
+                        {/* Placeholder - Only for textarea type (not info or deadend) */}
+                        {editingConditionalStep.stepType === 'textarea' && (
                           <div className="space-y-1.5">
                             <label className="block text-xs font-medium text-muted-foreground">
                               Placeholder <span className="text-xs">(optional)</span>
