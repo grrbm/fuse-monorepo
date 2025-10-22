@@ -522,17 +522,29 @@ export default function TemplateEditor() {
     const finishedDraggedId = draggedStepId
     setDraggedStepId(null)
     if (!token || !templateId) return
+    
+    console.log('Saving step order:', steps.map((s, idx) => ({ stepId: s.id, stepOrder: idx + 1, title: s.title })))
+    
     try {
-      await fetch(`${baseUrl}/questionnaires/step/order`, {
+      const res = await fetch(`${baseUrl}/questionnaires/step/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           questionnaireId: templateId,
-          steps: steps.map((s, idx) => ({ stepId: s.id, stepOrder: idx + 1 })),
+          steps: steps.map((s, idx) => ({ id: s.id, stepOrder: idx + 1 })),
         }),
       })
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        console.error('❌ Failed to save step order:', errorData)
+        alert(`Failed to save step order: ${errorData.message || 'Unknown error'}`)
+      } else {
+        console.log('✅ Step order saved successfully')
+      }
     } catch (e) {
       console.error('❌ Failed to save step order', e)
+      alert('Failed to save step order')
     }
   }
 
