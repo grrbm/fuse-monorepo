@@ -32,6 +32,19 @@ export default class QuestionnaireStep extends Entity {
     })
     declare stepOrder: number;
 
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare isDeadEnd: boolean;
+
+    @Column({
+        type: DataType.TEXT,
+        allowNull: true,
+    })
+    declare conditionalLogic: string;
+
     @ForeignKey(() => Questionnaire)
     @Column({
         type: DataType.UUID,

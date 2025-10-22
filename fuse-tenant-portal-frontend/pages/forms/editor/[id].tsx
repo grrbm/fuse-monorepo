@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { useRouter } from "next/router"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye } from "lucide-react"
+import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../QuestionEditor"
 
@@ -16,6 +16,8 @@ interface Step {
   stepOrder: number
   category: "normal" | "info" | "user_profile"
   stepType: "question" | "info"
+  isDeadEnd?: boolean
+  conditionalLogic?: string | null
   questions?: Question[]
   conditionalQuestions?: ConditionalQuestion[]
 }
@@ -29,7 +31,7 @@ interface Question {
   required: boolean
   placeholder?: string | null
   helpText?: string | null
-  options?: string[]
+  options?: Array<{optionText: string, optionValue: string, riskLevel?: 'safe' | 'review' | 'reject' | null}>
   conditionalLevel?: number
   subQuestionOrder?: number
 }
@@ -68,11 +70,15 @@ export default function TemplateEditor() {
   const [draggedStepId, setDraggedStepId] = useState<string | null>(null)
   const [copiedVariable, setCopiedVariable] = useState<string | null>(null)
   const [showConditionalModal, setShowConditionalModal] = useState(false)
+  const [conditionalModalType, setConditionalModalType] = useState<'question' | 'step'>('question')
+  const [editingConditionalStepId, setEditingConditionalStepId] = useState<string | null>(null)
+  const [hoveredConditionalStepId, setHoveredConditionalStepId] = useState<string | null>(null)
+  const stepRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const [selectedQuestionForConditional, setSelectedQuestionForConditional] = useState<{
     stepId: string
     questionId: string
     questionText: string
-    options: string[]
+    options: Array<{optionText: string, optionValue: string}>
     isEditingExisting?: boolean
     existingConditionalQuestionId?: string
   } | null>(null)
@@ -81,7 +87,7 @@ export default function TemplateEditor() {
     text: string
     helpText: string
     placeholder: string
-    stepType: 'single' | 'yesno' | 'multi' | 'textarea' | 'info' | null
+    stepType: 'single' | 'yesno' | 'multi' | 'textarea' | 'info' | 'deadend' | null
     placement: 'inline' | 'new-step' // Where to show the conditional step
     options: Array<{optionText: string, optionValue: string}>
     rules: Array<{
@@ -128,13 +134,16 @@ export default function TemplateEditor() {
         // Set form status from template data
         setFormStatus(data.data?.status || 'in_progress')
         // Normalize backend steps/questions/options into local editor shape
-        const loadedSteps = (data.data?.steps || []).map((s: any) => ({
+        const loadedSteps = (data.data?.steps || []).map((s: any, index: number) => ({
           id: String(s.id),
           title: String(s.title || ''),
           description: String(s.description || ''),
           stepOrder: Number(s.stepOrder || 0),
           category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
           stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+          isDeadEnd: Boolean(s.isDeadEnd),
+          // First step can never have conditional logic - force it to null
+          conditionalLogic: index === 0 ? null : (s.conditionalLogic || null),
           questions: (s.questions || []).map((q: any) => ({
             id: String(q.id),
             type: q.answerType || 'single-choice', // Use actual answerType from backend
@@ -144,12 +153,30 @@ export default function TemplateEditor() {
             required: Boolean(q.isRequired),
             placeholder: q.placeholder || null,
             helpText: q.helpText || null,
-            options: (q.options || []).map((o: any) => String(o.optionText || '')),
+            options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
+          })),
             conditionalLevel: Number(q.conditionalLevel || 0),
             subQuestionOrder: Number(q.subQuestionOrder || 0)
           })),
         })) as Step[]
         setSteps(loadedSteps)
+        
+        // Auto-clear conditional logic from first step if it exists in the database
+        const firstStep = data.data?.steps?.[0]
+        if (firstStep && firstStep.conditionalLogic) {
+          console.log('⚠️ First step has conditional logic - auto-clearing it from database')
+          fetch(`${baseUrl}/questionnaires/step`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              stepId: firstStep.id,
+              conditionalLogic: ''
+            }),
+          }).catch((e) => console.error('Failed to clear first step conditional logic:', e))
+        }
       } catch (err: any) {
         console.error("❌ Error loading template:", err)
         setError(err.message || "Failed to load template")
@@ -189,7 +216,7 @@ export default function TemplateEditor() {
     router.push("/forms?tab=templates")
   }
 
-  const handleAddStep = async (stepType: "question" | "info" | "yesno" | "multi" | "textarea") => {
+  const handleAddStep = async (stepType: "question" | "info" | "yesno" | "multi" | "textarea" | "deadend") => {
     if (isAccountTemplate) return
     if (!token || !templateId) return
     try {
@@ -281,6 +308,32 @@ export default function TemplateEditor() {
           }),
         })
         if (!qRes.ok) throw new Error((await qRes.json().catch(() => ({}))).message || 'Failed to create text question')
+      } else if (stepType === 'deadend' && newStepId) {
+        // Dead End - Informational step (no question) that terminates form
+        // Don't create a question - dead end is just title + description like info step
+        // Mark the step as dead end and set default title/description
+        await fetch(`${baseUrl}/questionnaires/step`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            title: 'Disqualification Notice',
+            description: 'Unfortunately, you do not qualify at this time. Thank you for your interest.',
+            isDeadEnd: true
+          }),
+        })
+      } else if (stepType === 'info' && newStepId) {
+        // Information - Just title + description, no question
+        // Set default title for info steps
+        await fetch(`${baseUrl}/questionnaires/step`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            title: 'Information',
+            description: 'Important information for you to review.'
+          }),
+        })
       }
 
       const ref = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
@@ -304,7 +357,11 @@ export default function TemplateEditor() {
           required: Boolean(q.isRequired),
           placeholder: q.placeholder || null,
           helpText: q.helpText || null,
-          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
+          })),
         })),
       })) as Step[]
       setSteps(loadedSteps)
@@ -360,6 +417,7 @@ export default function TemplateEditor() {
         stepOrder: Number(s.stepOrder || 0),
         category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
         stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        isDeadEnd: Boolean(s.isDeadEnd),
         questions: (s.questions || []).map((q: any) => ({
           id: String(q.id),
           type: q.answerType || 'single-choice',
@@ -369,7 +427,11 @@ export default function TemplateEditor() {
           required: Boolean(q.isRequired),
           placeholder: q.placeholder || null,
           helpText: q.helpText || null,
-          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
+          })),
           conditionalLevel: Number(q.conditionalLevel || 0),
           subQuestionOrder: Number(q.subQuestionOrder || 0)
         })),
@@ -397,9 +459,13 @@ export default function TemplateEditor() {
         ...s,
         questions: s.questions?.map(q => {
           if (q.id !== questionId) return q
+          const newOptionText = `Option ${(q.options?.length || 0) + 1}`
           return {
             ...q,
-            options: [...(q.options || []), `Option ${(q.options?.length || 0) + 1}`]
+            options: [...(q.options || []), {
+              optionText: newOptionText,
+              optionValue: newOptionText.toLowerCase().replace(/ /g, '_')
+            }]
           }
         })
       }
@@ -414,7 +480,10 @@ export default function TemplateEditor() {
         questions: s.questions?.map(q => {
           if (q.id !== questionId) return q
           const newOptions = [...(q.options || [])]
-          newOptions[optionIndex] = newValue
+          newOptions[optionIndex] = {
+            optionText: newValue,
+            optionValue: newValue.toLowerCase().replace(/ /g, '_')
+          }
           return { ...q, options: newOptions }
         })
       }
@@ -468,17 +537,29 @@ export default function TemplateEditor() {
     const finishedDraggedId = draggedStepId
     setDraggedStepId(null)
     if (!token || !templateId) return
+    
+    console.log('Saving step order:', steps.map((s, idx) => ({ stepId: s.id, stepOrder: idx + 1, title: s.title })))
+    
     try {
-      await fetch(`${baseUrl}/questionnaires/step/order`, {
+      const res = await fetch(`${baseUrl}/questionnaires/step/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           questionnaireId: templateId,
-          steps: steps.map((s, idx) => ({ stepId: s.id, stepOrder: idx + 1 })),
+          steps: steps.map((s, idx) => ({ id: s.id, stepOrder: idx + 1 })),
         }),
       })
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        console.error('❌ Failed to save step order:', errorData)
+        alert(`Failed to save step order: ${errorData.message || 'Unknown error'}`)
+      } else {
+        console.log('✅ Step order saved successfully')
+      }
     } catch (e) {
       console.error('❌ Failed to save step order', e)
+      alert('Failed to save step order')
     }
   }
 
@@ -490,6 +571,25 @@ export default function TemplateEditor() {
     } catch (err) {
       console.error('Failed to copy:', err)
     }
+  }
+
+  // Helper: Extract question IDs from conditional logic
+  const getReferencedQuestionIds = (conditionalLogic: string): string[] => {
+    if (!conditionalLogic) return []
+    const questionIds: string[] = []
+    const tokens = conditionalLogic.split(' ')
+    
+    for (const token of tokens) {
+      if (token.startsWith('answer_equals:')) {
+        // Format: answer_equals:{questionId}:{optionValue}
+        const parts = token.replace('answer_equals:', '').split(':')
+        if (parts.length === 2) {
+          questionIds.push(parts[0])
+        }
+      }
+    }
+    
+    return Array.from(new Set(questionIds)) // Remove duplicates
   }
 
   // Open modal to add a NEW conditional step
@@ -536,7 +636,7 @@ export default function TemplateEditor() {
         questionId: parentQuestion.id,
         questionText: parentQuestion.questionText,
         questionNumber: parentQuestion.questionNumber,
-        triggerOption: parentQuestion.options?.[0] || '',
+        triggerOption: parentQuestion.options?.[0]?.optionValue || '',
         operator: 'OR'
       }] : []
     })
@@ -596,11 +696,41 @@ export default function TemplateEditor() {
     }
     
     // Determine step type from answerType
-    const stepType = conditionalQuestion.answerType === 'textarea' && !conditionalQuestion.placeholder?.includes('informational') ? 'textarea' :
-                     conditionalQuestion.answerType === 'textarea' ? 'info' :
-                     conditionalQuestion.answerType === 'checkbox' ? 'multi' :
-                     conditionalQuestion.questionSubtype === 'yesno' ? 'yesno' :
-                     'single'
+    let stepType: 'single' | 'yesno' | 'multi' | 'textarea' | 'info' | 'deadend' = 'single'
+    
+    if (conditionalQuestion.answerType === 'checkbox') {
+      stepType = 'multi'
+    } else if (conditionalQuestion.questionSubtype === 'yesno') {
+      stepType = 'yesno'
+    } else if (conditionalQuestion.answerType === 'textarea') {
+      // Check if this is a dead end, info, or regular textarea
+      const questionText = conditionalQuestion.questionText?.toLowerCase() || ''
+      const placeholder = conditionalQuestion.placeholder?.toLowerCase() || ''
+      
+      if (questionText.includes('unfortunat') || questionText.includes('disqualif') || 
+          questionText.includes('do not qualify')) {
+        stepType = 'deadend'
+      } else if (!conditionalQuestion.required && (
+        placeholder?.includes('informational') || 
+        placeholder?.includes('no response needed') ||
+        questionText.includes('important') || 
+        questionText.includes('please note')
+      )) {
+        stepType = 'info'
+      } else {
+        stepType = 'textarea'
+      }
+    } else if (conditionalQuestion.answerType === 'radio') {
+      stepType = 'single'
+    }
+    
+    console.log('Detected step type:', stepType, 'for question:', conditionalQuestion.questionText)
+    console.log('Question details:', {
+      answerType: conditionalQuestion.answerType,
+      required: conditionalQuestion.required,
+      placeholder: conditionalQuestion.placeholder,
+      questionText: conditionalQuestion.questionText
+    })
     
     // Determine placement based on conditionalLevel
     // conditionalLevel 0 or undefined = new-step (separate slide)
@@ -616,14 +746,14 @@ export default function TemplateEditor() {
       stepType,
       placement: currentPlacement,
       options: (conditionalQuestion.options || []).map(opt => ({
-        optionText: opt,
-        optionValue: opt
+        optionText: opt.optionText,
+        optionValue: opt.optionValue
       })),
       rules: parsedRules.length > 0 ? parsedRules : [{
         questionId: parentQuestionId,
         questionText: parentQuestion.questionText,
         questionNumber: currentStepIdx + 1,
-        triggerOption: parentQuestion.options?.[0] || '',
+        triggerOption: parentQuestion.options?.[0]?.optionValue || '',
         operator: 'OR'
       }]
     })
@@ -641,6 +771,116 @@ export default function TemplateEditor() {
     setShowEditModal(false)
     setEditingQuestion(null)
     setEditingStepId(null)
+  }
+
+  // Open modal to add step-level conditional logic
+  const handleOpenStepConditionalModal = (stepId: string) => {
+    console.log('Opening step conditional modal for step:', stepId)
+    const currentStepIndex = steps.findIndex(s => s.id === stepId)
+    const currentStep = steps[currentStepIndex]
+    
+    console.log('Current step index:', currentStepIndex, 'Current step:', currentStep)
+    
+    if (!currentStep) {
+      console.error('Current step not found')
+      return
+    }
+    
+    // Prevent adding conditional logic to first step
+    if (currentStepIndex === 0) {
+      alert('The first step cannot have conditional logic since there are no previous steps to reference.')
+      return
+    }
+    
+    // Get all questions from previous steps that have options
+    const allPrevQuestions = steps
+      .slice(0, currentStepIndex)
+      .flatMap((s, stepIdx) => 
+        (s.questions || [])
+          .filter(q => (q.conditionalLevel || 0) === 0 && q.options && q.options.length > 0)
+          .map(q => ({
+            ...q,
+            questionNumber: stepIdx + 1
+          }))
+      )
+    
+    console.log('All previous questions with options:', allPrevQuestions)
+    
+    if (allPrevQuestions.length === 0) {
+      alert('No previous questions with options available for rules. Add questions to earlier steps first.')
+      return
+    }
+    
+    // Parse existing conditional logic if any
+    let parsedRules: Array<{
+      questionId: string
+      questionText: string
+      questionNumber: number
+      triggerOption: string
+      operator: 'OR' | 'AND'
+    }> = []
+    
+    console.log('Current step conditionalLogic:', currentStep.conditionalLogic)
+    
+    if (currentStep.conditionalLogic) {
+      const tokens = currentStep.conditionalLogic.split(' ')
+      console.log('Parsing tokens:', tokens)
+      
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i]
+        if (token.startsWith('answer_equals:')) {
+          const [questionRef, optionValue] = token.replace('answer_equals:', '').split(':')
+          console.log('Found rule:', { questionRef, optionValue })
+          
+          const referencedQuestion = allPrevQuestions.find(q => q.id === questionRef)
+          console.log('Referenced question found:', referencedQuestion)
+          
+          if (referencedQuestion) {
+            const nextToken = tokens[i + 1]
+            const operator = (nextToken === 'OR' || nextToken === 'AND') ? nextToken : 'OR'
+            parsedRules.push({
+              questionId: referencedQuestion.id,
+              questionText: referencedQuestion.questionText,
+              questionNumber: referencedQuestion.questionNumber,
+              triggerOption: optionValue,
+              operator
+            })
+          }
+        }
+      }
+      
+      console.log('Parsed rules:', parsedRules)
+    }
+    
+    // Initialize rules or use existing
+    const initialRules = parsedRules.length > 0 ? parsedRules : [{
+      questionId: allPrevQuestions[0].id,
+      questionText: allPrevQuestions[0].questionText,
+      questionNumber: allPrevQuestions[0].questionNumber,
+      triggerOption: allPrevQuestions[0].options?.[0]?.optionValue || '',
+      operator: 'OR' as 'OR' | 'AND'
+    }]
+    
+    console.log('Setting state...', {
+      editingConditionalStepId: stepId,
+      conditionalModalType: 'step',
+      rules: initialRules
+    })
+    
+    setEditingConditionalStepId(stepId)
+    setConditionalModalType('step')
+    setEditingConditionalStep({
+      text: currentStep.title,
+      helpText: '',
+      placeholder: '',
+      stepType: null,
+      placement: 'new-step',
+      options: [],
+      rules: initialRules
+    })
+    setShowConditionalModal(true)
+    
+    console.log('Modal should be opening now')
   }
 
   const handleDeleteConditionalStep = async (stepId: string, conditionalQuestionId: string) => {
@@ -674,6 +914,7 @@ export default function TemplateEditor() {
         stepOrder: Number(s.stepOrder || 0),
         category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
         stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        isDeadEnd: Boolean(s.isDeadEnd),
         questions: (s.questions || []).map((q: any) => ({
           id: String(q.id),
           type: q.answerType || 'single-choice',
@@ -683,7 +924,11 @@ export default function TemplateEditor() {
           required: Boolean(q.isRequired),
           placeholder: q.placeholder || null,
           helpText: q.helpText || null,
-          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
+          })),
           conditionalLevel: Number(q.conditionalLevel || 0),
           subQuestionOrder: Number(q.subQuestionOrder || 0)
         })),
@@ -696,7 +941,102 @@ export default function TemplateEditor() {
   }
 
   const handleSaveConditionalStep = async () => {
-    if (!selectedQuestionForConditional || !token || !templateId) return
+    if (!token || !templateId) return
+    
+    if (editingConditionalStep.rules.length === 0) {
+      alert('Please add at least one rule')
+      return
+    }
+
+    try {
+      // Build the conditionalLogic string from rules
+      const logicParts = editingConditionalStep.rules.map((rule, index) => {
+        const condition = `answer_equals:${rule.questionId}:${rule.triggerOption}`
+        if (index === editingConditionalStep.rules.length - 1) {
+          return condition
+        }
+        return `${condition} ${rule.operator}`
+      })
+      const conditionalLogic = logicParts.join(' ')
+
+      // Handle STEP-LEVEL conditional logic
+      if (conditionalModalType === 'step' && editingConditionalStepId) {
+        console.log('Saving step-level conditional logic:', {
+          stepId: editingConditionalStepId,
+          conditionalLogic,
+          rules: editingConditionalStep.rules
+        })
+        
+        const updateRes = await fetch(`${baseUrl}/questionnaires/step`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: editingConditionalStepId,
+            conditionalLogic
+          }),
+        })
+        
+        if (!updateRes.ok) {
+          const errorData = await updateRes.json().catch(() => ({}))
+          console.error('Failed to save step conditional logic:', errorData)
+          throw new Error(errorData.message || 'Failed to save step rules')
+        }
+        
+        console.log('Step conditional logic saved successfully')
+        
+        // Reload template
+        const refRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const refData = await refRes.json()
+        console.log('Reloaded template data:', refData.data)
+        console.log('Steps in reloaded data:', refData.data?.steps)
+        const editedStep = refData.data?.steps?.find((s: any) => s.id === editingConditionalStepId)
+        console.log('Step we just edited (FULL):', JSON.stringify(editedStep, null, 2))
+        console.log('conditionalLogic value:', editedStep?.conditionalLogic)
+        setTemplate(refData.data)
+        const loadedSteps = (refData.data?.steps || []).map((s: any) => {
+          console.log(`Loading step ${s.id}:`, { title: s.title, conditionalLogic: s.conditionalLogic })
+          return {
+          id: String(s.id),
+          title: String(s.title || ''),
+          description: String(s.description || ''),
+          stepOrder: Number(s.stepOrder || 0),
+          category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
+          stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+          isDeadEnd: Boolean(s.isDeadEnd),
+          conditionalLogic: s.conditionalLogic || null,
+          questions: (s.questions || []).map((q: any) => ({
+            id: String(q.id),
+            type: q.answerType || 'single-choice',
+            answerType: q.answerType || 'radio',
+            questionSubtype: q.questionSubtype || null,
+            questionText: String(q.questionText || ''),
+            required: Boolean(q.isRequired),
+            placeholder: q.placeholder || null,
+            helpText: q.helpText || null,
+            options: (q.options || []).map((o: any) => ({
+              optionText: String(o.optionText || ''),
+              optionValue: String(o.optionValue || o.optionText || ''),
+              riskLevel: o.riskLevel || null
+            })),
+            conditionalLevel: Number(q.conditionalLevel || 0),
+            subQuestionOrder: Number(q.subQuestionOrder || 0)
+          })),
+        }
+        }) as Step[]
+        console.log('Loaded steps with conditionalLogic:', loadedSteps.map(s => ({ id: s.id, title: s.title, conditionalLogic: s.conditionalLogic })))
+        setSteps(loadedSteps)
+        
+        // Close modal
+        setShowConditionalModal(false)
+        setEditingConditionalStepId(null)
+        setConditionalModalType('question')
+        return
+      }
+
+      // Handle QUESTION-LEVEL conditional logic (existing code)
+      if (!selectedQuestionForConditional) return
     if (!editingConditionalStep.stepType) {
       alert('Please select a step type')
       return
@@ -705,12 +1045,7 @@ export default function TemplateEditor() {
       alert('Please enter text for this step')
       return
     }
-    if (editingConditionalStep.rules.length === 0) {
-      alert('Please add at least one rule')
-      return
-    }
 
-    try {
       // Validate: all rules must reference the same parent question (for now)
       const parentQuestionId = selectedQuestionForConditional.questionId
       const allSameParent = editingConditionalStep.rules.every(r => r.questionId === parentQuestionId)
@@ -720,15 +1055,15 @@ export default function TemplateEditor() {
         return
       }
 
-      // Build the conditionalLogic string from rules
-      const logicParts = editingConditionalStep.rules.map((rule, index) => {
+      // Re-build conditionalLogic for question-level (simpler format)
+      const questionLogicParts = editingConditionalStep.rules.map((rule, index) => {
         const condition = `answer_equals:${rule.triggerOption}`
         if (index === editingConditionalStep.rules.length - 1) {
           return condition
         }
         return `${condition} ${rule.operator}`
       })
-      const conditionalLogic = logicParts.join(' ')
+      const questionConditionalLogic = questionLogicParts.join(' ')
 
       if (editingConditionalStep.id) {
         // UPDATE existing conditional step
@@ -763,10 +1098,10 @@ export default function TemplateEditor() {
                 conditionalLevel: 0,
                 parentQuestionId: null,
                 questionText: editingConditionalStep.text,
-                conditionalLogic,
+                conditionalLogic: questionConditionalLogic,
                 helpText: editingConditionalStep.helpText || null,
                 placeholder: editingConditionalStep.placeholder || null,
-                options: editingConditionalStep.stepType !== 'textarea' && editingConditionalStep.stepType !== 'info' 
+                options: editingConditionalStep.stepType !== 'textarea' 
                   ? editingConditionalStep.options.map((opt, idx) => ({
                       optionText: opt.optionText,
                       optionValue: opt.optionValue,
@@ -788,10 +1123,10 @@ export default function TemplateEditor() {
                 conditionalLevel: 1,
                 parentQuestionId: selectedQuestionForConditional.questionId,
                 questionText: editingConditionalStep.text,
-                conditionalLogic,
+                conditionalLogic: questionConditionalLogic,
                 helpText: editingConditionalStep.helpText || null,
                 placeholder: editingConditionalStep.placeholder || null,
-                options: editingConditionalStep.stepType !== 'textarea' && editingConditionalStep.stepType !== 'info' 
+                options: editingConditionalStep.stepType !== 'textarea' 
                   ? editingConditionalStep.options.map((opt, idx) => ({
                       optionText: opt.optionText,
                       optionValue: opt.optionValue,
@@ -809,12 +1144,12 @@ export default function TemplateEditor() {
           // No placement change, just update the question
           const updatePayload: any = {
             questionText: editingConditionalStep.text,
-            conditionalLogic,
+            conditionalLogic: questionConditionalLogic,
             helpText: editingConditionalStep.helpText || null
           }
           
           // Add options if not textarea
-          if (editingConditionalStep.stepType !== 'textarea' && editingConditionalStep.stepType !== 'info') {
+          if (editingConditionalStep.stepType !== 'textarea') {
             updatePayload.options = editingConditionalStep.options.map((opt, idx) => ({
               optionText: opt.optionText,
               optionValue: opt.optionValue,
@@ -823,7 +1158,7 @@ export default function TemplateEditor() {
           }
           
           // Add placeholder for textarea
-          if (editingConditionalStep.stepType === 'textarea' || editingConditionalStep.stepType === 'info') {
+          if (editingConditionalStep.stepType === 'textarea') {
             updatePayload.placeholder = editingConditionalStep.placeholder || null
           }
           
@@ -869,9 +1204,9 @@ export default function TemplateEditor() {
         const payload: any = {
           stepId: targetStepId,
           questionText: editingConditionalStep.text,
-          conditionalLogic,
+          conditionalLogic: questionConditionalLogic,
           conditionalLevel: editingConditionalStep.placement === 'inline' ? 1 : 0, // 0 for new step (main question), 1 for inline
-          isRequired: true,
+            isRequired: true,
         }
         
         // Only add parentQuestionId if placement is inline (don't send null)
@@ -925,14 +1260,20 @@ export default function TemplateEditor() {
             }
             break
           case 'info':
+            // Information - create a textarea question marked as not required so patient view detects it
             payload.answerType = 'textarea'
             payload.isRequired = false
-            if (editingConditionalStep.placeholder) {
-              payload.placeholder = editingConditionalStep.placeholder
-            }
+            payload.placeholder = 'No response needed - informational only'
+            break
+          case 'deadend':
+            // Dead End - create a textarea question with keywords so patient view detects it
+            payload.answerType = 'textarea'
+            payload.isRequired = false
+            payload.placeholder = 'This form will end here - no response needed'
             break
         }
 
+        // Create the question (including for dead end type now)
         const res = await fetch(`${baseUrl}/questions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -956,6 +1297,7 @@ export default function TemplateEditor() {
         stepOrder: Number(s.stepOrder || 0),
         category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
         stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        isDeadEnd: Boolean(s.isDeadEnd),
         questions: (s.questions || []).map((q: any) => ({
           id: String(q.id),
           type: q.answerType || 'single-choice',
@@ -965,7 +1307,11 @@ export default function TemplateEditor() {
           required: Boolean(q.isRequired),
           placeholder: q.placeholder || null,
           helpText: q.helpText || null,
-          options: (q.options || []).map((o: any) => String(o.optionText || '')),
+          options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
+          })),
           conditionalLevel: Number(q.conditionalLevel || 0),
           subQuestionOrder: Number(q.subQuestionOrder || 0)
         })),
@@ -1099,25 +1445,25 @@ export default function TemplateEditor() {
           )}
 
           {/* Header Section */}
-          <div className="mb-12">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <div className="mb-8 pb-8 border-b border-border/40">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Left: Title and Description */}
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-3">
                 <h1 className="text-3xl font-semibold mb-4 tracking-tight">Intake Form</h1>
                 <p className="text-muted-foreground text-base leading-relaxed">
                   {template.description || "Generate a voucher to start using this intake form for patient sign up."}
                 </p>
               </div>
               
-              {/* Right: Metadata and Actions */}
-              <div className="lg:col-span-3 space-y-6">
+              {/* Middle/Right: Metadata and Actions */}
+              <div className="lg:col-span-8 space-y-4">
                 {/* Metadata Cards */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/40">
+                  <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
                     <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Form Name</p>
                     <p className="font-semibold text-foreground text-base">{template.title}</p>
                   </div>
-                  <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/40">
+                  <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
                     <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Status</p>
                     <Badge 
                       variant="secondary" 
@@ -1167,7 +1513,7 @@ export default function TemplateEditor() {
                           setTimeout(() => setSaveMessage(null), 5000)
                         }
                       }}
-                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
                     >
                       Submit for Review
                     </Button>
@@ -1177,7 +1523,7 @@ export default function TemplateEditor() {
                     <Button 
                       onClick={handleSave} 
                       disabled={saving}
-                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
                     >
                     {saving ? (
                       <>
@@ -1192,7 +1538,7 @@ export default function TemplateEditor() {
                   
                   <Button 
                     variant="outline" 
-                    className="rounded-full px-6 border-border/60 shadow-sm hover:bg-muted/50"
+                    className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
                     onClick={() => {
                       if (!templateId) return
                       const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
@@ -1206,7 +1552,7 @@ export default function TemplateEditor() {
                   
                   <Button 
                     variant="outline" 
-                    className="rounded-full px-6 border-border/60 shadow-sm hover:bg-muted/50"
+                    className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
                   >
                     Add Voucher
                   </Button>
@@ -1215,12 +1561,12 @@ export default function TemplateEditor() {
             </div>
           </div>
 
-          {/* Main Content - Two Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          {/* Main Content - Three Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column - Add Step Controls */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-3 space-y-6 bg-muted/30 rounded-2xl p-4 border border-border/20">
               {/* Add New Step Card */}
-              <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/40">
+              <div className="bg-card rounded-2xl p-6 shadow-md border border-border/40">
                 <div className="mb-6">
                   <h2 className="text-lg font-semibold tracking-tight mb-2">Add New Step</h2>
                   <p className="text-sm text-muted-foreground">Choose a question type to add to your form</p>
@@ -1311,6 +1657,23 @@ export default function TemplateEditor() {
                       </div>
                     </div>
                   </Button>
+
+                  <Button 
+                    onClick={() => handleAddStep("deadend")} 
+                    className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-red-200 hover:border-red-300 hover:bg-red-50/50 transition-all"
+                    variant="outline"
+                    disabled={isAccountTemplate}
+                  >
+                    <div className="flex items-center gap-4 w-full">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
+                        <StopCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-base mb-0.5">Dead End</div>
+                        <div className="text-xs text-muted-foreground">Terminates form automatically</div>
+                      </div>
+                    </div>
+                  </Button>
                   
                   {isAccountTemplate && (
                     <p className="text-xs text-muted-foreground text-center mt-4 py-3 bg-muted/30 rounded-lg">
@@ -1321,7 +1684,7 @@ export default function TemplateEditor() {
               </div>
 
               {/* Save Actions Card */}
-              <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/40 space-y-3">
+              <div className="bg-card rounded-2xl p-6 shadow-md border border-border/40 space-y-3">
                 <Button 
                   onClick={handleSave} 
                   disabled={saving} 
@@ -1413,7 +1776,11 @@ export default function TemplateEditor() {
                             required: Boolean(q.isRequired),
                             placeholder: q.placeholder || null,
                             helpText: q.helpText || null,
-                            options: (q.options || []).map((o: any) => String(o.optionText || '')),
+                            options: (q.options || []).map((o: any) => ({
+            optionText: String(o.optionText || ''),
+            optionValue: String(o.optionValue || o.optionText || ''),
+            riskLevel: o.riskLevel || null
+          })),
                           })),
                         })) as Step[]
                         setSteps(loadedSteps)
@@ -1434,48 +1801,100 @@ export default function TemplateEditor() {
               </div>
             </div>
 
-            {/* Right Column - Steps List */}
-            <div className="lg:col-span-3 space-y-6">
+            {/* Middle Column - Steps List */}
+            <div className="lg:col-span-8 space-y-6">
               {/* Questions Section Header */}
-              <div>
-                <h2 className="text-2xl font-semibold tracking-tight mb-3">Questions</h2>
-                <p className="text-base text-muted-foreground leading-relaxed">
+              <div className="bg-gradient-to-r from-muted/50 to-transparent rounded-xl p-5 border border-border/30">
+                <h2 className="text-2xl font-semibold tracking-tight mb-2">Questions</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   These are the intake form questions. Some questions will be automatically added to every form when needed.
                 </p>
               </div>
 
               {steps.length > 0 ? (
-                <div className="space-y-5">
-                  {steps.map((step, index) => (
+                <div className="space-y-3 relative">
+                  
+                  {steps.map((step, index) => {
+                    // Check if this step or any question in it is referenced by the hovered conditional step
+                    const referencedQuestionIds = hoveredConditionalStepId && steps.find(s => s.id === hoveredConditionalStepId)?.conditionalLogic
+                      ? getReferencedQuestionIds(steps.find(s => s.id === hoveredConditionalStepId)!.conditionalLogic!)
+                      : []
+                    const isReferencedByHovered = step.questions?.some(q => referencedQuestionIds.includes(q.id))
+                    
+                    return (
                     <div
                       key={step.id}
+                      ref={(el) => {
+                        if (el) {
+                          stepRefs.current.set(step.id, el)
+                        } else {
+                          stepRefs.current.delete(step.id)
+                        }
+                      }}
                       className={`
-                        bg-card rounded-2xl shadow-sm border border-border/40 overflow-hidden transition-all
+                        bg-card rounded-xl overflow-hidden transition-all relative
+                        ${step.conditionalLogic ? "ml-8 shadow-[-8px_0_12px_-4px_rgba(0,0,0,0.1)]" : ""}
+                        ${step.isDeadEnd 
+                          ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10 shadow-sm" 
+                          : "border border-border/40 shadow-sm hover:shadow-md"}
                         ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-md" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
+                        ${isReferencedByHovered ? "ring-2 ring-orange-400 shadow-md" : ""}
                       `}
+                      style={{ zIndex: 1 }}
                       draggable
                       onDragStart={() => handleDragStart(step.id)}
                       onDragOver={(e) => handleDragOver(e, step.id)}
                       onDragEnd={handleDragEnd}
+                      onMouseEnter={() => step.conditionalLogic && setHoveredConditionalStepId(step.id)}
+                      onMouseLeave={() => setHoveredConditionalStepId(null)}
                     >
-                      <div className="p-6">
-                        <div className="flex items-start gap-5">
-                          {/* Icon */}
-                          <div className={`flex-shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center ${
-                            step.stepType === "info" 
-                              ? "bg-blue-50 dark:bg-blue-900/20" 
-                              : "bg-teal-50 dark:bg-teal-900/20"
-                          }`}>
-                            {step.stepType === "info" ? (
-                              <Info className="h-7 w-7 text-blue-600 dark:text-blue-400" />
-                            ) : (
-                              <MessageSquare className="h-7 w-7 text-teal-600 dark:text-teal-400" />
-                            )}
+                      <div className="p-4">
+                        <div className="flex items-start gap-3">
+                          {/* Icon based on question type - smaller and more compact */}
+                          {(() => {
+                            const firstQuestion = step.questions?.[0]
+                            const isDeadEnd = step.isDeadEnd
+                            const isInfo = step.stepType === "info"
+                            const isYesNo = firstQuestion?.questionSubtype === 'yesno'
+                            const isMulti = firstQuestion?.answerType === 'checkbox'
+                            const isTextarea = firstQuestion?.answerType === 'textarea'
+                            
+                            let bgColor = "bg-teal-50 dark:bg-teal-900/20"
+                            let iconColor = "text-teal-600 dark:text-teal-400"
+                            let icon = <MessageSquare className="h-5 w-5" />
+                            
+                            if (isDeadEnd) {
+                              bgColor = "bg-red-50 dark:bg-red-900/20"
+                              iconColor = "text-red-600 dark:text-red-400"
+                              icon = <StopCircle className="h-5 w-5" />
+                            } else if (isInfo) {
+                              bgColor = "bg-gray-100 dark:bg-gray-800"
+                              iconColor = "text-gray-600 dark:text-gray-400"
+                              icon = <Info className="h-5 w-5" />
+                            } else if (isYesNo) {
+                              bgColor = "bg-blue-50 dark:bg-blue-900/20"
+                              iconColor = "text-blue-600 dark:text-blue-400"
+                            } else if (isMulti) {
+                              bgColor = "bg-purple-50 dark:bg-purple-900/20"
+                              iconColor = "text-purple-600 dark:text-purple-400"
+                            } else if (isTextarea) {
+                              bgColor = "bg-orange-50 dark:bg-orange-900/20"
+                              iconColor = "text-orange-600 dark:text-orange-400"
+                              icon = <Edit className="h-5 w-5" />
+                            }
+                            
+                            return (
+                              <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${bgColor}`}>
+                                <div className={iconColor}>
+                                  {icon}
                           </div>
+                              </div>
+                            )
+                          })()}
                           
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-3 mb-3">
+                            <div className="flex items-center gap-2 mb-2">
                               <Badge variant="outline" className="text-xs rounded-full px-3 py-1 border-border/60">
                                 Step {index + 1}
                               </Badge>
@@ -1484,9 +1903,21 @@ export default function TemplateEditor() {
                                   Auto-added
                                 </Badge>
                               )}
+                              {step.isDeadEnd && (
+                                <Badge variant="destructive" className="text-xs rounded-full px-3 py-1 bg-red-500 text-white border-red-600">
+                                  <StopCircle className="h-3 w-3 mr-1" />
+                                  DEAD END
+                                </Badge>
+                              )}
+                              {step.conditionalLogic && (
+                                <div className="flex items-center gap-1 text-[10px] text-orange-600 font-medium">
+                                  <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                                  Conditional
+                                </div>
+                              )}
                             </div>
                             {/* Always show collapsed view */}
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 {step.stepType === "question" && (step.questions || []).map((q) => {
                                 // Only render the conditional header once for the first conditional question
                                 const isFirstConditional = (q.conditionalLevel || 0) > 0 && 
@@ -1603,7 +2034,7 @@ export default function TemplateEditor() {
 
                                     {/* Collapsed Question View */}
                                     {(q.conditionalLevel || 0) === 0 && (
-                                      <div className="bg-card rounded-lg border border-border/40 p-5 hover:shadow-md transition-shadow">
+                                      <div className="bg-card rounded-lg border border-border/40 p-3 transition-all hover:shadow-sm">
                                         <div className="flex items-start justify-between gap-4 mb-4">
                                           <div className="flex-1">
                                             <p className="text-base font-semibold text-foreground mb-2">{q.questionText}</p>
@@ -1632,7 +2063,16 @@ export default function TemplateEditor() {
                                                     ? 'border-teal-500 rounded' 
                                                     : 'border-teal-500'
                                                     }`}></div>
-                                                {opt}
+                                                <span className="flex-1">{opt.optionText}</span>
+                                                {opt.riskLevel && (
+                                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                                    opt.riskLevel === 'safe' ? 'bg-green-100 text-green-700 border border-green-300' :
+                                                    opt.riskLevel === 'review' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                                                    'bg-red-100 text-red-700 border border-red-300'
+                                                  }`}>
+                                                    {opt.riskLevel === 'safe' ? '✓ SAFE' : opt.riskLevel === 'review' ? '⚠ REVIEW' : '✕ REJECT'}
+                                                  </span>
+                                                )}
                                                   </div>
                                             ))}
                                             </div>
@@ -1669,37 +2109,117 @@ export default function TemplateEditor() {
                                   </div>
                               
                                 {step.stepType === "info" && (
-                                <div className="bg-card rounded-lg border border-border/40 p-4">
-                                    <p className="font-medium text-base mb-1">{step.title}</p>
-                                    <p className="text-sm text-muted-foreground">{step.description}</p>
+                                <div className="bg-card rounded-lg border border-border/40 p-3">
+                                  {editingStepId === step.id ? (
+                                    // Edit mode
+                                    <div className="space-y-4">
+                                      <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-foreground">Step Title</label>
+                                        <input
+                                          type="text"
+                                          value={step.title}
+                                          onChange={(e) => {
+                                            const newSteps = steps.map(s => s.id === step.id ? {...s, title: e.target.value} : s)
+                                            setSteps(newSteps)
+                                          }}
+                                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                                          placeholder="Enter step title"
+                                        />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-foreground">Description</label>
+                                        <textarea
+                                          value={step.description}
+                                          onChange={(e) => {
+                                            const newSteps = steps.map(s => s.id === step.id ? {...s, description: e.target.value} : s)
+                                            setSteps(newSteps)
+                                          }}
+                                          className="w-full px-3 py-2 border rounded-md bg-background text-sm resize-none"
+                                          rows={3}
+                                          placeholder="Enter description or information text"
+                                        />
+                                      </div>
+                                      <div className="flex gap-2 justify-end pt-2 border-t">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => setEditingStepId(null)}
+                                        >
+                                          Done
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    // View mode
+                                    <>
+                                      <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1">
+                                          <p className="font-medium text-base mb-1">{step.title || 'Information Step'}</p>
+                                          <p className="text-sm text-muted-foreground">{step.description || 'No description provided'}</p>
+                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => setEditingStepId(step.id)}
+                                          className="flex-shrink-0 rounded-lg"
+                                        >
+                                          <Edit className="h-4 w-4 mr-1.5" />
+                                          Edit
+                                        </Button>
+                                      </div>
+                                      {step.isDeadEnd && (
+                                        <div className="mt-3 pt-3 border-t">
+                                          <p className="text-xs text-red-600 font-medium">
+                                            ⚠ This step will terminate the form
+                                          </p>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
                               </div>
                             )}
                           </div>
                           
                           {/* Action Icons */}
-                          <div className="flex items-start gap-2 flex-shrink-0">
+                          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                            {/* Only show "Create Rule" button if this is NOT the first step */}
+                            {index > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenStepConditionalModal(step.id)}
+                                className="h-8 text-xs px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                title={step.conditionalLogic ? "Edit conditional logic" : "Create conditional rule"}
+                              >
+                                <GitBranch className="h-3.5 w-3.5 mr-1" />
+                                {step.conditionalLogic ? 'Edit Rule' : 'Create Rule'}
+                              </Button>
+                            )}
+                            <div className="flex items-start gap-1">
                             {!isAccountTemplate && (
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-10 w-10 rounded-xl hover:bg-destructive/10 transition-colors"
+                                  className="h-8 w-8 rounded-lg hover:bg-destructive/10 transition-colors"
                                 onClick={() => handleDeleteStep(step.id)}
                                 title="Delete step"
                               >
-                                <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                                  <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                               </Button>
                             )}
                             <div 
-                              className="h-10 w-10 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-xl hover:bg-muted/50 transition-colors"
+                                className="h-8 w-8 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-lg hover:bg-muted/50 transition-colors"
                               title="Drag to reorder"
                             >
-                              <GripVertical className="h-5 w-5 text-muted-foreground" />
+                                <GripVertical className="h-4 w-4 text-muted-foreground" />
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  ))}
+                    </div>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="bg-card rounded-2xl shadow-sm border border-dashed border-border/60 p-12 text-center">
@@ -1739,28 +2259,100 @@ export default function TemplateEditor() {
                 </div>
               )}
             </div>
+
+            {/* Right Column - Connection Indicators Track */}
+            <div className="lg:col-span-1 relative hidden lg:block">
+              <div className="absolute top-0 left-0 right-0 pointer-events-none" style={{ height: '100%' }}>
+                {/* Show circles when hovering over a conditional step */}
+                {hoveredConditionalStepId && (() => {
+                  const hoveredStep = steps.find(s => s.id === hoveredConditionalStepId)
+                  if (!hoveredStep || !hoveredStep.conditionalLogic) return null
+                  
+                  const hoveredStepEl = stepRefs.current.get(hoveredConditionalStepId)
+                  if (!hoveredStepEl) return null
+                  
+                  const referencedQuestionIds = getReferencedQuestionIds(hoveredStep.conditionalLogic)
+                  
+                  return steps.map((refStep) => {
+                    // Check if this step contains any referenced questions
+                    if (!refStep.questions?.some(q => referencedQuestionIds.includes(q.id))) return null
+                    
+                    const refStepEl = stepRefs.current.get(refStep.id)
+                    if (!refStepEl) return null
+                    
+                    // Get actual center position of the card
+                    const refRect = refStepEl.getBoundingClientRect()
+                    const centerY = refRect.top + refRect.height / 2
+                    
+                    return (
+                      <div 
+                        key={`circle-${refStep.id}`} 
+                        className="absolute left-0 transition-opacity duration-200" 
+                        style={{ 
+                          top: `${centerY}px`,
+                          transform: 'translateY(-50%)'
+                        }}
+                      >
+                        {/* Orange circle at card center */}
+                        <div className="w-3 h-3 rounded-full bg-orange-500 shadow-md"></div>
+                      </div>
+                    )
+                  })
+                })()}
+                
+                {/* Show circle on hovered conditional step */}
+                {hoveredConditionalStepId && (() => {
+                  const hoveredStepEl = stepRefs.current.get(hoveredConditionalStepId)
+                  if (!hoveredStepEl) return null
+                  
+                  const hoveredRect = hoveredStepEl.getBoundingClientRect()
+                  const centerY = hoveredRect.top + hoveredRect.height / 2
+                  
+                  return (
+                    <div 
+                      key={`circle-hovered-${hoveredConditionalStepId}`}
+                      className="absolute left-0 transition-opacity duration-200" 
+                      style={{ 
+                        top: `${centerY}px`,
+                        transform: 'translateY(-50%)'
+                      }}
+                    >
+                      {/* Orange circle at card center */}
+                      <div className="w-3 h-3 rounded-full bg-orange-500 shadow-md"></div>
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
           </div>
         </main>
       </div>
 
       {/* Conditional Logic Modal */}
-      {showConditionalModal && selectedQuestionForConditional && (
+      {showConditionalModal && (selectedQuestionForConditional || conditionalModalType === 'step') && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
                   <CardTitle className="text-2xl mb-2">
-                    Conditional Logic Builder
+                    {conditionalModalType === 'step' ? 'Step Conditional Logic' : 'Conditional Logic Builder'}
                   </CardTitle>
                   <CardDescription>
-                    Create rules and add multiple conditional steps that will appear when the rules match.
+                    {conditionalModalType === 'step' 
+                      ? 'Define when this step should appear based on previous answers.'
+                      : 'Create rules and add multiple conditional steps that will appear when the rules match.'}
                   </CardDescription>
                 </div>
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setShowConditionalModal(false)}
+                  onClick={() => {
+                    setShowConditionalModal(false)
+                    setConditionalModalType('question')
+                    setEditingConditionalStepId(null)
+                    setSelectedQuestionForConditional(null)
+                  }}
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -1768,16 +2360,99 @@ export default function TemplateEditor() {
             </CardHeader>
 
             <CardContent className="space-y-6">
-              {/* Parent Question Display */}
+              {/* Parent Question Display - Only for question-level conditionals */}
+              {conditionalModalType === 'question' && selectedQuestionForConditional && (
               <div className="bg-muted/50 p-4 rounded-lg border">
                 <p className="text-sm font-medium text-muted-foreground mb-1">Parent Question:</p>
                 <p className="font-medium">{selectedQuestionForConditional.questionText}</p>
               </div>
+              )}
+
+              {/* Step-level conditional info */}
+              {conditionalModalType === 'step' && editingConditionalStepId && (
+                <div className="flex items-start justify-between p-4 rounded-lg border border-border">
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-1">Step-Level Conditional Logic</p>
+                    <p className="text-xs text-muted-foreground">This entire step will only show if the rules match.</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      if (!confirm('Delete all rules for this step? The step will always show.')) return
+                      if (!token || !editingConditionalStepId) return
+                      
+                      try {
+                        const deleteRes = await fetch(`${baseUrl}/questionnaires/step`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({
+                            stepId: editingConditionalStepId,
+                            conditionalLogic: '' // Send empty string instead of null
+                          }),
+                        })
+                        
+                        if (!deleteRes.ok) {
+                          const errorData = await deleteRes.json().catch(() => ({}))
+                          console.error('Delete rules failed:', errorData)
+                          throw new Error(errorData.message || 'Failed to delete rules')
+                        }
+                        
+                        // Reload and close
+                        const refRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+                          headers: { Authorization: `Bearer ${token}` },
+                        })
+                        const refData = await refRes.json()
+                        setTemplate(refData.data)
+                        const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
+                          id: String(s.id),
+                          title: String(s.title || ''),
+                          description: String(s.description || ''),
+                          stepOrder: Number(s.stepOrder || 0),
+                          category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
+                          stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+                          isDeadEnd: Boolean(s.isDeadEnd),
+                          conditionalLogic: s.conditionalLogic || null,
+                          questions: (s.questions || []).map((q: any) => ({
+                            id: String(q.id),
+                            type: q.answerType || 'single-choice',
+                            answerType: q.answerType || 'radio',
+                            questionSubtype: q.questionSubtype || null,
+                            questionText: String(q.questionText || ''),
+                            required: Boolean(q.isRequired),
+                            placeholder: q.placeholder || null,
+                            helpText: q.helpText || null,
+                            options: (q.options || []).map((o: any) => ({
+                              optionText: String(o.optionText || ''),
+                              optionValue: String(o.optionValue || o.optionText || ''),
+                              riskLevel: o.riskLevel || null
+                            })),
+                            conditionalLevel: Number(q.conditionalLevel || 0),
+                            subQuestionOrder: Number(q.subQuestionOrder || 0)
+                          })),
+                        })) as Step[]
+                        setSteps(loadedSteps)
+                        setShowConditionalModal(false)
+                        setEditingConditionalStepId(null)
+                        setConditionalModalType('question')
+                      } catch (error) {
+                        console.error('Failed to delete rules:', error)
+                        alert('Failed to delete rules')
+                      }
+                    }}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete All Rules
+                  </Button>
+                </div>
+              )}
 
               {/* Conditional Step Editor */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold">
-                  {editingConditionalStep.id ? 'Edit Conditional Step' : 'Create New Conditional Step'}
+                  {conditionalModalType === 'step' ? 'Configure Step Rules' : 
+                   editingConditionalStep.id ? 'Edit Conditional Step' : 'Create New Conditional Step'}
                 </h3>
                 
                 {/* Step 1: Define Rules */}
@@ -1789,9 +2464,10 @@ export default function TemplateEditor() {
                       variant="outline"
                       onClick={() => {
                         // Get all available questions for rule building
-                        const currentStepIndex = steps.findIndex(s => s.id === selectedQuestionForConditional?.stepId)
+                        const targetStepId = conditionalModalType === 'step' ? editingConditionalStepId : selectedQuestionForConditional?.stepId
+                        const currentStepIndex = steps.findIndex(s => s.id === targetStepId)
                         const allPrevQuestions = steps
-                          .slice(0, currentStepIndex + 1)
+                          .slice(0, conditionalModalType === 'step' ? currentStepIndex : currentStepIndex + 1)
                           .flatMap((s, stepIdx) => 
                             (s.questions || [])
                               .filter(q => (q.conditionalLevel || 0) === 0 && q.options && q.options.length > 0)
@@ -1809,7 +2485,7 @@ export default function TemplateEditor() {
                               questionId: defaultQ.id,
                               questionText: defaultQ.questionText,
                               questionNumber: defaultQ.questionNumber,
-                              triggerOption: defaultQ.options?.[0] || '',
+                              triggerOption: defaultQ.options?.[0]?.optionValue || '',
                               operator: editingConditionalStep.rules.length > 0 ? editingConditionalStep.rules[editingConditionalStep.rules.length - 1].operator : 'OR'
                             }]
                           })
@@ -1830,9 +2506,10 @@ export default function TemplateEditor() {
 
                   {editingConditionalStep.rules.map((rule, index) => {
                     // Get all available questions for this rule
-                    const currentStepIndex = steps.findIndex(s => s.id === selectedQuestionForConditional?.stepId)
+                    const targetStepId = conditionalModalType === 'step' ? editingConditionalStepId : selectedQuestionForConditional?.stepId
+                    const currentStepIndex = steps.findIndex(s => s.id === targetStepId)
                     const allPrevQuestions = steps
-                      .slice(0, currentStepIndex + 1)
+                      .slice(0, conditionalModalType === 'step' ? currentStepIndex : currentStepIndex + 1)
                       .flatMap((s, stepIdx) => 
                         (s.questions || [])
                           .filter(q => (q.conditionalLevel || 0) === 0 && q.options && q.options.length > 0)
@@ -1862,7 +2539,7 @@ export default function TemplateEditor() {
                                     questionId: selected.id,
                                     questionText: selected.questionText,
                                     questionNumber: selected.questionNumber,
-                                    triggerOption: selected.options?.[0] || ''
+                                    triggerOption: selected.options?.[0]?.optionValue || ''
                                   }
                                   setEditingConditionalStep({...editingConditionalStep, rules: newRules})
                                 }
@@ -1885,17 +2562,23 @@ export default function TemplateEditor() {
                     <select
                               value={rule.triggerOption}
                               onChange={(e) => {
+                                console.log('Dropdown changed:', e.target.value, 'for rule', index)
+                                console.log('Available options:', selectedQ?.options)
                                 const newRules = [...editingConditionalStep.rules]
                                 newRules[index] = { ...rule, triggerOption: e.target.value }
                                 setEditingConditionalStep({...editingConditionalStep, rules: newRules})
+                                console.log('Updated rules:', newRules)
                               }}
                               className="w-full px-2 py-1.5 border rounded-md bg-background text-xs"
                             >
-                              {(selectedQ?.options || []).map((option, idx) => (
-                        <option key={idx} value={option}>
-                          {option}
+                              {(selectedQ?.options || []).map((option, optIdx) => {
+                                console.log(`Option ${optIdx}:`, option.optionText, '=', option.optionValue)
+                                return (
+                                  <option key={`rule-${index}-opt-${optIdx}-${option.optionValue}`} value={option.optionValue}>
+                                    {option.optionText}
                         </option>
-                      ))}
+                                )
+                              })}
                     </select>
                   </div>
 
@@ -1958,60 +2641,10 @@ export default function TemplateEditor() {
                   })}
                 </div>
 
-                {/* Step 2: Where to show the conditional step */}
+                {/* Step 2: Choose Step Type - Only for question-level */}
+                {conditionalModalType === 'question' && (
                 <div className="space-y-3">
-                  <label className="text-xs font-semibold text-foreground">2. Where to show this step?</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => setEditingConditionalStep({...editingConditionalStep, placement: 'inline'})}
-                        className={`p-4 rounded-lg border-2 transition-all text-left ${
-                          editingConditionalStep.placement === 'inline'
-                            ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
-                            : 'border-border hover:border-border/80'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            editingConditionalStep.placement === 'inline' ? 'bg-teal-100 dark:bg-teal-800' : 'bg-muted'
-                          }`}>
-                            <MessageSquare className={`h-4 w-4 ${
-                              editingConditionalStep.placement === 'inline' ? 'text-teal-600 dark:text-teal-400' : 'text-muted-foreground'
-                            }`} />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold mb-1">Same Step</p>
-                            <p className="text-xs text-muted-foreground">Shows below current question</p>
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => setEditingConditionalStep({...editingConditionalStep, placement: 'new-step'})}
-                        className={`p-4 rounded-lg border-2 transition-all text-left ${
-                          editingConditionalStep.placement === 'new-step'
-                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                            : 'border-border hover:border-border/80'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            editingConditionalStep.placement === 'new-step' ? 'bg-purple-100 dark:bg-purple-800' : 'bg-muted'
-                          }`}>
-                            <Plus className={`h-4 w-4 ${
-                              editingConditionalStep.placement === 'new-step' ? 'text-purple-600 dark:text-purple-400' : 'text-muted-foreground'
-                            }`} />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold mb-1">New Step</p>
-                            <p className="text-xs text-muted-foreground">Creates separate slide</p>
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                </div>
-
-                {/* Step 3: Choose Step Type */}
-                <div className="space-y-3">
-                  <label className="text-xs font-semibold text-foreground">3. What type of step?</label>
+                  <label className="text-xs font-semibold text-foreground">2. What type of step?</label>
                   
                   {!editingConditionalStep.stepType ? (
                     <div className="grid grid-cols-2 gap-2">
@@ -2075,15 +2708,29 @@ export default function TemplateEditor() {
                       </Button>
                       <Button
                         variant="outline"
-                        className="h-auto py-2.5 flex flex-col items-center gap-1 col-span-2"
+                        className="h-auto py-2.5 flex flex-col items-center gap-1"
                         onClick={() => setEditingConditionalStep({
                           ...editingConditionalStep, 
                           stepType: 'info',
-                          placeholder: 'No response needed - informational only'
+                          text: 'Important information to note',
+                          helpText: 'Please read this carefully.'
                         })}
                       >
                         <Info className="h-4 w-4 text-gray-600" />
                         <div className="text-[10px] font-medium">Information</div>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-auto py-2.5 flex flex-col items-center gap-1 border-red-200 hover:border-red-300 hover:bg-red-50"
+                        onClick={() => setEditingConditionalStep({
+                          ...editingConditionalStep, 
+                          stepType: 'deadend',
+                          text: 'Unfortunately, you do not qualify at this time.',
+                          helpText: 'Thank you for your interest.'
+                        })}
+                      >
+                        <StopCircle className="h-4 w-4 text-red-600" />
+                        <div className="text-[10px] font-medium">Dead End</div>
                       </Button>
                     </div>
                   ) : (
@@ -2095,12 +2742,14 @@ export default function TemplateEditor() {
                           {editingConditionalStep.stepType === 'multi' && <MessageSquare className="h-4 w-4 text-purple-600" />}
                           {editingConditionalStep.stepType === 'textarea' && <Edit className="h-4 w-4 text-orange-600" />}
                           {editingConditionalStep.stepType === 'info' && <Info className="h-4 w-4 text-gray-600" />}
+                          {editingConditionalStep.stepType === 'deadend' && <StopCircle className="h-4 w-4 text-red-600" />}
                           <span className="font-medium text-xs">
                             {editingConditionalStep.stepType === 'single' ? 'Single Option' :
                              editingConditionalStep.stepType === 'yesno' ? 'Yes/No' :
                              editingConditionalStep.stepType === 'multi' ? 'Multi Option' :
-                             editingConditionalStep.stepType === 'textarea' ? 'Multi Line Text' :
-                             'Information'}
+                             editingConditionalStep.stepType === 'info' ? 'Information' :
+                             editingConditionalStep.stepType === 'deadend' ? 'Dead End' :
+                             'Multi Line Text'}
                           </span>
                         </div>
                         <Button
@@ -2120,49 +2769,55 @@ export default function TemplateEditor() {
                     </div>
                   )}
                 </div>
+                )}
 
-                {/* Step 4: Configure the conditional step */}
-                {editingConditionalStep.stepType && (
+                {/* Step 3: Configure the conditional step - Only for question-level */}
+                {conditionalModalType === 'question' && editingConditionalStep.stepType && (
                   <div className="space-y-3">
-                    <label className="text-xs font-semibold text-foreground">4. Configure this step</label>
+                    <label className="text-xs font-semibold text-foreground">3. Configure this step</label>
                     
                     {/* Show a temporary question editor for the conditional step */}
                     <div className="bg-background rounded-lg border p-4">
                       <div className="space-y-4">
-                        {/* Question Text */}
+                        {/* Title/Question Text */}
                         <div className="space-y-1.5">
                           <label className="block text-xs font-semibold text-foreground">
-                            {editingConditionalStep.stepType === 'info' ? 'Information Text' : 'Question Text'} <span className="text-destructive">*</span>
+                            {editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend' ? 'Message Title' : 'Question Text'} <span className="text-destructive">*</span>
                   </label>
                   <input
                     type="text"
                             value={editingConditionalStep.text}
                             onChange={(e) => setEditingConditionalStep({...editingConditionalStep, text: e.target.value})}
                             placeholder={
+                              editingConditionalStep.stepType === 'info' ? "e.g., Important information to note" :
+                              editingConditionalStep.stepType === 'deadend' ? "e.g., Unfortunately, you do not qualify at this time." :
                               editingConditionalStep.stepType === 'textarea' ? "e.g., Please describe your symptoms in detail" :
-                              editingConditionalStep.stepType === 'info' ? "e.g., Important: Please consult your doctor" :
                               "e.g., What other medication are you taking?"
                             }
                             className="w-full px-3 py-2 border rounded-md bg-background text-sm h-9"
                   />
                 </div>
 
-                        {/* Help Text */}
+                        {/* Description / Help Text */}
                         <div className="space-y-1.5">
                           <label className="block text-xs font-medium text-muted-foreground">
-                            Help Text <span className="text-xs">(optional)</span>
+                            {editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend' ? 'Description' : 'Help Text'} <span className="text-xs">(optional)</span>
                           </label>
                           <textarea
                             value={editingConditionalStep.helpText}
                             onChange={(e) => setEditingConditionalStep({...editingConditionalStep, helpText: e.target.value})}
-                            placeholder="Add context or instructions..."
+                            placeholder={
+                              editingConditionalStep.stepType === 'info' ? "Additional details for patients to review..." :
+                              editingConditionalStep.stepType === 'deadend' ? "Explain why they don't qualify..." :
+                              "Add context or instructions..."
+                            }
                             className="w-full px-2.5 py-2 text-xs border border-input bg-background rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-                            rows={2}
+                            rows={3}
                           />
                     </div>
                         
-                        {/* Placeholder for textarea types */}
-                        {(editingConditionalStep.stepType === 'textarea' || editingConditionalStep.stepType === 'info') && (
+                        {/* Placeholder - Only for textarea type (not info or deadend) */}
+                        {editingConditionalStep.stepType === 'textarea' && (
                           <div className="space-y-1.5">
                             <label className="block text-xs font-medium text-muted-foreground">
                               Placeholder <span className="text-xs">(optional)</span>
@@ -2178,7 +2833,7 @@ export default function TemplateEditor() {
                         )}
                         
                         {/* Options Editor for question types */}
-                        {editingConditionalStep.stepType && editingConditionalStep.stepType !== 'textarea' && editingConditionalStep.stepType !== 'info' && (
+                        {editingConditionalStep.stepType && editingConditionalStep.stepType !== 'textarea' && editingConditionalStep.stepType !== 'info' && editingConditionalStep.stepType !== 'deadend' && (
                           <div className="space-y-2 pt-3 border-t">
                             <div className="flex items-center justify-between">
                               <label className="block text-xs font-semibold text-foreground">
@@ -2294,15 +2949,25 @@ export default function TemplateEditor() {
 
               {/* Action Buttons */}
               <div className="flex gap-2 justify-end pt-4 border-t">
-                <Button variant="outline" onClick={() => setShowConditionalModal(false)}>
+                <Button variant="outline" onClick={() => {
+                  setShowConditionalModal(false)
+                  setConditionalModalType('question')
+                  setEditingConditionalStepId(null)
+                  setSelectedQuestionForConditional(null)
+                }}>
                   Close
                 </Button>
                 <Button 
                   onClick={handleSaveConditionalStep}
-                  disabled={!editingConditionalStep.stepType || !editingConditionalStep.text.trim() || editingConditionalStep.rules.length === 0}
+                  disabled={
+                    conditionalModalType === 'step' 
+                      ? editingConditionalStep.rules.length === 0
+                      : (!editingConditionalStep.stepType || !editingConditionalStep.text.trim() || editingConditionalStep.rules.length === 0)
+                  }
                 >
                       <Save className="mr-2 h-4 w-4" />
-                  {editingConditionalStep.id ? 'Update Step' : 'Create Step'}
+                  {conditionalModalType === 'step' ? 'Save Rules' : 
+                   editingConditionalStep.id ? 'Update Step' : 'Create Step'}
                 </Button>
               </div>
             </CardContent>
@@ -2311,7 +2976,19 @@ export default function TemplateEditor() {
       )}
 
       {/* Edit Question Modal */}
-      {showEditModal && editingQuestion && editingStepId && (
+      {showEditModal && editingQuestion && editingStepId && (() => {
+        // Get question type label
+        const getQuestionTypeLabel = () => {
+          if (editingQuestion.questionSubtype === 'yesno') return 'Yes/No Question'
+          if (editingQuestion.answerType === 'textarea') return 'Multi-Line Text'
+          if (editingQuestion.answerType === 'checkbox') return 'Multi-Choice Question'
+          if (editingQuestion.answerType === 'radio') return 'Single-Choice Question'
+          if (editingQuestion.answerType === 'text') return 'Short Text'
+          if (editingQuestion.answerType === 'select') return 'Select Dropdown'
+          return 'Question'
+        }
+        
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
@@ -2320,6 +2997,11 @@ export default function TemplateEditor() {
                   <CardTitle className="text-2xl mb-2">
                     Edit Question
                   </CardTitle>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {getQuestionTypeLabel()}
+                    </Badge>
+                  </div>
                   <CardDescription>
                     Update the question text, options, and settings.
                   </CardDescription>
@@ -2346,10 +3028,10 @@ export default function TemplateEditor() {
                   isRequired: editingQuestion.required,
                   placeholder: editingQuestion.placeholder || null,
                   helpText: editingQuestion.helpText || null,
-                  options: (editingQuestion.options || []).map((text, idx) => ({ 
+                  options: (editingQuestion.options || []).map((opt, idx) => ({ 
                     id: undefined as any, 
-                    optionText: text, 
-                    optionValue: text, 
+                    optionText: opt.optionText, 
+                    optionValue: opt.optionValue, 
                     optionOrder: idx + 1 
                   } as any)),
                 } as any}
@@ -2367,7 +3049,10 @@ export default function TemplateEditor() {
                       answerType: updated.answerType || oldQ.answerType,
                       placeholder: updated.placeholder || oldQ.placeholder,
                       helpText: updated.helpText || oldQ.helpText,
-                      options: (updated.options || []).map((o: any) => o.optionText),
+                      options: (updated.options || []).map((o: any) => ({
+                        optionText: o.optionText,
+                        optionValue: o.optionValue || o.optionText
+                      })),
                     } : oldQ)
                   } : s))
                   handleCloseEditModal()
@@ -2382,7 +3067,8 @@ export default function TemplateEditor() {
             </CardContent>
           </Card>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

@@ -4943,7 +4943,7 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { stepId, title, description } = validation.data;
+    const { stepId, title, description, isDeadEnd, conditionalLogic } = validation.data;
 
     // Create questionnaire step service instance
     const questionnaireStepService = new QuestionnaireStepService();
@@ -4951,7 +4951,7 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
     // Update questionnaire step
     const updatedStep = await questionnaireStepService.updateQuestionnaireStep(
       stepId,
-      { title, description },
+      { title, description, isDeadEnd, conditionalLogic },
       currentUser.id
     );
 
@@ -4959,6 +4959,8 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
       stepId: updatedStep.id,
       title: updatedStep.title,
       description: updatedStep.description,
+      isDeadEnd: updatedStep.isDeadEnd,
+      conditionalLogic: updatedStep.conditionalLogic,
       userId: currentUser.id
     });
 

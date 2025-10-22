@@ -598,18 +598,79 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     return currentStepIndex === checkoutStepIndex;
   };
 
+  // Helper: Evaluate step-level conditional logic
+  const evaluateStepConditionalLogic = (step: any): boolean => {
+    const conditionalLogic = step.conditionalLogic;
+    if (!conditionalLogic) return true; // No condition = always show
+    
+    console.log(`🔍 Evaluating step conditional logic for: ${step.title}`);
+    console.log('  conditionalLogic:', conditionalLogic);
+    console.log('  current answers:', answers);
+    
+    try {
+      // Parse format: answer_equals:{questionId}:{optionValue}
+      const tokens = conditionalLogic.split(' ');
+      let result = false;
+      let currentOperator: 'OR' | 'AND' | null = null;
+      
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        
+        if (token.startsWith('answer_equals:')) {
+          const parts = token.replace('answer_equals:', '').split(':');
+          if (parts.length === 2) {
+            const [questionId, requiredValue] = parts;
+            const answer = answers[questionId];
+            const conditionMet = Array.isArray(answer) ? answer.includes(requiredValue) : answer === requiredValue;
+            
+            console.log(`  Checking: questionId=${questionId}, requiredValue=${requiredValue}`);
+            console.log(`  Answer found: ${answer}, Condition met: ${conditionMet}`);
+            
+            if (currentOperator === 'AND') {
+              result = result && conditionMet;
+            } else if (currentOperator === 'OR') {
+              result = result || conditionMet;
+            } else {
+              result = conditionMet;
+            }
+          }
+        } else if (token === 'OR' || token === 'AND') {
+          currentOperator = token as 'OR' | 'AND';
+        }
+      }
+      
+      console.log(`  Final result: ${result ? 'SHOW STEP' : 'HIDE STEP'}`);
+      return result;
+    } catch (error) {
+      console.error('Error evaluating step conditional logic:', error);
+      return true; // Show step if error
+    }
+  };
+
   const getCurrentQuestionnaireStep = () => {
     if (!questionnaire || isProductSelectionStep() || isCheckoutStep()) return null;
 
     const checkoutPos = questionnaire.checkoutStepPosition;
     let actualStepIndex = currentStepIndex;
 
-    // Adjust for checkout steps if they appear before this step
     if (checkoutPos !== -1 && currentStepIndex > checkoutPos + 1) {
       actualStepIndex = currentStepIndex - 2;
     }
 
-    return questionnaire.steps[actualStepIndex];
+    // Find the next visible step starting from actualStepIndex
+    for (let i = actualStepIndex; i < questionnaire.steps.length; i++) {
+      const step = questionnaire.steps[i];
+      if (evaluateStepConditionalLogic(step)) {
+        // Update currentStepIndex to this visible step's index
+        if (i !== actualStepIndex) {
+          setCurrentStepIndex(currentStepIndex + (i - actualStepIndex));
+        }
+        return step;
+      }
+    }
+
+    // If no more visible steps, return null to trigger completion
+    return null;
   };
 
   // Function to build questionnaire answers object (for real-time logging)
@@ -780,19 +841,31 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       });
     }
 
-    // Check if current step has conditional questions
-    const hasConditionalQuestions = currentStep?.questions?.some(q =>
-      (q as any).conditionalLogic
-    );
-
-    // Only auto-advance if there are no conditional questions in this step
-    if (!hasConditionalQuestions && questionnaire) {
-      const totalSteps = getTotalSteps();
-      if (currentStepIndex < totalSteps - 1) {
-        setCurrentStepIndex(prev => prev + 1);
-      } else {
-        handleSubmit();
+    // Check if this specific answer will trigger any conditional questions
+    const willTriggerConditionals = currentStep?.questions?.some(q => {
+      const logic = (q as any).conditionalLogic;
+      if (!logic) return false;
+      
+      // Check if this conditional matches the value we just selected
+      if (logic.startsWith('answer_equals:')) {
+        const requiredValue = logic.replace('answer_equals:', '').trim();
+        return value === requiredValue;
       }
+      return false;
+    });
+
+    // Auto-advance if this answer doesn't trigger any conditionals
+    if (!willTriggerConditionals && questionnaire) {
+      setTimeout(() => {
+        if (validateCurrentStep()) {
+          const totalSteps = getTotalSteps();
+          if (currentStepIndex < totalSteps - 1) {
+            setCurrentStepIndex(prev => prev + 1);
+          } else {
+            handleSubmit();
+          }
+        }
+      }, 300); // Small delay for smooth UX
     }
   };
 
@@ -954,7 +1027,35 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
     if (currentStep.questions) {
       for (const question of currentStep.questions) {
-        if (question.isRequired) {
+        // Only validate if question is VISIBLE (check conditional logic)
+        const conditionalLogic = (question as any).conditionalLogic;
+        let isVisible = true;
+        
+        if (conditionalLogic) {
+          try {
+            const parentQuestion = currentStep.questions?.find((q: any) => 
+              q.conditionalLevel === 0 || !q.conditionalLevel
+            );
+            if (parentQuestion) {
+              const parentAnswer = answers[parentQuestion.id];
+              if (parentAnswer && conditionalLogic.startsWith('answer_equals:')) {
+                const requiredValue = conditionalLogic.replace('answer_equals:', '').trim();
+                if (Array.isArray(parentAnswer)) {
+                  isVisible = parentAnswer.includes(requiredValue);
+                } else {
+                  isVisible = parentAnswer === requiredValue;
+                }
+              } else {
+                isVisible = false; // No parent answer = hidden
+              }
+            }
+          } catch (error) {
+            isVisible = true; // Default to visible if error
+          }
+        }
+        
+        // Only validate visible required questions
+        if (isVisible && question.isRequired) {
           const answer = answers[question.id];
           if (!answer || (Array.isArray(answer) && answer.length === 0) ||
             (typeof answer === 'string' && answer.trim() === '')) {
@@ -1253,6 +1354,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   } else if (currentStep) {
     stepTitle = currentStep.title;
     stepDescription = currentStep.description || '';
+  }
+
+  if (!currentStep && !isProductSelectionStep() && !isCheckoutStep()) {
+    // No more questionnaire steps - advance to next phase (product selection or checkout)
+    handleNext();
+    return null; // Prevent rendering empty step
   }
 
   return (
@@ -2137,23 +2244,80 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                       )}
 
                       {/* Continue button for regular steps */}
-                      {!(isCheckoutStep() && paymentStatus !== 'succeeded') && (
-                        <button
-                          onClick={handleNext}
-                          disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
-                          className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                          style={{
-                            backgroundColor: theme.primary,
-                            ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
-                          }}
-                        >
-                          {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
-                            (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
-                              isProductSelectionStep() ? 'Continue to Checkout' :
-                                isCheckoutStep() ? 'Complete Order' : 'Continue'}
-                          <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
-                        </button>
-                      )}
+                      {!(isCheckoutStep() && paymentStatus !== 'succeeded') && (() => {
+                        // Check if step itself is dead end OR if any VISIBLE question is a dead end
+                        // Use same filter logic as question rendering above
+                        const visibleQuestions = currentStep?.questions?.filter((question: any) => {
+                          const conditionalLogic = question.conditionalLogic;
+                          if (!conditionalLogic) return true;
+
+                          try {
+                            const parentQuestion = currentStep.questions?.find((q: any) => 
+                              q.conditionalLevel === 0 || !q.conditionalLevel
+                            );
+                            if (!parentQuestion) return false;
+                            
+                            const parentAnswer = answers[parentQuestion.id];
+                            if (!parentAnswer) return false;
+
+                            if (conditionalLogic.startsWith('answer_equals:')) {
+                              const requiredValue = conditionalLogic.replace('answer_equals:', '').trim();
+                              if (Array.isArray(parentAnswer)) {
+                                return parentAnswer.includes(requiredValue);
+                              }
+                              return parentAnswer === requiredValue;
+                            }
+                            return false;
+                          } catch (error) {
+                            return true;
+                          }
+                        }) || []
+                        
+                        const hasDeadEndQuestion = visibleQuestions.some((q: any) => {
+                          const questionText = q.questionText?.toLowerCase() || ''
+                          return questionText.includes('unfortunat') || questionText.includes('disqualif') || 
+                                 questionText.includes('do not qualify') || questionText.includes('cannot be medically')
+                        })
+                        
+                        const isDeadEndStep = currentStep?.isDeadEnd || hasDeadEndQuestion
+                        
+                        return isDeadEndStep ? (
+                          <div className="space-y-3">
+                            {currentStepIndex > 0 && (
+                              <button
+                                onClick={() => setCurrentStepIndex(prev => prev - 1)}
+                                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
+                              >
+                                <Icon icon="lucide:arrow-left" className="mr-2 h-4 w-4" />
+                                Go Back
+                              </button>
+                            )}
+                            <button
+                              onClick={onClose}
+                              className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
+                            >
+                              Close Form
+                              <Icon icon="lucide:x" className="ml-2 h-4 w-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={handleNext}
+                            disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
+                            className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            style={{
+                              backgroundColor: theme.primary,
+                              ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
+                            }}
+                          >
+                            {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
+                              (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
+                                isProductSelectionStep() ? 'Continue to Checkout' :
+                                  isCheckoutStep() ? 'Complete Order' : 'Continue'}
+                            <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
+                          </button>
+                        )
+                      })()}
                     </>
                   )}
 

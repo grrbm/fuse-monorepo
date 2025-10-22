@@ -69,7 +69,7 @@ class QuestionService {
         conditionalLevel?: number;
         subQuestionOrder?: number;
         parentQuestionId?: string;
-        options?: Array<{ optionText: string; optionValue?: string }>;
+        options?: Array<{ optionText: string; optionValue?: string; riskLevel?: 'safe' | 'review' | 'reject' }>;
     }, userId: string) {
         // Validate question operation permission
         await this.validateQuestionOperation(stepId, userId);
@@ -118,6 +118,7 @@ class QuestionService {
                     optionText: option.optionText,
                     optionValue: option.optionValue || option.optionText,
                     optionOrder: index + 1,
+                    riskLevel: option.riskLevel || null,
                     questionId: question.id
                 })
             );
@@ -148,7 +149,7 @@ class QuestionService {
         conditionalLevel?: number;
         subQuestionOrder?: number;
         parentQuestionId?: string;
-        options?: Array<{ id?: string; optionText: string; optionValue?: string }>;
+        options?: Array<{ id?: string; optionText: string; optionValue?: string; riskLevel?: 'safe' | 'review' | 'reject' }>;
     }, userId: string) {
         const question = await Question.findByPk(questionId);
         if (!question) {
@@ -197,6 +198,7 @@ class QuestionService {
                             optionText: option.optionText,
                             optionValue: option.optionValue ?? option.optionText,
                             optionOrder: index + 1,
+                            riskLevel: option.riskLevel || null,
                             questionId: questionIdValue,
                         }, { transaction })
                     );

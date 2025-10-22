@@ -157,7 +157,38 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 </div>
             );
 
-        case "textarea":
+        case "textarea": {
+            // Detect if this is a dead end or info message (not actual input)
+            const questionText = question.questionText?.toLowerCase() || ''
+            const placeholder = question.placeholder?.toLowerCase() || ''
+            
+            const isDeadEnd = questionText.includes('unfortunat') || questionText.includes('disqualif') || 
+                             questionText.includes('do not qualify') || questionText.includes('cannot be medically')
+            
+            const isInfoOnly = !question.isRequired && (
+                placeholder?.includes('informational') || 
+                placeholder?.includes('no response needed')
+            )
+            
+            // If it's dead end or info, show as read-only message (no textarea)
+            if (isDeadEnd || isInfoOnly) {
+                return (
+                    <div key={question.id} className="space-y-4">
+                        <div className={`p-6 rounded-2xl ${isDeadEnd ? 'bg-red-50 border-2 border-red-200' : 'bg-blue-50 border-2 border-blue-200'}`}>
+                            <h3 className={`text-xl font-semibold mb-3 ${isDeadEnd ? 'text-red-900' : 'text-blue-900'}`}>
+                                {question.questionText}
+                            </h3>
+                            {question.helpText && (
+                                <p className={`text-base ${isDeadEnd ? 'text-red-700' : 'text-blue-700'}`}>
+                                    {question.helpText}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                )
+            }
+            
+            // Otherwise show normal textarea input
             return (
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
@@ -200,6 +231,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                     )}
                 </div>
             );
+        }
 
         case "radio": {
             const renderGenericRadio = () => (

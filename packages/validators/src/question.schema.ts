@@ -19,6 +19,7 @@ export const questionCreateSchema = z.object({
   options: z.array(z.object({
     optionText: z.string().min(1, 'Option text is required'),
     optionValue: z.string().optional(),
+    riskLevel: z.enum(['safe', 'review', 'reject']).optional(),
   })).optional(),
 });
 
@@ -38,6 +39,7 @@ export const questionUpdateSchema = z.object({
     id: z.string().uuid('Invalid option ID').optional(),
     optionText: z.string().min(1, 'Option text is required'),
     optionValue: z.string().optional(),
+    riskLevel: z.enum(['safe', 'review', 'reject']).optional(),
   })).optional(),
 });
 
