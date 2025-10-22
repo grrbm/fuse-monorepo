@@ -2138,9 +2138,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
                       {/* Continue button for regular steps */}
                       {!(isCheckoutStep() && paymentStatus !== 'succeeded') && (() => {
-                        // Check if step itself is dead end OR if any visible question is a dead end
+                        // Check if step itself is dead end OR if any question is a dead end
                         const hasDeadEndQuestion = currentStep?.questions?.some((q: any) => {
-                          if (!shouldShowQuestion(q)) return false // Only check visible questions
                           const questionText = q.questionText?.toLowerCase() || ''
                           return questionText.includes('unfortunat') || questionText.includes('disqualif') || 
                                  questionText.includes('do not qualify') || questionText.includes('cannot be medically')
