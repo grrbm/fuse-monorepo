@@ -761,13 +761,21 @@ export default function TemplateEditor() {
       operator: 'OR' | 'AND'
     }> = []
     
+    console.log('Current step conditionalLogic:', currentStep.conditionalLogic)
+    
     if (currentStep.conditionalLogic) {
       const tokens = currentStep.conditionalLogic.split(' ')
+      console.log('Parsing tokens:', tokens)
+      
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i]
         if (token.startsWith('answer_equals:')) {
           const [questionRef, optionValue] = token.replace('answer_equals:', '').split(':')
+          console.log('Found rule:', { questionRef, optionValue })
+          
           const referencedQuestion = allPrevQuestions.find(q => q.id === questionRef)
+          console.log('Referenced question found:', referencedQuestion)
+          
           if (referencedQuestion) {
             const nextToken = tokens[i + 1]
             const operator = (nextToken === 'OR' || nextToken === 'AND') ? nextToken : 'OR'
@@ -781,6 +789,8 @@ export default function TemplateEditor() {
           }
         }
       }
+      
+      console.log('Parsed rules:', parsedRules)
     }
     
     // Initialize rules or use existing
@@ -892,7 +902,13 @@ export default function TemplateEditor() {
 
       // Handle STEP-LEVEL conditional logic
       if (conditionalModalType === 'step' && editingConditionalStepId) {
-        await fetch(`${baseUrl}/questionnaires/step`, {
+        console.log('Saving step-level conditional logic:', {
+          stepId: editingConditionalStepId,
+          conditionalLogic,
+          rules: editingConditionalStep.rules
+        })
+        
+        const updateRes = await fetch(`${baseUrl}/questionnaires/step`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
@@ -901,11 +917,20 @@ export default function TemplateEditor() {
           }),
         })
         
+        if (!updateRes.ok) {
+          const errorData = await updateRes.json().catch(() => ({}))
+          console.error('Failed to save step conditional logic:', errorData)
+          throw new Error(errorData.message || 'Failed to save step rules')
+        }
+        
+        console.log('Step conditional logic saved successfully')
+        
         // Reload template
         const refRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         const refData = await refRes.json()
+        console.log('Reloaded template data:', refData.data)
         setTemplate(refData.data)
         const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
           id: String(s.id),
