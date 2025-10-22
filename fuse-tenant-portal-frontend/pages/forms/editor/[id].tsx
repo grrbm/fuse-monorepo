@@ -978,14 +978,14 @@ export default function TemplateEditor() {
 
       // Handle QUESTION-LEVEL conditional logic (existing code)
       if (!selectedQuestionForConditional) return
-      if (!editingConditionalStep.stepType) {
-        alert('Please select a step type')
-        return
-      }
-      if (!editingConditionalStep.text.trim()) {
-        alert('Please enter text for this step')
-        return
-      }
+    if (!editingConditionalStep.stepType) {
+      alert('Please select a step type')
+      return
+    }
+    if (!editingConditionalStep.text.trim()) {
+      alert('Please enter text for this step')
+      return
+    }
 
       // Validate: all rules must reference the same parent question (for now)
       const parentQuestionId = selectedQuestionForConditional.questionId
@@ -1147,7 +1147,7 @@ export default function TemplateEditor() {
           questionText: editingConditionalStep.text,
           conditionalLogic: questionConditionalLogic,
           conditionalLevel: editingConditionalStep.placement === 'inline' ? 1 : 0, // 0 for new step (main question), 1 for inline
-          isRequired: true,
+            isRequired: true,
         }
         
         // Only add parentQuestionId if placement is inline (don't send null)
@@ -1219,13 +1219,13 @@ export default function TemplateEditor() {
 
         // Only create a question if stepType is NOT info or deadend
         if (editingConditionalStep.stepType !== 'info' && editingConditionalStep.stepType !== 'deadend') {
-          const res = await fetch(`${baseUrl}/questions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify(payload)
-          })
+        const res = await fetch(`${baseUrl}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload)
+        })
 
-          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create conditional step')
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || 'Failed to create conditional step')
         }
         
         // Update step title and description for info/deadend types
@@ -1521,7 +1521,7 @@ export default function TemplateEditor() {
             </div>
           </div>
 
-          {/* Main Content - Two Column Layout */}
+          {/* Main Content - Three Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column - Add Step Controls */}
             <div className="lg:col-span-3 space-y-6">
@@ -1761,8 +1761,8 @@ export default function TemplateEditor() {
               </div>
             </div>
 
-            {/* Right Column - Steps List */}
-            <div className="lg:col-span-9 space-y-6 relative pr-16">
+            {/* Middle Column - Steps List */}
+            <div className="lg:col-span-8 space-y-6">
               {/* Questions Section Header */}
               <div>
                 <h2 className="text-2xl font-semibold tracking-tight mb-3">Questions</h2>
@@ -1773,45 +1773,6 @@ export default function TemplateEditor() {
 
               {steps.length > 0 ? (
                 <div className="space-y-5 relative">
-                  {/* Visual connection lines for conditional steps - positioned on outer right edge */}
-                  <div className="absolute top-0 right-0 bottom-0 w-16 pointer-events-none" style={{ zIndex: 10 }}>
-                    {steps.map((step, index) => {
-                      if (!step.conditionalLogic) return null
-                      
-                      const referencedQuestionIds = getReferencedQuestionIds(step.conditionalLogic)
-                      const referencedStepIndices: number[] = []
-                      
-                      steps.forEach((s, idx) => {
-                        if (s.questions?.some(q => referencedQuestionIds.includes(q.id))) {
-                          referencedStepIndices.push(idx)
-                        }
-                      })
-                      
-                      return referencedStepIndices.map(refIdx => {
-                        if (refIdx >= index) return null // Only draw to previous steps
-                        
-                        // Calculate vertical positions (approximate based on step spacing)
-                        const stepHeight = 300 // Approximate height per step including gap
-                        const startY = refIdx * stepHeight + 80 // Top of referenced step
-                        const endY = index * stepHeight + 80 // Top of conditional step
-                        
-                        return (
-                          <div key={`${step.id}-${refIdx}`} className="absolute left-0 right-0" style={{ top: startY, height: endY - startY }}>
-                            {/* Orange vertical line - on far right */}
-                            <div className="absolute right-6 top-0 w-2 h-full bg-gradient-to-b from-orange-500 to-orange-400 rounded-full shadow-lg"></div>
-                            {/* Top circle with glow */}
-                            <div className="absolute right-4 -top-1 w-6 h-6 rounded-full bg-orange-500 shadow-xl border-4 border-white ring-4 ring-orange-200"></div>
-                            {/* Bottom circle with glow */}
-                            <div className="absolute right-4 -bottom-1 w-6 h-6 rounded-full bg-orange-500 shadow-xl border-4 border-white ring-4 ring-orange-200"></div>
-                            {/* Horizontal connector to start */}
-                            <div className="absolute -right-1 top-2 w-12 h-2 bg-orange-500 rounded-l-full shadow-lg"></div>
-                            {/* Horizontal connector to end */}
-                            <div className="absolute -right-1 bottom-2 w-12 h-2 bg-orange-500 rounded-l-full shadow-lg"></div>
-                          </div>
-                        )
-                      })
-                    })}
-                  </div>
                   
                   {steps.map((step, index) => {
                     // Check if this step or any question in it is referenced by the hovered conditional step
@@ -1831,7 +1792,6 @@ export default function TemplateEditor() {
                         ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-xl" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
                         ${isReferencedByHovered ? "ring-2 ring-orange-400 bg-orange-50/20 shadow-xl" : ""}
-                        ${step.conditionalLogic ? "border-l-4 border-l-orange-500" : ""}
                       `}
                       style={{ zIndex: 1 }}
                       draggable
@@ -1880,7 +1840,7 @@ export default function TemplateEditor() {
                               <div className={`flex-shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center ${bgColor}`}>
                                 <div className={iconColor}>
                                   {icon}
-                                </div>
+                          </div>
                               </div>
                             )
                           })()}
@@ -2197,27 +2157,27 @@ export default function TemplateEditor() {
                               {step.conditionalLogic ? 'Edit Rule' : 'Create Rule'}
                             </Button>
                             <div className="flex items-start gap-2">
-                              {!isAccountTemplate && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-10 w-10 rounded-xl hover:bg-destructive/10 transition-colors"
-                                  onClick={() => handleDeleteStep(step.id)}
-                                  title="Delete step"
-                                >
-                                  <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
-                                </Button>
-                              )}
-                              <div 
-                                className="h-10 w-10 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-xl hover:bg-muted/50 transition-colors"
-                                title="Drag to reorder"
+                            {!isAccountTemplate && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-10 w-10 rounded-xl hover:bg-destructive/10 transition-colors"
+                                onClick={() => handleDeleteStep(step.id)}
+                                title="Delete step"
                               >
-                                <GripVertical className="h-5 w-5 text-muted-foreground" />
-                              </div>
+                                <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                              </Button>
+                            )}
+                            <div 
+                              className="h-10 w-10 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-xl hover:bg-muted/50 transition-colors"
+                              title="Drag to reorder"
+                            >
+                              <GripVertical className="h-5 w-5 text-muted-foreground" />
                             </div>
                           </div>
                         </div>
                       </div>
+                    </div>
                     </div>
                     )
                   })}
@@ -2260,6 +2220,50 @@ export default function TemplateEditor() {
                 </div>
               )}
             </div>
+
+            {/* Right Column - Connection Lines Track */}
+            <div className="lg:col-span-1 relative hidden lg:block">
+              <div className="sticky top-24 h-screen">
+                <div className="relative h-full">
+                  {steps.map((step, index) => {
+                    if (!step.conditionalLogic) return null
+                    
+                    const referencedQuestionIds = getReferencedQuestionIds(step.conditionalLogic)
+                    const referencedStepIndices: number[] = []
+                    
+                    steps.forEach((s, idx) => {
+                      if (s.questions?.some(q => referencedQuestionIds.includes(q.id))) {
+                        referencedStepIndices.push(idx)
+                      }
+                    })
+                    
+                    return referencedStepIndices.map(refIdx => {
+                      if (refIdx >= index) return null // Only draw to previous steps
+                      
+                      // Calculate vertical positions
+                      const stepHeight = 300
+                      const startY = refIdx * stepHeight + 80
+                      const endY = index * stepHeight + 80
+                      
+                      return (
+                        <div key={`${step.id}-${refIdx}`} className="absolute left-0 w-full" style={{ top: startY, height: endY - startY }}>
+                          {/* Orange vertical line */}
+                          <div className="absolute left-6 top-0 w-2 h-full bg-gradient-to-b from-orange-500 to-orange-400 rounded-full shadow-lg"></div>
+                          {/* Top circle with glow */}
+                          <div className="absolute left-4 -top-1 w-6 h-6 rounded-full bg-orange-500 shadow-xl border-4 border-white ring-4 ring-orange-200"></div>
+                          {/* Bottom circle with glow */}
+                          <div className="absolute left-4 -bottom-1 w-6 h-6 rounded-full bg-orange-500 shadow-xl border-4 border-white ring-4 ring-orange-200"></div>
+                          {/* Horizontal connector to start - pointing left to card */}
+                          <div className="absolute left-0 top-2 w-8 h-2 bg-orange-500 rounded-r-full shadow-lg"></div>
+                          {/* Horizontal connector to end - pointing left to card */}
+                          <div className="absolute left-0 bottom-2 w-8 h-2 bg-orange-500 rounded-r-full shadow-lg"></div>
+                        </div>
+                      )
+                    })
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         </main>
       </div>
@@ -2298,10 +2302,10 @@ export default function TemplateEditor() {
             <CardContent className="space-y-6">
               {/* Parent Question Display - Only for question-level conditionals */}
               {conditionalModalType === 'question' && selectedQuestionForConditional && (
-                <div className="bg-muted/50 p-4 rounded-lg border">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Parent Question:</p>
-                  <p className="font-medium">{selectedQuestionForConditional.questionText}</p>
-                </div>
+              <div className="bg-muted/50 p-4 rounded-lg border">
+                <p className="text-sm font-medium text-muted-foreground mb-1">Parent Question:</p>
+                <p className="font-medium">{selectedQuestionForConditional.questionText}</p>
+              </div>
               )}
 
               {/* Step-level conditional info */}
@@ -2512,7 +2516,7 @@ export default function TemplateEditor() {
                                 return (
                                   <option key={`rule-${index}-opt-${optIdx}-${option.optionValue}`} value={option.optionValue}>
                                     {option.optionText}
-                                  </option>
+                        </option>
                                 )
                               })}
                     </select>
