@@ -1,4 +1,5 @@
 import axios from 'axios';
+import logger from '../../utils/logger';
 import MDAuthService from './MDAuth.service';
 
 export interface MessageUser {
@@ -78,24 +79,54 @@ class MDMessagesService {
     if (params.per_page) queryParams.append('per_page', params.per_page.toString());
     if (params.channel) queryParams.append('channel', params.channel);
 
-    const response = await axios.get<MessagesResponse>(
-      `${this.apiUrl}/partner/patients/${patientId}/messages?${queryParams.toString()}`,
-      { headers }
-    );
+    try {
+      const response = await axios.get<MessagesResponse>(
+        `${this.apiUrl}/partner/patients/${patientId}/messages?${queryParams.toString()}`,
+        { headers }
+      );
 
-    return response.data;
+      return response.data;
+    } catch (error) {
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.message || error.response?.data || error.message
+        : (error as Error).message;
+
+      logger.error('❌ Error fetching MDI messages', {
+        patientId,
+        params,
+        status: axios.isAxiosError(error) ? error.response?.status : undefined,
+        message,
+      });
+
+      throw new Error(message || 'Failed to fetch MDI messages');
+    }
   }
 
   async createMessage(patientId: string, payload: CreateMessagePayload): Promise<Message> {
     const headers = await this.getAuthHeaders();
 
-    const response = await axios.post<Message>(
-      `${this.apiUrl}/partner/patients/${patientId}/messages`,
-      payload,
-      { headers }
-    );
+    try {
+      const response = await axios.post<Message>(
+        `${this.apiUrl}/partner/patients/${patientId}/messages`,
+        payload,
+        { headers }
+      );
 
-    return response.data;
+      return response.data;
+    } catch (error) {
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.message || error.response?.data || error.message
+        : (error as Error).message;
+
+      logger.error('❌ Error creating MDI message', {
+        patientId,
+        payload,
+        status: axios.isAxiosError(error) ? error.response?.status : undefined,
+        message,
+      });
+
+      throw new Error(message || 'Failed to create MDI message');
+    }
   }
 
   async markMessageAsRead(patientId: string, messageId: string): Promise<void> {
