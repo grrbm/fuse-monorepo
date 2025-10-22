@@ -2225,7 +2225,9 @@ export default function TemplateEditor() {
             <div className="lg:col-span-1 relative hidden lg:block">
               <div className="sticky top-24 h-screen">
                 <div className="relative h-full">
-                  {steps.map((step, index) => {
+                  {/* Only show lines when hovering over a conditional step */}
+                  {hoveredConditionalStepId && steps.map((step, index) => {
+                    if (step.id !== hoveredConditionalStepId) return null
                     if (!step.conditionalLogic) return null
                     
                     const referencedQuestionIds = getReferencedQuestionIds(step.conditionalLogic)
@@ -2246,17 +2248,15 @@ export default function TemplateEditor() {
                       const endY = index * stepHeight + 80
                       
                       return (
-                        <div key={`${step.id}-${refIdx}`} className="absolute left-0 w-full" style={{ top: startY, height: endY - startY }}>
-                          {/* Orange vertical line */}
-                          <div className="absolute left-6 top-0 w-2 h-full bg-gradient-to-b from-orange-500 to-orange-400 rounded-full shadow-lg"></div>
-                          {/* Top circle with glow */}
-                          <div className="absolute left-4 -top-1 w-6 h-6 rounded-full bg-orange-500 shadow-xl border-4 border-white ring-4 ring-orange-200"></div>
-                          {/* Bottom circle with glow */}
-                          <div className="absolute left-4 -bottom-1 w-6 h-6 rounded-full bg-orange-500 shadow-xl border-4 border-white ring-4 ring-orange-200"></div>
-                          {/* Horizontal connector to start - pointing left to card */}
-                          <div className="absolute left-0 top-2 w-8 h-2 bg-orange-500 rounded-r-full shadow-lg"></div>
-                          {/* Horizontal connector to end - pointing left to card */}
-                          <div className="absolute left-0 bottom-2 w-8 h-2 bg-orange-500 rounded-r-full shadow-lg"></div>
+                        <div key={`${step.id}-${refIdx}`} className="absolute left-0 w-full transition-opacity duration-200" style={{ top: startY, height: endY - startY }}>
+                          {/* Simple orange vertical line */}
+                          <div className="absolute left-6 top-0 w-0.5 h-full bg-orange-400"></div>
+                          {/* Small circles at endpoints */}
+                          <div className="absolute left-5 -top-0.5 w-2 h-2 rounded-full bg-orange-500"></div>
+                          <div className="absolute left-5 -bottom-0.5 w-2 h-2 rounded-full bg-orange-500"></div>
+                          {/* Subtle horizontal connectors */}
+                          <div className="absolute left-0 top-0.5 w-6 h-0.5 bg-orange-400"></div>
+                          <div className="absolute left-0 bottom-0.5 w-6 h-0.5 bg-orange-400"></div>
                         </div>
                       )
                     })
