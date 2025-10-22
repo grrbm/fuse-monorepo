@@ -512,7 +512,50 @@ export default function CheckoutPage() {
 
   const handlePaymentSuccess = async () => {
     try {
+      // Wait a bit for the webhook to process
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Try to fetch subscription with retries until it's active
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      let attempts = 0
+      const maxAttempts = 5
+      let isActive = false
+      
+      while (attempts < maxAttempts && !isActive) {
+        try {
+          const response = await fetch(`${apiUrl}/subscriptions/current`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            if (data.status === 'active') {
+              console.log('✅ Subscription activated successfully')
+              isActive = true
+              // Update the context with the latest data
+              await refreshSubscription()
+              break
+            }
+          }
+        } catch (err) {
+          console.error('Error checking subscription status:', err)
+        }
+        
+        attempts++
+        if (attempts < maxAttempts) {
+          console.log(`⏳ Subscription not active yet, retrying (${attempts}/${maxAttempts})...`)
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+      }
+      
+      // Final refresh to ensure context is updated
+      if (!isActive) {
+        console.log('⚠️ Max attempts reached, doing final refresh')
+      }
       await refreshSubscription()
+      
     } catch (error) {
       console.error('Error refreshing subscription after payment:', error)
     } finally {
