@@ -1800,16 +1800,6 @@ export default function TemplateEditor() {
                                   Conditional
                                 </div>
                               )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleOpenStepConditionalModal(step.id)}
-                                className="h-6 text-xs px-2 text-muted-foreground hover:text-foreground"
-                                title="Add conditional logic to this step"
-                              >
-                                <GitBranch className="h-3 w-3 mr-1" />
-                                {step.conditionalLogic ? 'Edit Rules' : 'Add Rule'}
-                              </Button>
                             </div>
                             {/* Always show collapsed view */}
                             <div className="space-y-3">
@@ -2076,23 +2066,35 @@ export default function TemplateEditor() {
                           </div>
                           
                           {/* Action Icons */}
-                          <div className="flex items-start gap-2 flex-shrink-0">
-                            {!isAccountTemplate && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-10 w-10 rounded-xl hover:bg-destructive/10 transition-colors"
-                                onClick={() => handleDeleteStep(step.id)}
-                                title="Delete step"
-                              >
-                                <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
-                              </Button>
-                            )}
-                            <div 
-                              className="h-10 w-10 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-xl hover:bg-muted/50 transition-colors"
-                              title="Drag to reorder"
+                          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenStepConditionalModal(step.id)}
+                              className="h-8 text-xs px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                              title="Add conditional logic to this step"
                             >
-                              <GripVertical className="h-5 w-5 text-muted-foreground" />
+                              <GitBranch className="h-3.5 w-3.5 mr-1" />
+                              {step.conditionalLogic ? 'Edit Rules' : 'Add Rule'}
+                            </Button>
+                            <div className="flex items-start gap-2">
+                              {!isAccountTemplate && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-10 w-10 rounded-xl hover:bg-destructive/10 transition-colors"
+                                  onClick={() => handleDeleteStep(step.id)}
+                                  title="Delete step"
+                                >
+                                  <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                                </Button>
+                              )}
+                              <div 
+                                className="h-10 w-10 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-xl hover:bg-muted/50 transition-colors"
+                                title="Drag to reorder"
+                              >
+                                <GripVertical className="h-5 w-5 text-muted-foreground" />
+                              </div>
                             </div>
                           </div>
                         </div>
