@@ -1522,9 +1522,9 @@ export default function TemplateEditor() {
           </div>
 
           {/* Main Content - Two Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column - Add Step Controls */}
-            <div className="lg:col-span-1 space-y-6">
+            <div className="lg:col-span-3 space-y-6">
               {/* Add New Step Card */}
               <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/40">
                 <div className="mb-6">
@@ -1762,7 +1762,7 @@ export default function TemplateEditor() {
             </div>
 
             {/* Right Column - Steps List */}
-            <div className="lg:col-span-3 space-y-6 relative">
+            <div className="lg:col-span-9 space-y-6 relative pr-12">
               {/* Questions Section Header */}
               <div>
                 <h2 className="text-2xl font-semibold tracking-tight mb-3">Questions</h2>
@@ -1790,22 +1790,23 @@ export default function TemplateEditor() {
                       return referencedStepIndices.map(refIdx => {
                         if (refIdx >= index) return null // Only draw to previous steps
                         
-                        // Calculate vertical positions (approximate)
-                        const startY = refIdx * 280 + 140 // Approximate center of referenced step
-                        const endY = index * 280 + 140 // Approximate center of conditional step
+                        // Calculate vertical positions (approximate based on step spacing)
+                        const stepHeight = 300 // Approximate height per step including gap
+                        const startY = refIdx * stepHeight + 80 // Top of referenced step
+                        const endY = index * stepHeight + 80 // Top of conditional step
                         
                         return (
-                          <div key={`${step.id}-${refIdx}`} className="absolute right-0 w-8" style={{ top: startY, height: endY - startY }}>
-                            {/* Orange vertical line */}
-                            <div className="absolute right-3 top-0 w-0.5 h-full bg-orange-400/60"></div>
-                            {/* Top circle */}
-                            <div className="absolute right-2 top-0 w-2 h-2 rounded-full bg-orange-500"></div>
-                            {/* Bottom circle */}
-                            <div className="absolute right-2 bottom-0 w-2 h-2 rounded-full bg-orange-500"></div>
-                            {/* Horizontal connector to start */}
-                            <div className="absolute right-0 top-0 w-3 h-0.5 bg-orange-400/60"></div>
-                            {/* Horizontal connector to end */}
-                            <div className="absolute right-0 bottom-0 w-3 h-0.5 bg-orange-400/60"></div>
+                          <div key={`${step.id}-${refIdx}`} className="absolute right-0 w-16" style={{ top: startY, height: endY - startY }}>
+                            {/* Orange vertical line - thicker and more visible */}
+                            <div className="absolute right-8 top-0 w-1.5 h-full bg-gradient-to-b from-orange-500 to-orange-400 rounded-full shadow-lg"></div>
+                            {/* Top circle with glow */}
+                            <div className="absolute right-6 top-0 w-5 h-5 rounded-full bg-orange-500 shadow-lg border-3 border-white ring-2 ring-orange-200"></div>
+                            {/* Bottom circle with glow */}
+                            <div className="absolute right-6 bottom-0 w-5 h-5 rounded-full bg-orange-500 shadow-lg border-3 border-white ring-2 ring-orange-200"></div>
+                            {/* Horizontal connector to start - curved */}
+                            <div className="absolute right-0 top-2 w-10 h-1 bg-orange-500 rounded-full shadow-md"></div>
+                            {/* Horizontal connector to end - curved */}
+                            <div className="absolute right-0 bottom-2 w-10 h-1 bg-orange-500 rounded-full shadow-md"></div>
                           </div>
                         )
                       })
@@ -1823,12 +1824,14 @@ export default function TemplateEditor() {
                     <div
                       key={step.id}
                       className={`
-                        bg-card rounded-2xl shadow-sm overflow-hidden transition-all relative
-                        ${step.isDeadEnd ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10" : "border border-border/40"}
-                        ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-md" : ""}
+                        bg-card rounded-2xl overflow-hidden transition-all relative
+                        ${step.isDeadEnd 
+                          ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10 shadow-md" 
+                          : "border border-border/40 shadow-lg hover:shadow-xl"}
+                        ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-xl" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
-                        ${isReferencedByHovered ? "ring-2 ring-orange-400 bg-orange-50/20" : ""}
-                        ${step.conditionalLogic ? "hover:shadow-lg cursor-pointer" : ""}
+                        ${isReferencedByHovered ? "ring-2 ring-orange-400 bg-orange-50/20 shadow-xl" : ""}
+                        ${step.conditionalLogic ? "border-l-4 border-l-orange-500" : ""}
                       `}
                       style={{ zIndex: 1 }}
                       draggable
