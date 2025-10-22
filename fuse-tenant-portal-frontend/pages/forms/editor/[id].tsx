@@ -2276,14 +2276,20 @@ export default function TemplateEditor() {
                       if (!token || !editingConditionalStepId) return
                       
                       try {
-                        await fetch(`${baseUrl}/questionnaires/step`, {
+                        const deleteRes = await fetch(`${baseUrl}/questionnaires/step`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                           body: JSON.stringify({
                             stepId: editingConditionalStepId,
-                            conditionalLogic: null
+                            conditionalLogic: '' // Send empty string instead of null
                           }),
                         })
+                        
+                        if (!deleteRes.ok) {
+                          const errorData = await deleteRes.json().catch(() => ({}))
+                          console.error('Delete rules failed:', errorData)
+                          throw new Error(errorData.message || 'Failed to delete rules')
+                        }
                         
                         // Reload and close
                         const refRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {

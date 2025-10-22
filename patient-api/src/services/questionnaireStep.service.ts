@@ -64,11 +64,14 @@ class QuestionnaireStepService {
         await this.validateQuestionnaireOperation(step.questionnaireId, userId);
 
         // Update step with provided data
+        // Treat empty string as null for conditionalLogic (clears the field)
         const updatedStep = await step.update({
             ...(updateData.title !== undefined && { title: updateData.title }),
             ...(updateData.description !== undefined && { description: updateData.description }),
             ...(updateData.isDeadEnd !== undefined && { isDeadEnd: updateData.isDeadEnd }),
-            ...(updateData.conditionalLogic !== undefined && { conditionalLogic: updateData.conditionalLogic })
+            ...(updateData.conditionalLogic !== undefined && { 
+                conditionalLogic: updateData.conditionalLogic === '' ? null : updateData.conditionalLogic 
+            })
         });
 
         return updatedStep;
