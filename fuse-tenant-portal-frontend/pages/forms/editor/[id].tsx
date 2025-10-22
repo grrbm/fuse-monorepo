@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { useRouter } from "next/router"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
@@ -73,6 +73,7 @@ export default function TemplateEditor() {
   const [conditionalModalType, setConditionalModalType] = useState<'question' | 'step'>('question')
   const [editingConditionalStepId, setEditingConditionalStepId] = useState<string | null>(null)
   const [hoveredConditionalStepId, setHoveredConditionalStepId] = useState<string | null>(null)
+  const stepRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const [selectedQuestionForConditional, setSelectedQuestionForConditional] = useState<{
     stepId: string
     questionId: string
@@ -1406,17 +1407,17 @@ export default function TemplateEditor() {
 
           {/* Header Section */}
           <div className="mb-12">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Left: Title and Description */}
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-3">
                 <h1 className="text-3xl font-semibold mb-4 tracking-tight">Intake Form</h1>
                 <p className="text-muted-foreground text-base leading-relaxed">
                   {template.description || "Generate a voucher to start using this intake form for patient sign up."}
                 </p>
               </div>
               
-              {/* Right: Metadata and Actions */}
-              <div className="lg:col-span-3 space-y-6">
+              {/* Middle/Right: Metadata and Actions */}
+              <div className="lg:col-span-8 space-y-6">
                 {/* Metadata Cards */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/40">
@@ -1772,7 +1773,7 @@ export default function TemplateEditor() {
               </div>
 
               {steps.length > 0 ? (
-                <div className="space-y-5 relative">
+                <div className="space-y-3 relative">
                   
                   {steps.map((step, index) => {
                     // Check if this step or any question in it is referenced by the hovered conditional step
@@ -1784,14 +1785,22 @@ export default function TemplateEditor() {
                     return (
                     <div
                       key={step.id}
+                      ref={(el) => {
+                        if (el) {
+                          stepRefs.current.set(step.id, el)
+                        } else {
+                          stepRefs.current.delete(step.id)
+                        }
+                      }}
                       className={`
-                        bg-card rounded-2xl overflow-hidden transition-all relative
+                        bg-card rounded-xl overflow-hidden transition-all relative
+                        ${step.conditionalLogic ? "ml-8 shadow-[-8px_0_12px_-4px_rgba(0,0,0,0.1)]" : ""}
                         ${step.isDeadEnd 
-                          ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10 shadow-md" 
-                          : "border border-border/40 shadow-lg hover:shadow-xl"}
-                        ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-xl" : ""}
+                          ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10 shadow-sm" 
+                          : "border border-border/40 shadow-sm hover:shadow-md"}
+                        ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-md" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
-                        ${isReferencedByHovered ? "ring-2 ring-orange-400 bg-orange-50/20 shadow-xl" : ""}
+                        ${isReferencedByHovered ? "ring-2 ring-orange-400 shadow-md" : ""}
                       `}
                       style={{ zIndex: 1 }}
                       draggable
@@ -1801,9 +1810,9 @@ export default function TemplateEditor() {
                       onMouseEnter={() => step.conditionalLogic && setHoveredConditionalStepId(step.id)}
                       onMouseLeave={() => setHoveredConditionalStepId(null)}
                     >
-                      <div className="p-6">
-                        <div className="flex items-start gap-5">
-                          {/* Icon based on question type */}
+                      <div className="p-4">
+                        <div className="flex items-start gap-3">
+                          {/* Icon based on question type - smaller and more compact */}
                           {(() => {
                             const firstQuestion = step.questions?.[0]
                             const isDeadEnd = step.isDeadEnd
@@ -1814,16 +1823,16 @@ export default function TemplateEditor() {
                             
                             let bgColor = "bg-teal-50 dark:bg-teal-900/20"
                             let iconColor = "text-teal-600 dark:text-teal-400"
-                            let icon = <MessageSquare className="h-7 w-7" />
+                            let icon = <MessageSquare className="h-5 w-5" />
                             
                             if (isDeadEnd) {
                               bgColor = "bg-red-50 dark:bg-red-900/20"
                               iconColor = "text-red-600 dark:text-red-400"
-                              icon = <StopCircle className="h-7 w-7" />
+                              icon = <StopCircle className="h-5 w-5" />
                             } else if (isInfo) {
                               bgColor = "bg-gray-100 dark:bg-gray-800"
                               iconColor = "text-gray-600 dark:text-gray-400"
-                              icon = <Info className="h-7 w-7" />
+                              icon = <Info className="h-5 w-5" />
                             } else if (isYesNo) {
                               bgColor = "bg-blue-50 dark:bg-blue-900/20"
                               iconColor = "text-blue-600 dark:text-blue-400"
@@ -1833,20 +1842,20 @@ export default function TemplateEditor() {
                             } else if (isTextarea) {
                               bgColor = "bg-orange-50 dark:bg-orange-900/20"
                               iconColor = "text-orange-600 dark:text-orange-400"
-                              icon = <Edit className="h-7 w-7" />
+                              icon = <Edit className="h-5 w-5" />
                             }
                             
                             return (
-                              <div className={`flex-shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center ${bgColor}`}>
+                              <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${bgColor}`}>
                                 <div className={iconColor}>
                                   {icon}
-                          </div>
+                                </div>
                               </div>
                             )
                           })()}
                           
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-3 mb-3">
+                            <div className="flex items-center gap-2 mb-2">
                               <Badge variant="outline" className="text-xs rounded-full px-3 py-1 border-border/60">
                                 Step {index + 1}
                               </Badge>
@@ -1869,7 +1878,7 @@ export default function TemplateEditor() {
                               )}
                             </div>
                             {/* Always show collapsed view */}
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 {step.stepType === "question" && (step.questions || []).map((q) => {
                                 // Only render the conditional header once for the first conditional question
                                 const isFirstConditional = (q.conditionalLevel || 0) > 0 && 
@@ -1986,19 +1995,7 @@ export default function TemplateEditor() {
 
                                     {/* Collapsed Question View */}
                                     {(q.conditionalLevel || 0) === 0 && (
-                                      <div className={`rounded-lg border p-5 transition-all ${
-                                        referencedQuestionIds.includes(q.id)
-                                          ? 'bg-orange-50 border-orange-400 shadow-md ring-2 ring-orange-300'
-                                          : 'bg-card border-border/40 hover:shadow-md'
-                                      }`}>
-                                        {referencedQuestionIds.includes(q.id) && (
-                                          <div className="mb-3 pb-3 border-b border-orange-300">
-                                            <div className="flex items-center gap-2 text-xs font-medium text-orange-700">
-                                              <GitBranch className="h-3.5 w-3.5" />
-                                              <span>Referenced by: {steps.find(s => s.id === hoveredConditionalStepId)?.title}</span>
-                                            </div>
-                                          </div>
-                                        )}
+                                      <div className="bg-card rounded-lg border border-border/40 p-3 transition-all hover:shadow-sm">
                                         <div className="flex items-start justify-between gap-4 mb-4">
                                           <div className="flex-1">
                                             <p className="text-base font-semibold text-foreground mb-2">{q.questionText}</p>
@@ -2073,7 +2070,7 @@ export default function TemplateEditor() {
                                   </div>
                               
                                 {step.stepType === "info" && (
-                                <div className="bg-card rounded-lg border border-border/40 p-5">
+                                <div className="bg-card rounded-lg border border-border/40 p-3">
                                   {editingStepId === step.id ? (
                                     // Edit mode
                                     <div className="space-y-4">
@@ -2156,25 +2153,25 @@ export default function TemplateEditor() {
                               <GitBranch className="h-3.5 w-3.5 mr-1" />
                               {step.conditionalLogic ? 'Edit Rule' : 'Create Rule'}
                             </Button>
-                            <div className="flex items-start gap-2">
-                            {!isAccountTemplate && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-10 w-10 rounded-xl hover:bg-destructive/10 transition-colors"
-                                onClick={() => handleDeleteStep(step.id)}
-                                title="Delete step"
+                            <div className="flex items-start gap-1">
+                              {!isAccountTemplate && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-lg hover:bg-destructive/10 transition-colors"
+                                  onClick={() => handleDeleteStep(step.id)}
+                                  title="Delete step"
+                                >
+                                  <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                                </Button>
+                              )}
+                              <div 
+                                className="h-8 w-8 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-lg hover:bg-muted/50 transition-colors"
+                                title="Drag to reorder"
                               >
-                                <Trash2 className="h-5 w-5 text-muted-foreground hover:text-destructive" />
-                              </Button>
-                            )}
-                            <div 
-                              className="h-10 w-10 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-xl hover:bg-muted/50 transition-colors"
-                              title="Drag to reorder"
-                            >
-                              <GripVertical className="h-5 w-5 text-muted-foreground" />
+                                <GripVertical className="h-4 w-4 text-muted-foreground" />
+                              </div>
                             </div>
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -2221,47 +2218,68 @@ export default function TemplateEditor() {
               )}
             </div>
 
-            {/* Right Column - Connection Lines Track */}
+            {/* Right Column - Connection Indicators Track */}
             <div className="lg:col-span-1 relative hidden lg:block">
-              <div className="sticky top-24 h-screen">
-                <div className="relative h-full">
-                  {/* Only show lines when hovering over a conditional step */}
-                  {hoveredConditionalStepId && steps.map((step, index) => {
-                    if (step.id !== hoveredConditionalStepId) return null
-                    if (!step.conditionalLogic) return null
+              <div className="absolute top-0 left-0 right-0 pointer-events-none" style={{ height: '100%' }}>
+                {/* Show circles when hovering over a conditional step */}
+                {hoveredConditionalStepId && (() => {
+                  const hoveredStep = steps.find(s => s.id === hoveredConditionalStepId)
+                  if (!hoveredStep || !hoveredStep.conditionalLogic) return null
+                  
+                  const hoveredStepEl = stepRefs.current.get(hoveredConditionalStepId)
+                  if (!hoveredStepEl) return null
+                  
+                  const referencedQuestionIds = getReferencedQuestionIds(hoveredStep.conditionalLogic)
+                  
+                  return steps.map((refStep) => {
+                    // Check if this step contains any referenced questions
+                    if (!refStep.questions?.some(q => referencedQuestionIds.includes(q.id))) return null
                     
-                    const referencedQuestionIds = getReferencedQuestionIds(step.conditionalLogic)
-                    const referencedStepIndices: number[] = []
+                    const refStepEl = stepRefs.current.get(refStep.id)
+                    if (!refStepEl) return null
                     
-                    steps.forEach((s, idx) => {
-                      if (s.questions?.some(q => referencedQuestionIds.includes(q.id))) {
-                        referencedStepIndices.push(idx)
-                      }
-                    })
+                    // Get actual center position of the card
+                    const refRect = refStepEl.getBoundingClientRect()
+                    const centerY = refRect.top + refRect.height / 2
                     
-                    return referencedStepIndices.map(refIdx => {
-                      if (refIdx >= index) return null // Only draw to previous steps
-                      
-                      // Calculate vertical positions
-                      const stepHeight = 300
-                      const startY = refIdx * stepHeight + 80
-                      const endY = index * stepHeight + 80
-                      
-                      return (
-                        <div key={`${step.id}-${refIdx}`} className="absolute left-0 w-full transition-opacity duration-200" style={{ top: startY, height: endY - startY }}>
-                          {/* Simple orange vertical line */}
-                          <div className="absolute left-6 top-0 w-0.5 h-full bg-orange-400"></div>
-                          {/* Small circles at endpoints */}
-                          <div className="absolute left-5 -top-0.5 w-2 h-2 rounded-full bg-orange-500"></div>
-                          <div className="absolute left-5 -bottom-0.5 w-2 h-2 rounded-full bg-orange-500"></div>
-                          {/* Subtle horizontal connectors */}
-                          <div className="absolute left-0 top-0.5 w-6 h-0.5 bg-orange-400"></div>
-                          <div className="absolute left-0 bottom-0.5 w-6 h-0.5 bg-orange-400"></div>
-                        </div>
-                      )
-                    })
-                  })}
-                </div>
+                    return (
+                      <div 
+                        key={`circle-${refStep.id}`} 
+                        className="absolute left-0 transition-opacity duration-200" 
+                        style={{ 
+                          top: `${centerY}px`,
+                          transform: 'translateY(-50%)'
+                        }}
+                      >
+                        {/* Orange circle at card center */}
+                        <div className="w-3 h-3 rounded-full bg-orange-500 shadow-md"></div>
+                      </div>
+                    )
+                  })
+                })()}
+                
+                {/* Show circle on hovered conditional step */}
+                {hoveredConditionalStepId && (() => {
+                  const hoveredStepEl = stepRefs.current.get(hoveredConditionalStepId)
+                  if (!hoveredStepEl) return null
+                  
+                  const hoveredRect = hoveredStepEl.getBoundingClientRect()
+                  const centerY = hoveredRect.top + hoveredRect.height / 2
+                  
+                  return (
+                    <div 
+                      key={`circle-hovered-${hoveredConditionalStepId}`}
+                      className="absolute left-0 transition-opacity duration-200" 
+                      style={{ 
+                        top: `${centerY}px`,
+                        transform: 'translateY(-50%)'
+                      }}
+                    >
+                      {/* Orange circle at card center */}
+                      <div className="w-3 h-3 rounded-full bg-orange-500 shadow-md"></div>
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>
@@ -2581,63 +2599,10 @@ export default function TemplateEditor() {
                   })}
                 </div>
 
-                {/* Step 2: Where to show the conditional step - Only for question-level */}
+                {/* Step 2: Choose Step Type - Only for question-level */}
                 {conditionalModalType === 'question' && (
                 <div className="space-y-3">
-                  <label className="text-xs font-semibold text-foreground">2. Where to show this step?</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => setEditingConditionalStep({...editingConditionalStep, placement: 'inline'})}
-                        className={`p-4 rounded-lg border-2 transition-all text-left ${
-                          editingConditionalStep.placement === 'inline'
-                            ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
-                            : 'border-border hover:border-border/80'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            editingConditionalStep.placement === 'inline' ? 'bg-teal-100 dark:bg-teal-800' : 'bg-muted'
-                          }`}>
-                            <MessageSquare className={`h-4 w-4 ${
-                              editingConditionalStep.placement === 'inline' ? 'text-teal-600 dark:text-teal-400' : 'text-muted-foreground'
-                            }`} />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold mb-1">Same Step</p>
-                            <p className="text-xs text-muted-foreground">Shows below current question</p>
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => setEditingConditionalStep({...editingConditionalStep, placement: 'new-step'})}
-                        className={`p-4 rounded-lg border-2 transition-all text-left ${
-                          editingConditionalStep.placement === 'new-step'
-                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                            : 'border-border hover:border-border/80'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            editingConditionalStep.placement === 'new-step' ? 'bg-purple-100 dark:bg-purple-800' : 'bg-muted'
-                          }`}>
-                            <Plus className={`h-4 w-4 ${
-                              editingConditionalStep.placement === 'new-step' ? 'text-purple-600 dark:text-purple-400' : 'text-muted-foreground'
-                            }`} />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold mb-1">New Step</p>
-                            <p className="text-xs text-muted-foreground">Creates separate slide</p>
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                </div>
-                )}
-
-                {/* Step 3: Choose Step Type - Only for question-level */}
-                {conditionalModalType === 'question' && (
-                <div className="space-y-3">
-                  <label className="text-xs font-semibold text-foreground">3. What type of step?</label>
+                  <label className="text-xs font-semibold text-foreground">2. What type of step?</label>
                   
                   {!editingConditionalStep.stepType ? (
                     <div className="grid grid-cols-2 gap-2">
@@ -2764,10 +2729,10 @@ export default function TemplateEditor() {
                 </div>
                 )}
 
-                {/* Step 4: Configure the conditional step - Only for question-level */}
+                {/* Step 3: Configure the conditional step - Only for question-level */}
                 {conditionalModalType === 'question' && editingConditionalStep.stepType && (
                   <div className="space-y-3">
-                    <label className="text-xs font-semibold text-foreground">4. Configure this step</label>
+                    <label className="text-xs font-semibold text-foreground">3. Configure this step</label>
                     
                     {/* Show a temporary question editor for the conditional step */}
                     <div className="bg-background rounded-lg border p-4">
