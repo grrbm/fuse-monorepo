@@ -4951,7 +4951,7 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
     // Update questionnaire step
     const updatedStep = await questionnaireStepService.updateQuestionnaireStep(
       stepId,
-      { title, description, isDeadEnd, conditionalLogic },
+      { title, description, isDeadEnd, conditionalLogic: conditionalLogic ?? undefined },
       currentUser.id
     );
 
