@@ -603,6 +603,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const conditionalLogic = step.conditionalLogic;
     if (!conditionalLogic) return true; // No condition = always show
     
+    console.log(`🔍 Evaluating step conditional logic for: ${step.title}`);
+    console.log('  conditionalLogic:', conditionalLogic);
+    console.log('  current answers:', answers);
+    
     try {
       // Parse format: answer_equals:{questionId}:{optionValue}
       const tokens = conditionalLogic.split(' ');
@@ -619,6 +623,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             const answer = answers[questionId];
             const conditionMet = Array.isArray(answer) ? answer.includes(requiredValue) : answer === requiredValue;
             
+            console.log(`  Checking: questionId=${questionId}, requiredValue=${requiredValue}`);
+            console.log(`  Answer found: ${answer}, Condition met: ${conditionMet}`);
+            
             if (currentOperator === 'AND') {
               result = result && conditionMet;
             } else if (currentOperator === 'OR') {
@@ -632,6 +639,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         }
       }
       
+      console.log(`  Final result: ${result ? 'SHOW STEP' : 'HIDE STEP'}`);
       return result;
     } catch (error) {
       console.error('Error evaluating step conditional logic:', error);
