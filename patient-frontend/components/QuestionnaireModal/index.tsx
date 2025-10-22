@@ -653,25 +653,24 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const checkoutPos = questionnaire.checkoutStepPosition;
     let actualStepIndex = currentStepIndex;
 
-    // Adjust for checkout steps if they appear before this step
     if (checkoutPos !== -1 && currentStepIndex > checkoutPos + 1) {
       actualStepIndex = currentStepIndex - 2;
     }
 
-    const step = questionnaire.steps[actualStepIndex];
-    
-    // Check if step should be shown based on conditional logic
-    if (step && !evaluateStepConditionalLogic(step)) {
-      // Step condition not met, auto-skip to next step
-      setTimeout(() => {
-        if (currentStepIndex < questionnaire.steps.length - 1) {
-          setCurrentStepIndex(prev => prev + 1);
+    // Find the next visible step starting from actualStepIndex
+    for (let i = actualStepIndex; i < questionnaire.steps.length; i++) {
+      const step = questionnaire.steps[i];
+      if (evaluateStepConditionalLogic(step)) {
+        // Update currentStepIndex to this visible step's index
+        if (i !== actualStepIndex) {
+          setCurrentStepIndex(currentStepIndex + (i - actualStepIndex));
         }
-      }, 0);
-      return null; // Don't render this step
+        return step;
+      }
     }
-    
-    return step;
+
+    // If no more visible steps, return null to trigger completion
+    return null;
   };
 
   // Function to build questionnaire answers object (for real-time logging)
@@ -1355,6 +1354,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   } else if (currentStep) {
     stepTitle = currentStep.title;
     stepDescription = currentStep.description || '';
+  }
+
+  if (!currentStep && !isProductSelectionStep() && !isCheckoutStep()) {
+    // No more questionnaire steps - advance to next phase (product selection or checkout)
+    handleNext();
+    return null; // Prevent rendering empty step
   }
 
   return (
