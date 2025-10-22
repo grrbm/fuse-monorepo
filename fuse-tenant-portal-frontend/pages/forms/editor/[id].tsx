@@ -1762,7 +1762,7 @@ export default function TemplateEditor() {
             </div>
 
             {/* Right Column - Steps List */}
-            <div className="lg:col-span-9 space-y-6 relative pr-12">
+            <div className="lg:col-span-9 space-y-6 relative pr-16">
               {/* Questions Section Header */}
               <div>
                 <h2 className="text-2xl font-semibold tracking-tight mb-3">Questions</h2>
@@ -1773,8 +1773,8 @@ export default function TemplateEditor() {
 
               {steps.length > 0 ? (
                 <div className="space-y-5 relative">
-                  {/* Visual connection lines for conditional steps */}
-                  <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+                  {/* Visual connection lines for conditional steps - positioned on outer right edge */}
+                  <div className="absolute top-0 right-0 bottom-0 w-16 pointer-events-none" style={{ zIndex: 10 }}>
                     {steps.map((step, index) => {
                       if (!step.conditionalLogic) return null
                       
@@ -1796,17 +1796,17 @@ export default function TemplateEditor() {
                         const endY = index * stepHeight + 80 // Top of conditional step
                         
                         return (
-                          <div key={`${step.id}-${refIdx}`} className="absolute right-0 w-16" style={{ top: startY, height: endY - startY }}>
-                            {/* Orange vertical line - thicker and more visible */}
-                            <div className="absolute right-8 top-0 w-1.5 h-full bg-gradient-to-b from-orange-500 to-orange-400 rounded-full shadow-lg"></div>
+                          <div key={`${step.id}-${refIdx}`} className="absolute left-0 right-0" style={{ top: startY, height: endY - startY }}>
+                            {/* Orange vertical line - on far right */}
+                            <div className="absolute right-6 top-0 w-2 h-full bg-gradient-to-b from-orange-500 to-orange-400 rounded-full shadow-lg"></div>
                             {/* Top circle with glow */}
-                            <div className="absolute right-6 top-0 w-5 h-5 rounded-full bg-orange-500 shadow-lg border-3 border-white ring-2 ring-orange-200"></div>
+                            <div className="absolute right-4 -top-1 w-6 h-6 rounded-full bg-orange-500 shadow-xl border-4 border-white ring-4 ring-orange-200"></div>
                             {/* Bottom circle with glow */}
-                            <div className="absolute right-6 bottom-0 w-5 h-5 rounded-full bg-orange-500 shadow-lg border-3 border-white ring-2 ring-orange-200"></div>
-                            {/* Horizontal connector to start - curved */}
-                            <div className="absolute right-0 top-2 w-10 h-1 bg-orange-500 rounded-full shadow-md"></div>
-                            {/* Horizontal connector to end - curved */}
-                            <div className="absolute right-0 bottom-2 w-10 h-1 bg-orange-500 rounded-full shadow-md"></div>
+                            <div className="absolute right-4 -bottom-1 w-6 h-6 rounded-full bg-orange-500 shadow-xl border-4 border-white ring-4 ring-orange-200"></div>
+                            {/* Horizontal connector to start */}
+                            <div className="absolute -right-1 top-2 w-12 h-2 bg-orange-500 rounded-l-full shadow-lg"></div>
+                            {/* Horizontal connector to end */}
+                            <div className="absolute -right-1 bottom-2 w-12 h-2 bg-orange-500 rounded-l-full shadow-lg"></div>
                           </div>
                         )
                       })
