@@ -702,10 +702,16 @@ export default function TemplateEditor() {
 
   // Open modal to add step-level conditional logic
   const handleOpenStepConditionalModal = (stepId: string) => {
+    console.log('Opening step conditional modal for step:', stepId)
     const currentStepIndex = steps.findIndex(s => s.id === stepId)
     const currentStep = steps[currentStepIndex]
     
-    if (!currentStep) return
+    console.log('Current step index:', currentStepIndex, 'Current step:', currentStep)
+    
+    if (!currentStep) {
+      console.error('Current step not found')
+      return
+    }
     
     // Get all questions from previous steps that have options
     const allPrevQuestions = steps
@@ -718,6 +724,8 @@ export default function TemplateEditor() {
             questionNumber: stepIdx + 1
           }))
       )
+    
+    console.log('All previous questions with options:', allPrevQuestions)
     
     if (allPrevQuestions.length === 0) {
       alert('No previous questions with options available for rules. Add questions to earlier steps first.')
@@ -764,6 +772,12 @@ export default function TemplateEditor() {
       operator: 'OR' as 'OR' | 'AND'
     }]
     
+    console.log('Setting state...', {
+      editingConditionalStepId: stepId,
+      conditionalModalType: 'step',
+      rules: initialRules
+    })
+    
     setEditingConditionalStepId(stepId)
     setConditionalModalType('step')
     setEditingConditionalStep({
@@ -776,6 +790,8 @@ export default function TemplateEditor() {
       rules: initialRules
     })
     setShowConditionalModal(true)
+    
+    console.log('Modal should be opening now')
   }
 
   const handleDeleteConditionalStep = async (stepId: string, conditionalQuestionId: string) => {
@@ -2127,17 +2143,19 @@ export default function TemplateEditor() {
       </div>
 
       {/* Conditional Logic Modal */}
-      {showConditionalModal && selectedQuestionForConditional && (
+      {showConditionalModal && (selectedQuestionForConditional || conditionalModalType === 'step') && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
                   <CardTitle className="text-2xl mb-2">
-                    Conditional Logic Builder
+                    {conditionalModalType === 'step' ? 'Step Conditional Logic' : 'Conditional Logic Builder'}
                   </CardTitle>
                   <CardDescription>
-                    Create rules and add multiple conditional steps that will appear when the rules match.
+                    {conditionalModalType === 'step' 
+                      ? 'Define when this step should appear based on previous answers.'
+                      : 'Create rules and add multiple conditional steps that will appear when the rules match.'}
                   </CardDescription>
                 </div>
                 <Button
@@ -2188,9 +2206,10 @@ export default function TemplateEditor() {
                       variant="outline"
                       onClick={() => {
                         // Get all available questions for rule building
-                        const currentStepIndex = steps.findIndex(s => s.id === selectedQuestionForConditional?.stepId)
+                        const targetStepId = conditionalModalType === 'step' ? editingConditionalStepId : selectedQuestionForConditional?.stepId
+                        const currentStepIndex = steps.findIndex(s => s.id === targetStepId)
                         const allPrevQuestions = steps
-                          .slice(0, currentStepIndex + 1)
+                          .slice(0, conditionalModalType === 'step' ? currentStepIndex : currentStepIndex + 1)
                           .flatMap((s, stepIdx) => 
                             (s.questions || [])
                               .filter(q => (q.conditionalLevel || 0) === 0 && q.options && q.options.length > 0)
@@ -2229,9 +2248,10 @@ export default function TemplateEditor() {
 
                   {editingConditionalStep.rules.map((rule, index) => {
                     // Get all available questions for this rule
-                    const currentStepIndex = steps.findIndex(s => s.id === selectedQuestionForConditional?.stepId)
+                    const targetStepId = conditionalModalType === 'step' ? editingConditionalStepId : selectedQuestionForConditional?.stepId
+                    const currentStepIndex = steps.findIndex(s => s.id === targetStepId)
                     const allPrevQuestions = steps
-                      .slice(0, currentStepIndex + 1)
+                      .slice(0, conditionalModalType === 'step' ? currentStepIndex : currentStepIndex + 1)
                       .flatMap((s, stepIdx) => 
                         (s.questions || [])
                           .filter(q => (q.conditionalLevel || 0) === 0 && q.options && q.options.length > 0)
