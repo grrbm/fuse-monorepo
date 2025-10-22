@@ -38,6 +38,15 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 }) => {
     const selectedPlanData = plans.find((plan) => plan.id === selectedPlan);
 
+    // Require shipping fields before enabling payment setup
+    const canContinue = Boolean(
+        selectedPlan &&
+        (shippingInfo.address || '').trim() &&
+        (shippingInfo.city || '').trim() &&
+        (shippingInfo.state || '').trim() &&
+        (shippingInfo.zipCode || '').trim()
+    );
+
     return (
         <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
@@ -254,10 +263,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                                     color="primary"
                                     size="lg"
                                     className="w-full"
+                                    isDisabled={!canContinue}
                                     onPress={() => onCreateSubscription(selectedPlan)}
                                 >
                                     Continue with {selectedPlanData?.name} - ${selectedPlanData?.price}/mo
                                 </Button>
+                                {!canContinue && (
+                                    <div className="text-center text-xs text-gray-500">
+                                        Fill out shipping address to continue
+                                    </div>
+                                )}
                             </div>
                         )}
 
