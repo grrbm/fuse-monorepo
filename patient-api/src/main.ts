@@ -2563,6 +2563,163 @@ app.get("/treatments/:id", async (req, res) => {
   }
 });
 
+// Get treatments for current authenticated user based on their orders
+app.get("/getTreatments", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    console.log('🔍 Fetching treatments for user:', currentUser.id);
+
+    // Find all orders for this user that have a treatmentId
+    const orders = await Order.findAll({
+      where: {
+        userId: currentUser.id,
+      },
+      include: [
+        {
+          model: Treatment,
+          as: 'treatment',
+          required: true, // Only include orders that have a treatment
+          include: [
+            {
+              model: Product,
+              as: 'products',
+              through: { attributes: ['dosage'] }
+            },
+            {
+              model: Clinic,
+              as: 'clinic'
+            }
+          ]
+        },
+        {
+          model: TreatmentPlan,
+          as: 'treatmentPlan'
+        },
+        {
+          model: Subscription,
+          as: 'subscription'
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    console.log(`✅ Found ${orders.length} orders with treatments for user ${currentUser.id}`);
+
+    // Transform orders to unique treatments with subscription info
+    const treatmentMap = new Map();
+
+    for (const order of orders) {
+      if (!order.treatment) continue;
+
+      const treatmentId = order.treatment.id;
+      
+      // If we already have this treatment, keep the most recent order with active subscription
+      if (treatmentMap.has(treatmentId)) {
+        const existing = treatmentMap.get(treatmentId);
+        // Update if this order has an active subscription
+        if (order.subscription && 
+            order.subscription.status !== 'cancelled' && 
+            order.subscription.status !== 'deleted') {
+          existing.subscription = order.subscription;
+          existing.order = order;
+        }
+      } else {
+        // Add new treatment entry
+        treatmentMap.set(treatmentId, {
+          treatment: order.treatment,
+          treatmentPlan: order.treatmentPlan,
+          subscription: order.subscription,
+          order: order
+        });
+      }
+    }
+
+    // Convert map to array and format response
+    const treatments = Array.from(treatmentMap.values()).map(({ treatment, treatmentPlan, subscription, order }) => {
+      const treatmentData = treatment.toJSON();
+      
+      // Determine status from subscription or order
+      let status = "active";
+      if (subscription) {
+        switch (subscription.status.toLowerCase()) {
+          case "paid":
+          case "processing":
+            status = "active";
+            break;
+          case "pending":
+          case "payment_due":
+            status = "paused";
+            break;
+          case "cancelled":
+          case "deleted":
+            status = "cancelled";
+            break;
+        }
+      } else if (order.status === 'cancelled') {
+        status = "cancelled";
+      } else if (order.status === 'pending' || order.status === 'payment_due') {
+        status = "paused";
+      }
+      
+      return {
+        id: treatment.id,
+        name: treatment.name,
+        treatmentLogo: treatment.treatmentLogo,
+        status: status, // Status derived from subscription/order
+        clinicId: treatment.clinicId,
+        clinicName: treatment.clinic?.name || null,
+        clinicSlug: treatment.clinic?.slug || null,
+        // Treatment Plan info
+        treatmentPlan: treatmentPlan ? {
+          id: treatmentPlan.id,
+          name: treatmentPlan.name,
+          price: treatmentPlan.price,
+          billingInterval: treatmentPlan.billingInterval
+        } : null,
+        // Subscription info
+        subscription: subscription ? {
+          id: subscription.id,
+          status: subscription.status,
+          stripeSubscriptionId: subscription.stripeSubscriptionId,
+          cancelledAt: subscription.cancelledAt,
+          paymentDue: subscription.paymentDue,
+          paidAt: subscription.paidAt
+        } : null,
+        // Order info
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        orderStatus: order.status,
+        orderCreatedAt: order.createdAt,
+        // Products
+        products: treatment.products || [],
+        productsCount: treatment.products?.length || 0,
+      };
+    });
+
+    console.log(`✅ Returning ${treatments.length} unique treatments`);
+
+    res.json({
+      success: true,
+      data: treatments
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching user treatments:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch user treatments"
+    });
+  }
+});
+
 // Treatment Plan routes
 // List treatment plans for a treatment
 app.get("/treatment-plans/treatment/:treatmentId", authenticateJWT, async (req, res) => {
