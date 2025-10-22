@@ -72,6 +72,7 @@ export default function TemplateEditor() {
   const [showConditionalModal, setShowConditionalModal] = useState(false)
   const [conditionalModalType, setConditionalModalType] = useState<'question' | 'step'>('question')
   const [editingConditionalStepId, setEditingConditionalStepId] = useState<string | null>(null)
+  const [hoveredConditionalStepId, setHoveredConditionalStepId] = useState<string | null>(null)
   const [selectedQuestionForConditional, setSelectedQuestionForConditional] = useState<{
     stepId: string
     questionId: string
@@ -542,6 +543,25 @@ export default function TemplateEditor() {
     } catch (err) {
       console.error('Failed to copy:', err)
     }
+  }
+
+  // Helper: Extract question IDs from conditional logic
+  const getReferencedQuestionIds = (conditionalLogic: string): string[] => {
+    if (!conditionalLogic) return []
+    const questionIds: string[] = []
+    const tokens = conditionalLogic.split(' ')
+    
+    for (const token of tokens) {
+      if (token.startsWith('answer_equals:')) {
+        // Format: answer_equals:{questionId}:{optionValue}
+        const parts = token.replace('answer_equals:', '').split(':')
+        if (parts.length === 2) {
+          questionIds.push(parts[0])
+        }
+      }
+    }
+    
+    return Array.from(new Set(questionIds)) // Remove duplicates
   }
 
   // Open modal to add a NEW conditional step
@@ -1720,7 +1740,14 @@ export default function TemplateEditor() {
 
               {steps.length > 0 ? (
                 <div className="space-y-5">
-                  {steps.map((step, index) => (
+                  {steps.map((step, index) => {
+                    // Check if this step or any question in it is referenced by the hovered conditional step
+                    const referencedQuestionIds = hoveredConditionalStepId && steps.find(s => s.id === hoveredConditionalStepId)?.conditionalLogic
+                      ? getReferencedQuestionIds(steps.find(s => s.id === hoveredConditionalStepId)!.conditionalLogic!)
+                      : []
+                    const isReferencedByHovered = step.questions?.some(q => referencedQuestionIds.includes(q.id))
+                    
+                    return (
                     <div
                       key={step.id}
                       className={`
@@ -1728,11 +1755,15 @@ export default function TemplateEditor() {
                         ${step.isDeadEnd ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10" : "border border-border/40"}
                         ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-md" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
+                        ${isReferencedByHovered ? "ring-2 ring-orange-400 bg-orange-50/20" : ""}
+                        ${step.conditionalLogic ? "hover:shadow-lg cursor-pointer" : ""}
                       `}
                       draggable
                       onDragStart={() => handleDragStart(step.id)}
                       onDragOver={(e) => handleDragOver(e, step.id)}
                       onDragEnd={handleDragEnd}
+                      onMouseEnter={() => step.conditionalLogic && setHoveredConditionalStepId(step.id)}
+                      onMouseLeave={() => setHoveredConditionalStepId(null)}
                     >
                       <div className="p-6">
                         <div className="flex items-start gap-5">
@@ -1919,7 +1950,19 @@ export default function TemplateEditor() {
 
                                     {/* Collapsed Question View */}
                                     {(q.conditionalLevel || 0) === 0 && (
-                                      <div className="bg-card rounded-lg border border-border/40 p-5 hover:shadow-md transition-shadow">
+                                      <div className={`rounded-lg border p-5 transition-all ${
+                                        referencedQuestionIds.includes(q.id)
+                                          ? 'bg-orange-50 border-orange-400 shadow-md ring-2 ring-orange-300'
+                                          : 'bg-card border-border/40 hover:shadow-md'
+                                      }`}>
+                                        {referencedQuestionIds.includes(q.id) && (
+                                          <div className="mb-3 pb-3 border-b border-orange-300">
+                                            <div className="flex items-center gap-2 text-xs font-medium text-orange-700">
+                                              <GitBranch className="h-3.5 w-3.5" />
+                                              <span>Referenced by: {steps.find(s => s.id === hoveredConditionalStepId)?.title}</span>
+                                            </div>
+                                          </div>
+                                        )}
                                         <div className="flex items-start justify-between gap-4 mb-4">
                                           <div className="flex-1">
                                             <p className="text-base font-semibold text-foreground mb-2">{q.questionText}</p>
@@ -2100,7 +2143,8 @@ export default function TemplateEditor() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="bg-card rounded-2xl shadow-sm border border-dashed border-border/60 p-12 text-center">
