@@ -1406,7 +1406,7 @@ export default function TemplateEditor() {
           )}
 
           {/* Header Section */}
-          <div className="mb-12">
+          <div className="mb-8 pb-8 border-b border-border/40">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Left: Title and Description */}
               <div className="lg:col-span-3">
@@ -1417,14 +1417,14 @@ export default function TemplateEditor() {
               </div>
               
               {/* Middle/Right: Metadata and Actions */}
-              <div className="lg:col-span-8 space-y-6">
+              <div className="lg:col-span-8 space-y-4">
                 {/* Metadata Cards */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/40">
+                  <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
                     <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Form Name</p>
                     <p className="font-semibold text-foreground text-base">{template.title}</p>
                   </div>
-                  <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/40">
+                  <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
                     <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Status</p>
                     <Badge 
                       variant="secondary" 
@@ -1474,7 +1474,7 @@ export default function TemplateEditor() {
                           setTimeout(() => setSaveMessage(null), 5000)
                         }
                       }}
-                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
                     >
                       Submit for Review
                     </Button>
@@ -1484,7 +1484,7 @@ export default function TemplateEditor() {
                     <Button 
                       onClick={handleSave} 
                       disabled={saving}
-                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
                     >
                     {saving ? (
                       <>
@@ -1499,7 +1499,7 @@ export default function TemplateEditor() {
                   
                   <Button 
                     variant="outline" 
-                    className="rounded-full px-6 border-border/60 shadow-sm hover:bg-muted/50"
+                    className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
                     onClick={() => {
                       if (!templateId) return
                       const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
@@ -1513,7 +1513,7 @@ export default function TemplateEditor() {
                   
                   <Button 
                     variant="outline" 
-                    className="rounded-full px-6 border-border/60 shadow-sm hover:bg-muted/50"
+                    className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
                   >
                     Add Voucher
                   </Button>
@@ -1525,9 +1525,9 @@ export default function TemplateEditor() {
           {/* Main Content - Three Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column - Add Step Controls */}
-            <div className="lg:col-span-3 space-y-6">
+            <div className="lg:col-span-3 space-y-6 bg-muted/30 rounded-2xl p-4 border border-border/20">
               {/* Add New Step Card */}
-              <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/40">
+              <div className="bg-card rounded-2xl p-6 shadow-md border border-border/40">
                 <div className="mb-6">
                   <h2 className="text-lg font-semibold tracking-tight mb-2">Add New Step</h2>
                   <p className="text-sm text-muted-foreground">Choose a question type to add to your form</p>
@@ -1645,7 +1645,7 @@ export default function TemplateEditor() {
               </div>
 
               {/* Save Actions Card */}
-              <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/40 space-y-3">
+              <div className="bg-card rounded-2xl p-6 shadow-md border border-border/40 space-y-3">
                 <Button 
                   onClick={handleSave} 
                   disabled={saving} 
@@ -1765,9 +1765,9 @@ export default function TemplateEditor() {
             {/* Middle Column - Steps List */}
             <div className="lg:col-span-8 space-y-6">
               {/* Questions Section Header */}
-              <div>
-                <h2 className="text-2xl font-semibold tracking-tight mb-3">Questions</h2>
-                <p className="text-base text-muted-foreground leading-relaxed">
+              <div className="bg-gradient-to-r from-muted/50 to-transparent rounded-xl p-5 border border-border/30">
+                <h2 className="text-2xl font-semibold tracking-tight mb-2">Questions</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   These are the intake form questions. Some questions will be automatically added to every form when needed.
                 </p>
               </div>
