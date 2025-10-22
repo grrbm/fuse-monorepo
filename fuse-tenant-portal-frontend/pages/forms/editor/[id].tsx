@@ -932,7 +932,9 @@ export default function TemplateEditor() {
         const refData = await refRes.json()
         console.log('Reloaded template data:', refData.data)
         console.log('Steps in reloaded data:', refData.data?.steps)
-        console.log('Step we just edited:', refData.data?.steps?.find((s: any) => s.id === editingConditionalStepId))
+        const editedStep = refData.data?.steps?.find((s: any) => s.id === editingConditionalStepId)
+        console.log('Step we just edited (FULL):', JSON.stringify(editedStep, null, 2))
+        console.log('conditionalLogic value:', editedStep?.conditionalLogic)
         setTemplate(refData.data)
         const loadedSteps = (refData.data?.steps || []).map((s: any) => {
           console.log(`Loading step ${s.id}:`, { title: s.title, conditionalLogic: s.conditionalLogic })
