@@ -16,8 +16,13 @@ import {
     MapPin,
     CreditCard,
     Calendar,
-    User
+    User,
+    Link as LinkIcon,
+    CheckCircle,
+    AlertCircle,
+    X
 } from 'lucide-react'
+import { loadConnectAndInitialize } from '@stripe/connect-js'
 
 interface Order {
     id: string
@@ -237,9 +242,95 @@ export default function Orders() {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
     const { user, token } = useAuth()
 
+    // Stripe Connect states
+    const [showConnectModal, setShowConnectModal] = useState(false)
+    const [connectStatus, setConnectStatus] = useState<any>(null)
+    const [connectLoading, setConnectLoading] = useState(false)
+    const [connectInstance, setConnectInstance] = useState<any>(null)
+
     useEffect(() => {
         fetchOrders()
+        fetchConnectStatus()
     }, [token, user])
+
+    // Fetch Stripe Connect status
+    const fetchConnectStatus = async () => {
+        if (!token) return
+
+        try {
+            const response = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/stripe/connect/status`,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            )
+
+            if (response.ok) {
+                const data = await response.json()
+                if (data.success) {
+                    setConnectStatus(data.data)
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching Stripe Connect status:', err)
+        }
+    }
+
+    // Initialize Stripe Connect
+    const initializeStripeConnect = async () => {
+        if (!token || connectInstance) return
+
+        setConnectLoading(true)
+        try {
+            const instance = loadConnectAndInitialize({
+                publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
+                fetchClientSecret: async () => {
+                    const response = await fetch(
+                        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/stripe/connect/session`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        }
+                    )
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}))
+                        console.error('Failed to fetch client secret:', response.status, errorData)
+                        throw new Error(errorData.message || 'Failed to fetch client secret')
+                    }
+
+                    const data = await response.json()
+                    return data.data.client_secret
+                },
+                appearance: {
+                    variables: {
+                        colorPrimary: '#000000',
+                    }
+                }
+            })
+
+            setConnectInstance(instance)
+        } catch (err) {
+            console.error('Error initializing Stripe Connect:', err)
+        } finally {
+            setConnectLoading(false)
+        }
+    }
+
+    // Open Connect Modal
+    const openConnectModal = async () => {
+        setShowConnectModal(true)
+        if (!connectInstance) {
+            await initializeStripeConnect()
+        }
+    }
+
+    // Close modal and refresh status
+    const closeConnectModal = () => {
+        setShowConnectModal(false)
+        fetchConnectStatus() // Refresh status after closing
+    }
 
     const fetchOrders = async () => {
         if (!token || !user) return
@@ -357,9 +448,33 @@ export default function Orders() {
             <div className="min-h-screen bg-background p-8" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
-                    <div className="mb-8">
-                        <h1 className="text-3xl font-semibold text-foreground mb-2">Orders</h1>
-                        <p className="text-sm text-muted-foreground">Track and manage customer orders</p>
+                    <div className="mb-8 flex justify-between items-start">
+                        <div>
+                            <h1 className="text-3xl font-semibold text-foreground mb-2">Orders</h1>
+                            <p className="text-sm text-muted-foreground">Track and manage customer orders</p>
+                        </div>
+                        
+                        {/* Stripe Connect Button */}
+                        <button
+                            onClick={openConnectModal}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                                connectStatus?.onboardingComplete
+                                    ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
+                        >
+                            {connectStatus?.onboardingComplete ? (
+                                <>
+                                    <CheckCircle className="h-4 w-4" />
+                                    <span>Stripe Connected</span>
+                                </>
+                            ) : (
+                                <>
+                                    <LinkIcon className="h-4 w-4" />
+                                    <span>Connect Stripe Account</span>
+                                </>
+                            )}
+                        </button>
                     </div>
 
                     {/* Stats Cards - This Month */}
@@ -643,9 +758,133 @@ export default function Orders() {
                             )}
                         </CardContent>
                     </Card>
+
+                    {/* Stripe Connect Modal */}
+                    {showConnectModal && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+                                {/* Modal Header */}
+                                <div className="flex items-center justify-between p-6 border-b">
+                                    <div>
+                                        <h2 className="text-2xl font-semibold text-gray-900">Stripe Connect</h2>
+                                        <p className="text-sm text-gray-500 mt-1">
+                                            Connect your Stripe account to receive payouts
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={closeConnectModal}
+                                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    >
+                                        <X className="h-5 w-5 text-gray-500" />
+                                    </button>
+                                </div>
+
+                                {/* Modal Body */}
+                                <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                                    {connectLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-12">
+                                            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                            <p className="text-gray-600">Loading Stripe Connect...</p>
+                                        </div>
+                                    ) : connectStatus?.onboardingComplete ? (
+                                        <div className="text-center py-12">
+                                            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                                                <CheckCircle className="h-8 w-8 text-green-600" />
+                                            </div>
+                                            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                                Stripe Account Connected
+                                            </h3>
+                                            <p className="text-gray-600 mb-6">
+                                                Your account is fully set up and ready to receive payouts.
+                                            </p>
+                                            <div className="bg-gray-50 rounded-lg p-4 max-w-md mx-auto">
+                                                <div className="space-y-2 text-sm text-left">
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-600">Account ID:</span>
+                                                        <span className="font-mono text-gray-900">
+                                                            {connectStatus.accountId?.substring(0, 20)}...
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-600">Charges:</span>
+                                                        <span className={connectStatus.chargesEnabled ? 'text-green-600' : 'text-red-600'}>
+                                                            {connectStatus.chargesEnabled ? 'Enabled' : 'Disabled'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-600">Payouts:</span>
+                                                        <span className={connectStatus.payoutsEnabled ? 'text-green-600' : 'text-red-600'}>
+                                                            {connectStatus.payoutsEnabled ? 'Enabled' : 'Disabled'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                                                <div className="flex gap-3">
+                                                    <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <h4 className="font-medium text-blue-900 mb-1">
+                                                            Complete your Stripe onboarding
+                                                        </h4>
+                                                        <p className="text-sm text-blue-700">
+                                                            You'll need to provide some information about your business to start receiving payouts.
+                                                            This process is secure and handled directly by Stripe.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Stripe Connect Component Container */}
+                                            <div id="stripe-connect-container" className="min-h-[400px]">
+                                                {connectInstance && (
+                                                    <StripeConnectAccountOnboarding 
+                                                        stripeConnectInstance={connectInstance}
+                                                        onExit={closeConnectModal}
+                                                    />
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </Layout>
     )
+}
+
+// Stripe Connect Account Onboarding Component
+function StripeConnectAccountOnboarding({ 
+    stripeConnectInstance, 
+    onExit 
+}: { 
+    stripeConnectInstance: any, 
+    onExit: () => void 
+}) {
+    useEffect(() => {
+        if (stripeConnectInstance) {
+            const accountOnboarding = stripeConnectInstance.create('account-onboarding')
+            
+            // Mount the component
+            const container = document.getElementById('stripe-connect-container')
+            if (container && accountOnboarding) {
+                container.innerHTML = '' // Clear any existing content
+                container.appendChild(accountOnboarding)
+
+                // Listen for exit event
+                accountOnboarding.setOnExit(() => {
+                    console.log('User exited onboarding')
+                    onExit()
+                })
+            }
+        }
+    }, [stripeConnectInstance, onExit])
+
+    return null
 }
 
