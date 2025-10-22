@@ -2720,6 +2720,129 @@ app.get("/getTreatments", authenticateJWT, async (req, res) => {
   }
 });
 
+// Get products from user's active treatments
+app.get("/getProductsByTreatment", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    console.log('🔍 Fetching products from treatments for user:', currentUser.id);
+
+    // Find all orders for this user that have a treatmentId
+    const orders = await Order.findAll({
+      where: {
+        userId: currentUser.id,
+      },
+      include: [
+        {
+          model: Treatment,
+          as: 'treatment',
+          required: true,
+          include: [
+            {
+              model: Product,
+              as: 'products',
+              through: { 
+                attributes: ['dosage']
+              }
+            }
+          ]
+        },
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    console.log(`✅ Found ${orders.length} orders for user ${currentUser.id}`);
+
+    // Collect all products from active treatments
+    const productsList: any[] = [];
+    const processedProducts = new Set(); // To avoid duplicates
+
+    for (const order of orders) {
+      console.log('🔍 Order:', order);
+      if (!order.treatment || !order.treatment.products) continue;
+      console.log("has treatment and products");
+      // Determine if treatment is active
+      let isActive = true;
+      if (order.subscription) {
+        isActive = order.subscription.status === 'paid' || order.subscription.status === 'processing';
+      } else if (order.status === 'cancelled') {
+        isActive = false;
+      }
+      console.log("isActive:", isActive);
+
+      // Only include products from active treatments
+      // if (!isActive) continue;
+
+      // Map each product
+      for (const product of order.treatment.products) {
+        const productKey = `${product.id}-${order.treatment.id}`;
+        console.log("productKey:", productKey);
+        // Skip if already processed
+        if (processedProducts.has(productKey)) continue;
+        processedProducts.add(productKey);
+        console.log("has product and treatment");
+        // Get dosage from TreatmentProducts junction table
+        const dosage = (product as any).TreatmentProducts?.dosage || product.dosage || "As prescribed";
+        console.log("dosage:", dosage);
+        // Determine status from subscription or order
+        let status = "active";
+        if (order.subscription) {
+          switch (order.subscription.status.toLowerCase()) {
+            case "paid":
+            case "processing":
+              status = "active";
+              break;
+            case "pending":
+            case "payment_due":
+              status = "paused";
+              break;
+            case "cancelled":
+            case "deleted":
+              status = "cancelled";
+              break;
+          }
+        } else if (order.status === 'cancelled') {
+          status = "cancelled";
+        } else if (order.status === 'pending' || order.status === 'payment_due') {
+          status = "paused";
+        }
+
+        productsList.push({
+          id: product.id,
+          name: order.treatment.name, // Treatment name
+          subtitle: product.name, // Product name as subtitle
+          dosage: dosage,
+          refills: 0, // TODO: Add refills logic if available
+          status: status,
+          expiryDate: "N/A", // TODO: Add expiry date logic if available
+          image: product.imageUrl || `https://img.heroui.chat/image/medicine?w=100&h=100&u=${product.id.slice(-1)}`
+        });
+      }
+    }
+
+    console.log(`✅ Returning ${productsList.length} products from active treatments`);
+
+    res.json({
+      success: true,
+      data: productsList
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching products by treatment:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch products by treatment"
+    });
+  }
+});
+
 // Treatment Plan routes
 // List treatment plans for a treatment
 app.get("/treatment-plans/treatment/:treatmentId", authenticateJWT, async (req, res) => {
