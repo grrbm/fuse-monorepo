@@ -681,16 +681,45 @@ export default function TemplateEditor() {
     }
     
     // Determine step type from answerType
-    // Check if the step itself is a dead end step
-    const containingStep = template?.steps?.find((s: any) => s.id === stepId)
-    const isStepDeadEnd = containingStep?.isDeadEnd
+    // For textarea types, need to distinguish between: textarea (input), info (read-only), deadend (terminates)
+    let stepType: 'single' | 'yesno' | 'multi' | 'textarea' | 'info' | 'deadend' = 'single'
     
-    const stepType = isStepDeadEnd && conditionalQuestion.answerType === 'textarea' ? 'deadend' :
-                     conditionalQuestion.answerType === 'textarea' && !conditionalQuestion.placeholder?.includes('informational') ? 'textarea' :
-                     conditionalQuestion.answerType === 'textarea' ? 'info' :
-                     conditionalQuestion.answerType === 'checkbox' ? 'multi' :
-                     conditionalQuestion.questionSubtype === 'yesno' ? 'yesno' :
-                     'single'
+    if (conditionalQuestion.answerType === 'checkbox') {
+      stepType = 'multi'
+    } else if (conditionalQuestion.questionSubtype === 'yesno') {
+      stepType = 'yesno'
+    } else if (conditionalQuestion.answerType === 'textarea') {
+      // All three types use textarea answerType, distinguish by text patterns
+      const questionText = conditionalQuestion.questionText?.toLowerCase() || ''
+      const placeholder = conditionalQuestion.placeholder?.toLowerCase() || ''
+      
+      // Dead end detection: look for disqualification keywords
+      if (questionText.includes('unfortunat') || questionText.includes('disqualif') || 
+          questionText.includes('cannot be medically') || questionText.includes('do not qualify') ||
+          placeholder.includes('form will end')) {
+        stepType = 'deadend'
+      } 
+      // Info detection: look for informational keywords or patterns
+      else if (placeholder?.includes('informational') || placeholder?.includes('no response needed') ||
+               questionText.includes('important:') || questionText.includes('please note') ||
+               conditionalQuestion.required === false) {
+        stepType = 'info'
+      }
+      // Otherwise it's a real textarea input
+      else {
+        stepType = 'textarea'
+      }
+    } else if (conditionalQuestion.answerType === 'radio') {
+      stepType = 'single'
+    }
+    
+    console.log('Detected step type:', stepType, 'for question:', conditionalQuestion.questionText)
+    console.log('Question details:', {
+      answerType: conditionalQuestion.answerType,
+      required: conditionalQuestion.required,
+      placeholder: conditionalQuestion.placeholder,
+      questionText: conditionalQuestion.questionText
+    })
     
     // Determine placement based on conditionalLevel
     // conditionalLevel 0 or undefined = new-step (separate slide)
