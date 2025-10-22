@@ -1242,6 +1242,8 @@ export default function TemplateEditor() {
         }
         
         // Update step title and description for info/deadend types
+        // NOTE: Do NOT set isDeadEnd for conditional dead ends - they should only show when condition is met
+        // The isDeadEnd flag makes a step ALWAYS a dead end, which is not what we want for conditionals
         if ((editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend') && targetStepId) {
           await fetch(`${baseUrl}/questionnaires/step`, {
             method: 'PUT',
@@ -1249,8 +1251,8 @@ export default function TemplateEditor() {
             body: JSON.stringify({
               stepId: targetStepId,
               title: editingConditionalStep.text.substring(0, 100) || (editingConditionalStep.stepType === 'deadend' ? 'Disqualification Notice' : 'Information'),
-              description: editingConditionalStep.helpText || editingConditionalStep.text,
-              isDeadEnd: editingConditionalStep.stepType === 'deadend'
+              description: editingConditionalStep.helpText || editingConditionalStep.text
+              // Removed: isDeadEnd flag - conditional dead ends should NOT set this
             }),
           }).catch(() => { }) // Non-critical, continue if fails
         }
