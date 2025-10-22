@@ -931,8 +931,12 @@ export default function TemplateEditor() {
         })
         const refData = await refRes.json()
         console.log('Reloaded template data:', refData.data)
+        console.log('Steps in reloaded data:', refData.data?.steps)
+        console.log('Step we just edited:', refData.data?.steps?.find((s: any) => s.id === editingConditionalStepId))
         setTemplate(refData.data)
-        const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
+        const loadedSteps = (refData.data?.steps || []).map((s: any) => {
+          console.log(`Loading step ${s.id}:`, { title: s.title, conditionalLogic: s.conditionalLogic })
+          return {
           id: String(s.id),
           title: String(s.title || ''),
           description: String(s.description || ''),
@@ -958,7 +962,9 @@ export default function TemplateEditor() {
             conditionalLevel: Number(q.conditionalLevel || 0),
             subQuestionOrder: Number(q.subQuestionOrder || 0)
           })),
-        })) as Step[]
+        }
+        }) as Step[]
+        console.log('Loaded steps with conditionalLogic:', loadedSteps.map(s => ({ id: s.id, title: s.title, conditionalLogic: s.conditionalLogic })))
         setSteps(loadedSteps)
         
         // Close modal
@@ -2140,10 +2146,10 @@ export default function TemplateEditor() {
                               size="sm"
                               onClick={() => handleOpenStepConditionalModal(step.id)}
                               className="h-8 text-xs px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                              title="Add conditional logic to this step"
+                              title={step.conditionalLogic ? "Edit conditional logic" : "Create conditional rule"}
                             >
                               <GitBranch className="h-3.5 w-3.5 mr-1" />
-                              {step.conditionalLogic ? 'Edit Rules' : 'Add Rule'}
+                              {step.conditionalLogic ? 'Edit Rule' : 'Create Rule'}
                             </Button>
                             <div className="flex items-start gap-2">
                               {!isAccountTemplate && (
