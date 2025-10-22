@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardBody, Button, Chip } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { motion } from "framer-motion";
+import { useAuth } from "../contexts/AuthContext";
+import { apiCall } from "../lib/api";
 
 interface Treatment {
   id: string;
@@ -15,38 +17,36 @@ interface Treatment {
 }
 
 export const TreatmentsList: React.FC = () => {
-  const [treatments, setTreatments] = React.useState<Treatment[]>([
-    {
-      id: "1",
-      name: "Anti Aging",
-      subtitle: "NAD+ (1,000mg vial)",
-      dosage: "1000 MG every month",
-      refills: 10,
-      status: "paused",
-      expiryDate: "6/10/2025",
-      image: "https://img.heroui.chat/image/medicine?w=100&h=100&u=1"
-    },
-    {
-      id: "2",
-      name: "Anti Aging",
-      subtitle: "Glutathione",
-      dosage: "1 Monthly Supply every month",
-      refills: 11,
-      status: "paused",
-      expiryDate: "8/4/2024",
-      image: "https://img.heroui.chat/image/medicine?w=100&h=100&u=2"
-    },
-    {
-      id: "3",
-      name: "Anti Aging",
-      subtitle: "Glutathione",
-      dosage: "1 Monthly Supply every month",
-      refills: 11,
-      status: "cancelled",
-      expiryDate: "8/4/2024",
-      image: "https://img.heroui.chat/image/medicine?w=100&h=100&u=3"
-    }
-  ]);
+  const { user } = useAuth();
+  const [treatments, setTreatments] = useState<Treatment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        setLoading(true);
+        const response = await apiCall('/getProductsByTreatment');
+        
+        if (response.success && response.data?.data) {
+          console.log('✅ Products loaded:', response.data.data);
+          setTreatments(response.data.data);
+        } else {
+          console.error('❌ Failed to load products');
+        }
+      } catch (error) {
+        console.error('❌ Error fetching products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, [user]);
 
   const container = {
     hidden: { opacity: 0 },
@@ -88,6 +88,36 @@ export const TreatmentsList: React.FC = () => {
         return status;
     }
   };
+
+  if (loading) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-medium">Treatments</h2>
+        </div>
+        <div className="flex items-center justify-center py-8">
+          <Icon icon="lucide:loader-2" className="animate-spin text-primary" width={32} height={32} />
+        </div>
+      </div>
+    );
+  }
+
+  if (treatments.length === 0) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-medium">Treatments</h2>
+        </div>
+        <Card className="border border-content3">
+          <CardBody className="p-8 text-center">
+            <Icon icon="lucide:package" className="mx-auto mb-3 text-foreground-400" width={48} height={48} />
+            <p className="text-foreground-600">No active treatments</p>
+            <p className="text-sm text-foreground-500 mt-1">Your treatment products will appear here</p>
+          </CardBody>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>

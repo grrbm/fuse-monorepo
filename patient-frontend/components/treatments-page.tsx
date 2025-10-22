@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
   Card, 
@@ -57,24 +57,28 @@ export const TreatmentsPage: React.FC = () => {
   const { isOpen: isAddModalOpen, onOpen: onAddModalOpen, onOpenChange: onAddModalOpenChange } = useDisclosure();
   const { isOpen: isEditModalOpen, onOpen: onEditModalOpen, onOpenChange: onEditModalOpenChange } = useDisclosure();
   const { isOpen: isQuestionnaireModalOpen, onOpen: onQuestionnaireModalOpen, onOpenChange: onQuestionnaireModalOpenChange } = useDisclosure();
+
+  useEffect(() => {
+    setIsLoading(false);
+  }, [treatments]);
   
   // Function to get clinic slug from subdomain
 
   // Load treatments for clinic
-  React.useEffect(() => {
-    const initialLoadTreatments = async () => {
-      if (!user) {
-        setIsLoading(false);
-        return;
-      }
+  // React.useEffect(() => {
+  //   const initialLoadTreatments = async () => {
+  //     if (!user) {
+  //       setIsLoading(false);
+  //       return;
+  //     }
 
-      setIsLoading(true);
-      await loadTreatments();
-      setIsLoading(false);
-    };
+  //     setIsLoading(true);
+  //     await loadTreatments();
+  //     setIsLoading(false);
+  //   };
 
-    initialLoadTreatments();
-  }, [user]);
+  //   initialLoadTreatments();
+  // }, [user]);
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTab, setSelectedTab] = React.useState("all");
@@ -87,6 +91,19 @@ export const TreatmentsPage: React.FC = () => {
     onEditModalOpen();
   };
 
+  const fetchTreatments = async () => {
+    if (!user) return;
+    
+    const response = await apiCall('/getTreatments');
+    
+    if (response.success && response.data?.data) {
+      setTreatments(response.data.data);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchTreatments();
+  }, [user]);
   // Handle opening add modal
   const handleAddTreatment = () => {
     setEditingTreatment(null);
@@ -261,45 +278,54 @@ export const TreatmentsPage: React.FC = () => {
   };
 
   // Extract loadTreatments function for reuse
-  const loadTreatments = async () => {
-    if (!user) return;
+  // const loadTreatments = async () => {
+  //   if (!user) return;
 
-    try {
-      let result: ApiResponse<any> | undefined;
+  //   try {
+  //     let result: ApiResponse<any> | undefined;
       
-      // If user is a doctor with a clinicId, fetch by clinic ID
-      if (user.role === 'doctor' && user.clinicId) {
-        result = await apiCall(`/treatments/by-clinic-id/${user.clinicId}`);
-      } else {
-        // Otherwise, try to get by clinic slug from subdomain
-        const clinicSlug = getClinicSlugFromDomain();
-        if (clinicSlug) {
-          result = await apiCall(`/treatments/by-clinic-slug/${clinicSlug}`);
-        }
-      }
+  //     // If user is a doctor with a clinicId, fetch by clinic ID
+  //     if (user.role === 'doctor' && user.clinicId) {
+  //       result = await apiCall(`/treatments/by-clinic-id/${user.clinicId}`);
+  //     } else {
+  //       // Otherwise, try to get by clinic slug from subdomain
+  //       const clinicSlug = getClinicSlugFromDomain();
+  //       if (clinicSlug) {
+  //         result = await apiCall(`/treatments/by-clinic-slug/${clinicSlug}`);
+  //       }
+  //     }
 
-      if (result && result.success && result.data) {
-        setTreatments(result.data.data || result.data || []);
-      }
-    } catch (error) {
-      console.error('Error loading treatments:', error);
-    }
-  };
+  //     if (result && result.success && result.data) {
+  //       setTreatments(result.data.data || result.data || []);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error loading treatments:', error);
+  //   }
+  // };
 
   const filteredTreatments = React.useMemo(() => {
-    return treatments.filter(treatment => {
-      // Filter by search query
-      const matchesSearch = 
-        treatment.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        treatment.subtitle?.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      // Filter by tab
-      const matchesTab = 
-        selectedTab === "all" || 
-        treatment.status === selectedTab;
-      
-      return matchesSearch && matchesTab;
-    }).sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically by name
+    return treatments
+      .filter(treatment => {
+        // Filter by search query
+        const query = searchQuery.toLowerCase();
+        const matchesSearch =
+          treatment.name.toLowerCase().includes(query) ||
+          (treatment.subtitle && treatment.subtitle.toLowerCase().includes(query));
+
+        // Get treatment status
+        let treatmentStatus = "active";
+        if (typeof treatment.status === "string") {
+          treatmentStatus = treatment.status;
+        }
+
+        // Filter by tab
+        const matchesTab =
+          selectedTab === "all" ||
+          treatmentStatus === selectedTab;
+
+        return matchesSearch && matchesTab;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically by name
   }, [treatments, searchQuery, selectedTab]);
 
   const container = {
@@ -341,6 +367,15 @@ export const TreatmentsPage: React.FC = () => {
       default:
         return status;
     }
+  };
+
+  // Helper to get treatment status from active field or status field
+  const getTreatmentDisplayStatus = (treatment: Treatment): string => {
+    if (treatment.status) {
+      return treatment.status;
+    }
+    // If no status field, use active boolean
+    return treatment.status || "active";
   };
 
   return (
@@ -441,11 +476,11 @@ export const TreatmentsPage: React.FC = () => {
                                   <p className="text-foreground-600 text-sm">{treatment.subtitle || "Treatment"}</p>
                                 </div>
                                 <Chip 
-                                  color={getStatusColor(treatment.status || "active") as any} 
+                                  color={getStatusColor(getTreatmentDisplayStatus(treatment)) as any} 
                                   variant="flat"
                                   size="sm"
                                 >
-                                  {getStatusLabel(treatment.status || "active")}
+                                  {getStatusLabel(getTreatmentDisplayStatus(treatment))}
                                 </Chip>
                               </div>
                             </div>
@@ -519,7 +554,7 @@ export const TreatmentsPage: React.FC = () => {
                               ) : (
                                 // Patient actions
                                 <>
-                                  {(treatment.status || "active") === "active" && (
+                                  {getTreatmentDisplayStatus(treatment) === "active" && (
                                     <Button 
                                       size="sm" 
                                       color="primary"
