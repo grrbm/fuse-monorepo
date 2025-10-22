@@ -2263,9 +2263,75 @@ export default function TemplateEditor() {
 
               {/* Step-level conditional info */}
               {conditionalModalType === 'step' && editingConditionalStepId && (
-                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                  <p className="text-sm font-medium text-orange-900 mb-1">Step-Level Conditional Logic</p>
-                  <p className="text-xs text-orange-700">This entire step will only show if the rules match.</p>
+                <div className="flex items-start justify-between p-4 rounded-lg border border-border">
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-1">Step-Level Conditional Logic</p>
+                    <p className="text-xs text-muted-foreground">This entire step will only show if the rules match.</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      if (!confirm('Delete all rules for this step? The step will always show.')) return
+                      if (!token || !editingConditionalStepId) return
+                      
+                      try {
+                        await fetch(`${baseUrl}/questionnaires/step`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({
+                            stepId: editingConditionalStepId,
+                            conditionalLogic: null
+                          }),
+                        })
+                        
+                        // Reload and close
+                        const refRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+                          headers: { Authorization: `Bearer ${token}` },
+                        })
+                        const refData = await refRes.json()
+                        setTemplate(refData.data)
+                        const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
+                          id: String(s.id),
+                          title: String(s.title || ''),
+                          description: String(s.description || ''),
+                          stepOrder: Number(s.stepOrder || 0),
+                          category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
+                          stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+                          isDeadEnd: Boolean(s.isDeadEnd),
+                          conditionalLogic: s.conditionalLogic || null,
+                          questions: (s.questions || []).map((q: any) => ({
+                            id: String(q.id),
+                            type: q.answerType || 'single-choice',
+                            answerType: q.answerType || 'radio',
+                            questionSubtype: q.questionSubtype || null,
+                            questionText: String(q.questionText || ''),
+                            required: Boolean(q.isRequired),
+                            placeholder: q.placeholder || null,
+                            helpText: q.helpText || null,
+                            options: (q.options || []).map((o: any) => ({
+                              optionText: String(o.optionText || ''),
+                              optionValue: String(o.optionValue || o.optionText || ''),
+                              riskLevel: o.riskLevel || null
+                            })),
+                            conditionalLevel: Number(q.conditionalLevel || 0),
+                            subQuestionOrder: Number(q.subQuestionOrder || 0)
+                          })),
+                        })) as Step[]
+                        setSteps(loadedSteps)
+                        setShowConditionalModal(false)
+                        setEditingConditionalStepId(null)
+                        setConditionalModalType('question')
+                      } catch (error) {
+                        console.error('Failed to delete rules:', error)
+                        alert('Failed to delete rules')
+                      }
+                    }}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete All Rules
+                  </Button>
                 </div>
               )}
 
