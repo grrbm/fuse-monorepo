@@ -2139,13 +2139,24 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                       {/* Continue button for regular steps */}
                       {!(isCheckoutStep() && paymentStatus !== 'succeeded') && (
                         currentStep?.isDeadEnd ? (
-                          <button
-                            onClick={onClose}
-                            className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
-                          >
-                            Close Form
-                            <Icon icon="lucide:x" className="ml-2 h-4 w-4" />
-                          </button>
+                          <div className="space-y-3">
+                            {currentStepIndex > 0 && (
+                              <button
+                                onClick={() => setCurrentStepIndex(prev => prev - 1)}
+                                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
+                              >
+                                <Icon icon="lucide:arrow-left" className="mr-2 h-4 w-4" />
+                                Go Back
+                              </button>
+                            )}
+                            <button
+                              onClick={onClose}
+                              className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
+                            >
+                              Close Form
+                              <Icon icon="lucide:x" className="ml-2 h-4 w-4" />
+                            </button>
+                          </div>
                         ) : (
                           <button
                             onClick={handleNext}
