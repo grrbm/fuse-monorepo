@@ -1522,9 +1522,9 @@ export default function TemplateEditor() {
           </div>
 
           {/* Main Content - Two Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             {/* Left Column - Add Step Controls */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-1 space-y-6">
               {/* Add New Step Card */}
               <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/40">
                 <div className="mb-6">
@@ -1762,7 +1762,7 @@ export default function TemplateEditor() {
             </div>
 
             {/* Right Column - Steps List */}
-            <div className="lg:col-span-3 space-y-6">
+            <div className="lg:col-span-3 space-y-6 relative">
               {/* Questions Section Header */}
               <div>
                 <h2 className="text-2xl font-semibold tracking-tight mb-3">Questions</h2>
@@ -1772,7 +1772,46 @@ export default function TemplateEditor() {
               </div>
 
               {steps.length > 0 ? (
-                <div className="space-y-5">
+                <div className="space-y-5 relative">
+                  {/* Visual connection lines for conditional steps */}
+                  <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+                    {steps.map((step, index) => {
+                      if (!step.conditionalLogic) return null
+                      
+                      const referencedQuestionIds = getReferencedQuestionIds(step.conditionalLogic)
+                      const referencedStepIndices: number[] = []
+                      
+                      steps.forEach((s, idx) => {
+                        if (s.questions?.some(q => referencedQuestionIds.includes(q.id))) {
+                          referencedStepIndices.push(idx)
+                        }
+                      })
+                      
+                      return referencedStepIndices.map(refIdx => {
+                        if (refIdx >= index) return null // Only draw to previous steps
+                        
+                        // Calculate vertical positions (approximate)
+                        const startY = refIdx * 280 + 140 // Approximate center of referenced step
+                        const endY = index * 280 + 140 // Approximate center of conditional step
+                        
+                        return (
+                          <div key={`${step.id}-${refIdx}`} className="absolute right-0 w-8" style={{ top: startY, height: endY - startY }}>
+                            {/* Orange vertical line */}
+                            <div className="absolute right-3 top-0 w-0.5 h-full bg-orange-400/60"></div>
+                            {/* Top circle */}
+                            <div className="absolute right-2 top-0 w-2 h-2 rounded-full bg-orange-500"></div>
+                            {/* Bottom circle */}
+                            <div className="absolute right-2 bottom-0 w-2 h-2 rounded-full bg-orange-500"></div>
+                            {/* Horizontal connector to start */}
+                            <div className="absolute right-0 top-0 w-3 h-0.5 bg-orange-400/60"></div>
+                            {/* Horizontal connector to end */}
+                            <div className="absolute right-0 bottom-0 w-3 h-0.5 bg-orange-400/60"></div>
+                          </div>
+                        )
+                      })
+                    })}
+                  </div>
+                  
                   {steps.map((step, index) => {
                     // Check if this step or any question in it is referenced by the hovered conditional step
                     const referencedQuestionIds = hoveredConditionalStepId && steps.find(s => s.id === hoveredConditionalStepId)?.conditionalLogic
@@ -1784,13 +1823,14 @@ export default function TemplateEditor() {
                     <div
                       key={step.id}
                       className={`
-                        bg-card rounded-2xl shadow-sm overflow-hidden transition-all
+                        bg-card rounded-2xl shadow-sm overflow-hidden transition-all relative
                         ${step.isDeadEnd ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10" : "border border-border/40"}
                         ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-md" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
                         ${isReferencedByHovered ? "ring-2 ring-orange-400 bg-orange-50/20" : ""}
                         ${step.conditionalLogic ? "hover:shadow-lg cursor-pointer" : ""}
                       `}
+                      style={{ zIndex: 1 }}
                       draggable
                       onDragStart={() => handleDragStart(step.id)}
                       onDragOver={(e) => handleDragOver(e, step.id)}
