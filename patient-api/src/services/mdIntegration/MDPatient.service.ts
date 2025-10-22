@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { resolveMdIntegrationsBaseUrl } from './config';
 
 interface Address {
   address: string;
@@ -183,11 +184,9 @@ interface DriversLicenseResponse {
 }
 
 class MDPatientService {
-  private readonly apiUrl = 'https://api.mdintegrations.com/v1';
-
   async createPatient(patientData: CreatePatientRequest, accessToken: string): Promise<PatientResponse> {
     const response = await axios.post<PatientResponse>(
-      `${this.apiUrl}/partner/patients`,
+      resolveMdIntegrationsBaseUrl('/partner/patients'),
       patientData,
       {
         headers: {
@@ -202,7 +201,7 @@ class MDPatientService {
 
   async updatePatient(patientId: string, patientData: UpdatePatientRequest, accessToken: string): Promise<PatientResponse> {
     const response = await axios.patch<PatientResponse>(
-      `${this.apiUrl}/partner/patients/${patientId}`,
+      resolveMdIntegrationsBaseUrl(`/partner/patients/${patientId}`),
       patientData,
       {
         headers: {
@@ -217,7 +216,7 @@ class MDPatientService {
 
   async getPatient(patientId: string, accessToken: string): Promise<PatientResponse> {
     const response = await axios.get<PatientResponse>(
-      `${this.apiUrl}/partner/patients/${patientId}`,
+      resolveMdIntegrationsBaseUrl(`/partner/patients/${patientId}`),
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,

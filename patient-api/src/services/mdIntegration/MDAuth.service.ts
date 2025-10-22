@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { mdIntegrationsConfig, resolveMdIntegrationsBaseUrl } from './config';
 
 interface TokenResponse {
   token_type: string;
@@ -14,18 +15,16 @@ interface TokenRequest {
 }
 
 class MDAuthService {
-  private readonly apiUrl = 'https://api.mdintegrations.com/v1';
-
   async generateToken(): Promise<TokenResponse> {
     const requestBody: TokenRequest = {
       grant_type: 'client_credentials',
-      client_id: process.env.MD_INTEGRATIONS_CLIENT_ID!,
-      client_secret: process.env.MD_INTEGRATIONS_CLIENT_SECRET!,
-      scope: '*'
+      client_id: mdIntegrationsConfig.clientId,
+      client_secret: mdIntegrationsConfig.clientSecret,
+      scope: mdIntegrationsConfig.scope
     };
 
     const response = await axios.post<TokenResponse>(
-      `${this.apiUrl}/partner/auth/token`,
+      resolveMdIntegrationsBaseUrl('/partner/auth/token'),
       requestBody,
       {
         headers: {

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { resolveMdIntegrationsBaseUrl } from './config';
 
 interface License {
   license_id: string;
@@ -54,11 +55,9 @@ interface ClinicianResponse {
 }
 
 class MDClinicianService {
-  private readonly apiUrl = 'https://api.mdintegrations.com/v1';
-
   async getClinician(clinicianId: string, accessToken: string): Promise<ClinicianResponse> {
     const response = await axios.get<ClinicianResponse>(
-      `${this.apiUrl}/partner/clinicians/${clinicianId}`,
+      resolveMdIntegrationsBaseUrl(`/partner/clinicians/${clinicianId}`),
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,

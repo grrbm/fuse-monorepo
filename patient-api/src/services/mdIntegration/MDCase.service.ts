@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { resolveMdIntegrationsBaseUrl } from './config';
 
 interface License {
   license_id: string;
@@ -39,8 +40,8 @@ interface Patient {
 }
 
 interface CaseResponse {
-  case_id:string;
-  metadata:string; 
+  case_id: string;
+  metadata: string;
   patient: Patient;
   case_assignment: CaseAssignment;
 }
@@ -59,7 +60,13 @@ interface Question {
   type: string;
 }
 
-interface CreateCaseRequest {
+export interface CaseQuestionPayload {
+  question: string;
+  answer: string;
+  type: string;
+}
+
+export interface CreateCaseRequest {
   hold_status?: boolean;
   is_additional_approval_needed?: boolean;
   reference_case_id?: string;
@@ -69,17 +76,15 @@ interface CreateCaseRequest {
   case_offerings?: Offering[];
   diseases?: Disease[];
   case_files?: string[];
-  case_questions?: Question[];
+  case_questions?: CaseQuestionPayload[];
   is_chargeable?: boolean;
   tags?: Array<{ uuid: string }>;
 }
 
 class MDCaseService {
-  private readonly apiUrl = 'https://api.mdintegrations.com/v1';
-
   async getCase(caseId: string, accessToken: string): Promise<CaseResponse> {
     const response = await axios.get<CaseResponse>(
-      `${this.apiUrl}/partner/cases/${caseId}`,
+      resolveMdIntegrationsBaseUrl(`/partner/cases/${caseId}`),
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -93,7 +98,7 @@ class MDCaseService {
 
   async createCase(caseData: CreateCaseRequest, accessToken: string): Promise<CaseResponse> {
     const response = await axios.post<CaseResponse>(
-      `${this.apiUrl}/partner/cases`,
+      resolveMdIntegrationsBaseUrl('/partner/cases'),
       caseData,
       {
         headers: {

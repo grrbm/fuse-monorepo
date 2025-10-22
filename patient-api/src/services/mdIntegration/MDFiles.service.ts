@@ -1,6 +1,7 @@
 import axios from 'axios';
 import FormData from 'form-data';
 import MDAuthService from './MDAuth.service';
+import { resolveMdIntegrationsBaseUrl } from './config';
 
 interface FileResponse {
   id: string;
@@ -32,7 +33,7 @@ class MDFilesService {
     });
 
     const response = await axios.post<FileResponse>(
-      `${this.apiUrl}/partner/files`,
+      resolveMdIntegrationsBaseUrl('/partner/files'),
       formData,
       {
         headers: {
@@ -49,7 +50,7 @@ class MDFilesService {
     const headers = await this.getAuthHeaders();
 
     const response = await axios.get<FileResponse>(
-      `${this.apiUrl}/partner/files/${fileId}`,
+      resolveMdIntegrationsBaseUrl(`/partner/files/${fileId}`),
       { headers }
     );
 
@@ -60,7 +61,7 @@ class MDFilesService {
     const headers = await this.getAuthHeaders();
 
     await axios.delete(
-      `${this.apiUrl}/partner/files/${fileId}`,
+      resolveMdIntegrationsBaseUrl(`/partner/files/${fileId}`),
       { headers }
     );
   }
@@ -69,7 +70,7 @@ class MDFilesService {
     const headers = await this.getAuthHeaders();
 
     const response = await axios.get(
-      `${this.apiUrl}/partner/files/${fileId}`,
+      resolveMdIntegrationsBaseUrl(`/partner/files/${fileId}`),
       {
         headers,
         responseType: 'arraybuffer'
