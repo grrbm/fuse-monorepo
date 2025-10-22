@@ -79,6 +79,11 @@ export interface QuestionnaireModalProps {
     productName?: string; // optional label when questionnaire is product-based
     productCategory?: string; // optional product category (e.g., weight_loss)
     productFormVariant?: string; // '1' | '2' when product-based; if '2' prepend standardized steps
+    // Product checkout fallback pricing
+    productPrice?: number;
+    productStripePriceId?: string;
+    productStripeProductId?: string;
+    tenantProductId?: string;
 }
 
 export interface ThemePalette {

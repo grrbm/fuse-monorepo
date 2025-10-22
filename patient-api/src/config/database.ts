@@ -104,6 +104,11 @@ export async function initializeDatabase() {
       // ignore if already nullable or if statement not applicable
     }
     try {
+      await sequelize.query('ALTER TABLE "Order" ALTER COLUMN "treatmentId" DROP NOT NULL;');
+    } catch (e) {
+      // ignore
+    }
+    try {
       // Clean up any soft-deleted TenantProductForms by hard-deleting
       await sequelize.query('DELETE FROM "TenantProductForms" WHERE "deletedAt" IS NOT NULL;');
     } catch (e) {

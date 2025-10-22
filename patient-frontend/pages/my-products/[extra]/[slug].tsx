@@ -12,6 +12,10 @@ interface PublicProduct {
     questionnaireId: string | null
     category?: string | null
     currentFormVariant?: string | null
+    price?: number | null
+    stripeProductId?: string | null
+    stripePriceId?: string | null
+    tenantProductId?: string | null
 }
 
 export default function PublicProductPage() {
@@ -70,6 +74,10 @@ export default function PublicProductPage() {
                 questionnaireId: data.data.questionnaireId,
                 category: data.data.category || null,
                 currentFormVariant,
+                price: data.data.price ?? null,
+                stripeProductId: data.data.stripeProductId ?? null,
+                stripePriceId: data.data.stripePriceId ?? null,
+                tenantProductId: data.data.tenantProductId ?? null,
             })
             setIsModalOpen(true)
         } catch (err) {
@@ -115,6 +123,11 @@ export default function PublicProductPage() {
                     productName={product.name}
                     productCategory={product.category || undefined}
                     productFormVariant={typeof extra === 'string' ? extra : undefined}
+                    // Pass pricing data for fallback plan rendering
+                    productPrice={typeof product.price === 'number' ? product.price : undefined}
+                    productStripeProductId={product.stripeProductId || undefined}
+                    productStripePriceId={product.stripePriceId || undefined}
+                    tenantProductId={product.tenantProductId || undefined}
                 />
             )}
         </div>

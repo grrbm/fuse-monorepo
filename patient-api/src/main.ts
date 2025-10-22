@@ -2620,14 +2620,14 @@ app.get("/getTreatments", authenticateJWT, async (req, res) => {
       if (!order.treatment) continue;
 
       const treatmentId = order.treatment.id;
-      
+
       // If we already have this treatment, keep the most recent order with active subscription
       if (treatmentMap.has(treatmentId)) {
         const existing = treatmentMap.get(treatmentId);
         // Update if this order has an active subscription
-        if (order.subscription && 
-            order.subscription.status !== 'cancelled' && 
-            order.subscription.status !== 'deleted') {
+        if (order.subscription &&
+          order.subscription.status !== 'cancelled' &&
+          order.subscription.status !== 'deleted') {
           existing.subscription = order.subscription;
           existing.order = order;
         }
@@ -2645,7 +2645,7 @@ app.get("/getTreatments", authenticateJWT, async (req, res) => {
     // Convert map to array and format response
     const treatments = Array.from(treatmentMap.values()).map(({ treatment, treatmentPlan, subscription, order }) => {
       const treatmentData = treatment.toJSON();
-      
+
       // Determine status from subscription or order
       let status = "active";
       if (subscription) {
@@ -2668,7 +2668,7 @@ app.get("/getTreatments", authenticateJWT, async (req, res) => {
       } else if (order.status === 'pending' || order.status === 'payment_due') {
         status = "paused";
       }
-      
+
       return {
         id: treatment.id,
         name: treatment.name,
@@ -2748,7 +2748,7 @@ app.get("/getProductsByTreatment", authenticateJWT, async (req, res) => {
             {
               model: Product,
               as: 'products',
-              through: { 
+              through: {
                 attributes: ['dosage']
               }
             }
@@ -3400,23 +3400,21 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       });
     }
 
-    // Create payment intent with Stripe
+    // Create payment intent with Stripe (manual capture)
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalAmount * 100), // Convert to cents
+      amount: Math.round(totalAmount * 100),
       currency: 'usd',
       customer: stripeCustomerId,
+      capture_method: 'manual',
       metadata: {
         userId: currentUser.id,
-        productId,
+        tenantProductId: tenantProduct.id,
         orderId: order.id,
         orderNumber: orderNumber,
-        orderType: 'product_subscription'
+        orderType: 'product_subscription_initial_authorization'
       },
-      description: `Subscription Order ${orderNumber} - ${tenantProduct.product.name}`,
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: 'never'
-      },
+      description: `Subscription Authorization ${orderNumber} - ${tenantProduct.product.name}`,
+      automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       setup_future_usage: 'off_session',
     });
 
@@ -3469,6 +3467,151 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       message: "Failed to create product subscription order and payment intent",
       error: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
     });
+  }
+});
+
+// Public product subscription: creates manual-capture PaymentIntent and Order
+app.post("/payments/product/sub", async (req, res) => {
+  try {
+    const { tenantProductId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = req.body || {};
+
+    if (!tenantProductId || typeof tenantProductId !== 'string') {
+      return res.status(400).json({ success: false, message: 'tenantProductId is required' });
+    }
+
+    // Try authenticated user from JWT; if none, create/find from userDetails
+    let currentUser: any = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      try {
+        currentUser = getCurrentUser(req);
+      } catch { }
+    }
+
+    if (!currentUser) {
+      const { firstName, lastName, email, phoneNumber } = userDetails || {};
+      if (!email || !firstName || !lastName) {
+        return res.status(400).json({ success: false, message: 'userDetails with firstName, lastName, and email is required for public checkout' });
+      }
+      // Find or create patient user
+      currentUser = await User.findByEmail(email);
+      if (!currentUser) {
+        currentUser = await User.createUser({
+          firstName,
+          lastName,
+          email,
+          password: 'TempPassword123!',
+          role: 'patient',
+          phoneNumber
+        });
+      }
+    }
+
+    // Load tenant product configuration
+    const tenantProduct = await TenantProduct.findByPk(tenantProductId, {
+      include: [
+        { model: Clinic, as: 'clinic', required: false },
+        { model: Product, as: 'product', required: true },
+      ]
+    });
+
+    if (!tenantProduct) {
+      return res.status(404).json({ success: false, message: 'Product not available for subscription' });
+    }
+
+    const unitPrice = (tenantProduct as any).price;
+    const totalAmount = unitPrice;
+
+    // Ensure Stripe customer
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    const userService = new UserService();
+    const stripeCustomerId = await userService.getOrCreateCustomerId(user, { userId: user.id, tenantProductId });
+
+    // Create order
+    const orderNumber = await Order.generateOrderNumber();
+    const order = await Order.create({
+      orderNumber,
+      userId: currentUser.id,
+      clinicId: (tenantProduct as any).clinicId || null,
+      questionnaireId: (tenantProduct as any).questionnaireId || null,
+      status: 'pending',
+      billingInterval: BillingInterval.MONTHLY,
+      subtotalAmount: totalAmount,
+      discountAmount: 0,
+      taxAmount: 0,
+      shippingAmount: 0,
+      totalAmount: totalAmount,
+      questionnaireAnswers,
+      stripePriceId: stripePriceId || (tenantProduct as any).stripePriceId || null,
+      tenantProductId: (tenantProduct as any).id,
+    });
+
+    // Order item
+    await OrderItem.create({
+      orderId: order.id,
+      productId: (tenantProduct as any).product.id,
+      quantity: 1,
+      unitPrice: unitPrice,
+      totalPrice: totalAmount,
+      dosage: (tenantProduct as any).product.dosage
+    });
+
+    // Shipping address
+    if (shippingInfo?.address && shippingInfo?.city && shippingInfo?.state && shippingInfo?.zipCode) {
+      await ShippingAddress.create({
+        orderId: order.id,
+        address: shippingInfo.address,
+        apartment: shippingInfo.apartment || null,
+        city: shippingInfo.city,
+        state: shippingInfo.state,
+        zipCode: shippingInfo.zipCode,
+        country: shippingInfo.country || 'US',
+        userId: currentUser.id,
+      });
+    }
+
+    // Manual-capture PaymentIntent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(totalAmount * 100),
+      currency: 'usd',
+      customer: stripeCustomerId,
+      capture_method: 'manual',
+      metadata: {
+        userId: currentUser.id,
+        tenantProductId: (tenantProduct as any).id,
+        orderId: order.id,
+        orderNumber: orderNumber,
+        orderType: 'product_subscription_initial_authorization'
+      },
+      description: `Subscription Authorization ${orderNumber} - ${(tenantProduct as any).product.name}`,
+      automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+      setup_future_usage: 'off_session',
+    });
+
+    await Payment.create({
+      orderId: order.id,
+      stripePaymentIntentId: paymentIntent.id,
+      status: 'pending',
+      paymentMethod: 'card',
+      amount: totalAmount,
+      currency: 'USD'
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        orderId: order.id,
+        orderNumber,
+      }
+    });
+  } catch (error) {
+    console.error('Error in /payments/product/sub:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create product subscription' });
   }
 });
 
@@ -7512,6 +7655,11 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
           clinicSlug: clinic.slug,
           category: product.category || null,
           currentFormVariant,
+          // Expose tenant product pricing + stripe identifiers for checkout
+          price: (tenantProduct as any).price ?? null,
+          stripeProductId: (tenantProduct as any).stripeProductId ?? null,
+          stripePriceId: (tenantProduct as any).stripePriceId ?? null,
+          tenantProductId: (tenantProduct as any).id ?? null,
         },
       });
     }

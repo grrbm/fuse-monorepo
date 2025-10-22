@@ -46,7 +46,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   questionnaireId,
   productName,
   productCategory,
-  productFormVariant
+  productFormVariant,
+  productPrice,
+  productStripePriceId,
+  productStripeProductId,
+  tenantProductId
 }) => {
   const [questionnaire, setQuestionnaire] = React.useState<QuestionnaireData | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -109,33 +113,52 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     };
   }, [bmiWidth]);
 
-  // Use real treatment plans from the backend
+  // Build plans: prefer treatmentPlans; fallback to product (tenantProduct) pricing
   const plans = useMemo(() => {
-    if (!questionnaire?.treatment?.treatmentPlans || questionnaire.treatment.treatmentPlans.length === 0) {
-      return [];
+    const fromTreatmentPlans = (questionnaire as any)?.treatment?.treatmentPlans as any[] | undefined;
+    if (Array.isArray(fromTreatmentPlans) && fromTreatmentPlans.length > 0) {
+      return fromTreatmentPlans
+        .filter((plan: any) => plan.active)
+        .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
+        .map((plan: any) => ({
+          id: plan.billingInterval,
+          uuid: plan.id,
+          name: plan.name,
+          description: plan.description || `Billed ${plan.billingInterval}`,
+          price: plan.price,
+          badge: plan.popular ? "Most Popular" : undefined,
+          badgeColor: plan.popular ? "success" as const : "primary" as const,
+          stripePriceId: plan.stripePriceId,
+          billingInterval: plan.billingInterval,
+          features: [
+            "Prescription medications included",
+            "Free expedited shipping",
+            "HSA + FSA eligible",
+            "Home delivery included"
+          ]
+        }));
     }
 
-    return questionnaire.treatment.treatmentPlans
-      .filter((plan: any) => plan.active)
-      .sort((a: any, b: any) => a.sortOrder - b.sortOrder)
-      .map((plan: any) => ({
-        id: plan.billingInterval, // Use billingInterval as ID (monthly, quarterly, annual)
-        uuid: plan.id, // Keep UUID for database operations
-        name: plan.name,
-        description: plan.description || `Billed ${plan.billingInterval}`,
-        price: plan.price,
-        badge: plan.popular ? "Most Popular" : undefined,
-        badgeColor: plan.popular ? "success" as const : "primary" as const,
-        stripePriceId: plan.stripePriceId,
-        billingInterval: plan.billingInterval,
+    // Fallback to single monthly plan using product price + stripePriceId
+    if (typeof productPrice === 'number' && productPrice > 0 && productStripePriceId) {
+      return [{
+        id: 'monthly',
+        name: productName ? `${productName} Plan` : 'Monthly Plan',
+        description: 'Billed monthly',
+        price: productPrice,
+        stripePriceId: productStripePriceId,
+        billingInterval: 'monthly',
         features: [
           "Prescription medications included",
           "Free expedited shipping",
           "HSA + FSA eligible",
           "Home delivery included"
         ]
-      }));
-  }, [questionnaire?.treatment?.treatmentPlans]);
+      } as PlanOption];
+    }
+
+    return [] as PlanOption[];
+  }, [questionnaire?.treatment?.treatmentPlans, productPrice, productStripePriceId, productName]);
 
   // Set default selected plan to first available plan
   React.useEffect(() => {
@@ -602,30 +625,30 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const evaluateStepConditionalLogic = (step: any): boolean => {
     const conditionalLogic = step.conditionalLogic;
     if (!conditionalLogic) return true; // No condition = always show
-    
+
     console.log(`🔍 Evaluating step conditional logic for: ${step.title}`);
     console.log('  conditionalLogic:', conditionalLogic);
     console.log('  current answers:', answers);
-    
+
     try {
       // Parse format: answer_equals:{questionId}:{optionValue}
       const tokens = conditionalLogic.split(' ');
       let result = false;
       let currentOperator: 'OR' | 'AND' | null = null;
-      
+
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
-        
+
         if (token.startsWith('answer_equals:')) {
           const parts = token.replace('answer_equals:', '').split(':');
           if (parts.length === 2) {
             const [questionId, requiredValue] = parts;
             const answer = answers[questionId];
             const conditionMet = Array.isArray(answer) ? answer.includes(requiredValue) : answer === requiredValue;
-            
+
             console.log(`  Checking: questionId=${questionId}, requiredValue=${requiredValue}`);
             console.log(`  Answer found: ${answer}, Condition met: ${conditionMet}`);
-            
+
             if (currentOperator === 'AND') {
               result = result && conditionMet;
             } else if (currentOperator === 'OR') {
@@ -638,7 +661,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           currentOperator = token as 'OR' | 'AND';
         }
       }
-      
+
       console.log(`  Final result: ${result ? 'SHOW STEP' : 'HIDE STEP'}`);
       return result;
     } catch (error) {
@@ -845,7 +868,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const willTriggerConditionals = currentStep?.questions?.some(q => {
       const logic = (q as any).conditionalLogic;
       if (!logic) return false;
-      
+
       // Check if this conditional matches the value we just selected
       if (logic.startsWith('answer_equals:')) {
         const requiredValue = logic.replace('answer_equals:', '').trim();
@@ -1030,10 +1053,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         // Only validate if question is VISIBLE (check conditional logic)
         const conditionalLogic = (question as any).conditionalLogic;
         let isVisible = true;
-        
+
         if (conditionalLogic) {
           try {
-            const parentQuestion = currentStep.questions?.find((q: any) => 
+            const parentQuestion = currentStep.questions?.find((q: any) =>
               q.conditionalLevel === 0 || !q.conditionalLevel
             );
             if (parentQuestion) {
@@ -1053,7 +1076,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             isVisible = true; // Default to visible if error
           }
         }
-        
+
         // Only validate visible required questions
         if (isVisible && question.isRequired) {
           const answer = answers[question.id];
@@ -1194,17 +1217,17 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
       console.log('📋 🎉 Final questionnaire answers object:', questionnaireAnswers);
 
-      console.log('💳 Creating subscription for selected plan:', {
-        treatmentId,
+      console.log('💳 Creating product subscription for selected plan:', {
+        tenantProductId,
         stripePriceId,
         planId,
         planName: selectedPlanData?.name
       });
 
-      const result = await apiCall('/payments/treatment/sub', {
+      const result = await apiCall('/payments/product/sub', {
         method: 'POST',
         body: JSON.stringify({
-          treatmentId: treatmentId,
+          tenantProductId: tenantProductId,
           stripePriceId: stripePriceId,
           userDetails: userDetails,
           questionnaireAnswers: questionnaireAnswers,
@@ -2107,10 +2130,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
                               try {
                                 // Find the parent question (conditionalLevel 0) in this step
-                                const parentQuestion = currentStep.questions?.find(q => 
+                                const parentQuestion = currentStep.questions?.find(q =>
                                   (q as any).conditionalLevel === 0 || !(q as any).conditionalLevel
                                 );
-                                
+
                                 if (!parentQuestion) return false;
                                 const parentAnswer = answers[parentQuestion.id];
 
@@ -2118,12 +2141,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                 const checkCondition = (conditionStr: string): boolean => {
                                   if (conditionStr.startsWith('answer_equals:')) {
                                     const requiredValue = conditionStr.replace('answer_equals:', '').trim();
-                                    
+
                                     // Handle array answers (for checkboxes/multiple choice)
                                     if (Array.isArray(parentAnswer)) {
                                       return parentAnswer.includes(requiredValue);
                                     }
-                                    
+
                                     return parentAnswer === requiredValue;
                                   }
                                   return false;
@@ -2133,8 +2156,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                 // Format: "answer_equals:value1 OR answer_equals:value2 AND answer_equals:value3"
                                 if (conditionalLogic.includes(' OR ') || conditionalLogic.includes(' AND ')) {
                                   const tokens = conditionalLogic.split(' ');
-                                  const conditions: Array<{check: boolean, operator?: 'OR' | 'AND'}> = [];
-                                  
+                                  const conditions: Array<{ check: boolean, operator?: 'OR' | 'AND' }> = [];
+
                                   for (let i = 0; i < tokens.length; i++) {
                                     const token = tokens[i];
                                     if (token.startsWith('answer_equals:')) {
@@ -2145,12 +2168,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                       conditions.push({ check: isTrue, operator });
                                     }
                                   }
-                                  
+
                                   // Evaluate the conditions with proper precedence (AND has higher precedence than OR)
                                   // First, group AND conditions
                                   let result = conditions[0]?.check ?? false;
                                   let currentOperator: 'OR' | 'AND' | undefined = conditions[0]?.operator;
-                                  
+
                                   for (let i = 1; i < conditions.length; i++) {
                                     const cond = conditions[i];
                                     if (currentOperator === 'AND') {
@@ -2160,7 +2183,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                     }
                                     currentOperator = cond.operator;
                                   }
-                                  
+
                                   return result;
                                 }
 
@@ -2252,11 +2275,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           if (!conditionalLogic) return true;
 
                           try {
-                            const parentQuestion = currentStep.questions?.find((q: any) => 
+                            const parentQuestion = currentStep.questions?.find((q: any) =>
                               q.conditionalLevel === 0 || !q.conditionalLevel
                             );
                             if (!parentQuestion) return false;
-                            
+
                             const parentAnswer = answers[parentQuestion.id];
                             if (!parentAnswer) return false;
 
@@ -2272,15 +2295,15 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             return true;
                           }
                         }) || []
-                        
+
                         const hasDeadEndQuestion = visibleQuestions.some((q: any) => {
                           const questionText = q.questionText?.toLowerCase() || ''
-                          return questionText.includes('unfortunat') || questionText.includes('disqualif') || 
-                                 questionText.includes('do not qualify') || questionText.includes('cannot be medically')
+                          return questionText.includes('unfortunat') || questionText.includes('disqualif') ||
+                            questionText.includes('do not qualify') || questionText.includes('cannot be medically')
                         })
-                        
+
                         const isDeadEndStep = currentStep?.isDeadEnd || hasDeadEndQuestion
-                        
+
                         return isDeadEndStep ? (
                           <div className="space-y-3">
                             {currentStepIndex > 0 && (

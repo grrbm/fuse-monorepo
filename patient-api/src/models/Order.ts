@@ -229,13 +229,16 @@ export default class Order extends Entity {
 
   // Static method to generate order number
   /**
-   * Generate platform-wide sequential order number
-   * Format: ORD-1-000-000
-   * Uses OrderCounter table to ensure uniqueness across all tenants
+   * Generate an order number without relying on OrderCounter
+   * Format: ORD-YYYYMMDD-HHMMSS-XXXXXX
    */
   public static async generateOrderNumber(): Promise<string> {
-    const OrderCounter = (await import('./OrderCounter')).default;
-    return await OrderCounter.getNextOrderNumber();
+    const now = new Date();
+    const pad = (n: number, w: number = 2) => n.toString().padStart(w, '0');
+    const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const rand = Math.floor(Math.random() * 1_000_000).toString().padStart(6, '0');
+    return `ORD-${date}-${time}-${rand}`;
   }
 
   // Calculate total amount from items
