@@ -6488,12 +6488,35 @@ app.post("/md/cases", async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    // Attempt to populate missing fields from questionnaire answers before syncing
     try {
+      const qa = ((order as any).questionnaireAnswers || {}) as Record<string, any>;
+      const keys = Object.keys(qa);
+      const findAnswer = (substrs: string[]): string | undefined => {
+        const key = keys.find(k => substrs.some(s => k.toLowerCase().includes(s)));
+        const val = key ? qa[key] : undefined;
+        return typeof val === 'string' ? val : (val != null ? String(val) : undefined);
+      };
+
+      const dob = findAnswer(['date of birth', 'dob', 'birth']);
+      const genderAns = findAnswer(['gender', 'sex']);
+      const phoneAns = findAnswer(['mobile', 'phone']);
+
+      const updatePayload: Partial<User> = {} as any;
+      if (!user.dob && dob) (updatePayload as any).dob = dob;
+      if (!user.gender && genderAns) (updatePayload as any).gender = String(genderAns).toLowerCase();
+      if (!user.phoneNumber && phoneAns) (updatePayload as any).phoneNumber = phoneAns;
+
+      if (Object.keys(updatePayload).length > 0) {
+        await user.update(updatePayload);
+        await user.reload();
+      }
+
       const userService = new UserService();
       await userService.syncPatientInMD(user.id, (order as any).shippingAddressId);
       await user.reload();
     } catch (e) {
-      console.warn('⚠️ Could not sync patient in MD Integrations before creating case:', e);
+      console.warn('⚠️ Could not enrich/sync patient before creating case:', e);
     }
 
     if (!user.mdPatientId) {
