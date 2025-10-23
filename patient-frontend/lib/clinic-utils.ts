@@ -58,6 +58,10 @@ export function extractClinicSlugFromDomain(): ClinicDomainInfo {
     // Production: extract everything after 'app.' (fuse.health from app.fuse.health)
     clinicSlug = parts.slice(1).join('.');
     hasClinicSubdomain = true;
+  } else if (hostname.endsWith('.fuse.health') && parts.length >= 3 && parts[0] !== 'app' && parts[0] !== 'www') {
+    // Production clinic subdomain: <clinic>.fuse.health
+    clinicSlug = parts[0];
+    hasClinicSubdomain = true;
   }
 
   // Special case: limitless.health should act as the normal website (no clinic)
