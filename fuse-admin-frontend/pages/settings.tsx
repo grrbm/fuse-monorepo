@@ -147,6 +147,7 @@ export default function Settings({
     isCustomDomain: false,
     customDomain: "",
   });
+  const [organizationErrors, setOrganizationErrors] = useState<Record<string, string>>({});
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isHoveringLogo, setIsHoveringLogo] = useState(false);
@@ -521,7 +522,7 @@ export default function Settings({
 
       if (response.ok) {
         const data = await response.json();
-        
+
         setDomainVerificationStatus({
           verified: data.verified,
           message: data.message,
@@ -546,24 +547,46 @@ export default function Settings({
 
   const handleOrganizationUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    // Clear previous errors
+    setOrganizationErrors({});
+
+    // Required field validation
+    const errors: Record<string, string> = {};
+    if (!organizationData.address?.trim()) errors.address = "This field is required";
+    if (!organizationData.city?.trim()) errors.city = "This field is required";
+    if (!organizationData.state?.trim()) errors.state = "This field is required";
+    if (!organizationData.zipCode?.trim()) {
+      errors.zipCode = "This field is required";
+    } else if (!/^\d{5}(-\d{4})?$/.test(organizationData.zipCode.trim())) {
+      errors.zipCode = "Enter a valid ZIP (5 digits or ZIP+4)";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setOrganizationErrors(errors);
+      const missingList = Object.keys(errors)
+        .map((k) => k.replace(/([A-Z])/g, ' $1').toLowerCase())
+        .join(", ");
+      showToast("error", `Please fix the highlighted fields: ${missingList}`);
+      return;
+    }
+
     // Validate custom domain if selected
     if (organizationData.isCustomDomain) {
       const trimmedDomain = organizationData.customDomain.trim();
-      
+
       // Check if domain is empty, only "app.", or doesn't have content after "app."
       if (!trimmedDomain || trimmedDomain === "app." || trimmedDomain.length <= 4) {
         showToast("error", "Please enter a valid custom domain (e.g., app.yourdomain.com)");
         return;
       }
-      
+
       // Check if domain only contains "app." without a valid domain after
       if (trimmedDomain.startsWith("app.") && trimmedDomain.substring(4).trim() === "") {
         showToast("error", "Please enter a valid domain after 'app.' (e.g., app.yourdomain.com)");
         return;
       }
     }
-    
+
     setLoading(true);
 
     try {
@@ -576,13 +599,22 @@ export default function Settings({
 
       if (response.ok) {
         showToast("success", "Organization settings updated successfully!");
-        
+
         // Show CNAME instructions if custom domain is enabled
         if (organizationData.isCustomDomain && organizationData.customDomain) {
           setShowCNAMEInstructions(true);
         }
       } else {
-        showToast("error", "Failed to update organization settings");
+        // Attempt to parse server error details
+        let serverMsg = "Failed to update organization settings";
+        try {
+          const errData = await response.json();
+          if (errData?.message) serverMsg = errData.message;
+          if (errData?.errors && typeof errData.errors === 'object') {
+            setOrganizationErrors(errData.errors);
+          }
+        } catch { }
+        showToast("error", serverMsg);
       }
     } catch (error) {
       showToast("error", "An error occurred while updating");
@@ -858,10 +890,13 @@ export default function Settings({
                                 address: e.target.value,
                               })
                             }
-                            className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                            className={`w-full px-3 py-2 border rounded-md bg-background ${organizationErrors.address ? 'border-red-300' : 'border-input'}`}
                             placeholder="123 Main St"
                             autoComplete="off"
                           />
+                          {organizationErrors.address && (
+                            <p className="text-xs text-red-600 mt-1">{organizationErrors.address}</p>
+                          )}
                           <p className="text-xs text-muted-foreground pt-1">
                             {typeof window === "undefined"
                               ? "Preparing address suggestions…"
@@ -884,9 +919,12 @@ export default function Settings({
                                 city: e.target.value,
                               })
                             }
-                            className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                            className={`w-full px-3 py-2 border rounded-md bg-background ${organizationErrors.city ? 'border-red-300' : 'border-input'}`}
                             placeholder="City"
                           />
+                          {organizationErrors.city && (
+                            <p className="text-xs text-red-600 mt-1">{organizationErrors.city}</p>
+                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -900,9 +938,12 @@ export default function Settings({
                                 state: e.target.value,
                               })
                             }
-                            className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                            className={`w-full px-3 py-2 border rounded-md bg-background ${organizationErrors.state ? 'border-red-300' : 'border-input'}`}
                             placeholder="State"
                           />
+                          {organizationErrors.state && (
+                            <p className="text-xs text-red-600 mt-1">{organizationErrors.state}</p>
+                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -918,9 +959,12 @@ export default function Settings({
                                 zipCode: e.target.value,
                               })
                             }
-                            className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                            className={`w-full px-3 py-2 border rounded-md bg-background ${organizationErrors.zipCode ? 'border-red-300' : 'border-input'}`}
                             placeholder="12345"
                           />
+                          {organizationErrors.zipCode && (
+                            <p className="text-xs text-red-600 mt-1">{organizationErrors.zipCode}</p>
+                          )}
                         </div>
                       </div>
 
@@ -929,12 +973,11 @@ export default function Settings({
                         <h3 className="text-lg font-medium mb-4">Domain Configuration</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {/* Subdomain Card */}
-                          <Card 
-                            className={`cursor-pointer transition-all duration-200 ${
-                              !organizationData.isCustomDomain 
-                                ? 'border-primary bg-primary/5' 
+                          <Card
+                            className={`cursor-pointer transition-all duration-200 ${!organizationData.isCustomDomain
+                                ? 'border-primary bg-primary/5'
                                 : 'border-border hover:border-primary/50'
-                            }`}
+                              }`}
                             onClick={() => {
                               setOrganizationData(prev => ({
                                 ...prev,
@@ -945,39 +988,37 @@ export default function Settings({
                           >
                             <CardHeader className="pb-3">
                               <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${
-                                  !organizationData.isCustomDomain 
-                                    ? 'bg-primary text-primary-foreground' 
+                                <div className={`p-2 rounded-lg ${!organizationData.isCustomDomain
+                                    ? 'bg-primary text-primary-foreground'
                                     : 'bg-muted text-muted-foreground'
-                                }`}>
+                                  }`}>
                                   <Link className="h-4 w-4" />
                                 </div>
-                              <div>
-                                <CardTitle className="text-base">Subdomain</CardTitle>
-                                <CardDescription className="text-xs">
-                                  Use a subdomain like {organizationData.slug || 'clinic-slug'}.fuse.health
-                                </CardDescription>
-                              </div>
+                                <div>
+                                  <CardTitle className="text-base">Subdomain</CardTitle>
+                                  <CardDescription className="text-xs">
+                                    Use a subdomain like {organizationData.slug || 'clinic-slug'}.fuse.health
+                                  </CardDescription>
+                                </div>
                               </div>
                             </CardHeader>
                             <CardContent className="pt-0">
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
-                                  <div className={`w-3 h-3 rounded-full border-2 ${
-                                    !organizationData.isCustomDomain 
-                                      ? 'border-primary bg-primary' 
+                                  <div className={`w-3 h-3 rounded-full border-2 ${!organizationData.isCustomDomain
+                                      ? 'border-primary bg-primary'
                                       : 'border-muted-foreground'
-                                  }`}>
+                                    }`}>
                                     {!organizationData.isCustomDomain && (
                                       <div className="w-1 h-1 bg-white rounded-full m-0.5"></div>
                                     )}
                                   </div>
-                                <span className="text-xs font-medium">
-                                  {organizationData.slug ? 
-                                    `${organizationData.slug}.fuse.health` : 
-                                    'clinic-slug.fuse.health'
-                                  }
-                                </span>
+                                  <span className="text-xs font-medium">
+                                    {organizationData.slug ?
+                                      `${organizationData.slug}.fuse.health` :
+                                      'clinic-slug.fuse.health'
+                                    }
+                                  </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
                                   Quick setup, no additional configuration required
@@ -987,12 +1028,11 @@ export default function Settings({
                           </Card>
 
                           {/* Custom Domain Card */}
-                          <Card 
-                            className={`cursor-pointer transition-all duration-200 ${
-                              organizationData.isCustomDomain 
-                                ? 'border-primary bg-primary/5' 
+                          <Card
+                            className={`cursor-pointer transition-all duration-200 ${organizationData.isCustomDomain
+                                ? 'border-primary bg-primary/5'
                                 : 'border-border hover:border-primary/50'
-                            }`}
+                              }`}
                             onClick={() => {
                               setOrganizationData(prev => ({
                                 ...prev,
@@ -1003,11 +1043,10 @@ export default function Settings({
                           >
                             <CardHeader className="pb-3">
                               <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${
-                                  organizationData.isCustomDomain 
-                                    ? 'bg-primary text-primary-foreground' 
+                                <div className={`p-2 rounded-lg ${organizationData.isCustomDomain
+                                    ? 'bg-primary text-primary-foreground'
                                     : 'bg-muted text-muted-foreground'
-                                }`}>
+                                  }`}>
                                   <Globe className="h-4 w-4" />
                                 </div>
                                 <div>
@@ -1021,11 +1060,10 @@ export default function Settings({
                             <CardContent className="pt-0">
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
-                                  <div className={`w-3 h-3 rounded-full border-2 ${
-                                    organizationData.isCustomDomain 
-                                      ? 'border-primary bg-primary' 
+                                  <div className={`w-3 h-3 rounded-full border-2 ${organizationData.isCustomDomain
+                                      ? 'border-primary bg-primary'
                                       : 'border-muted-foreground'
-                                  }`}>
+                                    }`}>
                                     {organizationData.isCustomDomain && (
                                       <div className="w-1 h-1 bg-white rounded-full m-0.5"></div>
                                     )}
@@ -1067,7 +1105,7 @@ export default function Settings({
                                         {verifyingDomain ? "Verifying..." : "Verify"}
                                       </Button>
                                     </div>
-                                    
+
                                     <p className="text-xs text-muted-foreground mt-2">
                                       Must start with "app." - DNS configuration required
                                     </p>
@@ -1086,13 +1124,12 @@ export default function Settings({
 
                       {/* CNAME Instructions */}
                       {showCNAMEInstructions && organizationData.isCustomDomain && (
-                        <div className={`mt-6 p-6 border rounded-xl relative shadow-sm ${
-                          domainVerificationStatus.error === 'CNAME_MISMATCH'
+                        <div className={`mt-6 p-6 border rounded-xl relative shadow-sm ${domainVerificationStatus.error === 'CNAME_MISMATCH'
                             ? 'border-red-300 bg-gradient-to-br from-red-50 to-red-100/50'
                             : domainVerificationStatus.verified !== null
-                            ? 'border-green-300 bg-gradient-to-br from-green-50 to-green-100/50'
-                            : 'border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50'
-                        }`}>
+                              ? 'border-green-300 bg-gradient-to-br from-green-50 to-green-100/50'
+                              : 'border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50'
+                          }`}>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1104,7 +1141,7 @@ export default function Settings({
                           >
                             <X className="h-5 w-5" />
                           </button>
-                          
+
                           <div className="flex items-start gap-3 mb-5">
                             <div className="p-2 bg-blue-600 rounded-lg">
                               <AlertCircle className="h-5 w-5 text-white" />
@@ -1576,8 +1613,8 @@ export default function Settings({
                                 <Card
                                   key={plan.id}
                                   className={`relative group transition-all duration-300 flex flex-col ${isPopular
-                                      ? "border-primary shadow-lg hover:shadow-2xl hover:scale-[1.02]"
-                                      : "border-border hover:border-primary/60 hover:shadow-xl hover:scale-[1.01]"
+                                    ? "border-primary shadow-lg hover:shadow-2xl hover:scale-[1.02]"
+                                    : "border-border hover:border-primary/60 hover:shadow-xl hover:scale-[1.01]"
                                     } ${creatingPlan ? "opacity-75" : ""}`}
                                 >
                                   {isPopular && (
@@ -1690,10 +1727,10 @@ export default function Settings({
 
                                     <Button
                                       className={`w-full mt-auto ${isCurrentPlan && isActive
-                                          ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                                          : isPopular
-                                            ? "bg-blue-600 hover:bg-blue-700 text-white"
-                                            : "bg-white border border-gray-300 text-foreground hover:bg-gray-50"
+                                        ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                                        : isPopular
+                                          ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                          : "bg-white border border-gray-300 text-foreground hover:bg-gray-50"
                                         }`}
                                       onClick={() => handlePlanSelect(plan)}
                                       disabled={
