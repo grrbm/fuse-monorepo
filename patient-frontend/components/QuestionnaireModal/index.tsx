@@ -839,6 +839,26 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       return next;
     });
 
+    // Deterministic auto-advance: if all required questions in this step are satisfied with newAnswers
+    const step = getCurrentQuestionnaireStep();
+    const otherInvalid = step?.questions?.some((q: any) => {
+      if (q.id === questionId) return false;
+      if (!q.isRequired) return false;
+      const a = (newAnswers as any)[q.id];
+      if (a === undefined || a === null) return true;
+      if (typeof a === 'string' && a.trim() === '') return true;
+      if (Array.isArray(a) && a.length === 0) return true;
+      return false;
+    });
+    const totalSteps = getTotalSteps();
+    if (!otherInvalid) {
+      if (currentStepIndex < totalSteps - 1) {
+        setCurrentStepIndex(prev => prev + 1);
+      } else {
+        handleSubmit();
+      }
+    }
+
     // Log the updated questionnaire answers in real-time
     const questionnaireAnswers = buildQuestionnaireAnswers(newAnswers);
     console.log('📋 ⚡ Real-time questionnaire update (Radio):');
