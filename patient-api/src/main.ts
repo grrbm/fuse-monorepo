@@ -6853,7 +6853,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
 
     const { businessName, phone, address, city, state, zipCode, website } = validation.data as any;
     const isCustomDomain = (validation.data as any).isCustomDomain as boolean | undefined;
-    const customDomain = (validation.data as any).customDomain as string | undefined;
+    let customDomain = (validation.data as any).customDomain as string | undefined;
 
     const user = await User.findByPk(currentUser.id);
     if (!user) {
@@ -6871,6 +6871,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
     });
 
     // Update clinic fields (Clinic has name, slug, logo, active, status, isCustomDomain, customDomain)
+    let updatedClinic: any = null;
     if (user.clinicId) {
       const clinic = await Clinic.findByPk(user.clinicId);
       if (clinic) {
@@ -6885,14 +6886,37 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
         }
 
         if (customDomain !== undefined) {
-          updateData.customDomain = customDomain;
+          // Normalize custom domain to bare hostname (lowercase, no protocol/path/trailing dot)
+          try {
+            const candidate = customDomain.trim();
+            const url = new URL(candidate.startsWith('http') ? candidate : `https://${candidate}`);
+            let host = url.hostname.toLowerCase();
+            if (host.endsWith('.')) host = host.slice(0, -1);
+            updateData.customDomain = host;
+          } catch {
+            // Fallback to raw value (will be validated elsewhere if needed)
+            updateData.customDomain = customDomain;
+          }
         }
-
         await clinic.update(updateData);
+        updatedClinic = clinic;
       }
     }
 
-    res.json({ success: true, message: "Organization updated successfully" });
+    res.json({
+      success: true, message: "Organization updated successfully", data: {
+        clinic: updatedClinic ? {
+          id: updatedClinic.id,
+          slug: updatedClinic.slug,
+          name: updatedClinic.name,
+          isCustomDomain: updatedClinic.isCustomDomain,
+          customDomain: updatedClinic.customDomain,
+          logo: updatedClinic.logo,
+          active: updatedClinic.active,
+          status: updatedClinic.status,
+        } : null
+      }
+    });
   } catch (error) {
     console.error('Error updating organization:', error);
     res.status(500).json({ success: false, message: "Internal server error" });
