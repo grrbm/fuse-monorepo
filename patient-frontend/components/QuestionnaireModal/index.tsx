@@ -64,14 +64,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [paymentStatus, setPaymentStatus] = React.useState<'idle' | 'processing' | 'succeeded' | 'failed'>('idle');
   const [mdCaseStatus, setMdCaseStatus] = React.useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [mdCaseError, setMdCaseError] = React.useState<string | null>(null);
-  const [patientConfirm, setPatientConfirm] = React.useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    dob: '',
-    gender: '',
-    phoneNumber: ''
-  });
+  const [patientDob, setPatientDob] = React.useState('');
+  const [patientDobError, setPatientDobError] = React.useState<string | null>(null);
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -1095,12 +1089,46 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           }
         }
 
-        // Only validate visible required questions
-        if (isVisible && question.isRequired) {
+        // Only validate visible questions
+        if (isVisible) {
           const answer = answers[question.id];
-          if (!answer || (Array.isArray(answer) && answer.length === 0) ||
-            (typeof answer === 'string' && answer.trim() === '')) {
+          // Required empty
+          if (question.isRequired && (!answer || (Array.isArray(answer) && answer.length === 0) || (typeof answer === 'string' && answer.trim() === ''))) {
             stepErrors[question.id] = 'This field is required';
+          }
+
+          // Special: DOB validation
+          const isDobQuestion = (question.questionText || '').toLowerCase().includes('date of birth');
+          if (isDobQuestion && answer) {
+            let normalized = String(answer);
+            const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+            const usMatch = mmddyyyy.exec(normalized);
+            if (usMatch) {
+              const mm = usMatch[1].padStart(2, '0');
+              const dd = usMatch[2].padStart(2, '0');
+              const yyyy = usMatch[3];
+              normalized = `${yyyy}-${mm}-${dd}`;
+            }
+            const iso = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(normalized);
+            let valid = false;
+            if (iso) {
+              const year = Number(iso[1]);
+              const month = Number(iso[2]);
+              const day = Number(iso[3]);
+              if (year >= 1900 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                const dob = new Date(`${iso[1]}-${iso[2]}-${iso[3]}T00:00:00Z`);
+                if (!isNaN(dob.getTime())) {
+                  const now = new Date();
+                  const ageYears = (now.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+                  valid = ageYears >= 18 && ageYears <= 120;
+                }
+              }
+            }
+            if (!valid) {
+              stepErrors[question.id] = 'Enter a valid date (YYYY-MM-DD), age 18-120.';
+            } else if (normalized !== answer) {
+              setAnswers(prev => ({ ...prev, [question.id]: normalized }));
+            }
           }
         }
       }
@@ -1297,22 +1325,41 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   };
 
+  const isRealisticDob = (value: string): boolean => {
+    const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
+    if (!m) return false;
+    const year = Number(m[1]);
+    const month = Number(m[2]);
+    const day = Number(m[3]);
+    if (year < 1900) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    const dobDate = new Date(value + 'T00:00:00Z');
+    if (isNaN(dobDate.getTime())) return false;
+    const now = new Date();
+    const ageYears = (now.getTime() - dobDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    return ageYears >= 18 && ageYears <= 120;
+  };
+
   const handleSubmitMdCase = async () => {
     if (!orderId) {
       setMdCaseStatus('error');
       setMdCaseError('Missing order reference. Please try again.');
       return;
     }
+    if (!patientDob || !isRealisticDob(patientDob)) {
+      setPatientDobError('Enter a valid date in YYYY-MM-DD (age 18-120).');
+      return;
+    }
+    setPatientDobError(null);
     try {
       setMdCaseStatus('submitting');
       setMdCaseError(null);
-      const overrides: any = {};
-      if (patientConfirm.firstName) overrides.firstName = patientConfirm.firstName;
-      if (patientConfirm.lastName) overrides.lastName = patientConfirm.lastName;
-      if (patientConfirm.email) overrides.email = patientConfirm.email;
-      if (patientConfirm.dob) overrides.dob = patientConfirm.dob;
-      if (patientConfirm.gender) overrides.gender = patientConfirm.gender;
-      if (patientConfirm.phoneNumber) overrides.phoneNumber = patientConfirm.phoneNumber;
+      const overrides: any = { dob: patientDob };
+      if (answers['firstName']) overrides.firstName = answers['firstName'];
+      if (answers['lastName']) overrides.lastName = answers['lastName'];
+      if (answers['email']) overrides.email = answers['email'];
+      if (answers['mobile']) overrides.phoneNumber = answers['mobile'];
 
       const resp = await apiCall('/md/cases', {
         method: 'POST',
@@ -1552,13 +1599,37 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           <p className="text-gray-600">We'll send your answers to our medical team to review your case.</p>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input label="First Name" value={patientConfirm.firstName} onValueChange={(v) => setPatientConfirm(p => ({ ...p, firstName: v }))} variant="bordered" />
-                          <Input label="Last Name" value={patientConfirm.lastName} onValueChange={(v) => setPatientConfirm(p => ({ ...p, lastName: v }))} variant="bordered" />
-                          <Input label="Email" value={patientConfirm.email} onValueChange={(v) => setPatientConfirm(p => ({ ...p, email: v }))} variant="bordered" className="col-span-2" />
-                          <Input label="Date of Birth (YYYY-MM-DD)" value={patientConfirm.dob} onValueChange={(v) => setPatientConfirm(p => ({ ...p, dob: v }))} variant="bordered" />
-                          <Input label="Gender (male/female)" value={patientConfirm.gender} onValueChange={(v) => setPatientConfirm(p => ({ ...p, gender: v }))} variant="bordered" />
-                          <Input label="Phone Number" value={patientConfirm.phoneNumber} onValueChange={(v) => setPatientConfirm(p => ({ ...p, phoneNumber: v }))} variant="bordered" className="col-span-2" />
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
+                            <div>
+                              <div className="text-gray-500">First Name</div>
+                              <div className="font-medium">{answers['firstName'] || '-'}</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-500">Last Name</div>
+                              <div className="font-medium">{answers['lastName'] || '-'}</div>
+                            </div>
+                            <div className="col-span-2">
+                              <div className="text-gray-500">Email</div>
+                              <div className="font-medium">{answers['email'] || '-'}</div>
+                            </div>
+                            <div className="col-span-2">
+                              <div className="text-gray-500">Phone</div>
+                              <div className="font-medium">{answers['mobile'] || '-'}</div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <Input
+                              label="Date of Birth (YYYY-MM-DD)"
+                              value={patientDob}
+                              onValueChange={(v) => setPatientDob(v)}
+                              variant="bordered"
+                            />
+                          </div>
+                          {patientDobError && (
+                            <div className="text-red-600 text-sm">{patientDobError}</div>
+                          )}
                         </div>
 
                         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700">
@@ -1593,7 +1664,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             color="primary"
                             size="lg"
                             className="w-full"
-                            isDisabled={mdCaseStatus === 'submitting'}
+                            isDisabled={mdCaseStatus === 'submitting' || !patientDob || !isRealisticDob(patientDob)}
                             onPress={handleSubmitMdCase}
                             startContent={<Icon icon={mdCaseStatus === 'submitting' ? 'lucide:loader-2' : 'lucide:send'} className={mdCaseStatus === 'submitting' ? 'animate-spin' : ''} />}
                           >

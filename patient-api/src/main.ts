@@ -6444,6 +6444,85 @@ app.get("/md-files/:fileId", authenticateJWT, async (req, res) => {
   }
 });
 
+// Get current user's MD patient record
+app.get("/md/patient", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.mdPatientId) {
+      return res.status(404).json({ success: false, message: "MD patient not found for user" });
+    }
+
+    const MDAuthService = (await import('./services/mdIntegration/MDAuth.service')).default;
+    const MDPatientService = (await import('./services/mdIntegration/MDPatient.service')).default;
+
+    const tokenResponse = await MDAuthService.generateToken();
+    const patient = await MDPatientService.getPatient(user.mdPatientId, tokenResponse.access_token);
+    return res.json({ success: true, data: patient });
+  } catch (error) {
+    console.error('❌ Error fetching MD patient:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch MD patient' });
+  }
+});
+
+// Get MD case details by caseId
+app.get("/md/cases/:caseId", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const { caseId } = req.params;
+    if (!caseId) {
+      return res.status(400).json({ success: false, message: 'caseId is required' });
+    }
+
+    const MDAuthService = (await import('./services/mdIntegration/MDAuth.service')).default;
+    const MDCaseService = (await import('./services/mdIntegration/MDCase.service')).default;
+
+    const tokenResponse = await MDAuthService.generateToken();
+    const mdCase = await MDCaseService.getCase(caseId, tokenResponse.access_token);
+    return res.json({ success: true, data: mdCase });
+  } catch (error) {
+    console.error('❌ Error fetching MD case:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch MD case' });
+  }
+});
+
+// Get latest MD case for the current user (by most recent order with mdCaseId)
+app.get("/md/cases/latest", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const lastOrder = await Order.findOne({
+      where: { userId: currentUser.id },
+      order: [["createdAt", "DESC"]]
+    } as any);
+
+    if (!lastOrder || !(lastOrder as any).mdCaseId) {
+      return res.status(404).json({ success: false, message: 'No MD case found for latest order' });
+    }
+
+    const caseId = (lastOrder as any).mdCaseId as string;
+    const MDAuthService = (await import('./services/mdIntegration/MDAuth.service')).default;
+    const MDCaseService = (await import('./services/mdIntegration/MDCase.service')).default;
+    const tokenResponse = await MDAuthService.generateToken();
+    const mdCase = await MDCaseService.getCase(caseId, tokenResponse.access_token);
+    return res.json({ success: true, data: mdCase });
+  } catch (error) {
+    console.error('❌ Error fetching latest MD case:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch latest MD case' });
+  }
+});
+
 // Create an MD Integrations Case directly after checkout
 // Public endpoint; attempts auth if provided, otherwise infers user from orderId
 app.post("/md/cases", async (req, res) => {

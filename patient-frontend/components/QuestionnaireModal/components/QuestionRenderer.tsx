@@ -132,7 +132,51 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
             );
         }
 
-        case "date":
+        case "date": {
+            const onChange = (v: string) => {
+                // Validate realistic DOB if this is a DOB question
+                const isDobQuestion = (question.questionText || '').toLowerCase().includes('date of birth');
+                if (isDobQuestion) {
+                    const valid = (() => {
+                        // Accept common MM/DD/YYYY and normalize to YYYY-MM-DD for storage
+                        let normalized = v;
+                        const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+                        const mUs = mmddyyyy.exec(v);
+                        if (mUs) {
+                            const mm = mUs[1].padStart(2, '0');
+                            const dd = mUs[2].padStart(2, '0');
+                            const yyyy = mUs[3];
+                            normalized = `${yyyy}-${mm}-${dd}`;
+                        }
+
+                        const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(normalized);
+                        if (!m) return false;
+                        const year = Number(m[1]);
+                        const month = Number(m[2]);
+                        const day = Number(m[3]);
+                        if (year < 1900) return false;
+                        if (month < 1 || month > 12) return false;
+                        if (day < 1 || day > 31) return false;
+                        const dob = new Date(normalized + 'T00:00:00Z');
+                        if (isNaN(dob.getTime())) return false;
+                        const now = new Date();
+                        const ageYears = (now.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+                        return ageYears >= 18 && ageYears <= 120;
+                    })();
+
+                    if (!valid) {
+                        errors[question.id] = 'Enter a valid date (YYYY-MM-DD), age 18-120.';
+                    } else if (errors[question.id]) {
+                        delete errors[question.id];
+                    }
+                }
+                // Store normalized YYYY-MM-DD if user used MM/DD/YYYY
+                const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+                const mUs = mmddyyyy.exec(v);
+                const finalValue = mUs ? `${mUs[3]}-${mUs[1].padStart(2, '0')}-${mUs[2].padStart(2, '0')}` : v;
+                onAnswerChange(question.id, finalValue);
+            };
+
             return (
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
@@ -142,7 +186,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                     <input
                         type="date"
                         value={value}
-                        onChange={(e) => onAnswerChange(question.id, e.target.value)}
+                        onChange={(e) => onChange(e.target.value)}
                         className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError
                             ? "border-red-300 bg-red-50"
                             : "border-gray-200 bg-white hover:border-gray-300 focus:border-primary focus:bg-primary-light"
@@ -156,20 +200,21 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                     )}
                 </div>
             );
+        }
 
         case "textarea": {
             // Detect if this is a dead end or info message (not actual input)
             const questionText = question.questionText?.toLowerCase() || ''
             const placeholder = question.placeholder?.toLowerCase() || ''
-            
-            const isDeadEnd = questionText.includes('unfortunat') || questionText.includes('disqualif') || 
-                             questionText.includes('do not qualify') || questionText.includes('cannot be medically')
-            
+
+            const isDeadEnd = questionText.includes('unfortunat') || questionText.includes('disqualif') ||
+                questionText.includes('do not qualify') || questionText.includes('cannot be medically')
+
             const isInfoOnly = !question.isRequired && (
-                placeholder?.includes('informational') || 
+                placeholder?.includes('informational') ||
                 placeholder?.includes('no response needed')
             )
-            
+
             // If it's dead end or info, show as read-only message (no textarea)
             if (isDeadEnd || isInfoOnly) {
                 return (
@@ -187,7 +232,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                     </div>
                 )
             }
-            
+
             // Otherwise show normal textarea input
             return (
                 <div key={question.id} className="space-y-3">
