@@ -975,8 +975,8 @@ export default function Settings({
                           {/* Subdomain Card */}
                           <Card
                             className={`cursor-pointer transition-all duration-200 ${!organizationData.isCustomDomain
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border hover:border-primary/50'
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50'
                               }`}
                             onClick={() => {
                               setOrganizationData(prev => ({
@@ -989,8 +989,8 @@ export default function Settings({
                             <CardHeader className="pb-3">
                               <div className="flex items-center gap-3">
                                 <div className={`p-2 rounded-lg ${!organizationData.isCustomDomain
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-muted text-muted-foreground'
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted text-muted-foreground'
                                   }`}>
                                   <Link className="h-4 w-4" />
                                 </div>
@@ -1006,8 +1006,8 @@ export default function Settings({
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
                                   <div className={`w-3 h-3 rounded-full border-2 ${!organizationData.isCustomDomain
-                                      ? 'border-primary bg-primary'
-                                      : 'border-muted-foreground'
+                                    ? 'border-primary bg-primary'
+                                    : 'border-muted-foreground'
                                     }`}>
                                     {!organizationData.isCustomDomain && (
                                       <div className="w-1 h-1 bg-white rounded-full m-0.5"></div>
@@ -1030,8 +1030,8 @@ export default function Settings({
                           {/* Custom Domain Card */}
                           <Card
                             className={`cursor-pointer transition-all duration-200 ${organizationData.isCustomDomain
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border hover:border-primary/50'
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50'
                               }`}
                             onClick={() => {
                               setOrganizationData(prev => ({
@@ -1044,8 +1044,8 @@ export default function Settings({
                             <CardHeader className="pb-3">
                               <div className="flex items-center gap-3">
                                 <div className={`p-2 rounded-lg ${organizationData.isCustomDomain
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-muted text-muted-foreground'
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted text-muted-foreground'
                                   }`}>
                                   <Globe className="h-4 w-4" />
                                 </div>
@@ -1061,8 +1061,8 @@ export default function Settings({
                               <div className="space-y-2">
                                 <div className="flex items-center gap-2">
                                   <div className={`w-3 h-3 rounded-full border-2 ${organizationData.isCustomDomain
-                                      ? 'border-primary bg-primary'
-                                      : 'border-muted-foreground'
+                                    ? 'border-primary bg-primary'
+                                    : 'border-muted-foreground'
                                     }`}>
                                     {organizationData.isCustomDomain && (
                                       <div className="w-1 h-1 bg-white rounded-full m-0.5"></div>
@@ -1125,10 +1125,10 @@ export default function Settings({
                       {/* CNAME Instructions */}
                       {showCNAMEInstructions && organizationData.isCustomDomain && (
                         <div className={`mt-6 p-6 border rounded-xl relative shadow-sm ${domainVerificationStatus.error === 'CNAME_MISMATCH'
-                            ? 'border-red-300 bg-gradient-to-br from-red-50 to-red-100/50'
-                            : domainVerificationStatus.verified !== null
-                              ? 'border-green-300 bg-gradient-to-br from-green-50 to-green-100/50'
-                              : 'border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50'
+                          ? 'border-red-300 bg-gradient-to-br from-red-50 to-red-100/50'
+                          : domainVerificationStatus.verified !== null
+                            ? 'border-green-300 bg-gradient-to-br from-green-50 to-green-100/50'
+                            : 'border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50'
                           }`}>
                           <button
                             type="button"
