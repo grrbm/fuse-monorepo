@@ -3561,7 +3561,7 @@ app.post("/payments/product/sub", async (req, res) => {
 
     // Shipping address
     if (shippingInfo?.address && shippingInfo?.city && shippingInfo?.state && shippingInfo?.zipCode) {
-      await ShippingAddress.create({
+      const createdAddress = await ShippingAddress.create({
         orderId: order.id,
         address: shippingInfo.address,
         apartment: shippingInfo.apartment || null,
@@ -3571,6 +3571,7 @@ app.post("/payments/product/sub", async (req, res) => {
         country: shippingInfo.country || 'US',
         userId: currentUser.id,
       });
+      await order.update({ shippingAddressId: createdAddress.id });
     }
 
     // Manual-capture PaymentIntent
@@ -6451,7 +6452,7 @@ app.post("/md/cases", async (req, res) => {
     try {
       currentUser = getCurrentUser(req);
     } catch { }
-    const { orderId } = req.body || {};
+    const { orderId, patientOverrides } = req.body || {};
 
     if (!orderId || typeof orderId !== 'string') {
       return res.status(400).json({ success: false, message: "orderId is required" });
@@ -6501,11 +6502,34 @@ app.post("/md/cases", async (req, res) => {
       const dob = findAnswer(['date of birth', 'dob', 'birth']);
       const genderAns = findAnswer(['gender', 'sex']);
       const phoneAns = findAnswer(['mobile', 'phone']);
+      const firstNameAns = findAnswer(['first name']);
+      const lastNameAns = findAnswer(['last name']);
+      const emailAns = findAnswer(['email']);
+
+      console.log('MD Case: extracted fields from QA', {
+        hasDob: Boolean(dob),
+        hasGender: Boolean(genderAns),
+        hasPhone: Boolean(phoneAns)
+      });
 
       const updatePayload: Partial<User> = {} as any;
       if (!user.dob && dob) (updatePayload as any).dob = dob;
       if (!user.gender && genderAns) (updatePayload as any).gender = String(genderAns).toLowerCase();
       if (!user.phoneNumber && phoneAns) (updatePayload as any).phoneNumber = phoneAns;
+      if (!user.firstName && firstNameAns) (updatePayload as any).firstName = firstNameAns;
+      if (!user.lastName && lastNameAns) (updatePayload as any).lastName = lastNameAns;
+      if (!user.email && emailAns) (updatePayload as any).email = emailAns;
+
+      // Apply explicit overrides from client (takes precedence)
+      if (patientOverrides && typeof patientOverrides === 'object') {
+        const { firstName, lastName, email, dob: dobOv, gender: genderOv, phoneNumber: phoneOv } = patientOverrides as any;
+        if (firstName) (updatePayload as any).firstName = String(firstName);
+        if (lastName) (updatePayload as any).lastName = String(lastName);
+        if (email) (updatePayload as any).email = String(email);
+        if (dobOv) (updatePayload as any).dob = String(dobOv);
+        if (genderOv) (updatePayload as any).gender = String(genderOv).toLowerCase();
+        if (phoneOv) (updatePayload as any).phoneNumber = String(phoneOv);
+      }
 
       if (Object.keys(updatePayload).length > 0) {
         await user.update(updatePayload);
@@ -6520,7 +6544,45 @@ app.post("/md/cases", async (req, res) => {
     }
 
     if (!user.mdPatientId) {
-      return res.status(400).json({ success: false, message: "User is not provisioned in MD Integrations (missing mdPatientId)" });
+      // Validate required fields and provide actionable details
+      const missingOrInvalid: Record<string, string> = {};
+      const isValidDate = (value?: string) => {
+        if (!value) return false;
+        const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
+        if (!m) return false;
+        const year = Number(m[1]);
+        const month = Number(m[2]);
+        const day = Number(m[3]);
+        if (year < 1900 || year > new Date().getFullYear()) return false;
+        if (month < 1 || month > 12) return false;
+        if (day < 1 || day > 31) return false;
+        return true;
+      };
+
+      if (!user.firstName) missingOrInvalid.firstName = 'required';
+      if (!user.lastName) missingOrInvalid.lastName = 'required';
+      if (!user.email) missingOrInvalid.email = 'required';
+      if (!user.dob || !isValidDate(user.dob as any)) missingOrInvalid.dob = 'required (YYYY-MM-DD, realistic)';
+      if (!user.gender) missingOrInvalid.gender = 'required (male/female)';
+      if (!user.phoneNumber) missingOrInvalid.phoneNumber = 'required (US format)';
+      const hasShipping = Boolean((order as any).shippingAddressId);
+      console.warn('MD Case: mdPatientId missing after sync', {
+        hasDob: Boolean(user.dob),
+        hasGender: Boolean(user.gender),
+        hasPhone: Boolean(user.phoneNumber),
+        hasShipping
+      });
+      return res.status(400).json({
+        success: false,
+        message: "User is not provisioned in MD Integrations (missing mdPatientId)",
+        details: {
+          hasDob: Boolean(user.dob),
+          hasGender: Boolean(user.gender),
+          hasPhone: Boolean(user.phoneNumber),
+          hasShipping,
+          missingOrInvalid
+        }
+      });
     }
 
     // Resolve offering to use

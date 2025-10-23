@@ -14,7 +14,7 @@ interface FileResponse {
 }
 
 class MDFilesService {
-  private readonly apiUrl = 'https://api.mdintegrations.com/v1';
+  private readonly apiUrl = resolveMdIntegrationsBaseUrl('');
 
   private async getAuthHeaders() {
     const tokenData = await MDAuthService.generateToken();

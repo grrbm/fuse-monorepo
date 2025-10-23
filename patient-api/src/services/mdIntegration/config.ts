@@ -11,10 +11,15 @@ const env = (process.env.MD_INTEGRATIONS_ENV || 'production').toLowerCase();
 
 const environment: 'production' | 'sandbox' = env === 'sandbox' ? 'sandbox' : 'production';
 
-const baseUrl = process.env.MD_INTEGRATIONS_BASE_URL
+// Resolve and normalize base URL; if an override without path is provided, append /v1 automatically
+const rawBase = process.env.MD_INTEGRATIONS_BASE_URL
     || (environment === 'sandbox'
-        ? 'https://api-sandbox.mdintegrations.com/v1'
+        ? 'https://api.sandbox.mdintegrations.com/v1'
         : 'https://api.mdintegrations.com/v1');
+
+const cleanedBase = rawBase.replace(/\/+$/, '');
+const domainOnly = /^https?:\/\/[^/]+$/.test(cleanedBase);
+const baseUrl = domainOnly ? `${cleanedBase}/v1` : cleanedBase;
 
 const clientId = environment === 'sandbox'
     ? (process.env.MD_INTEGRATIONS_SANDBOX_CLIENT_ID || process.env.MD_INTEGRATIONS_CLIENT_ID || '')

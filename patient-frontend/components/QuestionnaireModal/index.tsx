@@ -64,6 +64,14 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [paymentStatus, setPaymentStatus] = React.useState<'idle' | 'processing' | 'succeeded' | 'failed'>('idle');
   const [mdCaseStatus, setMdCaseStatus] = React.useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [mdCaseError, setMdCaseError] = React.useState<string | null>(null);
+  const [patientConfirm, setPatientConfirm] = React.useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    dob: '',
+    gender: '',
+    phoneNumber: ''
+  });
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -1298,13 +1306,21 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     try {
       setMdCaseStatus('submitting');
       setMdCaseError(null);
+      const overrides: any = {};
+      if (patientConfirm.firstName) overrides.firstName = patientConfirm.firstName;
+      if (patientConfirm.lastName) overrides.lastName = patientConfirm.lastName;
+      if (patientConfirm.email) overrides.email = patientConfirm.email;
+      if (patientConfirm.dob) overrides.dob = patientConfirm.dob;
+      if (patientConfirm.gender) overrides.gender = patientConfirm.gender;
+      if (patientConfirm.phoneNumber) overrides.phoneNumber = patientConfirm.phoneNumber;
+
       const resp = await apiCall('/md/cases', {
         method: 'POST',
-        body: JSON.stringify({ orderId })
+        body: JSON.stringify({ orderId, patientOverrides: overrides })
       });
       if (!resp.success) {
         setMdCaseStatus('error');
-        setMdCaseError(resp.error || 'Failed to submit case');
+        setMdCaseError((resp as any)?.error || 'Failed to submit case');
         return;
       }
       setMdCaseStatus('success');
@@ -1533,7 +1549,16 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                       <div className="bg-white rounded-2xl p-6 space-y-6 max-w-2xl mx-auto w-full">
                         <div className="space-y-2 text-center">
                           <h3 className="text-2xl font-semibold text-gray-900">Submit for Medical Review</h3>
-                          <p className="text-gray-600">We’ll send your answers to our medical team to review your case.</p>
+                          <p className="text-gray-600">We'll send your answers to our medical team to review your case.</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <Input label="First Name" value={patientConfirm.firstName} onValueChange={(v) => setPatientConfirm(p => ({ ...p, firstName: v }))} variant="bordered" />
+                          <Input label="Last Name" value={patientConfirm.lastName} onValueChange={(v) => setPatientConfirm(p => ({ ...p, lastName: v }))} variant="bordered" />
+                          <Input label="Email" value={patientConfirm.email} onValueChange={(v) => setPatientConfirm(p => ({ ...p, email: v }))} variant="bordered" className="col-span-2" />
+                          <Input label="Date of Birth (YYYY-MM-DD)" value={patientConfirm.dob} onValueChange={(v) => setPatientConfirm(p => ({ ...p, dob: v }))} variant="bordered" />
+                          <Input label="Gender (male/female)" value={patientConfirm.gender} onValueChange={(v) => setPatientConfirm(p => ({ ...p, gender: v }))} variant="bordered" />
+                          <Input label="Phone Number" value={patientConfirm.phoneNumber} onValueChange={(v) => setPatientConfirm(p => ({ ...p, phoneNumber: v }))} variant="bordered" className="col-span-2" />
                         </div>
 
                         <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700">
