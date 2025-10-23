@@ -633,6 +633,17 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     return currentStepIndex === checkoutStepIndex + 1;
   };
 
+  // Prefill DOB on entering MD Case step
+  React.useEffect(() => {
+    if (isMdCaseStep()) {
+      // Try to find DOB from answers by common keys
+      const dobFromAnswer = answers['8bee532e-6888-45fa-905b-cf9f2078b45e'] || answers['dob'] || answers['dateOfBirth'];
+      if (typeof dobFromAnswer === 'string' && dobFromAnswer && !patientDob) {
+        setPatientDob(dobFromAnswer);
+      }
+    }
+  }, [currentStepIndex, answers, isMdCaseStep]);
+
   // Helper: Evaluate step-level conditional logic
   const evaluateStepConditionalLogic = (step: any): boolean => {
     const conditionalLogic = step.conditionalLogic;
@@ -1619,13 +1630,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <Input
-                              label="Date of Birth (YYYY-MM-DD)"
-                              value={patientDob}
-                              onValueChange={(v) => setPatientDob(v)}
-                              variant="bordered"
-                            />
+                          <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
+                            <div>
+                              <div className="text-gray-500">Date of Birth</div>
+                              <div className="font-medium">{patientDob || '-'}</div>
+                            </div>
                           </div>
                           {patientDobError && (
                             <div className="text-red-600 text-sm">{patientDobError}</div>
@@ -1664,7 +1673,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             color="primary"
                             size="lg"
                             className="w-full"
-                            isDisabled={mdCaseStatus === 'submitting' || !patientDob || !isRealisticDob(patientDob)}
+                            isDisabled={mdCaseStatus === 'submitting' || !patientDob}
                             onPress={handleSubmitMdCase}
                             startContent={<Icon icon={mdCaseStatus === 'submitting' ? 'lucide:loader-2' : 'lucide:send'} className={mdCaseStatus === 'submitting' ? 'animate-spin' : ''} />}
                           >
