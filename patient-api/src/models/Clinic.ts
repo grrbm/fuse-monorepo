@@ -69,6 +69,54 @@ export default class Clinic extends Entity {
     })
     declare customDomain?: string;
 
+    // Stripe Connect fields
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+        unique: true,
+    })
+    declare stripeAccountId?: string;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare stripeOnboardingComplete: boolean;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare stripeDetailsSubmitted: boolean;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare stripeChargesEnabled: boolean;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+    })
+    declare stripePayoutsEnabled: boolean;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare stripeAccountType?: string;
+
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+    declare stripeOnboardedAt?: Date;
+
     @HasOne(() => Subscription)
     declare subscription?: Subscription;
 

@@ -15,6 +15,7 @@ export interface JWTPayload {
   userId: string;
   userEmail: string;
   userRole: 'patient' | 'provider' | 'admin' | 'brand';
+  clinicId?: string;
   loginTime: number;
   iat?: number;
   exp?: number;
@@ -26,6 +27,7 @@ export const createJWTToken = (user: any): string => {
     userId: user.id,
     userEmail: user.email,
     userRole: user.role,
+    clinicId: user.clinicId,
     loginTime: Date.now(),
   };
 
@@ -120,6 +122,7 @@ export const getCurrentUser = (req: any) => {
     id: req.user.userId,
     email: req.user.userEmail,
     role: req.user.userRole,
+    clinicId: req.user.clinicId,
     loginTime: new Date(req.user.loginTime),
   };
 };

@@ -16,6 +16,7 @@ import TenantProduct from '../../models/TenantProduct';
 import ShippingOrder from '../../models/ShippingOrder';
 import Product from '../../models/Product';
 import Sale from '../../models/Sale';
+import StripeConnectService from './connect.service';
 
 
 export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
@@ -703,6 +704,17 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
     }
 };
 
+/**
+ * Handle Stripe Connect account.updated webhook
+ */
+export const handleAccountUpdated = async (account: Stripe.Account): Promise<void> => {
+    try {
+        await StripeConnectService.handleAccountUpdated(account);
+    } catch (error) {
+        console.error('❌ Error handling account.updated webhook:', error);
+        throw error;
+    }
+};
 
 export const processStripeWebhook = async (event: Stripe.Event): Promise<void> => {
     switch (event.type) {
@@ -748,6 +760,18 @@ export const processStripeWebhook = async (event: Stripe.Event): Promise<void> =
             await handlePaymentIntentAmountCapturableUpdated(event.data.object as Stripe.PaymentIntent)
             break;
 
+        // Stripe Connect events
+        case 'account.updated':
+            await handleAccountUpdated(event.data.object as Stripe.Account);
+            break;
+
+        case 'account.application.authorized':
+            console.log('📬 Account application authorized:', event.data.object);
+            break;
+
+        case 'account.application.deauthorized':
+            console.log('📬 Account application deauthorized:', event.data.object);
+            break;
 
         default:
             console.log(`🔍 Unhandled event type ${event.type}`);
