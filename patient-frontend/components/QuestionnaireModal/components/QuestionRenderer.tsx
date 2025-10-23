@@ -22,7 +22,13 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     onCheckboxChange,
 }) => {
     const value = answers[question.id] || "";
-    const hasError = !!errors[question.id];
+    const isEmpty = (
+        value === undefined ||
+        value === null ||
+        (typeof value === 'string' && value.trim() === '') ||
+        (Array.isArray(value) && value.length === 0)
+    );
+    const hasError = !!errors[question.id] && isEmpty;
 
     switch (question.answerType) {
         case "text":

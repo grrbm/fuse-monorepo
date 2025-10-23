@@ -829,6 +829,16 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     // Update state synchronously for immediate navigation
     let newAnswers = { ...answers, [questionId]: value };
 
+    // Persist updated answer immediately
+    setAnswers(newAnswers);
+
+    // Proactively clear error for this question on selection
+    setErrors(prev => {
+      const next = { ...prev };
+      delete next[questionId];
+      return next;
+    });
+
     // Log the updated questionnaire answers in real-time
     const questionnaireAnswers = buildQuestionnaireAnswers(newAnswers);
     console.log('📋 ⚡ Real-time questionnaire update (Radio):');
@@ -2459,7 +2469,15 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                 errors={errors}
                                 theme={theme}
                                 onAnswerChange={handleAnswerChange}
-                                onRadioChange={handleRadioChange}
+                                onRadioChange={(questionId: string, value: any) => {
+                                  // Clear any existing error on first selection
+                                  setErrors(prev => {
+                                    const next = { ...prev };
+                                    delete next[questionId];
+                                    return next;
+                                  });
+                                  handleRadioChange(questionId, value);
+                                }}
                                 onCheckboxChange={handleCheckboxChange}
                               />
                             ))}
