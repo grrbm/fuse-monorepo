@@ -60,6 +60,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [selectedProducts, setSelectedProducts] = React.useState<Record<string, number>>({});
   const [clientSecret, setClientSecret] = React.useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = React.useState<string | null>(null);
+  const [orderId, setOrderId] = React.useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = React.useState<'idle' | 'processing' | 'succeeded' | 'failed'>('idle');
 
   // Checkout form state
@@ -1240,6 +1241,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         if (subscriptionData.clientSecret) {
           setClientSecret(subscriptionData.clientSecret);
           setPaymentIntentId(subscriptionData.paymentIntentId || subscriptionData.subscriptionId || subscriptionData.id);
+          if (subscriptionData.orderId) {
+            setOrderId(subscriptionData.orderId);
+          }
           setPaymentStatus('idle');
           console.log('💳 Subscription created successfully for plan:', selectedPlanData?.name);
           return subscriptionData.clientSecret;
@@ -1268,6 +1272,25 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setPaymentStatus('succeeded');
       console.log('💳 Payment authorized successfully:', paymentIntentId);
       console.log('💳 Subscription will be created after manual payment capture');
+
+      // Create MD Integrations Case now (final step after checkout)
+      try {
+        if (!orderId) {
+          console.warn('⚠️ No orderId available to create MD case');
+        } else {
+          const mdResp = await apiCall('/md/cases', {
+            method: 'POST',
+            body: JSON.stringify({ orderId })
+          });
+          if (!mdResp.success) {
+            console.warn('⚠️ MD case creation failed:', mdResp.error);
+          } else {
+            console.log('✅ MD case created:', mdResp.data);
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Error creating MD case:', e);
+      }
 
       // Don't close modal, allow user to continue with questionnaire steps
     } catch (error) {

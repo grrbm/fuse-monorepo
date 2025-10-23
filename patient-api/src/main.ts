@@ -6443,6 +6443,118 @@ app.get("/md-files/:fileId", authenticateJWT, async (req, res) => {
   }
 });
 
+// Create an MD Integrations Case directly after checkout
+app.post("/md/cases", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const { orderId } = req.body || {};
+
+    if (!orderId || typeof orderId !== 'string') {
+      return res.status(400).json({ success: false, message: "orderId is required" });
+    }
+
+    // Load order (must belong to current user)
+    const order = await Order.findByPk(orderId);
+    if (!order || (order as any).userId !== currentUser.id) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // If case already exists, return early
+    if ((order as any).mdCaseId) {
+      return res.json({ success: true, message: 'MD case already exists', data: { caseId: (order as any).mdCaseId } });
+    }
+
+    // Ensure user exists and has mdPatientId
+    const user = await User.findByPk(currentUser.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    try {
+      const userService = new UserService();
+      await userService.syncPatientInMD(user.id, (order as any).shippingAddressId);
+      await user.reload();
+    } catch (e) {
+      console.warn('⚠️ Could not sync patient in MD Integrations before creating case:', e);
+    }
+
+    if (!user.mdPatientId) {
+      return res.status(400).json({ success: false, message: "User is not provisioned in MD Integrations (missing mdPatientId)" });
+    }
+
+    // Resolve offering to use
+    let offeringIds: { offering_id: string }[] = [];
+    try {
+      const mdConfig = (await import('./services/mdIntegration/config')).mdIntegrationsConfig;
+      if (mdConfig.defaultOfferingId) {
+        offeringIds = [{ offering_id: mdConfig.defaultOfferingId }];
+      }
+    } catch { }
+
+    if (offeringIds.length === 0) {
+      // Try to infer from environment or product metadata
+      if (process.env.NODE_ENV !== 'production') {
+        // Known sandbox offering for development
+        offeringIds = [{ offering_id: '3c3d0118-e362-4466-9c92-d852720c5a41' }];
+      } else {
+        // Try from related product (via tenantProduct)
+        let inferredOfferingId: string | undefined;
+        try {
+          if ((order as any).tenantProductId) {
+            const tenantProduct = await TenantProduct.findByPk((order as any).tenantProductId, {
+              include: [{ model: Product, as: 'product', required: false }] as any
+            } as any);
+            const product = tenantProduct && (tenantProduct as any).product;
+            if (product && product.mdCaseId) {
+              inferredOfferingId = product.mdCaseId;
+            }
+          }
+        } catch { }
+        if (inferredOfferingId) {
+          offeringIds = [{ offering_id: inferredOfferingId }];
+        }
+      }
+    }
+
+    // Build case questions from stored questionnaire answers
+    const caseQuestions = (order as any).questionnaireAnswers
+      ? Object.entries((order as any).questionnaireAnswers).map(([question, answer]) => ({
+        question: String(question),
+        answer: String(answer),
+        type: 'string'
+      }))
+      : [];
+
+    // Generate token and create case
+    const MDAuthService = (await import('./services/mdIntegration/MDAuth.service')).default;
+    const MDCaseService = (await import('./services/mdIntegration/MDCase.service')).default;
+
+    const tokenResponse = await MDAuthService.generateToken();
+
+    const casePayload: any = {
+      patient_id: user.mdPatientId,
+      metadata: `orderId: ${order.id}`,
+      hold_status: false,
+      case_questions: caseQuestions,
+    };
+    if (offeringIds.length > 0) {
+      (casePayload as any).case_offerings = offeringIds;
+    }
+
+    const caseResponse = await MDCaseService.createCase(casePayload, tokenResponse.access_token);
+
+    await order.update({ mdCaseId: (caseResponse as any).case_id });
+
+    return res.json({ success: true, message: 'MD case created', data: { caseId: (caseResponse as any).case_id } });
+  } catch (error) {
+    console.error('❌ Error creating MD case:', error);
+    return res.status(500).json({ success: false, message: 'Failed to create MD case' });
+  }
+});
+
 app.get("/md-files/:fileId/download", authenticateJWT, async (req, res) => {
   try {
     const { fileId } = req.params;

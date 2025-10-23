@@ -5,12 +5,14 @@ A comprehensive healthcare platform for managing treatments, prescriptions, orde
 ## 🏗️ Architecture
 
 **Monorepo Structure:**
+
 - `patient-api/` - Express + TypeScript backend API (port 3001)
 - `patient-frontend/` - Patient portal built with Next.js 14 (port 3000)
 - `fuse-admin-frontend/` - Admin dashboard (port 3002)
 - `fuse-tenant-portal-frontend/` - Tenant/clinic portal (port 3030)
 
 **Technology Stack:**
+
 - **Monorepo:** Turborepo + pnpm workspaces
 - **Backend:** Node.js, Express, TypeScript, Sequelize (PostgreSQL)
 - **Frontend:** Next.js 14, React 18, TypeScript, Tailwind CSS
@@ -20,6 +22,7 @@ A comprehensive healthcare platform for managing treatments, prescriptions, orde
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - Node.js 18+
 - pnpm 10+
 - PostgreSQL database
@@ -61,6 +64,7 @@ pnpm migrate:undo
 ```
 
 **Note:** Local development uses Aptible tunnel:
+
 ```bash
 aptible db:tunnel patient-api-staging-postgresql --port 5433
 ```
@@ -122,6 +126,7 @@ This monorepo uses **pnpm workspace catalogs** for shared dependencies.
 ### Adding Dependencies
 
 **Shared dependency** (used by 2+ apps):
+
 ```yaml
 # pnpm-workspace.yaml
 catalog:
@@ -136,6 +141,7 @@ catalog:
 ```
 
 **Version-specific catalogs:**
+
 ```json
 "dependencies": {
   "react": "catalog:react18",
@@ -182,6 +188,23 @@ pnpm pm2:stop              # Stop PM2 process
 
 - **Stripe** - Payment processing and subscription management
 - **MD Integrations** - Telehealth services via OAuth2
+
+### MD Integrations Environment
+
+Add these to `.env.local` (backend) and restart the API:
+
+```bash
+MD_INTEGRATIONS_ENV=production # or sandbox
+MD_INTEGRATIONS_SCOPE=*        # optional; defaults to *
+MD_INTEGRATIONS_CLIENT_ID=...
+MD_INTEGRATIONS_CLIENT_SECRET=...
+MD_INTEGRATIONS_SANDBOX_CLIENT_ID=...
+MD_INTEGRATIONS_SANDBOX_CLIENT_SECRET=...
+MD_INTEGRATIONS_BASE_URL=      # optional; overrides default per env
+MD_INTEGRATIONS_OFFERING_ID=...             # prod default offering (optional)
+MD_INTEGRATIONS_SANDBOX_OFFERING_ID=...     # sandbox default offering (optional)
+```
+
 - **Pharmacy API** - Patient sync and order submission
 - **AWS S3** - Image storage (max 5MB, images only)
 - **SendGrid** - Email notifications
@@ -226,18 +249,23 @@ fuse-monorepo/
 ## 🐛 Troubleshooting
 
 ### TypeScript: "Cannot find type definition"
+
 Add `"types": ["node"]` or `"types": []` to tsconfig.json.
 
 ### "Invalid hook call" in React
+
 Ensure all frontends use React 18: `"react": "catalog:react18"`
 
 ### "Must use import to load ES Module"
+
 Remove `"type": "module"` from patient-api/package.json (uses CommonJS).
 
 ### CORS errors
+
 Check `FRONTEND_URL` in `.env.local` and API CORS configuration.
 
 ### Environment variables not loading
+
 - Ensure `.env.local` exists at monorepo root
 - Scripts use `pnpm with-env` prefix
 - Frontend vars prefixed with `NEXT_PUBLIC_`
