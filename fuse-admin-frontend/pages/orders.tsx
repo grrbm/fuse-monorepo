@@ -43,6 +43,8 @@ interface Order {
         quantity: number
         unitPrice: number
         totalPrice: number
+        pharmacyPrice: number  // Price from Products table (pharmacy's price)
+        brandPrice: number     // Price from TenantProducts table (brand's price)
         product: {
             id: string
             name: string
@@ -64,174 +66,6 @@ interface Order {
 }
 
 type StatusFilter = 'all' | 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled'
-
-// Mock orders for initial setup - automatically replaced when real orders exist
-// All dates are within the current month to populate "This Month" stats
-const MOCK_ORDERS: Order[] = [
-    {
-        id: 'mock-order-1',
-        orderNumber: 'ORD-1-000001',
-        status: 'paid',
-        totalAmount: 450.00,
-        createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 15).toISOString(),
-        shippedAt: new Date(new Date().getFullYear(), new Date().getMonth(), 16).toISOString(),
-        user: {
-            id: 'mock-user-1',
-            firstName: 'James',
-            lastName: 'Bond',
-            email: 'james.bond@mi6.gov.uk'
-        },
-        orderItems: [
-            {
-                id: 'mock-item-1',
-                quantity: 1,
-                unitPrice: 450.00,
-                totalPrice: 450.00,
-                product: {
-                    id: 'mock-prod-1',
-                    name: 'Semaglutide 2.5mg',
-                    category: 'weight_loss'
-                }
-            }
-        ],
-        shippingAddress: {
-            address: '123 Secret Service Lane',
-            city: 'London',
-            state: 'England',
-            zipCode: 'SW1A 1AA',
-            country: 'UK'
-        },
-        payment: {
-            status: 'succeeded',
-            paymentMethod: 'card'
-        }
-    },
-    {
-        id: 'mock-order-2',
-        orderNumber: 'ORD-1-000002',
-        status: 'shipped',
-        totalAmount: 680.00,
-        createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 8).toISOString(),
-        shippedAt: new Date(new Date().getFullYear(), new Date().getMonth(), 10).toISOString(),
-        user: {
-            id: 'mock-user-2',
-            firstName: 'Marie',
-            lastName: 'Curie',
-            email: 'marie.curie@science.edu'
-        },
-        orderItems: [
-            {
-                id: 'mock-item-2',
-                quantity: 1,
-                unitPrice: 400.00,
-                totalPrice: 400.00,
-                product: {
-                    id: 'mock-prod-2',
-                    name: 'NAD+ Injection',
-                    category: 'wellness'
-                }
-            },
-            {
-                id: 'mock-item-3',
-                quantity: 2,
-                unitPrice: 140.00,
-                totalPrice: 280.00,
-                product: {
-                    id: 'mock-prod-3',
-                    name: 'Vitamin B12',
-                    category: 'wellness'
-                }
-            }
-        ],
-        shippingAddress: {
-            address: '456 Science Boulevard',
-            city: 'Paris',
-            state: 'Île-de-France',
-            zipCode: '75005',
-            country: 'France'
-        },
-        payment: {
-            status: 'succeeded',
-            paymentMethod: 'card'
-        }
-    },
-    {
-        id: 'mock-order-3',
-        orderNumber: 'ORD-1-000003',
-        status: 'pending',
-        totalAmount: 299.00,
-        createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 12).toISOString(),
-        user: {
-            id: 'mock-user-3',
-            firstName: 'Leonardo',
-            lastName: 'da Vinci',
-            email: 'leonardo.davinci@renaissance.art'
-        },
-        orderItems: [
-            {
-                id: 'mock-item-4',
-                quantity: 1,
-                unitPrice: 299.00,
-                totalPrice: 299.00,
-                product: {
-                    id: 'mock-prod-4',
-                    name: 'Finasteride 1mg',
-                    category: 'hair_growth'
-                }
-            }
-        ],
-        shippingAddress: {
-            address: '789 Renaissance Way',
-            city: 'Florence',
-            state: 'Tuscany',
-            zipCode: '50100',
-            country: 'Italy'
-        },
-        payment: {
-            status: 'pending',
-            paymentMethod: 'card'
-        }
-    },
-    {
-        id: 'mock-order-4',
-        orderNumber: 'ORD-1-000004',
-        status: 'delivered',
-        totalAmount: 850.00,
-        createdAt: new Date(new Date().getFullYear(), new Date().getMonth(), 3).toISOString(),
-        shippedAt: new Date(new Date().getFullYear(), new Date().getMonth(), 5).toISOString(),
-        deliveredAt: new Date(new Date().getFullYear(), new Date().getMonth(), 7).toISOString(),
-        user: {
-            id: 'mock-user-4',
-            firstName: 'Cleopatra',
-            lastName: 'VII',
-            email: 'cleopatra@egypt.ancient'
-        },
-        orderItems: [
-            {
-                id: 'mock-item-5',
-                quantity: 1,
-                unitPrice: 850.00,
-                totalPrice: 850.00,
-                product: {
-                    id: 'mock-prod-5',
-                    name: 'Tirzepatide 15mg',
-                    category: 'weight_loss'
-                }
-            }
-        ],
-        shippingAddress: {
-            address: '321 Nile River Road',
-            city: 'Alexandria',
-            state: 'Alexandria',
-            zipCode: '21500',
-            country: 'Egypt'
-        },
-        payment: {
-            status: 'succeeded',
-            paymentMethod: 'card'
-        }
-    }
-]
 
 export default function Orders() {
     const [orders, setOrders] = useState<Order[]>([])
@@ -354,37 +188,41 @@ export default function Orders() {
             if (response.ok) {
                 const data = await response.json()
                 if (data.success) {
-                    const realOrders = data.data.orders || []
-                    // Use mock data if no real orders exist
-                    setOrders(realOrders.length > 0 ? realOrders : MOCK_ORDERS)
+                    setOrders(data.data.orders || [])
                 } else {
-                    // On error, use mock data
-                    setOrders(MOCK_ORDERS)
+                    setError(data.message || 'Failed to load orders')
+                    setOrders([])
                 }
             } else {
-                // On error, use mock data
-                setOrders(MOCK_ORDERS)
+                setError('Failed to fetch orders')
+                setOrders([])
             }
         } catch (err) {
-            // On error, use mock data
-            setOrders(MOCK_ORDERS)
+            console.error('Error fetching orders:', err)
+            setError('An error occurred while fetching orders')
+            setOrders([])
         } finally {
             setLoading(false)
         }
     }
 
-    // Calculate stats for this month only
-    const now = new Date()
-    const thisMonthOrders = orders.filter(order => {
-        const orderDate = new Date(order.createdAt)
-        return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear()
-    })
+    // Calculate brand revenue for an order
+    const calculateBrandRevenue = (order: Order) => {
+        if (!order.orderItems || order.orderItems.length === 0) return 0
+        
+        return order.orderItems.reduce((total, item) => {
+            const markup = item.brandPrice - item.pharmacyPrice
+            const itemBrandRevenue = markup * item.quantity
+            return total + itemBrandRevenue
+        }, 0)
+    }
 
+    // Calculate stats for ALL orders
     const stats = {
-        totalOrders: thisMonthOrders.length,
-        totalRevenue: thisMonthOrders.filter(o => o.status === 'paid').reduce((sum, o) => sum + o.totalAmount, 0),
-        pendingOrders: thisMonthOrders.filter(o => o.status === 'pending' || o.status === 'payment_due').length,
-        avgOrderValue: thisMonthOrders.length > 0 ? thisMonthOrders.reduce((sum, o) => sum + o.totalAmount, 0) / thisMonthOrders.length : 0
+        totalOrders: orders.length,
+        brandRevenue: orders.filter(o => o.status === 'paid').reduce((sum, o) => sum + calculateBrandRevenue(o), 0),
+        pendingOrders: orders.filter(o => o.status === 'pending' || o.status === 'payment_due').length,
+        avgOrderValue: orders.length > 0 ? orders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0) / orders.length : 0
     }
 
     // Filter orders
@@ -477,9 +315,9 @@ export default function Orders() {
                         </button>
                     </div>
 
-                    {/* Stats Cards - This Month */}
+                    {/* Stats Cards - Overview */}
                     <div className="mb-3">
-                        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">This Month</h2>
+                        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Overview</h2>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                         <Card className="border-border shadow-sm">
@@ -499,12 +337,12 @@ export default function Orders() {
                         <Card className="border-border shadow-sm">
                             <CardContent className="p-6">
                                 <div className="flex items-center gap-4">
-                                    <div className="p-3 rounded-lg bg-muted">
-                                        <DollarSign className="h-5 w-5 text-muted-foreground" />
+                                    <div className="p-3 rounded-lg bg-green-100">
+                                        <DollarSign className="h-5 w-5 text-green-600" />
                                     </div>
                                     <div>
-                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Revenue</p>
-                                        <p className="text-2xl font-semibold text-foreground mt-1">{formatCurrency(stats.totalRevenue)}</p>
+                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Brand Revenue</p>
+                                        <p className="text-2xl font-semibold text-green-600 mt-1">{formatCurrency(stats.brandRevenue)}</p>
                                     </div>
                                 </div>
                             </CardContent>
@@ -603,6 +441,7 @@ export default function Orders() {
                                                 <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Items</th>
                                                 <th className="text-left p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                                                 <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total</th>
+                                                <th className="text-right p-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Brand Revenue</th>
                                                 <th className="w-10"></th>
                                             </tr>
                                         </thead>
@@ -641,6 +480,9 @@ export default function Orders() {
                                                             <td className="p-4 text-right">
                                                                 <span className="font-semibold text-foreground">{formatCurrency(order.totalAmount)}</span>
                                                             </td>
+                                                            <td className="p-4 text-right">
+                                                                <span className="font-semibold text-green-600">{formatCurrency(calculateBrandRevenue(order))}</span>
+                                                            </td>
                                                             <td className="p-4">
                                                                 {isExpanded ? (
                                                                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -653,31 +495,43 @@ export default function Orders() {
                                                         {/* Expanded Row Details */}
                                                         {isExpanded && (
                                                             <tr>
-                                                                <td colSpan={7} className="p-0">
+                                                                <td colSpan={8} className="p-0">
                                                                     <div className="bg-muted/30 p-6 border-t border-border">
                                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                                             {/* Order Items */}
                                                                             <div>
                                                                                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Order Items</h4>
                                                                                 <div className="space-y-3">
-                                                                                    {order.orderItems?.map((item) => (
-                                                                                        <div key={item.id} className="flex justify-between items-start p-3 bg-card border border-border rounded-lg">
-                                                                                            <div className="flex-1">
-                                                                                                <div className="font-medium text-foreground">{item.product.name}</div>
-                                                                                                <div className="text-xs text-muted-foreground mt-1">
-                                                                                                    Qty: {item.quantity} × {formatCurrency(item.unitPrice)}
+                                                                                    {order.orderItems?.map((item) => {
+                                                                                        const itemMarkup = item.brandPrice - item.pharmacyPrice
+                                                                                        const itemBrandRevenue = itemMarkup * item.quantity
+                                                                                        return (
+                                                                                            <div key={item.id} className="flex justify-between items-start p-3 bg-card border border-border rounded-lg">
+                                                                                                <div className="flex-1">
+                                                                                                    <div className="font-medium text-foreground">{item.product.name}</div>
+                                                                                                    <div className="text-xs text-muted-foreground mt-1">
+                                                                                                        Qty: {item.quantity} × {formatCurrency(item.unitPrice)}
+                                                                                                    </div>
+                                                                                                    <div className="text-xs text-muted-foreground mt-1">
+                                                                                                        Pharmacy: {formatCurrency(item.pharmacyPrice)} | Brand: {formatCurrency(item.brandPrice)} | Markup: {formatCurrency(itemMarkup)}
+                                                                                                    </div>
+                                                                                                    {item.product.category && (
+                                                                                                        <Badge variant="outline" className="text-xs font-normal mt-1">
+                                                                                                            {item.product.category.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                                                                                        </Badge>
+                                                                                                    )}
                                                                                                 </div>
-                                                                                                {item.product.category && (
-                                                                                                    <Badge variant="outline" className="text-xs font-normal mt-1">
-                                                                                                        {item.product.category.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                                                                                                    </Badge>
-                                                                                                )}
+                                                                                                <div className="text-right">
+                                                                                                    <div className="font-semibold text-foreground">
+                                                                                                        {formatCurrency(item.totalPrice)}
+                                                                                                    </div>
+                                                                                                    <div className="text-xs font-medium text-green-600 mt-1">
+                                                                                                        Revenue: {formatCurrency(itemBrandRevenue)}
+                                                                                                    </div>
+                                                                                                </div>
                                                                                             </div>
-                                                                                            <div className="font-semibold text-foreground">
-                                                                                                {formatCurrency(item.totalPrice)}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    ))}
+                                                                                        )
+                                                                                    })}
                                                                                 </div>
                                                                             </div>
 
