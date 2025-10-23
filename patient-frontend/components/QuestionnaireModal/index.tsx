@@ -62,6 +62,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [paymentIntentId, setPaymentIntentId] = React.useState<string | null>(null);
   const [orderId, setOrderId] = React.useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = React.useState<'idle' | 'processing' | 'succeeded' | 'failed'>('idle');
+  const [mdCaseStatus, setMdCaseStatus] = React.useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [mdCaseError, setMdCaseError] = React.useState<string | null>(null);
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -605,8 +607,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Helper functions for checkout steps
   const getTotalSteps = (): number => {
     if (!questionnaire) return 0;
-    // For subscription treatments, skip product selection step
-    return questionnaire.steps.length + 1; // +1 for checkout only
+    // Questionnaire steps + Checkout + MD Case submission step
+    return questionnaire.steps.length + 2;
   };
 
   const isProductSelectionStep = (): boolean => {
@@ -620,6 +622,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     // For subscription treatments, checkout comes right after questionnaire steps
     const checkoutStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
     return currentStepIndex === checkoutStepIndex;
+  };
+
+  const isMdCaseStep = (): boolean => {
+    if (!questionnaire) return false;
+    const checkoutPos = questionnaire.checkoutStepPosition;
+    const checkoutStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
+    return currentStepIndex === checkoutStepIndex + 1;
   };
 
   // Helper: Evaluate step-level conditional logic
@@ -1273,29 +1282,35 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       console.log('💳 Payment authorized successfully:', paymentIntentId);
       console.log('💳 Subscription will be created after manual payment capture');
 
-      // Create MD Integrations Case now (final step after checkout)
-      try {
-        if (!orderId) {
-          console.warn('⚠️ No orderId available to create MD case');
-        } else {
-          const mdResp = await apiCall('/md/cases', {
-            method: 'POST',
-            body: JSON.stringify({ orderId })
-          });
-          if (!mdResp.success) {
-            console.warn('⚠️ MD case creation failed:', mdResp.error);
-          } else {
-            console.log('✅ MD case created:', mdResp.data);
-          }
-        }
-      } catch (e) {
-        console.warn('⚠️ Error creating MD case:', e);
-      }
-
       // Don't close modal, allow user to continue with questionnaire steps
     } catch (error) {
       setPaymentStatus('failed');
       alert('Payment authorization failed. Please contact support.');
+    }
+  };
+
+  const handleSubmitMdCase = async () => {
+    if (!orderId) {
+      setMdCaseStatus('error');
+      setMdCaseError('Missing order reference. Please try again.');
+      return;
+    }
+    try {
+      setMdCaseStatus('submitting');
+      setMdCaseError(null);
+      const resp = await apiCall('/md/cases', {
+        method: 'POST',
+        body: JSON.stringify({ orderId })
+      });
+      if (!resp.success) {
+        setMdCaseStatus('error');
+        setMdCaseError(resp.error || 'Failed to submit case');
+        return;
+      }
+      setMdCaseStatus('success');
+    } catch (e) {
+      setMdCaseStatus('error');
+      setMdCaseError('Network error. Please try again.');
     }
   };
 
@@ -1402,7 +1417,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     stepDescription = currentStep.description || '';
   }
 
-  if (!currentStep && !isProductSelectionStep() && !isCheckoutStep()) {
+  if (!currentStep && !isProductSelectionStep() && !isCheckoutStep() && !isMdCaseStep()) {
     // No more questionnaire steps - advance to next phase (product selection or checkout)
     handleNext();
     return null; // Prevent rendering empty step
@@ -1491,6 +1506,75 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           selectedProducts={selectedProducts}
                           treatmentName={treatmentName ?? productName ?? ''}
                         />
+
+                        {paymentStatus === 'succeeded' && (
+                          <div className="pt-2">
+                            <Button
+                              color="primary"
+                              className="w-full"
+                              onPress={handleNext}
+                            >
+                              Continue
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : isMdCaseStep() ? (
+                    // MD Case submission step
+                    <>
+                      <ProgressBar progressPercent={progressPercent} color={theme.primary} />
+
+                      <StepHeader
+                        onPrevious={handlePrevious}
+                        canGoBack={currentStepIndex > 0}
+                      />
+
+                      <div className="bg-white rounded-2xl p-6 space-y-6 max-w-2xl mx-auto w-full">
+                        <div className="space-y-2 text-center">
+                          <h3 className="text-2xl font-semibold text-gray-900">Submit for Medical Review</h3>
+                          <p className="text-gray-600">We’ll send your answers to our medical team to review your case.</p>
+                        </div>
+
+                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700">
+                          <div className="flex items-center gap-2">
+                            <Icon icon="lucide:shield-check" className="w-4 h-4 text-emerald-600" />
+                            <span>Payment authorized. Your card will only be charged if prescribed.</span>
+                          </div>
+                        </div>
+
+                        {mdCaseStatus === 'error' && (
+                          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
+                            {mdCaseError || 'There was a problem submitting your case.'}
+                          </div>
+                        )}
+
+                        {mdCaseStatus === 'success' ? (
+                          <div className="space-y-4 text-center">
+                            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-emerald-50 text-emerald-700">
+                              <Icon icon="lucide:check" className="w-4 h-4" />
+                              <span>Case submitted</span>
+                            </div>
+                            <Button
+                              color="primary"
+                              className="w-full"
+                              onPress={onClose}
+                            >
+                              Done
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            color="primary"
+                            size="lg"
+                            className="w-full"
+                            isDisabled={mdCaseStatus === 'submitting'}
+                            onPress={handleSubmitMdCase}
+                            startContent={<Icon icon={mdCaseStatus === 'submitting' ? 'lucide:loader-2' : 'lucide:send'} className={mdCaseStatus === 'submitting' ? 'animate-spin' : ''} />}
+                          >
+                            {mdCaseStatus === 'submitting' ? 'Submitting...' : 'Submit Case'}
+                          </Button>
+                        )}
                       </div>
                     </>
                   ) : isProductSelectionStep() ? (

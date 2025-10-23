@@ -6444,22 +6444,37 @@ app.get("/md-files/:fileId", authenticateJWT, async (req, res) => {
 });
 
 // Create an MD Integrations Case directly after checkout
-app.post("/md/cases", authenticateJWT, async (req, res) => {
+// Public endpoint; attempts auth if provided, otherwise infers user from orderId
+app.post("/md/cases", async (req, res) => {
   try {
-    const currentUser = getCurrentUser(req);
-    if (!currentUser) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
+    let currentUser: any = null;
+    try {
+      currentUser = getCurrentUser(req);
+    } catch { }
     const { orderId } = req.body || {};
 
     if (!orderId || typeof orderId !== 'string') {
       return res.status(400).json({ success: false, message: "orderId is required" });
     }
 
-    // Load order (must belong to current user)
+    // Load order
     const order = await Order.findByPk(orderId);
-    if (!order || (order as any).userId !== currentUser.id) {
+    if (!order) {
       return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    // If no authenticated user, infer from order
+    if (!currentUser) {
+      const ownerUser = await User.findByPk((order as any).userId);
+      if (!ownerUser) {
+        return res.status(404).json({ success: false, message: "User not found for order" });
+      }
+      currentUser = ownerUser;
+    } else {
+      // If authenticated, ensure access to order
+      if ((order as any).userId !== currentUser.id) {
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      }
     }
 
     // If case already exists, return early
