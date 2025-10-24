@@ -94,6 +94,13 @@ interface MessageCreatedEvent {
   channel: string;
 }
 
+interface CaseCompletedEvent {
+  timestamp: number;
+  event_type: 'case_completed';
+  case_id: string;
+  metadata?: string;
+}
+
 class MDWebhookService {
   /**
    * Verify webhook signature using HMAC SHA256
@@ -105,7 +112,7 @@ class MDWebhookService {
     }
 
     // Calculate expected signature: hash_hmac('sha256', json_encode(payload), secret)
-    const payloadString = JSON.stringify(payload);
+    const payloadString = typeof payload === 'string' ? payload : JSON.stringify(payload);
     const expectedSignature = crypto
       .createHmac('sha256', secret)
       .update(payloadString, 'utf8')
@@ -267,6 +274,22 @@ class MDWebhookService {
 
       case 'message_created':
         await this.handleMessageCreated(eventData as MessageCreatedEvent);
+        break;
+
+      case 'case_completed':
+        console.log('[MD-WH] ✅ case_completed received', { case_id: (eventData as CaseCompletedEvent).case_id });
+        try {
+          const order = await Order.findOne({ where: { mdCaseId: (eventData as CaseCompletedEvent).case_id } });
+          if (!order) {
+            console.log('[MD-WH] ⚠️ no order for completed case', { case_id: (eventData as CaseCompletedEvent).case_id });
+            break;
+          }
+          // Mark order as processing (paid and being fulfilled)
+          await order.updateStatus('processing' as any);
+          console.log('[MD-WH] 🧾 order marked processing for completed case', { orderNumber: order.orderNumber });
+        } catch (e) {
+          console.error('[MD-WH] ❌ error handling case_completed', e);
+        }
         break;
 
       default:
