@@ -129,6 +129,9 @@ async function findOrderForEvent(eventData: GenericCaseEvent): Promise<Order | n
 }
 
 class MDWebhookService {
+  public async resyncCaseDetails(caseId: string): Promise<void> {
+    return this.fetchAndPersistCaseDetails(caseId);
+  }
   private async fetchAndPersistCaseDetails(caseId: string): Promise<void> {
     try {
       const order = await Order.findOne({ where: { mdCaseId: caseId } });
@@ -143,13 +146,24 @@ class MDWebhookService {
       const prescriptions = (mdCase as any)?.prescriptions ?? null;
       const offerings = (mdCase as any)?.offerings ?? (mdCase as any)?.case_offerings ?? (mdCase as any)?.services ?? null;
 
-      await order.update({
-        mdPrescriptions: prescriptions,
-        mdOfferings: offerings
-      });
+      const updatePayload: any = {};
+      const incomingRxCount = Array.isArray(prescriptions) ? prescriptions.length : 0;
+      const incomingOffCount = Array.isArray(offerings) ? offerings.length : 0;
 
-      const prescriptionsCount = Array.isArray(prescriptions) ? prescriptions.length : 0;
-      const offeringsCount = Array.isArray(offerings) ? offerings.length : 0;
+      // Only overwrite if MD returns non-empty arrays; keep previously saved details otherwise
+      if (incomingRxCount > 0) {
+        updatePayload.mdPrescriptions = prescriptions;
+      }
+      if (incomingOffCount > 0) {
+        updatePayload.mdOfferings = offerings;
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        await order.update(updatePayload);
+      }
+
+      const prescriptionsCount = incomingRxCount || ((order as any).mdPrescriptions?.length ?? 0);
+      const offeringsCount = incomingOffCount || ((order as any).mdOfferings?.length ?? 0);
 
       console.log('[MD-WH] 📦 saved case details from MD', {
         orderNumber: order.orderNumber,

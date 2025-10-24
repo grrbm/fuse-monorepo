@@ -7703,6 +7703,25 @@ async function startServer() {
     }
   });
 
+  // One-off: resync MD case details onto the order (NO AUTH by request)
+  // Body: { caseId: string }
+  app.post("/md/resync", async (req, res) => {
+    try {
+      const { caseId } = req.body || {};
+      if (!caseId || typeof caseId !== 'string') {
+        return res.status(400).json({ success: false, message: 'caseId is required' });
+      }
+
+      const MDWebhookService = (await import('./services/mdIntegration/MDWebhook.service')).default;
+      await MDWebhookService.resyncCaseDetails(caseId);
+
+      return res.json({ success: true, message: 'Resync triggered', caseId });
+    } catch (error) {
+      console.error('❌ Error in /md/resync:', error);
+      return res.status(500).json({ success: false, message: 'Failed to resync case details' });
+    }
+  });
+
   // MD Integrations Webhook (raw body required for signature verification)
   // Accept any content-type as raw so signature can be computed on exact bytes
   app.post("/md/webhooks", express.raw({ type: () => true }), async (req, res) => {

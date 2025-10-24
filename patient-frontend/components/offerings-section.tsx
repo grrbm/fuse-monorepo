@@ -87,6 +87,9 @@ export const OfferingsSection: React.FC = () => {
                                         <div>
                                             <div className="font-medium">{item.title}</div>
                                             <div className="text-sm text-foreground-500">Order {item.orderNumber}</div>
+                                            {item.caseId && (
+                                                <div className="text-xs text-foreground-400 mt-1">Case: <span className="font-mono">{item.caseId}</span></div>
+                                            )}
                                         </div>
                                         <Chip color="success" size="sm" variant="flat">Approved</Chip>
                                     </div>
@@ -117,6 +120,9 @@ export const OfferingsSection: React.FC = () => {
                                         <div>
                                             <div className="font-medium">{item.title}</div>
                                             <div className="text-sm text-foreground-500">Order {item.orderNumber}</div>
+                                            {item.caseId && (
+                                                <div className="text-xs text-foreground-400 mt-1">Case: <span className="font-mono">{item.caseId}</span></div>
+                                            )}
                                         </div>
                                         <Chip color="warning" size="sm" variant="flat">Pending review</Chip>
                                     </div>
