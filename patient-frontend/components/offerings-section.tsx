@@ -2,6 +2,8 @@ import React from "react";
 import { Card, CardBody, Chip, Spinner, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from "@heroui/react";
 import { fetchWithAuth, apiCall } from "../lib/api";
 import { Icon } from "@iconify/react";
+import Link from "next/link";
+import { useRouter } from "next/router";
 
 type OfferingItem = {
     orderId: string;
@@ -21,6 +23,7 @@ type OfferingItem = {
 };
 
 export const OfferingsSection: React.FC = () => {
+    const router = useRouter();
     const [loading, setLoading] = React.useState(true);
     const [approved, setApproved] = React.useState<OfferingItem[]>([]);
     const [pending, setPending] = React.useState<OfferingItem[]>([]);
@@ -108,32 +111,63 @@ export const OfferingsSection: React.FC = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {approved.map((item) => (
-                            <Card key={`${item.orderId}-${item.offeringId || item.caseOfferingId || "none"}`} className="cursor-pointer" onClick={() => openDetails(item)}>
-                                <CardBody>
-                                    <div className="flex items-start justify-between">
-                                        <div>
-                                            <div className="font-medium">{item.title}</div>
-                                            <div className="text-sm text-foreground-500">Order {item.orderNumber}</div>
-                                            {item.caseId && (
-                                                <div className="text-xs text-foreground-400 mt-1">Case: <span className="font-mono">{item.caseId}</span></div>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button isIconOnly size="sm" variant="light" aria-label="Refresh" onClick={(ev) => { ev.stopPropagation(); handleResync(item); }} isDisabled={!item.caseId}>
-                                                {item.caseId && refreshing[item.caseId] ? (
-                                                    <Icon icon="lucide:loader-2" className="animate-spin" />
-                                                ) : (
-                                                    <Icon icon="lucide:refresh-cw" />
+                            item.caseId ? (
+                                <Link href={`/offerings/${item.caseId}`} key={`${item.orderId}-${item.offeringId || item.caseOfferingId || "none"}`} className="block">
+                                    <Card className="cursor-pointer">
+                                        <CardBody>
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <div className="font-medium">{item.title}</div>
+                                                    <div className="text-sm text-foreground-500">Order {item.orderNumber}</div>
+                                                    {item.caseId && (
+                                                        <div className="text-xs text-foreground-400 mt-1">Case: <span className="font-mono">{item.caseId}</span></div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button isIconOnly size="sm" variant="light" aria-label="Refresh" onClick={(ev) => { ev.stopPropagation(); handleResync(item); }} isDisabled={!item.caseId}>
+                                                        {item.caseId && refreshing[item.caseId] ? (
+                                                            <Icon icon="lucide:loader-2" className="animate-spin" />
+                                                        ) : (
+                                                            <Icon icon="lucide:refresh-cw" />
+                                                        )}
+                                                    </Button>
+                                                    <Chip color="success" size="sm" variant="flat">Approved</Chip>
+                                                </div>
+                                            </div>
+                                            <div className="mt-2 text-xs text-foreground-500">
+                                                Updated {new Date(item.updatedAt).toLocaleString()}
+                                            </div>
+                                        </CardBody>
+                                    </Card>
+                                </Link>
+                            ) : (
+                                <Card key={`${item.orderId}-${item.offeringId || item.caseOfferingId || "none"}`} className="cursor-pointer" onClick={() => openDetails(item)}>
+                                    <CardBody>
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <div className="font-medium">{item.title}</div>
+                                                <div className="text-sm text-foreground-500">Order {item.orderNumber}</div>
+                                                {item.caseId && (
+                                                    <div className="text-xs text-foreground-400 mt-1">Case: <span className="font-mono">{item.caseId}</span></div>
                                                 )}
-                                            </Button>
-                                            <Chip color="success" size="sm" variant="flat">Approved</Chip>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button isIconOnly size="sm" variant="light" aria-label="Refresh" onClick={(ev) => { ev.stopPropagation(); handleResync(item); }} isDisabled={!item.caseId}>
+                                                    {item.caseId && refreshing[item.caseId] ? (
+                                                        <Icon icon="lucide:loader-2" className="animate-spin" />
+                                                    ) : (
+                                                        <Icon icon="lucide:refresh-cw" />
+                                                    )}
+                                                </Button>
+                                                <Chip color="success" size="sm" variant="flat">Approved</Chip>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="mt-2 text-xs text-foreground-500">
-                                        Updated {new Date(item.updatedAt).toLocaleString()}
-                                    </div>
-                                </CardBody>
-                            </Card>
+                                        <div className="mt-2 text-xs text-foreground-500">
+                                            Updated {new Date(item.updatedAt).toLocaleString()}
+                                        </div>
+                                    </CardBody>
+                                </Card>
+                            )
                         ))}
                     </div>
                 )}
@@ -150,32 +184,63 @@ export const OfferingsSection: React.FC = () => {
                 ) : (
                     <div className="space-y-3">
                         {pending.map((item) => (
-                            <Card key={`${item.orderId}-pending-${item.caseId}`} className="cursor-pointer" onClick={() => openDetails(item)}>
-                                <CardBody>
-                                    <div className="flex items-start justify-between">
-                                        <div>
-                                            <div className="font-medium">{item.title}</div>
-                                            <div className="text-sm text-foreground-500">Order {item.orderNumber}</div>
-                                            {item.caseId && (
-                                                <div className="text-xs text-foreground-400 mt-1">Case: <span className="font-mono">{item.caseId}</span></div>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button isIconOnly size="sm" variant="light" aria-label="Refresh" onClick={(ev) => { ev.stopPropagation(); handleResync(item); }} isDisabled={!item.caseId}>
-                                                {item.caseId && refreshing[item.caseId] ? (
-                                                    <Icon icon="lucide:loader-2" className="animate-spin" />
-                                                ) : (
-                                                    <Icon icon="lucide:refresh-cw" />
+                            item.caseId ? (
+                                <Link href={`/offerings/${item.caseId}`} key={`${item.orderId}-pending-${item.caseId}`} className="block">
+                                    <Card className="cursor-pointer">
+                                        <CardBody>
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <div className="font-medium">{item.title}</div>
+                                                    <div className="text-sm text-foreground-500">Order {item.orderNumber}</div>
+                                                    {item.caseId && (
+                                                        <div className="text-xs text-foreground-400 mt-1">Case: <span className="font-mono">{item.caseId}</span></div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button isIconOnly size="sm" variant="light" aria-label="Refresh" onClick={(ev) => { ev.stopPropagation(); handleResync(item); }} isDisabled={!item.caseId}>
+                                                        {item.caseId && refreshing[item.caseId] ? (
+                                                            <Icon icon="lucide:loader-2" className="animate-spin" />
+                                                        ) : (
+                                                            <Icon icon="lucide:refresh-cw" />
+                                                        )}
+                                                    </Button>
+                                                    <Chip color="warning" size="sm" variant="flat">Pending review</Chip>
+                                                </div>
+                                            </div>
+                                            <div className="mt-2 text-xs text-foreground-500">
+                                                Updated {new Date(item.updatedAt).toLocaleString()}
+                                            </div>
+                                        </CardBody>
+                                    </Card>
+                                </Link>
+                            ) : (
+                                <Card key={`${item.orderId}-pending-${item.caseId}`} className="cursor-pointer" onClick={() => openDetails(item)}>
+                                    <CardBody>
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <div className="font-medium">{item.title}</div>
+                                                <div className="text-sm text-foreground-500">Order {item.orderNumber}</div>
+                                                {item.caseId && (
+                                                    <div className="text-xs text-foreground-400 mt-1">Case: <span className="font-mono">{item.caseId}</span></div>
                                                 )}
-                                            </Button>
-                                            <Chip color="warning" size="sm" variant="flat">Pending review</Chip>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button isIconOnly size="sm" variant="light" aria-label="Refresh" onClick={(ev) => { ev.stopPropagation(); handleResync(item); }} isDisabled={!item.caseId}>
+                                                    {item.caseId && refreshing[item.caseId] ? (
+                                                        <Icon icon="lucide:loader-2" className="animate-spin" />
+                                                    ) : (
+                                                        <Icon icon="lucide:refresh-cw" />
+                                                    )}
+                                                </Button>
+                                                <Chip color="warning" size="sm" variant="flat">Pending review</Chip>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="mt-2 text-xs text-foreground-500">
-                                        Updated {new Date(item.updatedAt).toLocaleString()}
-                                    </div>
-                                </CardBody>
-                            </Card>
+                                        <div className="mt-2 text-xs text-foreground-500">
+                                            Updated {new Date(item.updatedAt).toLocaleString()}
+                                        </div>
+                                    </CardBody>
+                                </Card>
+                            )
                         ))}
                     </div>
                 )}

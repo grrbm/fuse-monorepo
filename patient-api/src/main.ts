@@ -7722,6 +7722,31 @@ async function startServer() {
     }
   });
 
+  // Get offerings for a specific MD case
+  app.get("/md/cases/:caseId/offerings", authenticateJWT, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const { caseId } = req.params as any;
+      if (!caseId) {
+        return res.status(400).json({ success: false, message: 'caseId is required' });
+      }
+
+      const MDAuthService = (await import('./services/mdIntegration/MDAuth.service')).default;
+      const MDCaseService = (await import('./services/mdIntegration/MDCase.service')).default;
+      const tokenResponse = await MDAuthService.generateToken();
+      const offerings = await MDCaseService.getCaseOfferings(caseId, tokenResponse.access_token);
+
+      return res.json({ success: true, data: offerings });
+    } catch (error) {
+      console.error('❌ Error fetching MD case offerings:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch MD case offerings' });
+    }
+  });
+
   // One-off: resync MD case details onto the order (NO AUTH by request)
   // Body: { caseId: string }
   app.post("/md/resync", async (req, res) => {
