@@ -7631,6 +7631,55 @@ async function startServer() {
     console.log('📊 Database connected successfully');
     console.log('🔒 HIPAA-compliant security features enabled');
   });
+
+  // MD Integrations Webhook (raw body required for signature verification)
+  app.post("/md/webhooks", express.raw({ type: 'application/json' }), async (req, res) => {
+    const requestId = (req.headers['x-request-id'] as string) || Math.random().toString(36).slice(2);
+    try {
+      // Lazy import to avoid circular deps at module init
+      const { default: MDWebhookService } = await import('./services/mdIntegration/MDWebhook.service');
+
+      const signatureHeaderName = process.env.MD_INTEGRATIONS_WEBHOOK_SIGNATURE_HEADER || 'x-md-signature';
+      const providedSignature = (req.headers[signatureHeaderName] as string) || '';
+
+      // Parse raw body safely
+      let payload: any = undefined;
+      try {
+        const raw = (req as any).body instanceof Buffer ? (req as any).body.toString('utf8') : (req as any).rawBody || '';
+        payload = raw ? JSON.parse(raw) : {};
+      } catch (e) {
+        console.error(`[MD-WH] reqId=${requestId} invalid JSON body`, e);
+        return res.status(400).json({ success: false, message: 'Invalid JSON' });
+      }
+
+      const secret = process.env.MD_INTEGRATIONS_WEBHOOK_SECRET || '';
+      let signatureValid = true;
+      if (secret) {
+        signatureValid = MDWebhookService.verifyWebhookSignature(providedSignature, payload, secret);
+      }
+
+      console.log(`[MD-WH] reqId=${requestId} received`, {
+        event_type: payload?.event_type,
+        case_id: payload?.case_id,
+        patient_id: payload?.patient_id,
+        signature_present: Boolean(providedSignature),
+        signature_valid: signatureValid,
+        header_sig_name: signatureHeaderName,
+      });
+
+      if (secret && !signatureValid) {
+        return res.status(401).json({ success: false, message: 'Invalid signature' });
+      }
+
+      await MDWebhookService.processMDWebhook(payload);
+
+      console.log(`[MD-WH] reqId=${requestId} processed`, { event_type: payload?.event_type });
+      return res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error(`[MD-WH] reqId=${requestId} error`, error);
+      return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+    }
+  });
 }
 
 startServer();

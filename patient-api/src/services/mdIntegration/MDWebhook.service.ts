@@ -126,7 +126,7 @@ class MDWebhookService {
 
   // This event will be dispatched when a treatment is approved and ready to be ordered, depending on the offering type:
   async handleOfferingSubmitted(eventData: OfferingSubmittedEvent): Promise<void> {
-    console.log('🩺 MD Integration offering submitted:', eventData.case_id);
+    console.log('[MD-WH] 🩺 offering_submitted start', { case_id: eventData.case_id, offerings_count: eventData.offerings?.length });
 
     try {
       // Find order by mdCaseId
@@ -135,25 +135,25 @@ class MDWebhookService {
       });
 
       if (!order) {
-        console.log('⚠️ Order not found for case ID:', eventData.case_id);
+        console.log('[MD-WH] ⚠️ no order for case', { case_id: eventData.case_id });
         return;
       }
 
-      console.log('✅ Processing offering submitted for order:', order.orderNumber);
+      console.log('[MD-WH] processing order', { orderNumber: order.orderNumber, orderId: order.id });
 
       // Approve the order with the assigned physician
       const orderService = new OrderService();
       await orderService.approveOrder(order.id);
-      console.log('✅ Order approved with physician:', order.orderNumber);
+      console.log('[MD-WH] ✅ order approved', { orderNumber: order.orderNumber });
 
     } catch (error) {
-      console.error('❌ Error processing offering submitted:', error);
+      console.error('[MD-WH] ❌ offering_submitted error', error);
       throw error;
     }
   }
 
   async handleIntroVideoRequested(eventData: IntroVideoRequestedEvent): Promise<void> {
-    console.log('🎥 MD Integration intro video requested:', eventData.patient_id);
+    console.log('[MD-WH] 🎥 intro_video_requested start', { patient_id: eventData.patient_id });
 
     try {
       // Find user by mdPatientId
@@ -162,15 +162,15 @@ class MDWebhookService {
       });
 
       if (!user) {
-        console.log('⚠️ User not found for MD patient ID:', eventData.patient_id);
+        console.log('[MD-WH] ⚠️ no user for patient', { patient_id: eventData.patient_id });
         return;
       }
 
-      console.log('✅ Processing intro video request for user:', user.id);
+      console.log('[MD-WH] processing intro video', { userId: user.id });
 
 
 
-      console.log('📋 Intro video details:', {
+      console.log('[MD-WH] intro video details', {
         userId: user.id,
         patientId: eventData.patient_id,
         accessLink: eventData.access_link,
@@ -181,13 +181,13 @@ class MDWebhookService {
       // TODO: Store access link for future reference if needed
 
     } catch (error) {
-      console.error('❌ Error processing intro video request:', error);
+      console.error('[MD-WH] ❌ intro_video_requested error', error);
       throw error;
     }
   }
 
   async handleDriversLicenseRequested(eventData: DriversLicenseRequestedEvent): Promise<void> {
-    console.log('🆔 MD Integration drivers license requested:', eventData.patient_id);
+    console.log('[MD-WH] 🆔 drivers_license_requested start', { patient_id: eventData.patient_id });
 
     try {
       // Find user by mdPatientId
@@ -196,13 +196,13 @@ class MDWebhookService {
       });
 
       if (!user) {
-        console.log('⚠️ User not found for MD patient ID:', eventData.patient_id);
+        console.log('[MD-WH] ⚠️ no user for patient', { patient_id: eventData.patient_id });
         return;
       }
 
-      console.log('✅ Processing drivers license request for user:', user.id);
+      console.log('[MD-WH] processing drivers license', { userId: user.id });
 
-      console.log('📋 Drivers license request details:', {
+      console.log('[MD-WH] drivers license details', {
         userId: user.id,
         patientId: eventData.patient_id,
         accessLink: eventData.access_link,
@@ -213,15 +213,15 @@ class MDWebhookService {
       // TODO: Send notification to user about drivers license request
 
     } catch (error) {
-      console.error('❌ Error processing drivers license request:', error);
+      console.error('[MD-WH] ❌ drivers_license_requested error', error);
       throw error;
     }
   }
 
   async handleMessageCreated(eventData: MessageCreatedEvent): Promise<void> {
-    console.log('💬 MD Integration message created:', eventData.message_id);
+    console.log('[MD-WH] 💬 message_created start', { message_id: eventData.message_id });
 
-    console.log('📋 Message details:', {
+    console.log('[MD-WH] message details', {
       patientId: eventData.patient_id,
       messageId: eventData.message_id,
       userType: eventData.user_type,
@@ -239,14 +239,14 @@ class MDWebhookService {
         user?.update({
           newMessages: true
         })
-        console.log('✅ Processing message created for user:', user?.id);
+        console.log('[MD-WH] processing message for user', { userId: user?.id });
       }
 
 
       // TODO: Send push notification to user about new message
 
     } catch (error) {
-      console.error('❌ Error processing message created:', error);
+      console.error('[MD-WH] ❌ message_created error', error);
       throw error;
     }
   }
@@ -270,7 +270,7 @@ class MDWebhookService {
         break;
 
       default:
-        console.log(`🔍 Unhandled MD Integration event type: ${eventData.event_type}`);
+        console.log(`[MD-WH] 🔍 unhandled event type: ${eventData.event_type}`);
     }
   }
 }
