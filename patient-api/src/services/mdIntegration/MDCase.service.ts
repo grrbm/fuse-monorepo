@@ -96,6 +96,20 @@ class MDCaseService {
     return response.data;
   }
 
+  async getCaseOfferings(caseId: string, accessToken: string): Promise<any[]> {
+    const response = await axios.get<any[]>(
+      resolveMdIntegrationsBaseUrl(`/partner/cases/${caseId}/offerings`),
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    return response.data;
+  }
+
   async createCase(caseData: CreateCaseRequest, accessToken: string): Promise<CaseResponse> {
     const response = await axios.post<CaseResponse>(
       resolveMdIntegrationsBaseUrl('/partner/cases'),

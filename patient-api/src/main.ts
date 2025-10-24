@@ -7659,7 +7659,8 @@ async function startServer() {
           for (const off of mdOfferings) {
             const status = off?.status || off?.order_status || 'submitted';
             const title = off?.title || off?.name || 'Offering';
-            const classification = ['approved', 'submitted'].includes(String(status).toLowerCase()) ? 'approved' : 'pending';
+            const normalized = String(status).toLowerCase();
+            const classification = ['approved', 'submitted', 'completed'].includes(normalized) ? 'approved' : 'pending';
             flattened.push({
               orderId: order.id,
               orderNumber: (order as any).orderNumber,

@@ -142,9 +142,18 @@ class MDWebhookService {
 
       const token = await MDAuthService.generateToken();
       const mdCase = await MDCaseService.getCase(caseId, token.access_token);
+      // Fetch offerings explicitly (more reliable than relying on case embed)
+      let offeringsFromEndpoint: any[] = [];
+      try {
+        offeringsFromEndpoint = await MDCaseService.getCaseOfferings(caseId, token.access_token);
+      } catch (e) {
+        console.warn('[MD-WH] ⚠️ getCaseOfferings failed, falling back to case payload', e);
+      }
 
       const prescriptions = (mdCase as any)?.prescriptions ?? null;
-      const offerings = (mdCase as any)?.offerings ?? (mdCase as any)?.case_offerings ?? (mdCase as any)?.services ?? null;
+      const offerings = (offeringsFromEndpoint && offeringsFromEndpoint.length > 0)
+        ? offeringsFromEndpoint
+        : (mdCase as any)?.offerings ?? (mdCase as any)?.case_offerings ?? (mdCase as any)?.services ?? null;
 
       const updatePayload: any = {};
       const incomingRxCount = Array.isArray(prescriptions) ? prescriptions.length : 0;
