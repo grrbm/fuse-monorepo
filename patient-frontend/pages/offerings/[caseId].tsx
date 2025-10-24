@@ -46,34 +46,60 @@ export default function OfferingDetailsPage() {
                 <Card className="border-dashed"><CardBody className="text-foreground-500">No offerings found for this case.</CardBody></Card>
             ) : (
                 <div className="space-y-4">
-                    {offerings.map((o) => (
-                        <Card key={o.case_offering_id || o.id} className="transition-shadow hover:shadow-md">
-                            <CardBody>
-                                <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                        <div className="font-medium text-foreground text-lg">{o.title || o.name || 'Offering'}</div>
-                                        <div className="mt-1 text-sm text-foreground-500">{o.product?.title || o.product_id}</div>
+                    {offerings.map((o) => {
+                        const hasLeft = Boolean(o.directions || o.thank_you_note || o.clinical_note);
+                        return (
+                            <Card key={o.case_offering_id || o.id} className="transition-shadow hover:shadow-md">
+                                <CardBody>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div className="font-medium text-foreground text-lg">{o.title || o.name || 'Offering'}</div>
+                                            <div className="mt-1 text-sm text-foreground-500">{o.product?.title || o.product_id}</div>
+                                        </div>
+                                        <Chip size="sm" variant="flat" color={String(o.status || '').toLowerCase() === 'completed' ? 'success' as any : 'default' as any}>
+                                            {o.status || 'n/a'}
+                                        </Chip>
                                     </div>
-                                    <Chip size="sm" variant="flat" color={String(o.status || '').toLowerCase() === 'completed' ? 'success' as any : 'default' as any}>
-                                        {o.status || 'n/a'}
-                                    </Chip>
-                                </div>
-                                <Divider className="my-3" />
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                    <div className="space-y-2">
-                                        {o.directions && <div><span className="text-foreground-500">Directions:</span> {o.directions}</div>}
-                                        {o.thank_you_note && <div><span className="text-foreground-500">Thank you note:</span> {o.thank_you_note}</div>}
-                                        {o.clinical_note && <div><span className="text-foreground-500">Clinical note:</span> {o.clinical_note}</div>}
-                                    </div>
-                                    <div className="space-y-2">
-                                        {o.product?.description && <div><span className="text-foreground-500">Description:</span> {o.product.description}</div>}
-                                        {o.product?.pharmacy_notes && <div><span className="text-foreground-500">Pharmacy notes:</span> {o.product.pharmacy_notes}</div>}
-                                        {o.order_status && <div><span className="text-foreground-500">Order status:</span> {o.order_status}</div>}
-                                    </div>
-                                </div>
-                            </CardBody>
-                        </Card>
-                    ))}
+                                    <Divider className="my-3" />
+                                    {hasLeft ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                            <div className="space-y-2">
+                                                {o.directions && <div><span className="text-foreground-500">Directions:</span> {o.directions}</div>}
+                                                {o.thank_you_note && <div><span className="text-foreground-500">Thank you note:</span> {o.thank_you_note}</div>}
+                                                {o.clinical_note && (
+                                                    <div>
+                                                        <span className="text-foreground-500">Clinical note:</span>
+                                                        <div className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap bg-content2/60 border border-content3 rounded-md p-2 text-foreground-600">
+                                                            {o.clinical_note}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="space-y-2">
+                                                {o.product?.description && <div><span className="text-foreground-500">Description:</span> {o.product.description}</div>}
+                                                {o.product?.pharmacy_notes && <div><span className="text-foreground-500">Pharmacy notes:</span> {o.product.pharmacy_notes}</div>}
+                                                {o.order_status && <div><span className="text-foreground-500">Order status:</span> {o.order_status}</div>}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm space-y-2">
+                                            {o.product?.description && <div><span className="text-foreground-500">Description:</span> {o.product.description}</div>}
+                                            {o.product?.pharmacy_notes && <div><span className="text-foreground-500">Pharmacy notes:</span> {o.product.pharmacy_notes}</div>}
+                                            {o.order_status && <div><span className="text-foreground-500">Order status:</span> {o.order_status}</div>}
+                                            {o.clinical_note && (
+                                                <div>
+                                                    <span className="text-foreground-500">Clinical note:</span>
+                                                    <div className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap bg-content2/60 border border-content3 rounded-md p-2 text-foreground-600">
+                                                        {o.clinical_note}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </CardBody>
+                            </Card>
+                        );
+                    })}
                 </div>
             )}
         </div>
