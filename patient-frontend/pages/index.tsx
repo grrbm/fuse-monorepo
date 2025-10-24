@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Sidebar } from "../components/sidebar";
 import { Header } from "../components/header";
 import { Dashboard } from "../components/dashboard";
+import { OfferingsPage } from "../components/offerings-page";
 import { MessengerPage } from "../components/messenger-page";
 import { TreatmentsPage } from "../components/treatments-page";
 import { AccountPage } from "../components/account-page";
@@ -94,6 +95,7 @@ function HomePage() {
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           >
             {activeTab === "dashboard" && <Dashboard />}
+            {activeTab === "offerings" && <OfferingsPage />}
             {activeTab === "treatments" && <TreatmentsPage />}
             {activeTab === "messenger" && <MessengerPage isMobileView={isMobileView} />}
             {activeTab === "branding" && <BrandingPage />}

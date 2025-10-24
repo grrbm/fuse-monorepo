@@ -7632,6 +7632,77 @@ async function startServer() {
     console.log('🔒 HIPAA-compliant security features enabled');
   });
 
+  // List MD offerings for current user (approved and pending)
+  app.get("/md/offerings", authenticateJWT, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const limit = Math.min(parseInt(String((req.query as any).limit || '50'), 10) || 50, 200);
+      const offset = parseInt(String((req.query as any).offset || '0'), 10) || 0;
+
+      const orders = await Order.findAll({
+        where: { userId: currentUser.id },
+        order: [["createdAt", "DESC"]] as any,
+        limit,
+        offset,
+      } as any);
+
+      const flattened: any[] = [];
+      for (const order of orders) {
+        const mdCaseId = (order as any).mdCaseId;
+        const mdOfferings = (order as any).mdOfferings as any[] | null | undefined;
+
+        if (Array.isArray(mdOfferings) && mdOfferings.length > 0) {
+          for (const off of mdOfferings) {
+            const status = off?.status || off?.order_status || 'submitted';
+            const title = off?.title || off?.name || 'Offering';
+            const classification = ['approved', 'submitted'].includes(String(status).toLowerCase()) ? 'approved' : 'pending';
+            flattened.push({
+              orderId: order.id,
+              orderNumber: (order as any).orderNumber,
+              caseId: mdCaseId,
+              offeringId: off?.id,
+              caseOfferingId: off?.case_offering_id,
+              title,
+              productId: off?.product_id,
+              productType: off?.product_type,
+              status,
+              orderStatus: (order as any).status,
+              createdAt: off?.created_at || (order as any).createdAt,
+              updatedAt: off?.updated_at || (order as any).updatedAt,
+              classification,
+            });
+          }
+        } else if (mdCaseId) {
+          // Case exists but no offerings captured yet → pending bucket
+          flattened.push({
+            orderId: order.id,
+            orderNumber: (order as any).orderNumber,
+            caseId: mdCaseId,
+            offeringId: null,
+            caseOfferingId: null,
+            title: 'Pending medical review',
+            productId: null,
+            productType: null,
+            status: 'pending',
+            orderStatus: (order as any).status,
+            createdAt: (order as any).createdAt,
+            updatedAt: (order as any).updatedAt,
+            classification: 'pending',
+          });
+        }
+      }
+
+      return res.json({ success: true, data: flattened });
+    } catch (error) {
+      console.error('❌ Error listing MD offerings:', error);
+      return res.status(500).json({ success: false, message: 'Failed to list MD offerings' });
+    }
+  });
+
   // MD Integrations Webhook (raw body required for signature verification)
   // Accept any content-type as raw so signature can be computed on exact bytes
   app.post("/md/webhooks", express.raw({ type: () => true }), async (req, res) => {
