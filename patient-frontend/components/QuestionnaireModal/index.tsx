@@ -37,6 +37,7 @@ import { QuestionRenderer } from "./components/QuestionRenderer";
 import { CheckoutView } from "./components/CheckoutView";
 import { ProductSelection } from "./components/ProductSelection";
 import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVariables";
+import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
@@ -52,6 +53,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   productStripeProductId,
   tenantProductId
 }) => {
+  const { clinic: domainClinic, isLoading: isLoadingClinic } = useClinicFromDomain();
   const [questionnaire, setQuestionnaire] = React.useState<QuestionnaireData | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [currentStepIndex, setCurrentStepIndex] = React.useState(0);
@@ -1583,6 +1585,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                       <StepHeader
                         onPrevious={handlePrevious}
                         canGoBack={currentStepIndex > 0}
+                        clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
+                        isLoadingClinic={isLoadingClinic}
                       />
 
                       <div className="bg-white rounded-2xl p-6 space-y-6">
@@ -1632,6 +1636,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                       <StepHeader
                         onPrevious={handlePrevious}
                         canGoBack={currentStepIndex > 0}
+                        clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
+                        isLoadingClinic={isLoadingClinic}
                       />
 
                       <div className="bg-white rounded-2xl p-6 space-y-6 max-w-2xl mx-auto w-full">
@@ -1755,6 +1761,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                       <StepHeader
                         onPrevious={handlePrevious}
                         canGoBack={currentStepIndex > 0}
+                        clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
+                        isLoadingClinic={isLoadingClinic}
                       />
 
                       {/* Questions */}
