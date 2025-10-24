@@ -129,6 +129,68 @@ async function findOrderForEvent(eventData: GenericCaseEvent): Promise<Order | n
 }
 
 class MDWebhookService {
+  private async fetchAndPersistCaseDetails(caseId: string): Promise<void> {
+    try {
+      const order = await Order.findOne({ where: { mdCaseId: caseId } });
+      if (!order) {
+        console.log('[MD-WH] ⚠️ fetchAndPersistCaseDetails: no order for case', { case_id: caseId });
+        return;
+      }
+
+      const token = await MDAuthService.generateToken();
+      const mdCase = await MDCaseService.getCase(caseId, token.access_token);
+
+      const prescriptions = (mdCase as any)?.prescriptions ?? null;
+      const offerings = (mdCase as any)?.offerings ?? (mdCase as any)?.case_offerings ?? (mdCase as any)?.services ?? null;
+
+      await order.update({
+        mdPrescriptions: prescriptions,
+        mdOfferings: offerings
+      });
+
+      const prescriptionsCount = Array.isArray(prescriptions) ? prescriptions.length : 0;
+      const offeringsCount = Array.isArray(offerings) ? offerings.length : 0;
+
+      console.log('[MD-WH] 📦 saved case details from MD', {
+        orderNumber: order.orderNumber,
+        case_id: caseId,
+        prescriptions_count: prescriptionsCount,
+        offerings_count: offeringsCount
+      });
+
+      if (Array.isArray(prescriptions)) {
+        prescriptions.forEach((p: any, idx: number) => {
+          console.log('[MD-WH] 💊 prescription', {
+            idx,
+            id: p?.id,
+            title: p?.title ?? p?.name,
+            directions: p?.directions,
+            quantity: p?.quantity,
+            refills: p?.refills,
+            product_id: p?.product_id
+          });
+        });
+      }
+
+      if (Array.isArray(offerings)) {
+        offerings.forEach((o: any, idx: number) => {
+          console.log('[MD-WH] 🩺 offering', {
+            idx,
+            id: o?.id,
+            case_offering_id: o?.case_offering_id,
+            title: o?.title ?? o?.name,
+            product_id: o?.product_id,
+            product_type: o?.product_type,
+            status: o?.status,
+            order_status: o?.order_status
+          });
+        });
+      }
+    } catch (error) {
+      console.error('[MD-WH] ❌ fetchAndPersistCaseDetails error', error);
+      throw error;
+    }
+  }
   /**
    * Verify webhook signature using HMAC SHA256
    * Matches PHP: hash_hmac('sha256', json_encode(payload), secret)
@@ -174,6 +236,14 @@ class MDWebhookService {
       }
 
       console.log('[MD-WH] processing order', { orderNumber: order.orderNumber, orderId: order.id });
+
+      // Persist offerings from event payload immediately
+      try {
+        await order.update({ mdOfferings: eventData.offerings });
+        console.log('[MD-WH] 📝 offerings saved on order from webhook payload', { orderNumber: order.orderNumber, offerings_count: eventData.offerings?.length || 0 });
+      } catch (e) {
+        console.warn('[MD-WH] ⚠️ failed to save offerings from payload', e);
+      }
 
       // Approve the order with the assigned physician
       const orderService = new OrderService();
@@ -314,6 +384,11 @@ class MDWebhookService {
           // Mark order as processing (paid and being fulfilled)
           await order.updateStatus(OrderStatus.PROCESSING);
           console.log('[MD-WH] 🧾 order marked processing for completed case', { orderNumber: order.orderNumber });
+
+          // Fetch and persist final case details (prescriptions/offerings)
+          if ((eventData as CaseCompletedEvent).case_id) {
+            await this.fetchAndPersistCaseDetails((eventData as CaseCompletedEvent).case_id);
+          }
         } catch (e) {
           console.error('[MD-WH] ❌ error handling case_completed', e);
         }
@@ -368,6 +443,48 @@ class MDWebhookService {
         if (!order) break;
         await order.updateStatus(OrderStatus.PROCESSING);
         console.log('[MD-WH] order marked processing after prescription submission', { orderNumber: order.orderNumber });
+
+        // Persist prescriptions/offerings from payload if present
+        try {
+          const payloadPrescriptions = (eventData as any)?.prescriptions;
+          const payloadOfferings = (eventData as any)?.offerings ?? (eventData as any)?.services;
+          if (payloadPrescriptions || payloadOfferings) {
+            await order.update({
+              mdPrescriptions: payloadPrescriptions ?? order.getDataValue('mdPrescriptions'),
+              mdOfferings: payloadOfferings ?? order.getDataValue('mdOfferings')
+            });
+            console.log('[MD-WH] 📝 saved rx/offerings from webhook payload', {
+              orderNumber: order.orderNumber,
+              prescriptions_count: Array.isArray(payloadPrescriptions) ? payloadPrescriptions.length : 0,
+              offerings_count: Array.isArray(payloadOfferings) ? payloadOfferings.length : 0
+            });
+
+            if (Array.isArray(payloadPrescriptions)) {
+              payloadPrescriptions.forEach((p: any, idx: number) => {
+                console.log('[MD-WH] 💊 prescription(payload)', {
+                  idx,
+                  id: p?.id,
+                  title: p?.title ?? p?.name,
+                  directions: p?.directions,
+                  quantity: p?.quantity,
+                  refills: p?.refills,
+                  product_id: p?.product_id
+                });
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('[MD-WH] ⚠️ failed to save rx/offerings from payload', e);
+        }
+
+        // Also fetch the case from MD to ensure we have the latest
+        if ((eventData as any)?.case_id) {
+          try {
+            await this.fetchAndPersistCaseDetails((eventData as any).case_id);
+          } catch (e) {
+            console.warn('[MD-WH] ⚠️ fetch after prescription_submitted failed', e);
+          }
+        }
         break;
       }
 
