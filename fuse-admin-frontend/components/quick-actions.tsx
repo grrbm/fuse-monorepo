@@ -27,11 +27,18 @@ export function QuickActions() {
       icon: Users,
       onClick: () => router.push('/settings'),
       variant: "outline" as const
+    },
+    {
+      title: "View Customers",
+      description: "View your customers",
+      icon: Users,
+      onClick: () => router.push('/customers'),
+      variant: "outline" as const
     }
   ];
 
   return (
-    <Card className="bg-card border-border shadow-sm">
+    <Card className="bg-card border-border shadow-sm h-full">
       <CardHeader className="border-b border-border">
         <CardTitle className="text-lg font-semibold text-foreground">Quick Actions</CardTitle>
       </CardHeader>
