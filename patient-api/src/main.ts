@@ -197,7 +197,7 @@ app.use(cors({
         'https://unboundedhealth.xyz', // Add unboundedhealth.xyz
         'https://www.unboundedhealth.xyz'
       ]
-      : ['http://localhost:3000', 'http://localhost:3002', 'http://localhost:3030', 'http://3.140.178.30', 'https://unboundedhealth.xyz']; // Allow local frontends, your IP, and unboundedhealth.xyz during development
+      : ['http://localhost:3000', 'http://localhost:3002', 'http://localhost:3003', 'http://localhost:3030', 'http://3.140.178.30', 'https://unboundedhealth.xyz']; // Allow local frontends, your IP, and unboundedhealth.xyz during development
 
     // Check if origin is in allowed list or matches patterns
     const isAllowed = allowedOrigins.includes(origin) ||
