@@ -40,3 +40,5 @@ playwright/.cache/
 backup env
 
 MdIntegrationsAPIDocs.pdf
+
+caddy.tar.gz

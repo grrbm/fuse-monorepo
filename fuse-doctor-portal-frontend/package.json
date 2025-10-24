@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "pnpm with-env next dev -p 3003",
     "build": "NODE_ENV=production pnpm with-env next build",
-    "start": "next start -p 3030",
+    "start": "next start -p 3040",
     "lint": "next lint",
     "pm2:start": "pnpm with-env pm2 start npm --name doctor-portal-frontend --node-args='--max-old-space-size=1024 --no-warnings' -- start",
     "pm2:reload": "pnpm build && pnpm with-env pm2 reload doctor-portal-frontend --update-env",
@@ -76,4 +76,3 @@
     "typescript": "catalog:"
   }
 }
-
