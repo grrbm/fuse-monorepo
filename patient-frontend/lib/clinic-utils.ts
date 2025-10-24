@@ -1,4 +1,5 @@
 // Utility functions for clinic subdomain handling
+import { apiCall } from './api';
 
 export interface ClinicDomainInfo {
   hasClinicSubdomain: boolean;
@@ -10,7 +11,13 @@ export interface ClinicDomainInfo {
 /**
  * Extracts clinic slug from current domain
  * 
- * Development examples:
+ * This function first checks for custom/vanity domains via API call,
+ * then falls back to subdomain detection if no custom domain is found.
+ * 
+ * Vanity domain examples:
+ * - myclinic.com -> checks API for custom domain -> returns slug if configured
+ * 
+ * Subdomain examples (fallback):
  * - saboia.xyz.localhost:3000 -> slug: "saboia.xyz"
  * - g-health.localhost:3000 -> slug: "g-health"  
  * - limitless.health.localhost:3000 -> no slug (special case)
@@ -23,7 +30,7 @@ export interface ClinicDomainInfo {
  * - app.anydomain.anyextension -> slug: "anydomain.anyextension"
  * - fuse.health -> no slug (direct domain access)
  */
-export function extractClinicSlugFromDomain(): ClinicDomainInfo {
+export async function extractClinicSlugFromDomain(): Promise<ClinicDomainInfo> {
   if (typeof window === 'undefined') {
     return {
       hasClinicSubdomain: false,
@@ -37,6 +44,36 @@ export function extractClinicSlugFromDomain(): ClinicDomainInfo {
   const parts = hostname.split('.');
 
   console.log('🔍 Domain analysis:', { hostname, parts });
+
+  // FIRST: Try to detect custom domain (vanity domain)
+  // Check if hostname is NOT a .fuse.health subdomain and NOT localhost
+  if (!hostname.endsWith('.fuse.health') && !hostname.includes('.localhost')) {
+    try {
+      console.log('🔍 Checking for custom domain:', hostname);
+      const customDomainResult = await apiCall('/clinic/by-custom-domain', {
+        method: 'POST',
+        body: JSON.stringify({ domain: hostname })
+      });
+
+      if (customDomainResult.success && customDomainResult.data?.slug) {
+        const clinicSlug = customDomainResult.data.slug;
+        console.log('✅ Found clinic via custom domain:', clinicSlug);
+        
+        return {
+          hasClinicSubdomain: true,
+          clinicSlug,
+          isDevelopment: false,
+          isProduction: true
+        };
+      } else {
+        console.log('[clinic-utils] custom-domain lookup returned no slug, falling back to subdomain detection');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching clinic by custom domain, falling back to subdomain detection:', error);
+    }
+  }
+
+  // FALLBACK: Subdomain detection logic
 
   // Development: Check if 'localhost' appears in any position
   const localhostIndex = parts.indexOf('localhost');

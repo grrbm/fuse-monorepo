@@ -49,10 +49,11 @@ export default function SignUp() {
 
   // Load clinic data based on subdomain
   React.useEffect(() => {
-    const loadClinicFromSubdomain = async () => {
+    const loadClinicFromDomain = async () => {
       setLoadingClinic(true);
       try {
-        const domainInfo = extractClinicSlugFromDomain();
+        // This function checks vanity domain first, then falls back to subdomain
+        const domainInfo = await extractClinicSlugFromDomain();
 
         if (domainInfo.hasClinicSubdomain && domainInfo.clinicSlug) {
           console.log('🏥 Detected clinic slug from subdomain:', domainInfo.clinicSlug);
@@ -74,7 +75,7 @@ export default function SignUp() {
       }
     };
 
-    loadClinicFromSubdomain();
+    loadClinicFromDomain();
   }, []);
 
   // Password strength validation (HIPAA requires strong passwords)

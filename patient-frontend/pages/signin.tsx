@@ -54,10 +54,11 @@ export default function SignIn() {
 
   // Load clinic data based on subdomain
   React.useEffect(() => {
-    const loadClinicFromSubdomain = async () => {
+    const loadClinicFromDomain = async () => {
       setLoadingClinic(true);
       try {
-        const domainInfo = extractClinicSlugFromDomain();
+        // This function checks vanity domain first, then falls back to subdomain
+        const domainInfo = await extractClinicSlugFromDomain();
 
         if (domainInfo.hasClinicSubdomain && domainInfo.clinicSlug) {
           setHasClinicSubdomain(true);
@@ -99,7 +100,7 @@ export default function SignIn() {
       }
     };
 
-    loadClinicFromSubdomain();
+    loadClinicFromDomain();
   }, []);
 
   React.useEffect(() => {

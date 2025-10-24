@@ -11,11 +11,12 @@ interface StepHeaderProps {
 export const StepHeader: React.FC<StepHeaderProps> = ({ canGoBack, onPrevious }) => {
     const [clinic, setClinic] = React.useState<{ name: string; logo?: string } | null>(null);
 
-    // Load clinic data from domain
+    // Load clinic data from domain (checks vanity domain first, then subdomain)
     React.useEffect(() => {
         const loadClinicFromDomain = async () => {
             try {
-                const domainInfo = extractClinicSlugFromDomain();
+                // This function checks vanity domain first, then falls back to subdomain
+                const domainInfo = await extractClinicSlugFromDomain();
 
                 if (domainInfo.hasClinicSubdomain && domainInfo.clinicSlug) {
                     console.log('🏥 StepHeader - Loading clinic data for slug:', domainInfo.clinicSlug);
@@ -33,7 +34,7 @@ export const StepHeader: React.FC<StepHeaderProps> = ({ canGoBack, onPrevious })
                         setClinic(null);
                     }
                 } else {
-                    console.log('❌ StepHeader - No clinic subdomain detected');
+                    console.log('ℹ️ StepHeader - No clinic subdomain or custom domain detected');
                     setClinic(null);
                 }
             } catch (error) {

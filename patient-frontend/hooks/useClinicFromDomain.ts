@@ -35,7 +35,8 @@ export function useClinicFromDomain(): UseClinicFromDomainResult {
     setError(null);
 
     try {
-      const domainInfo = extractClinicSlugFromDomain();
+      // This function checks vanity domain first, then falls back to subdomain
+      const domainInfo = await extractClinicSlugFromDomain();
 
       if (domainInfo.hasClinicSubdomain && domainInfo.clinicSlug) {
         console.log('🏥 Loading clinic from domain:', domainInfo.clinicSlug);
@@ -67,7 +68,25 @@ export function useClinicFromDomain(): UseClinicFromDomainResult {
     loadClinic();
   }, [loadClinic]);
 
-  const domainInfo = extractClinicSlugFromDomain();
+  // Note: We track clinicSlug and hasClinicSubdomain in state via loadClinic
+  // To get these synchronously, we'd need to call the function again, but that would
+  // trigger another API call. Instead, components should use the clinic object directly.
+  // For now, we'll use a simple synchronous check just for the return value.
+  const [domainInfo, setDomainInfo] = React.useState<{
+    hasClinicSubdomain: boolean;
+    clinicSlug: string | null;
+  }>({ hasClinicSubdomain: false, clinicSlug: null });
+
+  React.useEffect(() => {
+    const getDomainInfo = async () => {
+      const info = await extractClinicSlugFromDomain();
+      setDomainInfo({
+        hasClinicSubdomain: info.hasClinicSubdomain,
+        clinicSlug: info.clinicSlug
+      });
+    };
+    getDomainInfo();
+  }, []);
 
   return {
     clinic,
@@ -80,9 +99,9 @@ export function useClinicFromDomain(): UseClinicFromDomainResult {
 
 /**
  * Simple utility function to get just the clinic slug from current domain
- * Use this when you only need the slug and don't want to trigger API calls
+ * Checks vanity domain first, then falls back to subdomain detection
  */
-export function getClinicSlugFromDomain(): string | null {
-  const domainInfo = extractClinicSlugFromDomain();
+export async function getClinicSlugFromDomain(): Promise<string | null> {
+  const domainInfo = await extractClinicSlugFromDomain();
   return domainInfo.clinicSlug;
 }
