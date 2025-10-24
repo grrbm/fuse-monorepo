@@ -5,8 +5,10 @@ import { Analytics } from "@vercel/analytics/next"
 import { useState, useCallback } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { WebSocketProvider } from '@/contexts/WebSocketContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { ToastManager } from '@/components/ui/toast'
+import { Toaster } from 'sonner'
 import "../styles/globals.css"
 
 // Pages that don't require authentication
@@ -52,8 +54,11 @@ export default function App({ Component, pageProps }: AppProps & { showToast?: (
             </Head>
             <ThemeProvider>
                 <AuthProvider>
-                    {content}
-                    <ToastManager toasts={toasts} onDismiss={dismissToast} />
+                    <WebSocketProvider>
+                        {content}
+                        <ToastManager toasts={toasts} onDismiss={dismissToast} />
+                        <Toaster position="top-right" richColors />
+                    </WebSocketProvider>
                 </AuthProvider>
             </ThemeProvider>
         </>

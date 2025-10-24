@@ -36,6 +36,7 @@
     "sequelize": "^6.37.7",
     "sequelize-cli": "^6.6.3",
     "sequelize-typescript": "^2.1.6",
+    "socket.io": "^4.8.1",
     "stripe": "^18.5.0",
     "@fuse/stripe": "workspace:*",
     "@fuse/tsconfig": "workspace:*",

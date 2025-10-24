@@ -2,6 +2,8 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import Link from "next/link"
 import { useRouter } from "next/router"
+import { useState, useEffect } from "react"
+import { ApiClient } from "@/lib/api"
 import {
     BarChart3,
     Users,
@@ -9,10 +11,12 @@ import {
     FileText,
     Settings,
     LogOut,
+    ClipboardList,
 } from "lucide-react"
 
 const navigation = [
     { name: "Dashboard", icon: BarChart3, current: true, href: "/" },
+    { name: "Requests", icon: ClipboardList, current: false, href: "/requests", badge: true },
     { name: "Patients", icon: Users, current: false, href: "/patients" },
     { name: "Appointments", icon: Calendar, current: false, href: "/appointments" },
     { name: "Records", icon: FileText, current: false, href: "/records" },
@@ -23,10 +27,41 @@ const configuration = [
 ]
 
 export function Sidebar() {
-    const { user, logout } = useAuth()
+    const { user, logout, authenticatedFetch } = useAuth()
     const router = useRouter()
+    const [pendingCount, setPendingCount] = useState(0)
 
-    const renderSidebarItem = (item: { name: string; icon: any; current: boolean; href?: string }) => {
+    useEffect(() => {
+        if (user && user.role === 'doctor') {
+            const apiClient = new ApiClient(authenticatedFetch);
+            apiClient.getOrderStats()
+                .then(response => {
+                    if (response.success) {
+                        setPendingCount(response.data.totalPending);
+                    }
+                })
+                .catch(error => {
+                    console.error('Failed to fetch order stats:', error);
+                });
+
+            // Refresh stats every 30 seconds
+            const interval = setInterval(() => {
+                apiClient.getOrderStats()
+                    .then(response => {
+                        if (response.success) {
+                            setPendingCount(response.data.totalPending);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Failed to fetch order stats:', error);
+                    });
+            }, 30000);
+
+            return () => clearInterval(interval);
+        }
+    }, [user, authenticatedFetch]);
+
+    const renderSidebarItem = (item: { name: string; icon: any; current: boolean; href?: string; badge?: boolean }) => {
         const isActive = router.pathname === item.href
 
         return (
@@ -34,7 +69,7 @@ export function Sidebar() {
                 key={item.name}
                 href={item.href || "#"}
                 className={cn(
-                    "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                    "group flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors",
                     isActive
                         ? "bg-sidebar-accent text-sidebar-accent-foreground"
                         : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -44,6 +79,11 @@ export function Sidebar() {
                     <item.icon className="mr-3 h-4 w-4" />
                     {item.name}
                 </div>
+                {item.badge && pendingCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                        {pendingCount}
+                    </span>
+                )}
             </Link>
         )
     }

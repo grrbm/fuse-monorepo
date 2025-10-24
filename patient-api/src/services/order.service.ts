@@ -13,6 +13,7 @@ import TreatmentPlan from "../models/TreatmentPlan";
 import Physician from "../models/Physician";
 import PharmacyService from "./pharmacy.service";
 import Treatment from "../models/Treatment";
+import WebSocketService from "./websocket.service";
 
 
 interface ListOrdersByClinicResult {
@@ -302,6 +303,16 @@ class OrderService {
             const pharmacyService = new PharmacyService()
             await pharmacyService.createPharmacyOrder(order)
 
+            // Emit WebSocket event for order approval
+            WebSocketService.emitOrderApproved({
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                userId: order.userId,
+                clinicId: order.clinicId,
+                status: order.status,
+                autoApproved: order.autoApproved || false,
+            });
+
             return {
                 success: true,
                 message: "Order successfully approved and sent to pharmacy",
@@ -312,6 +323,62 @@ class OrderService {
             return {
                 success: false,
                 message: "Failed to approve order",
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
+            };
+        }
+    }
+
+    async addDoctorNotes(orderId: string, doctorId: string, noteText: string) {
+        try {
+            const order = await Order.findByPk(orderId, {
+                include: [
+                    { model: User, as: 'user', attributes: ['id'] }
+                ]
+            });
+
+            if (!order) {
+                return {
+                    success: false,
+                    message: "Order not found",
+                    error: "Order with the provided ID does not exist"
+                };
+            }
+
+            // Get existing notes or initialize empty array
+            const existingNotes = order.doctorNotes || [];
+
+            // Add new note with timestamp
+            const newNote = {
+                doctorId,
+                note: noteText,
+                timestamp: new Date().toISOString(),
+            };
+
+            const updatedNotes = [...existingNotes, newNote];
+
+            // Update order with new notes
+            await order.update({ doctorNotes: updatedNotes });
+
+            // Emit WebSocket event
+            WebSocketService.emitDoctorNotesAdded({
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                userId: order.userId,
+                clinicId: order.clinicId,
+                doctorNotes: updatedNotes,
+            });
+
+            return {
+                success: true,
+                message: "Doctor notes added successfully",
+                data: { notes: updatedNotes }
+            };
+
+        } catch (error) {
+            console.error('Error adding doctor notes:', error);
+            return {
+                success: false,
+                message: "Failed to add doctor notes",
                 error: error instanceof Error ? error.message : 'Unknown error occurred'
             };
         }

@@ -239,6 +239,25 @@ export default class Order extends Entity {
   })
   declare mdOfferings?: any;
 
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare doctorNotes?: any;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: true,
+    defaultValue: false,
+  })
+  declare autoApproved?: boolean;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  declare autoApprovalReason?: string;
+
 
   // Static method to generate order number
   /**

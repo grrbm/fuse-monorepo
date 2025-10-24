@@ -7626,11 +7626,21 @@ async function startServer() {
     process.exit(1);
   }
 
-  app.listen(PORT, () => {
+  const httpServer = app.listen(PORT, () => {
     console.log(`🚀 API listening on :${PORT}`);
     console.log('📊 Database connected successfully');
     console.log('🔒 HIPAA-compliant security features enabled');
   });
+
+  // Initialize WebSocket server
+  const WebSocketService = (await import('./services/websocket.service')).default;
+  WebSocketService.initialize(httpServer);
+  console.log('🔌 WebSocket server initialized');
+
+  // Start auto-approval service
+  const AutoApprovalService = (await import('./services/autoApproval.service')).default;
+  AutoApprovalService.start();
+  console.log('🤖 Auto-approval service started');
 
   // List MD offerings for current user (approved and pending)
   app.get("/md/offerings", authenticateJWT, async (req, res) => {
@@ -7765,6 +7775,306 @@ async function startServer() {
       return res.status(500).json({ success: false, message: 'Failed to resync case details' });
     }
   });
+
+  // ============= DOCTOR PORTAL ENDPOINTS =============
+
+  // Get pending orders for doctor's clinic
+  app.get("/doctor/orders/pending", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      // Fetch full user data to get clinicId
+      const user = await User.findByPk(currentUser.id);
+      if (!user || user.role !== 'doctor') {
+        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      }
+
+      if (!user.clinicId) {
+        return res.status(400).json({ success: false, message: "No clinic associated with this doctor" });
+      }
+
+      // Parse filters from query params
+      const {
+        status = 'paid',
+        treatmentId,
+        dateFrom,
+        dateTo,
+        patientAge,
+        patientGender,
+        limit = '50',
+        offset = '0'
+      } = req.query as any;
+
+      // Build where clause
+      const whereClause: any = {
+        clinicId: user.clinicId,
+        status: status || 'paid',
+      };
+
+      if (treatmentId) {
+        whereClause.treatmentId = treatmentId;
+      }
+
+      if (dateFrom || dateTo) {
+        whereClause.createdAt = {};
+        if (dateFrom) whereClause.createdAt[Op.gte] = new Date(dateFrom);
+        if (dateTo) whereClause.createdAt[Op.lte] = new Date(dateTo);
+      }
+
+      // Fetch orders
+      const orders = await Order.findAll({
+        where: whereClause,
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber'],
+          },
+          {
+            model: Treatment,
+            as: 'treatment',
+            attributes: ['id', 'name', 'description', 'isCompound'],
+          },
+          {
+            model: ShippingAddress,
+            as: 'shippingAddress',
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+        limit: Math.min(parseInt(limit), 200),
+        offset: parseInt(offset),
+      });
+
+      // Note: Demographics filtering removed as fields don't exist on User model
+      // Age and gender can be added when User model is updated
+      const filteredOrders = orders;
+
+      res.json({
+        success: true,
+        data: filteredOrders.map(order => ({
+          id: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          createdAt: order.createdAt,
+          updatedAt: order.updatedAt,
+          totalAmount: order.totalAmount,
+          autoApproved: order.autoApproved,
+          autoApprovalReason: order.autoApprovalReason,
+          doctorNotes: order.doctorNotes,
+          patient: order.user ? {
+            id: order.user.id,
+            firstName: order.user.firstName,
+            lastName: order.user.lastName,
+            email: order.user.email,
+            phoneNumber: order.user.phoneNumber,
+          } : null,
+          treatment: order.treatment,
+          shippingAddress: order.shippingAddress,
+          questionnaireAnswers: order.questionnaireAnswers,
+          mdCaseId: order.mdCaseId,
+          mdPrescriptions: order.mdPrescriptions,
+          mdOfferings: order.mdOfferings,
+        })),
+        pagination: {
+          limit: parseInt(limit),
+          offset: parseInt(offset),
+          total: filteredOrders.length,
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching pending orders for doctor:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch pending orders" });
+    }
+  });
+
+  // Bulk approve orders
+  app.post("/doctor/orders/bulk-approve", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const user = await User.findByPk(currentUser.id);
+      if (!user || user.role !== 'doctor') {
+        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      }
+
+      const { orderIds } = req.body;
+      if (!Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ success: false, message: "orderIds array is required" });
+      }
+
+      // Validate doctor has access to all orders
+      const orders = await Order.findAll({
+        where: {
+          id: { [Op.in]: orderIds },
+          clinicId: user.clinicId,
+        }
+      });
+
+      if (orders.length !== orderIds.length) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. Some orders do not belong to your clinic or do not exist."
+        });
+      }
+
+      // Approve each order
+      const orderService = new OrderService();
+      const results: any[] = [];
+
+      for (const order of orders) {
+        try {
+          const result = await orderService.approveOrder(order.id);
+          results.push({
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            ...result
+          });
+        } catch (error) {
+          results.push({
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            success: false,
+            message: "Failed to approve order",
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      const successCount = results.filter((r: any) => r.success).length;
+      const failCount = results.length - successCount;
+
+      res.json({
+        success: true,
+        message: `Bulk approval completed: ${successCount} succeeded, ${failCount} failed`,
+        data: {
+          results,
+          summary: {
+            total: results.length,
+            succeeded: successCount,
+            failed: failCount,
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error bulk approving orders:', error);
+      res.status(500).json({ success: false, message: "Failed to bulk approve orders" });
+    }
+  });
+
+  // Add doctor notes to order
+  app.post("/doctor/orders/:orderId/notes", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const user = await User.findByPk(currentUser.id);
+      if (!user || user.role !== 'doctor') {
+        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      }
+
+      const { orderId } = req.params;
+      const { note } = req.body;
+
+      if (!note || typeof note !== 'string') {
+        return res.status(400).json({ success: false, message: "note is required" });
+      }
+
+      // Validate doctor has access to this order
+      const order = await Order.findOne({
+        where: {
+          id: orderId,
+          clinicId: user.clinicId,
+        }
+      });
+
+      if (!order) {
+        return res.status(404).json({ success: false, message: "Order not found or access denied" });
+      }
+
+      // Add notes using order service
+      const orderService = new OrderService();
+      const result = await orderService.addDoctorNotes(orderId, user.id, note);
+
+      res.json(result);
+
+    } catch (error) {
+      console.error('❌ Error adding doctor notes:', error);
+      res.status(500).json({ success: false, message: "Failed to add doctor notes" });
+    }
+  });
+
+  // Get order statistics for doctor's clinic
+  app.get("/doctor/orders/stats", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const user = await User.findByPk(currentUser.id);
+      if (!user || user.role !== 'doctor') {
+        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      }
+
+      if (!user.clinicId) {
+        return res.status(400).json({ success: false, message: "No clinic associated with this doctor" });
+      }
+
+      // Get counts for different statuses
+      const totalPending = await Order.count({
+        where: {
+          clinicId: user.clinicId,
+          status: 'paid',
+        }
+      });
+
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const approvedToday = await Order.count({
+        where: {
+          clinicId: user.clinicId,
+          status: 'processing',
+          updatedAt: {
+            [Op.gte]: startOfToday
+          }
+        }
+      });
+
+      const autoApprovedCount = await Order.count({
+        where: {
+          clinicId: user.clinicId,
+          autoApproved: true,
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          totalPending,
+          approvedToday,
+          autoApprovedCount,
+          requiresAction: totalPending,
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching doctor stats:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch statistics" });
+    }
+  });
+
+  // ============= MD INTEGRATIONS WEBHOOKS =============
 
   // MD Integrations Webhook (raw body required for signature verification)
   // Accept any content-type as raw so signature can be computed on exact bytes
