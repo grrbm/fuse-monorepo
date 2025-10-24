@@ -3,9 +3,10 @@ packages:
   - patient-frontend/
   - fuse-admin-frontend/
   - fuse-tenant-portal-frontend/
+  - fuse-doctor-portal-frontend/
   - packages/*
   - tooling/*
-  
+
 catalog:
   # Build & Development Tools
   typescript: ^5.9.2
@@ -85,12 +86,10 @@ catalog:
   # Authentication & Security
   "@types/jsonwebtoken": ^9.0.10
   jsonwebtoken: ^9.0.2
-  
+
   # Turbo
-  '@turbo/gen': ^2.5.4
+  "@turbo/gen": ^2.5.4
   turbo: ^2.5.4
-
-
 
 catalogs:
   react18:
@@ -109,4 +108,3 @@ catalogs:
 
   next15:
     next: 15.5.2
-
