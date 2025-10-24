@@ -227,6 +227,19 @@ export default class Order extends Entity {
 
 
 
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare mdPrescriptions?: any;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  declare mdOfferings?: any;
+
+
   // Static method to generate order number
   /**
    * Generate an order number without relying on OrderCounter

@@ -229,8 +229,8 @@ app.use(helmet());
 
 // Conditional JSON parsing - exclude webhook paths that need raw body
 app.use((req, res, next) => {
-  if (req.path === '/webhook/stripe') {
-    next(); // Skip JSON parsing for Stripe webhook
+  if (req.path === '/webhook/stripe' || req.path === '/md/webhooks') {
+    next(); // Skip JSON parsing for webhook endpoints that need raw body
   } else {
     express.json()(req, res, next); // Apply JSON parsing for all other routes
   }
@@ -7630,6 +7630,207 @@ async function startServer() {
     console.log(`🚀 API listening on :${PORT}`);
     console.log('📊 Database connected successfully');
     console.log('🔒 HIPAA-compliant security features enabled');
+  });
+
+  // List MD offerings for current user (approved and pending)
+  app.get("/md/offerings", authenticateJWT, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const limit = Math.min(parseInt(String((req.query as any).limit || '50'), 10) || 50, 200);
+      const offset = parseInt(String((req.query as any).offset || '0'), 10) || 0;
+
+      const orders = await Order.findAll({
+        where: { userId: currentUser.id },
+        order: [["createdAt", "DESC"]] as any,
+        limit,
+        offset,
+      } as any);
+
+      const flattened: any[] = [];
+      for (const order of orders) {
+        const mdCaseId = (order as any).mdCaseId;
+        const mdOfferings = (order as any).mdOfferings as any[] | null | undefined;
+
+        if (Array.isArray(mdOfferings) && mdOfferings.length > 0) {
+          for (const off of mdOfferings) {
+            const status = off?.status || off?.order_status || 'submitted';
+            const title = off?.title || off?.name || 'Offering';
+            const normalized = String(status).toLowerCase();
+            const classification = ['approved', 'submitted', 'completed'].includes(normalized) ? 'approved' : 'pending';
+            flattened.push({
+              orderId: order.id,
+              orderNumber: (order as any).orderNumber,
+              caseId: mdCaseId,
+              offeringId: off?.id,
+              caseOfferingId: off?.case_offering_id,
+              title,
+              productId: off?.product_id,
+              productType: off?.product_type,
+              status,
+              orderStatus: (order as any).status,
+              createdAt: off?.created_at || (order as any).createdAt,
+              updatedAt: off?.updated_at || (order as any).updatedAt,
+              classification,
+              details: {
+                directions: off?.directions ?? null,
+                thankYouNote: off?.thank_you_note ?? null,
+                clinicalNote: off?.clinical_note ?? null,
+                statusDetails: off?.status_details ?? null,
+                offerableType: off?.offerable_type ?? null,
+                offerableId: off?.offerable_id ?? null,
+                orderStatus: off?.order_status ?? null,
+                orderDate: off?.order_date ?? null,
+                orderDetails: off?.order_details ?? null,
+                product: off?.product ? {
+                  id: off?.product?.id ?? null,
+                  title: off?.product?.title ?? null,
+                  description: off?.product?.description ?? null,
+                  pharmacyNotes: off?.product?.pharmacy_notes ?? null,
+                  serviceType: off?.product?.service_type ?? null,
+                } : null
+              }
+            });
+          }
+        } else if (mdCaseId) {
+          // Case exists but no offerings captured yet → pending bucket
+          flattened.push({
+            orderId: order.id,
+            orderNumber: (order as any).orderNumber,
+            caseId: mdCaseId,
+            offeringId: null,
+            caseOfferingId: null,
+            title: 'Pending medical review',
+            productId: null,
+            productType: null,
+            status: 'pending',
+            orderStatus: (order as any).status,
+            createdAt: (order as any).createdAt,
+            updatedAt: (order as any).updatedAt,
+            classification: 'pending',
+          });
+        }
+      }
+
+      return res.json({ success: true, data: flattened });
+    } catch (error) {
+      console.error('❌ Error listing MD offerings:', error);
+      return res.status(500).json({ success: false, message: 'Failed to list MD offerings' });
+    }
+  });
+
+  // Get offerings for a specific MD case
+  app.get("/md/cases/:caseId/offerings", authenticateJWT, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const { caseId } = req.params as any;
+      if (!caseId) {
+        return res.status(400).json({ success: false, message: 'caseId is required' });
+      }
+
+      const MDAuthService = (await import('./services/mdIntegration/MDAuth.service')).default;
+      const MDCaseService = (await import('./services/mdIntegration/MDCase.service')).default;
+      const tokenResponse = await MDAuthService.generateToken();
+      const offerings = await MDCaseService.getCaseOfferings(caseId, tokenResponse.access_token);
+
+      return res.json({ success: true, data: offerings });
+    } catch (error) {
+      console.error('❌ Error fetching MD case offerings:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch MD case offerings' });
+    }
+  });
+
+  // One-off: resync MD case details onto the order (NO AUTH by request)
+  // Body: { caseId: string }
+  app.post("/md/resync", async (req, res) => {
+    try {
+      const { caseId } = req.body || {};
+      if (!caseId || typeof caseId !== 'string') {
+        return res.status(400).json({ success: false, message: 'caseId is required' });
+      }
+
+      const MDWebhookService = (await import('./services/mdIntegration/MDWebhook.service')).default;
+      await MDWebhookService.resyncCaseDetails(caseId);
+
+      return res.json({ success: true, message: 'Resync triggered', caseId });
+    } catch (error) {
+      console.error('❌ Error in /md/resync:', error);
+      return res.status(500).json({ success: false, message: 'Failed to resync case details' });
+    }
+  });
+
+  // MD Integrations Webhook (raw body required for signature verification)
+  // Accept any content-type as raw so signature can be computed on exact bytes
+  app.post("/md/webhooks", express.raw({ type: () => true }), async (req, res) => {
+    const requestId = (req.headers['x-request-id'] as string) || Math.random().toString(36).slice(2);
+    try {
+      // Lazy import to avoid circular deps at module init
+      const { default: MDWebhookService } = await import('./services/mdIntegration/MDWebhook.service');
+
+      const signatureHeaderName = process.env.MD_INTEGRATIONS_WEBHOOK_SIGNATURE_HEADER || 'x-md-signature';
+      const providedSignature = (req.headers[signatureHeaderName] as string) || (req.headers['signature'] as string) || '';
+      const authorization = (req.headers['authorization'] as string) || '';
+
+      // Grab raw body bytes and content-type for logging and signature
+      const rawBuf: Buffer | undefined = (req as any).body instanceof Buffer ? (req as any).body : undefined;
+      const rawBody = rawBuf ? rawBuf.toString('utf8') : '';
+      const contentType = (req.headers['content-type'] as string) || 'unknown';
+
+      // Parse JSON or form if possible (without affecting signature calc)
+      let payload: any = undefined;
+      try {
+        if (contentType.includes('application/json')) {
+          payload = rawBody ? JSON.parse(rawBody) : {};
+        } else if (contentType.includes('application/x-www-form-urlencoded')) {
+          // Basic URL-encoded parse
+          payload = Object.fromEntries(new URLSearchParams(rawBody));
+        } else {
+          // Attempt JSON parse as a best-effort
+          payload = rawBody ? JSON.parse(rawBody) : {};
+        }
+      } catch (e) {
+        console.warn(`[MD-WH] reqId=${requestId} body parse failed; continuing with raw string`);
+        payload = {};
+      }
+
+      const secret = process.env.MD_INTEGRATIONS_WEBHOOK_SECRET || '';
+      let signatureValid = true;
+      if (secret) {
+        // Verify against exact raw body string
+        signatureValid = MDWebhookService.verifyWebhookSignature(providedSignature, rawBody, secret);
+      }
+
+      console.log(`[MD-WH] reqId=${requestId} received`, {
+        event_type: payload?.event_type,
+        case_id: payload?.case_id,
+        patient_id: payload?.patient_id,
+        signature_present: Boolean(providedSignature),
+        signature_valid: signatureValid,
+        header_sig_name: signatureHeaderName,
+        auth_present: Boolean(authorization),
+        content_type: contentType,
+        body_preview: rawBody?.slice(0, 300)
+      });
+
+      if (secret && !signatureValid) {
+        return res.status(401).json({ success: false, message: 'Invalid signature' });
+      }
+
+      await MDWebhookService.processMDWebhook(payload);
+
+      console.log(`[MD-WH] reqId=${requestId} processed`, { event_type: payload?.event_type });
+      return res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error(`[MD-WH] reqId=${requestId} error`, error);
+      return res.status(500).json({ success: false, message: 'Webhook processing failed' });
+    }
   });
 }
 
