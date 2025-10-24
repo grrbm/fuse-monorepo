@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import Order from '../../models/Order';
+import Order, { OrderStatus } from '../../models/Order';
 import OrderService from '../order.service';
 import MDAuthService from './MDAuth.service';
 import MDCaseService from './MDCase.service';
@@ -99,6 +99,33 @@ interface CaseCompletedEvent {
   event_type: 'case_completed';
   case_id: string;
   metadata?: string;
+}
+
+type GenericCaseEvent = {
+  timestamp?: number;
+  event_type: string;
+  case_id?: string;
+  encounter_id?: string;
+  metadata?: string;
+  [key: string]: any;
+};
+
+async function findOrderForEvent(eventData: GenericCaseEvent): Promise<Order | null> {
+  // Try metadata orderId first
+  const meta = eventData?.metadata as string | undefined;
+  if (meta) {
+    const match = meta.match(/orderId:\s*([0-9a-fA-F-]{36})/);
+    if (match && match[1]) {
+      const byId = await Order.findByPk(match[1]);
+      if (byId) return byId;
+    }
+  }
+  // Fallback to case_id mapping
+  if (eventData.case_id) {
+    const byCase = await Order.findOne({ where: { mdCaseId: eventData.case_id } });
+    if (byCase) return byCase;
+  }
+  return null;
 }
 
 class MDWebhookService {
@@ -279,18 +306,85 @@ class MDWebhookService {
       case 'case_completed':
         console.log('[MD-WH] ✅ case_completed received', { case_id: (eventData as CaseCompletedEvent).case_id });
         try {
-          const order = await Order.findOne({ where: { mdCaseId: (eventData as CaseCompletedEvent).case_id } });
+          const order = await findOrderForEvent(eventData as GenericCaseEvent);
           if (!order) {
             console.log('[MD-WH] ⚠️ no order for completed case', { case_id: (eventData as CaseCompletedEvent).case_id });
             break;
           }
           // Mark order as processing (paid and being fulfilled)
-          await order.updateStatus('processing' as any);
+          await order.updateStatus(OrderStatus.PROCESSING);
           console.log('[MD-WH] 🧾 order marked processing for completed case', { orderNumber: order.orderNumber });
         } catch (e) {
           console.error('[MD-WH] ❌ error handling case_completed', e);
         }
         break;
+
+      case 'case_created': {
+        console.log('[MD-WH] 🆕 case_created received', { case_id: eventData.case_id });
+        const order = await findOrderForEvent(eventData as GenericCaseEvent);
+        if (!order) {
+          console.log('[MD-WH] ⚠️ no order for case_created', { case_id: eventData.case_id });
+          break;
+        }
+        console.log('[MD-WH] case_created mapped to order', { orderNumber: order.orderNumber });
+        break;
+      }
+
+      case 'case_assigned_to_clinician': {
+        console.log('[MD-WH] 👨‍⚕️ case_assigned_to_clinician', { case_id: eventData.case_id });
+        const order = await findOrderForEvent(eventData as GenericCaseEvent);
+        if (!order) break;
+        await order.updateStatus(OrderStatus.PROCESSING);
+        console.log('[MD-WH] order marked processing after assignment', { orderNumber: order.orderNumber });
+        break;
+      }
+
+      case 'case_processing': {
+        console.log('[MD-WH] 🔄 case_processing', { case_id: eventData.case_id });
+        const order = await findOrderForEvent(eventData as GenericCaseEvent);
+        if (!order) break;
+        await order.updateStatus(OrderStatus.PROCESSING);
+        console.log('[MD-WH] order marked processing', { orderNumber: order.orderNumber });
+        break;
+      }
+
+      case 'case_approved': {
+        console.log('[MD-WH] ✅ case_approved', { case_id: eventData.case_id });
+        const order = await findOrderForEvent(eventData as GenericCaseEvent);
+        if (!order) break;
+        try {
+          const orderService = new OrderService();
+          await orderService.approveOrder(order.id);
+          console.log('[MD-WH] order approval attempted after case_approved', { orderNumber: order.orderNumber });
+        } catch (e) {
+          console.error('[MD-WH] ❌ approve after case_approved failed', e);
+        }
+        break;
+      }
+
+      case 'prescription_submitted': {
+        console.log('[MD-WH] 💊 prescription_submitted', { case_id: eventData.case_id });
+        const order = await findOrderForEvent(eventData as GenericCaseEvent);
+        if (!order) break;
+        await order.updateStatus(OrderStatus.PROCESSING);
+        console.log('[MD-WH] order marked processing after prescription submission', { orderNumber: order.orderNumber });
+        break;
+      }
+
+      case 'partner_charged': {
+        console.log('[MD-WH] 💵 partner_charged', { case_id: eventData.case_id, charge_type: eventData.charge_type });
+        // No order status change; Stripe capture is our source of truth for payment
+        break;
+      }
+
+      case 'case_waiting': {
+        console.log('[MD-WH] ⏳ case_waiting', { case_id: eventData.case_id });
+        const order = await findOrderForEvent(eventData as GenericCaseEvent);
+        if (!order) break;
+        await order.updateStatus(OrderStatus.PENDING);
+        console.log('[MD-WH] order marked pending (waiting)', { orderNumber: order.orderNumber });
+        break;
+      }
 
       default:
         console.log(`[MD-WH] 🔍 unhandled event type: ${eventData.event_type}`);
