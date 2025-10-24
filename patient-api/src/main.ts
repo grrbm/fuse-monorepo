@@ -7675,6 +7675,24 @@ async function startServer() {
               createdAt: off?.created_at || (order as any).createdAt,
               updatedAt: off?.updated_at || (order as any).updatedAt,
               classification,
+              details: {
+                directions: off?.directions ?? null,
+                thankYouNote: off?.thank_you_note ?? null,
+                clinicalNote: off?.clinical_note ?? null,
+                statusDetails: off?.status_details ?? null,
+                offerableType: off?.offerable_type ?? null,
+                offerableId: off?.offerable_id ?? null,
+                orderStatus: off?.order_status ?? null,
+                orderDate: off?.order_date ?? null,
+                orderDetails: off?.order_details ?? null,
+                product: off?.product ? {
+                  id: off?.product?.id ?? null,
+                  title: off?.product?.title ?? null,
+                  description: off?.product?.description ?? null,
+                  pharmacyNotes: off?.product?.pharmacy_notes ?? null,
+                  serviceType: off?.product?.service_type ?? null,
+                } : null
+              }
             });
           }
         } else if (mdCaseId) {
