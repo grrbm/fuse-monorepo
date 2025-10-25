@@ -737,6 +737,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           const structuredAnswer: any = {
             questionId: question.id,
             stepId: step.id,
+            stepCategory: step.category, // Add the step category
             questionText: question.questionText,
             answerType: question.answerType,
             answer: answerValue,
@@ -810,6 +811,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         structuredAnswers.push({
           questionId: field.key, // Use the key as questionId for account fields
           stepId: 'account-creation', // Special step ID for account fields
+          stepCategory: 'user_profile', // Account creation is typically user_profile category
           questionText: field.label,
           answerType: 'text',
           answer: currentAnswers[field.key],

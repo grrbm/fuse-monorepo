@@ -5,6 +5,7 @@
 export interface StructuredAnswer {
     questionId: string;
     stepId: string;
+    stepCategory?: string; // Add the step category
     questionText: string;
     answerType: string;
     answer: any;
@@ -72,6 +73,7 @@ export function toStructuredFormat(legacyAnswers: LegacyQuestionnaireAnswers): S
         answers.push({
             questionId: `legacy-${questionText.replace(/\s+/g, '-').toLowerCase()}`,
             stepId: 'legacy-step',
+            stepCategory: 'legacy', // Add legacy category for converted answers
             questionText,
             answerType: 'text',
             answer,
