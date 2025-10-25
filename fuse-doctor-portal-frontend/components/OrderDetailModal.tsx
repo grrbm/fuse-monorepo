@@ -258,7 +258,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                     </section>
 
                     {/* Auto Approval Info */}
-                    {order.autoApproved && (
+                    {order.autoApprovedByDoctor && (
                         <section>
                             <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
                                 <p className="font-medium text-yellow-900">Auto-Approved</p>
