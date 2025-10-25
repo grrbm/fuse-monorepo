@@ -336,7 +336,7 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
                 const clinic = await Clinic.findByPk(sub.clinicId);
                 if (clinic) {
                     await clinic.update({
-                        active: true,
+                        isActive: true,
                         status: PaymentStatus.PAID
                     })
                 }
@@ -469,7 +469,7 @@ export const handleSubscriptionDeleted = async (subscription: Stripe.Subscriptio
             const clinic = await Clinic.findByPk(sub.clinicId);
             if (clinic) {
                 await clinic.update({
-                    active: false,
+                    isActive: false,
                     status: PaymentStatus.CANCELLED
                 })
             }

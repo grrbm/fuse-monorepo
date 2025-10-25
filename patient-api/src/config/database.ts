@@ -28,6 +28,7 @@ import TenantProduct from '../models/TenantProduct';
 import FormSectionTemplate from '../models/FormSectionTemplate';
 import TenantProductForm from '../models/TenantProductForm';
 import Sale from '../models/Sale';
+import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -96,6 +97,15 @@ export async function initializeDatabase() {
     await sequelize.sync({ alter: { drop: false } });
     // await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
+
+    // Run active to isActive migration
+    try {
+      const migrationService = new MigrationService(sequelize);
+      await migrationService.runActiveToIsActiveMigration();
+    } catch (error) {
+      console.error('❌ Error during active to isActive migration:', error);
+      // Don't throw - let the app continue
+    }
 
     // Ensure optional columns are nullable even if previous schema had NOT NULL
     try {

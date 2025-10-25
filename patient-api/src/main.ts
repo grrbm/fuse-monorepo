@@ -1290,7 +1290,7 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       pharmacyProductId: product.pharmacyProductId,
       dosage: product.dosage,
       imageUrl: product.imageUrl,
-      active: (product as any).active ?? true,
+      active: (product as any).isActive ?? true,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
       treatments: (product as any).treatments || []
@@ -7056,7 +7056,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
           isCustomDomain: updatedClinic.isCustomDomain,
           customDomain: updatedClinic.customDomain,
           logo: updatedClinic.logo,
-          active: updatedClinic.active,
+          active: updatedClinic.isActive,
           status: updatedClinic.status,
         } : null
       }
@@ -8380,7 +8380,7 @@ app.get("/brand-treatments", authenticateJWT, async (req, res) => {
         id: treatment.id,
         name: treatment.name,
         treatmentLogo: treatment.treatmentLogo,
-        active: treatment.active,
+        active: treatment.isActive,
         selected: Boolean(selection),
         brandLogo: selection?.brandLogo || null,
         brandColor: selection?.brandColor || null,
