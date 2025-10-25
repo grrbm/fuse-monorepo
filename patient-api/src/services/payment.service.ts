@@ -161,7 +161,7 @@ class PaymentService {
 
             // Create order items from treatment products
             if (treatment.treatmentProducts && treatment.treatmentProducts.length > 0) {
-                const orderItems = [];
+                const orderItems: any[] = [];
                 for (const treatmentProduct of treatment.treatmentProducts) {
                     const product = treatmentProduct.product;
                     const orderItem = await OrderItem.create({

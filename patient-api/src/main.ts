@@ -502,7 +502,7 @@ app.post("/auth/signup", async (req, res) => {
     console.log('✅ No existing user found, proceeding with registration');
 
     // Handle clinic association
-    let clinic = null;
+    let clinic: any = null;
     let finalClinicId = clinicId; // Use provided clinicId from request body
 
     // Create clinic if user is a healthcare provider and no clinicId provided
@@ -3156,7 +3156,7 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
     });
 
     // Create order items
-    const orderItems = [];
+    const orderItems: any[] = [];
     for (const [productId, quantity] of Object.entries(selectedProducts)) {
       if (quantity && Number(quantity) > 0) {
         const product = treatment.products?.find(p => p.id === productId);
@@ -3631,7 +3631,7 @@ app.post("/payments/treatment/sub", async (req, res) => {
 
     const { treatmentId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = validation.data;
 
-    let currentUser = null;
+    let currentUser: any = null;
 
     // Try to get user from auth token if provided
     const authHeader = req.headers.authorization;

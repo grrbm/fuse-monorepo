@@ -832,7 +832,7 @@ class QuestionnaireService {
 
 
         // Validate product if provided
-        let product = null;
+        let product: any = null;
         if (productId) {
             product = await Product.findByPk(productId);
             if (!product) {
@@ -889,7 +889,7 @@ class QuestionnaireService {
         }
 
         // Validate product if provided
-        let product = null;
+        let product: any = null;
         if (productId !== undefined) {
             if (productId) {
                 product = await Product.findByPk(productId);
