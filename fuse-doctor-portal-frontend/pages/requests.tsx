@@ -144,8 +144,8 @@ export default function Requests() {
                         {/* Header */}
                         <div className="flex items-center justify-between">
                             <div>
-                                <h1 className="text-3xl font-semibold text-foreground">Patient Requests</h1>
-                                <p className="text-muted-foreground mt-1">Review and approve patient treatment requests</p>
+                                <h1 className="text-3xl font-semibold text-foreground">Patient Orders</h1>
+                                <p className="text-muted-foreground mt-1">Review and manage patient product orders across all clinics</p>
                             </div>
                             <button
                                 onClick={handleRefresh}

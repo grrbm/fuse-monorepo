@@ -7918,7 +7918,7 @@ async function startServer() {
 
       // Parse filters from query params
       const {
-        status = 'paid',
+        status,
         tenantProductId,
         clinicId,
         dateFrom,
@@ -7931,10 +7931,14 @@ async function startServer() {
 
       // Build where clause - show ALL orders by default
       const whereClause: any = {
-        status: status || 'paid',
         // Only show orders with tenantProductId (orders for tenant products)
         tenantProductId: { [Op.ne]: null }
       };
+
+      // Optional status filter (if not provided, show all statuses)
+      if (status) {
+        whereClause.status = status;
+      }
 
       // Optional clinic filter
       if (clinicId) {

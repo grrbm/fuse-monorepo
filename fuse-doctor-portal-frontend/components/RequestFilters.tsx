@@ -17,6 +17,7 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
     const [tenantProducts, setTenantProducts] = useState<any[]>([]);
     const [clinics, setClinics] = useState<any[]>([]);
     const [filters, setFilters] = useState({
+        status: '',
         tenantProductId: '',
         clinicId: '',
         dateFrom: '',
@@ -53,6 +54,7 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
     const handleApply = () => {
         const activeFilters: any = {};
 
+        if (filters.status) activeFilters.status = filters.status;
         if (filters.tenantProductId) activeFilters.tenantProductId = filters.tenantProductId;
         if (filters.clinicId) activeFilters.clinicId = filters.clinicId;
         if (filters.dateFrom) activeFilters.dateFrom = filters.dateFrom;
@@ -63,6 +65,7 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
 
     const handleReset = () => {
         setFilters({
+            status: '',
             tenantProductId: '',
             clinicId: '',
             dateFrom: '',
@@ -77,6 +80,27 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
                 <CardTitle className="text-lg">Filters</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+                {/* Status Filter */}
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Status</label>
+                    <select
+                        className="w-full border rounded-md px-3 py-2 text-sm"
+                        value={filters.status}
+                        onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                    >
+                        <option value="">All Statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="payment_processing">Payment Processing</option>
+                        <option value="paid">Paid</option>
+                        <option value="payment_due">Payment Due</option>
+                        <option value="processing">Processing</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="refunded">Refunded</option>
+                    </select>
+                </div>
+
                 {/* Clinic Filter */}
                 <div className="space-y-2">
                     <label className="text-sm font-medium">Clinic</label>
