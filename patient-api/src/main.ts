@@ -7654,72 +7654,118 @@ async function startServer() {
         where: { userId: currentUser.id },
         order: [["createdAt", "DESC"]] as any,
         limit,
-        offset,
+        offset
       } as any);
 
       const flattened: any[] = [];
       for (const order of orders) {
         const mdCaseId = (order as any).mdCaseId;
         const mdOfferings = (order as any).mdOfferings as any[] | null | undefined;
+        const tenantProduct = (order as any).tenantProduct;
+        const questionnaireAnswers = (order as any).questionnaireAnswers;
 
-        if (Array.isArray(mdOfferings) && mdOfferings.length > 0) {
-          for (const off of mdOfferings) {
-            const status = off?.status || off?.order_status || 'submitted';
-            const title = off?.title || off?.name || 'Offering';
-            const normalized = String(status).toLowerCase();
-            const classification = ['approved', 'submitted', 'completed'].includes(normalized) ? 'approved' : 'pending';
-            flattened.push({
-              orderId: order.id,
-              orderNumber: (order as any).orderNumber,
-              caseId: mdCaseId,
-              offeringId: off?.id,
-              caseOfferingId: off?.case_offering_id,
-              title,
-              productId: off?.product_id,
-              productType: off?.product_type,
-              status,
-              orderStatus: (order as any).status,
-              createdAt: off?.created_at || (order as any).createdAt,
-              updatedAt: off?.updated_at || (order as any).updatedAt,
-              classification,
-              details: {
-                directions: off?.directions ?? null,
-                thankYouNote: off?.thank_you_note ?? null,
-                clinicalNote: off?.clinical_note ?? null,
-                statusDetails: off?.status_details ?? null,
-                offerableType: off?.offerable_type ?? null,
-                offerableId: off?.offerable_id ?? null,
-                orderStatus: off?.order_status ?? null,
-                orderDate: off?.order_date ?? null,
-                orderDetails: off?.order_details ?? null,
-                product: off?.product ? {
-                  id: off?.product?.id ?? null,
-                  title: off?.product?.title ?? null,
-                  description: off?.product?.description ?? null,
-                  pharmacyNotes: off?.product?.pharmacy_notes ?? null,
-                  serviceType: off?.product?.service_type ?? null,
-                } : null
-              }
+        // Helper function to get product details from TenantProduct
+        const getTenantProductDetails = async () => {
+          const tenantProductId = (order as any).tenantProductId;
+          if (!tenantProductId) return null;
+
+          try {
+            const tenantProduct = await TenantProduct.findByPk(tenantProductId, {
+              include: [
+                {
+                  model: Product,
+                  as: 'product'
+                }
+              ]
             });
+
+            if (!tenantProduct) return null;
+
+            return {
+              id: tenantProduct.id,
+              name: tenantProduct.product?.name || 'Product',
+              description: tenantProduct.product?.description || null,
+              dosage: tenantProduct.product?.dosage || null,
+              category: tenantProduct.product?.category || null,
+              stripePriceId: tenantProduct.stripePriceId || null,
+              isActive: tenantProduct.isActive ?? true
+            };
+          } catch (error) {
+            console.error('Error fetching TenantProduct:', error);
+            return null;
           }
-        } else if (mdCaseId) {
-          // Case exists but no offerings captured yet → pending bucket
-          flattened.push({
-            orderId: order.id,
-            orderNumber: (order as any).orderNumber,
-            caseId: mdCaseId,
-            offeringId: null,
-            caseOfferingId: null,
-            title: 'Pending medical review',
-            productId: null,
-            productType: null,
-            status: 'pending',
-            orderStatus: (order as any).status,
-            createdAt: (order as any).createdAt,
-            updatedAt: (order as any).updatedAt,
-            classification: 'pending',
-          });
+        };
+
+        // Helper function to process questionnaire answers
+        const getQuestionnaireAnswers = () => {
+          if (!questionnaireAnswers) return null;
+
+          // Check if it's the new structured format (simplified check)
+          if (questionnaireAnswers && typeof questionnaireAnswers === 'object' && 'answers' in questionnaireAnswers && 'metadata' in questionnaireAnswers) {
+            return {
+              format: 'structured',
+              answers: questionnaireAnswers.answers,
+              metadata: questionnaireAnswers.metadata
+            };
+          } else {
+            return {
+              format: 'legacy',
+              answers: questionnaireAnswers
+            };
+          }
+        };
+
+        // Get TenantProduct details
+        const tenantProductDetails = await getTenantProductDetails();
+        const questionnaireAnswersData = getQuestionnaireAnswers();
+
+        // Determine status and classification based on order status and MD offerings
+        const orderStatus = (order as any).status;
+        let status = orderStatus || 'pending';
+        let classification: 'approved' | 'pending' = 'pending';
+        let title = tenantProductDetails?.name || 'Order';
+
+        // Check if MD offerings indicate approval
+        const hasMdOfferings = Array.isArray(mdOfferings) && mdOfferings.length > 0;
+        if (hasMdOfferings) {
+          const firstOffering = mdOfferings[0];
+          const mdStatus = firstOffering?.status || firstOffering?.order_status;
+          if (mdStatus) {
+            const normalized = String(mdStatus).toLowerCase();
+            if (['approved', 'submitted', 'completed'].includes(normalized)) {
+              classification = 'approved';
+            }
+          }
         }
+
+        // Override classification based on order status
+        if (orderStatus === 'paid' || orderStatus === 'processing' || orderStatus === 'shipped' || orderStatus === 'delivered') {
+          classification = 'approved';
+        } else if (orderStatus === 'pending' || orderStatus === 'payment_processing') {
+          classification = 'pending';
+        }
+
+        // Create ONE entry per order (not per MD offering)
+        flattened.push({
+          orderId: order.id,
+          orderNumber: (order as any).orderNumber,
+          caseId: mdCaseId,
+          offeringId: null,
+          caseOfferingId: null,
+          title: title,
+          productId: null,
+          productType: null,
+          status: status,
+          orderStatus: orderStatus,
+          createdAt: (order as any).createdAt,
+          updatedAt: (order as any).updatedAt,
+          classification,
+          // Enhanced details with TenantProduct and questionnaire answers
+          tenantProduct: tenantProductDetails,
+          questionnaireAnswers: questionnaireAnswersData,
+          // Store MD offerings count for reference
+          mdOfferingsCount: hasMdOfferings ? mdOfferings.length : 0
+        });
       }
 
       return res.json({ success: true, data: flattened });
