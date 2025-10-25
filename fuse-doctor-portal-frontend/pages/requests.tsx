@@ -5,7 +5,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ApiClient, PendingOrder } from '@/lib/api';
 import { RequestFilters } from '@/components/RequestFilters';
 import { OrderDetailModal } from '@/components/OrderDetailModal';
-import { useOrderUpdates } from '@/contexts/WebSocketContext';
 import { toast } from 'sonner';
 import { RefreshCw, CheckSquare, Square } from 'lucide-react';
 
@@ -40,14 +39,6 @@ export default function Requests() {
     useEffect(() => {
         loadOrders();
     }, [loadOrders]);
-
-    // Listen for real-time updates
-    useOrderUpdates((update) => {
-        console.log('Order update received:', update);
-        // Refresh orders when updates come in
-        loadOrders();
-        toast.info('Orders updated in real-time');
-    });
 
     const handleRefresh = async () => {
         setRefreshing(true);
@@ -244,6 +235,9 @@ export default function Requests() {
                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                                         Status
                                                     </th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                        Approval
+                                                    </th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y">
@@ -286,9 +280,22 @@ export default function Requests() {
                                                             <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
                                                                 {order.status}
                                                             </span>
-                                                            {order.autoApproved && (
-                                                                <span className="ml-2 inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
-                                                                    Auto-Approved
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            {order.approvedByDoctor ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded">
+                                                                        ✓ Approved
+                                                                    </span>
+                                                                    {order.autoApprovedByDoctor && (
+                                                                        <span className="inline-block px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                                                                            Auto
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">
+                                                                    Pending Approval
                                                                 </span>
                                                             )}
                                                         </td>

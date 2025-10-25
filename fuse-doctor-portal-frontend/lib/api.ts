@@ -19,7 +19,8 @@ export interface PendingOrder {
     createdAt: string;
     updatedAt: string;
     totalAmount: number;
-    autoApproved?: boolean;
+    approvedByDoctor?: boolean;
+    autoApprovedByDoctor?: boolean;
     autoApprovalReason?: string;
     doctorNotes?: any[];
     patient: {

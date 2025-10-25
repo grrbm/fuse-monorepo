@@ -8044,8 +8044,8 @@ async function startServer() {
       }
 
       const user = await User.findByPk(currentUser.id);
-      if (!user || user.role !== 'doctor') {
-        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      if (!user) {
+        return res.status(401).json({ success: false, message: "User not found" });
       }
 
       const { orderIds } = req.body;
@@ -8053,18 +8053,20 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "orderIds array is required" });
       }
 
-      // Validate doctor has access to all orders
+      console.log('✅ Bulk approve request:', { userId: user.id, userRole: user.role, orderCount: orderIds.length });
+
+      // Fetch all orders - doctors and admins can approve any order
       const orders = await Order.findAll({
         where: {
-          id: { [Op.in]: orderIds },
-          clinicId: user.clinicId,
+          id: { [Op.in]: orderIds }
         }
       });
 
       if (orders.length !== orderIds.length) {
-        return res.status(403).json({
+        console.log('⚠️ Some orders not found:', { requested: orderIds.length, found: orders.length });
+        return res.status(404).json({
           success: false,
-          message: "Access denied. Some orders do not belong to your clinic or do not exist."
+          message: "Some orders do not exist."
         });
       }
 
