@@ -7719,31 +7719,15 @@ async function startServer() {
         const tenantProductDetails = await getTenantProductDetails();
         const questionnaireAnswersData = getQuestionnaireAnswers();
 
-        // Determine status and classification based on order status and MD offerings
+        // Determine status and classification based on approvedByDoctor field
         const orderStatus = (order as any).status;
+        const approvedByDoctor = (order as any).approvedByDoctor || false;
         let status = orderStatus || 'pending';
-        let classification: 'approved' | 'pending' = 'pending';
+        let classification: 'approved' | 'pending' = approvedByDoctor ? 'approved' : 'pending';
         let title = tenantProductDetails?.name || 'Order';
 
-        // Check if MD offerings indicate approval
+        // Store MD offerings count for reference
         const hasMdOfferings = Array.isArray(mdOfferings) && mdOfferings.length > 0;
-        if (hasMdOfferings) {
-          const firstOffering = mdOfferings[0];
-          const mdStatus = firstOffering?.status || firstOffering?.order_status;
-          if (mdStatus) {
-            const normalized = String(mdStatus).toLowerCase();
-            if (['approved', 'submitted', 'completed'].includes(normalized)) {
-              classification = 'approved';
-            }
-          }
-        }
-
-        // Override classification based on order status
-        if (orderStatus === 'paid' || orderStatus === 'processing' || orderStatus === 'shipped' || orderStatus === 'delivered') {
-          classification = 'approved';
-        } else if (orderStatus === 'pending' || orderStatus === 'payment_processing') {
-          classification = 'pending';
-        }
 
         // Create ONE entry per order (not per MD offering)
         flattened.push({
@@ -8008,7 +7992,8 @@ async function startServer() {
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
           totalAmount: order.totalAmount,
-          autoApproved: order.autoApproved,
+          approvedByDoctor: order.approvedByDoctor,
+          autoApprovedByDoctor: order.autoApprovedByDoctor,
           autoApprovalReason: order.autoApprovalReason,
           doctorNotes: order.doctorNotes,
           patient: order.user ? {
@@ -8213,7 +8198,7 @@ async function startServer() {
       const autoApprovedCount = await Order.count({
         where: {
           clinicId: user.clinicId,
-          autoApproved: true,
+          autoApprovedByDoctor: true,
         }
       });
 

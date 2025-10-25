@@ -262,7 +262,7 @@ class OrderService {
                             metadata: {
                                 userId: order.userId,
                                 orderId: order.id,
-                                ...(order?.treatmentId &&{
+                                ...(order?.treatmentId && {
                                     treatmentId: order?.treatmentId,
                                 }),
                                 initial_payment_intent_id: capturedPayment.id
@@ -299,6 +299,11 @@ class OrderService {
             }
 
 
+            // Mark order as approved by doctor (if not already set by auto-approval)
+            if (!order.approvedByDoctor) {
+                await order.update({ approvedByDoctor: true });
+            }
+
             // First time creating order 
             const pharmacyService = new PharmacyService()
             await pharmacyService.createPharmacyOrder(order)
@@ -310,7 +315,7 @@ class OrderService {
                 userId: order.userId,
                 clinicId: order.clinicId,
                 status: order.status,
-                autoApproved: order.autoApproved || false,
+                autoApproved: order.autoApprovedByDoctor || false,
             });
 
             return {

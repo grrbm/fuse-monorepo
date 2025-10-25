@@ -80,9 +80,7 @@ class AutoApprovalService {
             const orders = await Order.findAll({
                 where: {
                     status: OrderStatus.PAID,
-                    autoApproved: {
-                        [Op.or]: [null, false]
-                    }
+                    autoApprovedByDoctor: false
                 },
                 include: [
                     {
@@ -266,7 +264,8 @@ class AutoApprovalService {
 
         // Mark as auto-approved before processing
         await order.update({
-            autoApproved: true,
+            approvedByDoctor: true,
+            autoApprovedByDoctor: true,
             autoApprovalReason: reason,
         });
 
@@ -284,7 +283,7 @@ class AutoApprovalService {
                 userId: order.userId,
                 clinicId: order.clinicId,
                 status: order.status,
-                autoApproved: true,
+                autoApprovedByDoctor: true,
             });
         } else {
             console.error('[AUTO-APPROVE] ❌ Failed to auto-approve', {
@@ -294,7 +293,8 @@ class AutoApprovalService {
 
             // Revert auto-approval flag
             await order.update({
-                autoApproved: false,
+                approvedByDoctor: false,
+                autoApprovedByDoctor: false,
                 autoApprovalReason: null,
             });
         }
