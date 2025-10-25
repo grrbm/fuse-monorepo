@@ -16,6 +16,7 @@ interface OrderEventData {
     clinicId?: string;
     status?: string;
     autoApproved?: boolean;
+    autoApprovedByDoctor?: boolean;
     doctorNotes?: any;
 }
 

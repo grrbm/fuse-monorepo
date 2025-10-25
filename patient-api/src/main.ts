@@ -6843,12 +6843,9 @@ app.post("/md/cases", async (req, res) => {
     }
 
     // Build case questions from stored questionnaire answers
+    const { extractCaseQuestions } = await import('./utils/questionnaireAnswers');
     const caseQuestions = (order as any).questionnaireAnswers
-      ? Object.entries((order as any).questionnaireAnswers).map(([question, answer]) => ({
-        question: String(question),
-        answer: String(answer),
-        type: 'string'
-      }))
+      ? extractCaseQuestions((order as any).questionnaireAnswers)
       : [];
 
     // Generate token and create case
@@ -7657,72 +7654,102 @@ async function startServer() {
         where: { userId: currentUser.id },
         order: [["createdAt", "DESC"]] as any,
         limit,
-        offset,
+        offset
       } as any);
 
       const flattened: any[] = [];
       for (const order of orders) {
         const mdCaseId = (order as any).mdCaseId;
         const mdOfferings = (order as any).mdOfferings as any[] | null | undefined;
+        const tenantProduct = (order as any).tenantProduct;
+        const questionnaireAnswers = (order as any).questionnaireAnswers;
 
-        if (Array.isArray(mdOfferings) && mdOfferings.length > 0) {
-          for (const off of mdOfferings) {
-            const status = off?.status || off?.order_status || 'submitted';
-            const title = off?.title || off?.name || 'Offering';
-            const normalized = String(status).toLowerCase();
-            const classification = ['approved', 'submitted', 'completed'].includes(normalized) ? 'approved' : 'pending';
-            flattened.push({
-              orderId: order.id,
-              orderNumber: (order as any).orderNumber,
-              caseId: mdCaseId,
-              offeringId: off?.id,
-              caseOfferingId: off?.case_offering_id,
-              title,
-              productId: off?.product_id,
-              productType: off?.product_type,
-              status,
-              orderStatus: (order as any).status,
-              createdAt: off?.created_at || (order as any).createdAt,
-              updatedAt: off?.updated_at || (order as any).updatedAt,
-              classification,
-              details: {
-                directions: off?.directions ?? null,
-                thankYouNote: off?.thank_you_note ?? null,
-                clinicalNote: off?.clinical_note ?? null,
-                statusDetails: off?.status_details ?? null,
-                offerableType: off?.offerable_type ?? null,
-                offerableId: off?.offerable_id ?? null,
-                orderStatus: off?.order_status ?? null,
-                orderDate: off?.order_date ?? null,
-                orderDetails: off?.order_details ?? null,
-                product: off?.product ? {
-                  id: off?.product?.id ?? null,
-                  title: off?.product?.title ?? null,
-                  description: off?.product?.description ?? null,
-                  pharmacyNotes: off?.product?.pharmacy_notes ?? null,
-                  serviceType: off?.product?.service_type ?? null,
-                } : null
-              }
+        // Helper function to get product details from TenantProduct
+        const getTenantProductDetails = async () => {
+          const tenantProductId = (order as any).tenantProductId;
+          if (!tenantProductId) return null;
+
+          try {
+            const tenantProduct = await TenantProduct.findByPk(tenantProductId, {
+              include: [
+                {
+                  model: Product,
+                  as: 'product'
+                }
+              ]
             });
+
+            if (!tenantProduct) return null;
+
+            return {
+              id: tenantProduct.id,
+              name: tenantProduct.product?.name || 'Product',
+              description: tenantProduct.product?.description || null,
+              dosage: tenantProduct.product?.dosage || null,
+              category: tenantProduct.product?.category || null,
+              stripePriceId: tenantProduct.stripePriceId || null,
+              isActive: tenantProduct.isActive ?? true
+            };
+          } catch (error) {
+            console.error('Error fetching TenantProduct:', error);
+            return null;
           }
-        } else if (mdCaseId) {
-          // Case exists but no offerings captured yet → pending bucket
-          flattened.push({
-            orderId: order.id,
-            orderNumber: (order as any).orderNumber,
-            caseId: mdCaseId,
-            offeringId: null,
-            caseOfferingId: null,
-            title: 'Pending medical review',
-            productId: null,
-            productType: null,
-            status: 'pending',
-            orderStatus: (order as any).status,
-            createdAt: (order as any).createdAt,
-            updatedAt: (order as any).updatedAt,
-            classification: 'pending',
-          });
-        }
+        };
+
+        // Helper function to process questionnaire answers
+        const getQuestionnaireAnswers = () => {
+          if (!questionnaireAnswers) return null;
+
+          // Check if it's the new structured format (simplified check)
+          if (questionnaireAnswers && typeof questionnaireAnswers === 'object' && 'answers' in questionnaireAnswers && 'metadata' in questionnaireAnswers) {
+            return {
+              format: 'structured',
+              answers: questionnaireAnswers.answers,
+              metadata: questionnaireAnswers.metadata
+            };
+          } else {
+            return {
+              format: 'legacy',
+              answers: questionnaireAnswers
+            };
+          }
+        };
+
+        // Get TenantProduct details
+        const tenantProductDetails = await getTenantProductDetails();
+        const questionnaireAnswersData = getQuestionnaireAnswers();
+
+        // Determine status and classification based on approvedByDoctor field
+        const orderStatus = (order as any).status;
+        const approvedByDoctor = (order as any).approvedByDoctor || false;
+        let status = orderStatus || 'pending';
+        let classification: 'approved' | 'pending' = approvedByDoctor ? 'approved' : 'pending';
+        let title = tenantProductDetails?.name || 'Order';
+
+        // Store MD offerings count for reference
+        const hasMdOfferings = Array.isArray(mdOfferings) && mdOfferings.length > 0;
+
+        // Create ONE entry per order (not per MD offering)
+        flattened.push({
+          orderId: order.id,
+          orderNumber: (order as any).orderNumber,
+          caseId: mdCaseId,
+          offeringId: null,
+          caseOfferingId: null,
+          title: title,
+          productId: null,
+          productType: null,
+          status: status,
+          orderStatus: orderStatus,
+          createdAt: (order as any).createdAt,
+          updatedAt: (order as any).updatedAt,
+          classification,
+          // Enhanced details with TenantProduct and questionnaire answers
+          tenantProduct: tenantProductDetails,
+          questionnaireAnswers: questionnaireAnswersData,
+          // Store MD offerings count for reference
+          mdOfferingsCount: hasMdOfferings ? mdOfferings.length : 0
+        });
       }
 
       return res.json({ success: true, data: flattened });
@@ -7778,6 +7805,83 @@ async function startServer() {
 
   // ============= DOCTOR PORTAL ENDPOINTS =============
 
+  // Get all clinics for filters
+  app.get("/doctor/clinics", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      // Fetch all clinics
+      const clinics = await Clinic.findAll({
+        attributes: ['id', 'name'],
+        order: [['name', 'ASC']],
+      });
+
+      res.json({
+        success: true,
+        data: clinics
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching clinics:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch clinics" });
+    }
+  });
+
+  // Get tenant products for filters
+  app.get("/doctor/tenant-products", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const user = await User.findByPk(currentUser.id);
+      if (!user) {
+        return res.status(403).json({ success: false, message: "User not found" });
+      }
+
+      // Build where clause
+      const whereClause: any = {};
+
+      // If user has a clinicId, filter by that clinic
+      if (user.clinicId) {
+        whereClause.clinicId = user.clinicId;
+      }
+
+      // Fetch tenant products
+      const tenantProducts = await TenantProduct.findAll({
+        where: whereClause,
+        include: [
+          {
+            model: Product,
+            as: 'product',
+            attributes: ['id', 'name', 'description', 'dosage', 'category'],
+          }
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+
+      res.json({
+        success: true,
+        data: tenantProducts.map(tp => ({
+          id: tp.id,
+          name: tp.product?.name || 'Product',
+          description: tp.product?.description,
+          dosage: tp.product?.dosage,
+          category: tp.product?.category,
+          isActive: tp.isActive,
+        }))
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching tenant products:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch tenant products" });
+    }
+  });
+
   // Get pending orders for doctor's clinic
   app.get("/doctor/orders/pending", authenticateJWT, async (req: any, res: any) => {
     try {
@@ -7788,18 +7892,21 @@ async function startServer() {
 
       // Fetch full user data to get clinicId
       const user = await User.findByPk(currentUser.id);
-      if (!user || user.role !== 'doctor') {
-        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      if (!user) {
+        return res.status(403).json({ success: false, message: "User not found" });
       }
 
-      if (!user.clinicId) {
-        return res.status(400).json({ success: false, message: "No clinic associated with this doctor" });
-      }
+      // Allow doctors and admins to access all orders
+      // If user has a clinicId, filter by that clinic
+      // Otherwise (admin), show all orders
 
       // Parse filters from query params
       const {
-        status = 'paid',
-        treatmentId,
+        status,
+        tenantProductId,
+        clinicId,
+        patientId,
+        patientSearch,
         dateFrom,
         dateTo,
         patientAge,
@@ -7808,14 +7915,29 @@ async function startServer() {
         offset = '0'
       } = req.query as any;
 
-      // Build where clause
+      // Build where clause - show ALL orders by default
       const whereClause: any = {
-        clinicId: user.clinicId,
-        status: status || 'paid',
+        // Only show orders with tenantProductId (orders for tenant products)
+        tenantProductId: { [Op.ne]: null }
       };
 
-      if (treatmentId) {
-        whereClause.treatmentId = treatmentId;
+      // Optional status filter (if not provided, show all statuses)
+      if (status) {
+        whereClause.status = status;
+      }
+
+      // Optional clinic filter
+      if (clinicId) {
+        whereClause.clinicId = clinicId;
+      }
+
+      if (tenantProductId) {
+        whereClause.tenantProductId = tenantProductId;
+      }
+
+      // Optional patient filter
+      if (patientId) {
+        whereClause.userId = patientId;
       }
 
       if (dateFrom || dateTo) {
@@ -7824,24 +7946,54 @@ async function startServer() {
         if (dateTo) whereClause.createdAt[Op.lte] = new Date(dateTo);
       }
 
-      // Fetch orders
+      // Build user include with optional search filter
+      const userInclude: any = {
+        model: User,
+        as: 'user',
+        attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'dob'],
+      };
+
+      // Add patient search filter if provided
+      if (patientSearch) {
+        userInclude.where = {
+          [Op.or]: [
+            { firstName: { [Op.iLike]: `%${patientSearch}%` } },
+            { lastName: { [Op.iLike]: `%${patientSearch}%` } },
+            { email: { [Op.iLike]: `%${patientSearch}%` } }
+          ]
+        };
+      }
+
+      // Fetch orders with TenantProduct
       const orders = await Order.findAll({
         where: whereClause,
         include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber'],
-          },
+          userInclude,
           {
             model: Treatment,
             as: 'treatment',
-            attributes: ['id', 'name', 'description', 'isCompound'],
+            attributes: ['id', 'name', 'category'],
           },
           {
             model: ShippingAddress,
             as: 'shippingAddress',
           },
+          {
+            model: TenantProduct,
+            as: 'tenantProduct',
+            include: [
+              {
+                model: Product,
+                as: 'product',
+                attributes: ['id', 'name', 'description', 'dosage', 'category'],
+              }
+            ]
+          },
+          {
+            model: Clinic,
+            as: 'clinic',
+            attributes: ['id', 'name'],
+          }
         ],
         order: [['createdAt', 'DESC']],
         limit: Math.min(parseInt(limit), 200),
@@ -7861,7 +8013,8 @@ async function startServer() {
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
           totalAmount: order.totalAmount,
-          autoApproved: order.autoApproved,
+          approvedByDoctor: order.approvedByDoctor,
+          autoApprovedByDoctor: order.autoApprovedByDoctor,
           autoApprovalReason: order.autoApprovalReason,
           doctorNotes: order.doctorNotes,
           patient: order.user ? {
@@ -7870,8 +8023,20 @@ async function startServer() {
             lastName: order.user.lastName,
             email: order.user.email,
             phoneNumber: order.user.phoneNumber,
+            dob: order.user.dob,
           } : null,
           treatment: order.treatment,
+          tenantProduct: order.tenantProduct ? {
+            id: order.tenantProduct.id,
+            name: order.tenantProduct.product?.name || 'Product',
+            description: order.tenantProduct.product?.description,
+            dosage: order.tenantProduct.product?.dosage,
+            category: order.tenantProduct.product?.category,
+          } : null,
+          clinic: order.clinic ? {
+            id: order.clinic.id,
+            name: order.clinic.name,
+          } : null,
           shippingAddress: order.shippingAddress,
           questionnaireAnswers: order.questionnaireAnswers,
           mdCaseId: order.mdCaseId,
@@ -7900,8 +8065,8 @@ async function startServer() {
       }
 
       const user = await User.findByPk(currentUser.id);
-      if (!user || user.role !== 'doctor') {
-        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      if (!user) {
+        return res.status(401).json({ success: false, message: "User not found" });
       }
 
       const { orderIds } = req.body;
@@ -7909,18 +8074,20 @@ async function startServer() {
         return res.status(400).json({ success: false, message: "orderIds array is required" });
       }
 
-      // Validate doctor has access to all orders
+      console.log('✅ Bulk approve request:', { userId: user.id, userRole: user.role, orderCount: orderIds.length });
+
+      // Fetch all orders - doctors and admins can approve any order
       const orders = await Order.findAll({
         where: {
-          id: { [Op.in]: orderIds },
-          clinicId: user.clinicId,
+          id: { [Op.in]: orderIds }
         }
       });
 
       if (orders.length !== orderIds.length) {
-        return res.status(403).json({
+        console.log('⚠️ Some orders not found:', { requested: orderIds.length, found: orders.length });
+        return res.status(404).json({
           success: false,
-          message: "Access denied. Some orders do not belong to your clinic or do not exist."
+          message: "Some orders do not exist."
         });
       }
 
@@ -8054,7 +8221,7 @@ async function startServer() {
       const autoApprovedCount = await Order.count({
         where: {
           clinicId: user.clinicId,
-          autoApproved: true,
+          autoApprovedByDoctor: true,
         }
       });
 

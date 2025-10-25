@@ -5,7 +5,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ApiClient, PendingOrder } from '@/lib/api';
 import { RequestFilters } from '@/components/RequestFilters';
 import { OrderDetailModal } from '@/components/OrderDetailModal';
-import { useOrderUpdates } from '@/contexts/WebSocketContext';
 import { toast } from 'sonner';
 import { RefreshCw, CheckSquare, Square } from 'lucide-react';
 
@@ -40,14 +39,6 @@ export default function Requests() {
     useEffect(() => {
         loadOrders();
     }, [loadOrders]);
-
-    // Listen for real-time updates
-    useOrderUpdates((update) => {
-        console.log('Order update received:', update);
-        // Refresh orders when updates come in
-        loadOrders();
-        toast.info('Orders updated in real-time');
-    });
 
     const handleRefresh = async () => {
         setRefreshing(true);
@@ -94,7 +85,7 @@ export default function Requests() {
         setBulkApproving(true);
         try {
             const response = await apiClient.bulkApproveOrders(Array.from(selectedOrders));
-            
+
             if (response.success) {
                 const { succeeded, failed } = response.data.summary;
                 if (succeeded > 0) {
@@ -103,7 +94,7 @@ export default function Requests() {
                 if (failed > 0) {
                     toast.error(`${failed} order(s) failed to approve`);
                 }
-                
+
                 setSelectedOrders(new Set());
                 await loadOrders();
             }
@@ -144,8 +135,8 @@ export default function Requests() {
                         {/* Header */}
                         <div className="flex items-center justify-between">
                             <div>
-                                <h1 className="text-3xl font-semibold text-foreground">Patient Requests</h1>
-                                <p className="text-muted-foreground mt-1">Review and approve patient treatment requests</p>
+                                <h1 className="text-3xl font-semibold text-foreground">Patient Orders</h1>
+                                <p className="text-muted-foreground mt-1">Review and manage patient product orders across all clinics</p>
                             </div>
                             <button
                                 onClick={handleRefresh}
@@ -155,6 +146,14 @@ export default function Requests() {
                                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                                 Refresh
                             </button>
+                        </div>
+
+                        {/* Info Note */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <p className="text-sm text-blue-800">
+                                <strong>Note:</strong> This page displays orders made by patients to purchase products offered by our tenants.
+                                Orders without an associated tenant product are not shown here.
+                            </p>
                         </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -228,13 +227,16 @@ export default function Requests() {
                                                         Patient
                                                     </th>
                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                                        Treatment
+                                                        Product
                                                     </th>
                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                                         Date
                                                     </th>
                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                                         Status
+                                                    </th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                        Approval
                                                     </th>
                                                 </tr>
                                             </thead>
@@ -264,10 +266,10 @@ export default function Requests() {
                                                             {order.patient?.firstName} {order.patient?.lastName}
                                                         </td>
                                                         <td className="px-4 py-3 text-sm">
-                                                            {order.treatment?.name || 'N/A'}
-                                                            {order.treatment?.isCompound && (
-                                                                <span className="ml-2 inline-block px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">
-                                                                    Compound
+                                                            {(order as any).tenantProduct?.name || order.treatment?.name || 'N/A'}
+                                                            {(order as any).tenantProduct?.dosage && (
+                                                                <span className="ml-2 text-xs text-gray-500">
+                                                                    {(order as any).tenantProduct.dosage}
                                                                 </span>
                                                             )}
                                                         </td>
@@ -278,9 +280,22 @@ export default function Requests() {
                                                             <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
                                                                 {order.status}
                                                             </span>
-                                                            {order.autoApproved && (
-                                                                <span className="ml-2 inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
-                                                                    Auto-Approved
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            {order.approvedByDoctor ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded">
+                                                                        ✓ Approved
+                                                                    </span>
+                                                                    {order.autoApprovedByDoctor && (
+                                                                        <span className="inline-block px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                                                                            Auto
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">
+                                                                    Pending Approval
                                                                 </span>
                                                             )}
                                                         </td>

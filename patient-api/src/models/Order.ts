@@ -247,10 +247,17 @@ export default class Order extends Entity {
 
   @Column({
     type: DataType.BOOLEAN,
-    allowNull: true,
+    allowNull: false,
     defaultValue: false,
   })
-  declare autoApproved?: boolean;
+  declare approvedByDoctor: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare autoApprovedByDoctor: boolean;
 
   @Column({
     type: DataType.TEXT,

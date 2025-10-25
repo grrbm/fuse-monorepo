@@ -93,6 +93,23 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                                     <p className="font-medium">{order.patient.phoneNumber}</p>
                                 </div>
                             )}
+                            <div>
+                                <p className="text-sm text-gray-600">Order Date</p>
+                                <p className="font-medium">{new Date(order.createdAt).toLocaleString()}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Order Total</p>
+                                <p className="font-medium">${order.totalAmount}</p>
+                            </div>
+                            {order.shippingAddress && (
+                                <div className="col-span-2">
+                                    <p className="text-sm text-gray-600">Shipping Address</p>
+                                    <p className="font-medium">
+                                        {order.shippingAddress.street}<br />
+                                        {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </section>
 
@@ -159,18 +176,48 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                     )}
 
                     {/* Questionnaire Answers */}
-                    {order.questionnaireAnswers && Object.keys(order.questionnaireAnswers).length > 0 && (
+                    {order.questionnaireAnswers && (
                         <section>
                             <h3 className="text-lg font-semibold mb-3">Questionnaire Answers</h3>
-                            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                                {Object.entries(order.questionnaireAnswers).map(([key, value]) => (
-                                    <div key={key} className="border-b pb-2 last:border-b-0">
-                                        <p className="text-sm font-medium text-gray-700 capitalize">
-                                            {key.replace(/([A-Z])/g, ' $1').trim()}
-                                        </p>
-                                        <p className="text-sm">{String(value)}</p>
-                                    </div>
-                                ))}
+                            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                                {/* Check if structured format */}
+                                {order.questionnaireAnswers.answers && order.questionnaireAnswers.metadata ? (
+                                    // Structured format
+                                    <>
+                                        {order.questionnaireAnswers.answers.map((answer: any, index: number) => (
+                                            <div key={index} className="bg-white border border-gray-200 p-3 rounded-md">
+                                                <p className="text-sm font-medium text-gray-900">{answer.questionText}</p>
+                                                <p className="text-sm text-gray-700 mt-1">
+                                                    {answer.selectedOptions && answer.selectedOptions.length > 0 ? (
+                                                        answer.selectedOptions.map((opt: any) => opt.optionText).join(', ')
+                                                    ) : (
+                                                        String(answer.answer)
+                                                    )}
+                                                </p>
+                                                {answer.stepCategory && (
+                                                    <span className="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                                                        {answer.stepCategory}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {order.questionnaireAnswers.metadata && (
+                                            <div className="text-xs text-gray-500 mt-2">
+                                                Completed: {new Date(order.questionnaireAnswers.metadata.completedAt).toLocaleString()}
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    // Legacy format
+                                    Object.entries(order.questionnaireAnswers).map(([key, value]) => (
+                                        <div key={key} className="bg-white border border-gray-200 p-3 rounded-md">
+                                            <p className="text-sm font-medium text-gray-900 capitalize">
+                                                {key.replace(/([A-Z])/g, ' $1').trim()}
+                                            </p>
+                                            <p className="text-sm text-gray-700 mt-1">{String(value)}</p>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </section>
                     )}
