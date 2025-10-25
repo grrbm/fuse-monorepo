@@ -645,12 +645,9 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
         const tokenResponse = await MDAuthService.generateToken();
 
         // Create case using MD Integration
+        const { extractCaseQuestions } = await import('../../utils/questionnaireAnswers');
         const caseQuestions = order.questionnaireAnswers
-            ? Object.entries(order.questionnaireAnswers).map(([question, answer]) => ({
-                question: question,
-                answer: String(answer),
-                type: "string"
-            }))
+            ? extractCaseQuestions(order.questionnaireAnswers)
             : [];
 
         // Determine case offerings based on environment

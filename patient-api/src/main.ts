@@ -6843,12 +6843,9 @@ app.post("/md/cases", async (req, res) => {
     }
 
     // Build case questions from stored questionnaire answers
+    const { extractCaseQuestions } = await import('./utils/questionnaireAnswers');
     const caseQuestions = (order as any).questionnaireAnswers
-      ? Object.entries((order as any).questionnaireAnswers).map(([question, answer]) => ({
-        question: String(question),
-        answer: String(answer),
-        type: 'string'
-      }))
+      ? extractCaseQuestions((order as any).questionnaireAnswers)
       : [];
 
     // Generate token and create case
