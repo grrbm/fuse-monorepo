@@ -126,32 +126,6 @@ export default function OfferingDetailsPage() {
                         </Card>
                     )}
 
-                    {/* MD Integration Details (if available) */}
-                    {order.mdOfferings && order.mdOfferings.length > 0 && (
-                        <Card className="transition-shadow hover:shadow-md">
-                            <CardBody>
-                                <div className="font-medium text-foreground text-lg mb-3">Medical Review Details</div>
-                                <Divider className="my-3" />
-                                <div className="space-y-4">
-                                    {order.mdOfferings.map((offering: any, index: number) => (
-                                        <div key={index} className="space-y-2">
-                                            <div className="font-medium">{offering.title || offering.name}</div>
-                                            {offering.directions && <div className="text-sm"><span className="text-foreground-500">Directions:</span> {offering.directions}</div>}
-                                            {offering.clinical_note && (
-                                                <div className="text-sm">
-                                                    <span className="text-foreground-500">Clinical Note:</span>
-                                                    <div className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap bg-content2/60 border border-content3 rounded-md p-2 text-foreground-600">
-                                                        {offering.clinical_note}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {index < order.mdOfferings.length - 1 && <Divider className="my-3" />}
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardBody>
-                        </Card>
-                    )}
                 </div>
             )}
         </div>
