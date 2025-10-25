@@ -4,6 +4,8 @@ export interface OrderFilters {
     status?: string;
     tenantProductId?: string;
     clinicId?: string;
+    patientId?: string;
+    patientSearch?: string;
     dateFrom?: string;
     dateTo?: string;
     patientAge?: number;
@@ -67,6 +69,8 @@ export class ApiClient {
         if (filters.status) params.append('status', filters.status);
         if (filters.tenantProductId) params.append('tenantProductId', filters.tenantProductId);
         if (filters.clinicId) params.append('clinicId', filters.clinicId);
+        if (filters.patientId) params.append('patientId', filters.patientId);
+        if (filters.patientSearch) params.append('patientSearch', filters.patientSearch);
         if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
         if (filters.dateTo) params.append('dateTo', filters.dateTo);
         if (filters.patientAge) params.append('patientAge', filters.patientAge.toString());

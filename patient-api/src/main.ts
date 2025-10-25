@@ -7905,6 +7905,8 @@ async function startServer() {
         status,
         tenantProductId,
         clinicId,
+        patientId,
+        patientSearch,
         dateFrom,
         dateTo,
         patientAge,
@@ -7933,21 +7935,40 @@ async function startServer() {
         whereClause.tenantProductId = tenantProductId;
       }
 
+      // Optional patient filter
+      if (patientId) {
+        whereClause.userId = patientId;
+      }
+
       if (dateFrom || dateTo) {
         whereClause.createdAt = {};
         if (dateFrom) whereClause.createdAt[Op.gte] = new Date(dateFrom);
         if (dateTo) whereClause.createdAt[Op.lte] = new Date(dateTo);
       }
 
+      // Build user include with optional search filter
+      const userInclude: any = {
+        model: User,
+        as: 'user',
+        attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'dob'],
+      };
+
+      // Add patient search filter if provided
+      if (patientSearch) {
+        userInclude.where = {
+          [Op.or]: [
+            { firstName: { [Op.iLike]: `%${patientSearch}%` } },
+            { lastName: { [Op.iLike]: `%${patientSearch}%` } },
+            { email: { [Op.iLike]: `%${patientSearch}%` } }
+          ]
+        };
+      }
+
       // Fetch orders with TenantProduct
       const orders = await Order.findAll({
         where: whereClause,
         include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'dob'],
-          },
+          userInclude,
           {
             model: Treatment,
             as: 'treatment',

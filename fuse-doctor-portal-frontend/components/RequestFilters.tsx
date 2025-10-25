@@ -20,6 +20,7 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
         status: '',
         tenantProductId: '',
         clinicId: '',
+        patientSearch: '',
         dateFrom: '',
         dateTo: '',
     });
@@ -57,6 +58,7 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
         if (filters.status) activeFilters.status = filters.status;
         if (filters.tenantProductId) activeFilters.tenantProductId = filters.tenantProductId;
         if (filters.clinicId) activeFilters.clinicId = filters.clinicId;
+        if (filters.patientSearch) activeFilters.patientSearch = filters.patientSearch;
         if (filters.dateFrom) activeFilters.dateFrom = filters.dateFrom;
         if (filters.dateTo) activeFilters.dateTo = filters.dateTo;
 
@@ -68,6 +70,7 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
             status: '',
             tenantProductId: '',
             clinicId: '',
+            patientSearch: '',
             dateFrom: '',
             dateTo: '',
         });
@@ -133,6 +136,18 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
                             </option>
                         ))}
                     </select>
+                </div>
+
+                {/* Patient Search */}
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Patient Search</label>
+                    <Input
+                        type="text"
+                        value={filters.patientSearch}
+                        onChange={(e) => setFilters({ ...filters, patientSearch: e.target.value })}
+                        placeholder="Name or email..."
+                        className="text-sm"
+                    />
                 </div>
 
                 {/* Date Range */}

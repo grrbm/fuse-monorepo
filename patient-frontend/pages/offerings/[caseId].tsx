@@ -68,7 +68,7 @@ export default function OfferingDetailsPage() {
                                     <div><span className="text-foreground-500">Status:</span> {order.status}</div>
                                     <div><span className="text-foreground-500">Total Amount:</span> ${order.totalAmount}</div>
                                     <div><span className="text-foreground-500">Created:</span> {new Date(order.createdAt).toLocaleString()}</div>
-                                    {order.mdCaseId && <div><span className="text-foreground-500">MD Case ID:</span> <span className="font-mono text-xs">{order.mdCaseId}</span></div>}
+                                    {false && <div><span className="text-foreground-500">MD Case ID:</span> <span className="font-mono text-xs">{order.mdCaseId}</span></div>}
                                 </div>
                                 <div className="space-y-2">
                                     {order.shippingAddress && (
