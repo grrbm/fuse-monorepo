@@ -47,7 +47,7 @@ export default class Clinic extends Entity {
         allowNull: false,
         defaultValue: false
     })
-    declare active: string;
+    declare isActive: boolean;
 
     @Column({
         type: DataType.ENUM(...Object.values(PaymentStatus)),
