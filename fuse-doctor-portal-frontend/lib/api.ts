@@ -2,7 +2,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export interface OrderFilters {
     status?: string;
-    treatmentId?: string;
+    tenantProductId?: string;
+    clinicId?: string;
     dateFrom?: string;
     dateTo?: string;
     patientAge?: number;
@@ -63,7 +64,8 @@ export class ApiClient {
         const params = new URLSearchParams();
 
         if (filters.status) params.append('status', filters.status);
-        if (filters.treatmentId) params.append('treatmentId', filters.treatmentId);
+        if (filters.tenantProductId) params.append('tenantProductId', filters.tenantProductId);
+        if (filters.clinicId) params.append('clinicId', filters.clinicId);
         if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
         if (filters.dateTo) params.append('dateTo', filters.dateTo);
         if (filters.patientAge) params.append('patientAge', filters.patientAge.toString());
@@ -139,11 +141,21 @@ export class ApiClient {
         return response.json();
     }
 
-    async getTreatments(): Promise<{ success: boolean; data: any[] }> {
-        const response = await this.authenticatedFetch(`${API_URL}/treatments`);
+    async getTenantProducts(): Promise<{ success: boolean; data: any[] }> {
+        const response = await this.authenticatedFetch(`${API_URL}/doctor/tenant-products`);
 
         if (!response.ok) {
-            throw new Error('Failed to fetch treatments');
+            throw new Error('Failed to fetch tenant products');
+        }
+
+        return response.json();
+    }
+
+    async getClinics(): Promise<{ success: boolean; data: any[] }> {
+        const response = await this.authenticatedFetch(`${API_URL}/doctor/clinics`);
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch clinics');
         }
 
         return response.json();

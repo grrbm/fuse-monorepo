@@ -14,32 +14,47 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
     const { authenticatedFetch } = useAuth();
     const apiClient = new ApiClient(authenticatedFetch);
 
-    const [treatments, setTreatments] = useState<any[]>([]);
+    const [tenantProducts, setTenantProducts] = useState<any[]>([]);
+    const [clinics, setClinics] = useState<any[]>([]);
     const [filters, setFilters] = useState({
-        treatmentId: '',
+        tenantProductId: '',
+        clinicId: '',
         dateFrom: '',
         dateTo: '',
     });
 
     useEffect(() => {
-        loadTreatments();
+        loadTenantProducts();
+        loadClinics();
     }, []);
 
-    const loadTreatments = async () => {
+    const loadTenantProducts = async () => {
         try {
-            const response = await apiClient.getTreatments();
+            const response = await apiClient.getTenantProducts();
             if (response.success && response.data) {
-                setTreatments(response.data);
+                setTenantProducts(response.data);
             }
         } catch (error) {
-            console.error('Failed to load treatments:', error);
+            console.error('Failed to load tenant products:', error);
+        }
+    };
+
+    const loadClinics = async () => {
+        try {
+            const response = await apiClient.getClinics();
+            if (response.success && response.data) {
+                setClinics(response.data);
+            }
+        } catch (error) {
+            console.error('Failed to load clinics:', error);
         }
     };
 
     const handleApply = () => {
         const activeFilters: any = {};
 
-        if (filters.treatmentId) activeFilters.treatmentId = filters.treatmentId;
+        if (filters.tenantProductId) activeFilters.tenantProductId = filters.tenantProductId;
+        if (filters.clinicId) activeFilters.clinicId = filters.clinicId;
         if (filters.dateFrom) activeFilters.dateFrom = filters.dateFrom;
         if (filters.dateTo) activeFilters.dateTo = filters.dateTo;
 
@@ -48,7 +63,8 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
 
     const handleReset = () => {
         setFilters({
-            treatmentId: '',
+            tenantProductId: '',
+            clinicId: '',
             dateFrom: '',
             dateTo: '',
         });
@@ -61,18 +77,35 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
                 <CardTitle className="text-lg">Filters</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                {/* Treatment Type */}
+                {/* Clinic Filter */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Treatment Type</label>
+                    <label className="text-sm font-medium">Clinic</label>
                     <select
                         className="w-full border rounded-md px-3 py-2 text-sm"
-                        value={filters.treatmentId}
-                        onChange={(e) => setFilters({ ...filters, treatmentId: e.target.value })}
+                        value={filters.clinicId}
+                        onChange={(e) => setFilters({ ...filters, clinicId: e.target.value })}
                     >
-                        <option value="">All Treatments</option>
-                        {treatments.map((treatment) => (
-                            <option key={treatment.id} value={treatment.id}>
-                                {treatment.name}
+                        <option value="">All Clinics</option>
+                        {clinics.map((clinic) => (
+                            <option key={clinic.id} value={clinic.id}>
+                                {clinic.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Product Filter */}
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Product</label>
+                    <select
+                        className="w-full border rounded-md px-3 py-2 text-sm"
+                        value={filters.tenantProductId}
+                        onChange={(e) => setFilters({ ...filters, tenantProductId: e.target.value })}
+                    >
+                        <option value="">All Products</option>
+                        {tenantProducts.map((product) => (
+                            <option key={product.id} value={product.id}>
+                                {product.name} {product.dosage && `(${product.dosage})`}
                             </option>
                         ))}
                     </select>

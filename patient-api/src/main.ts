@@ -7821,6 +7821,83 @@ async function startServer() {
 
   // ============= DOCTOR PORTAL ENDPOINTS =============
 
+  // Get all clinics for filters
+  app.get("/doctor/clinics", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      // Fetch all clinics
+      const clinics = await Clinic.findAll({
+        attributes: ['id', 'name'],
+        order: [['name', 'ASC']],
+      });
+
+      res.json({
+        success: true,
+        data: clinics
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching clinics:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch clinics" });
+    }
+  });
+
+  // Get tenant products for filters
+  app.get("/doctor/tenant-products", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      const user = await User.findByPk(currentUser.id);
+      if (!user) {
+        return res.status(403).json({ success: false, message: "User not found" });
+      }
+
+      // Build where clause
+      const whereClause: any = {};
+
+      // If user has a clinicId, filter by that clinic
+      if (user.clinicId) {
+        whereClause.clinicId = user.clinicId;
+      }
+
+      // Fetch tenant products
+      const tenantProducts = await TenantProduct.findAll({
+        where: whereClause,
+        include: [
+          {
+            model: Product,
+            as: 'product',
+            attributes: ['id', 'name', 'description', 'dosage', 'category'],
+          }
+        ],
+        order: [['createdAt', 'DESC']],
+      });
+
+      res.json({
+        success: true,
+        data: tenantProducts.map(tp => ({
+          id: tp.id,
+          name: tp.product?.name || 'Product',
+          description: tp.product?.description,
+          dosage: tp.product?.dosage,
+          category: tp.product?.category,
+          isActive: tp.isActive,
+        }))
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching tenant products:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch tenant products" });
+    }
+  });
+
   // Get pending orders for doctor's clinic
   app.get("/doctor/orders/pending", authenticateJWT, async (req: any, res: any) => {
     try {
@@ -7831,18 +7908,19 @@ async function startServer() {
 
       // Fetch full user data to get clinicId
       const user = await User.findByPk(currentUser.id);
-      if (!user || user.role !== 'doctor') {
-        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      if (!user) {
+        return res.status(403).json({ success: false, message: "User not found" });
       }
 
-      if (!user.clinicId) {
-        return res.status(400).json({ success: false, message: "No clinic associated with this doctor" });
-      }
+      // Allow doctors and admins to access all orders
+      // If user has a clinicId, filter by that clinic
+      // Otherwise (admin), show all orders
 
       // Parse filters from query params
       const {
         status = 'paid',
-        treatmentId,
+        tenantProductId,
+        clinicId,
         dateFrom,
         dateTo,
         patientAge,
@@ -7851,14 +7929,20 @@ async function startServer() {
         offset = '0'
       } = req.query as any;
 
-      // Build where clause
+      // Build where clause - show ALL orders by default
       const whereClause: any = {
-        clinicId: user.clinicId,
         status: status || 'paid',
+        // Only show orders with tenantProductId (orders for tenant products)
+        tenantProductId: { [Op.ne]: null }
       };
 
-      if (treatmentId) {
-        whereClause.treatmentId = treatmentId;
+      // Optional clinic filter
+      if (clinicId) {
+        whereClause.clinicId = clinicId;
+      }
+
+      if (tenantProductId) {
+        whereClause.tenantProductId = tenantProductId;
       }
 
       if (dateFrom || dateTo) {
@@ -7867,24 +7951,40 @@ async function startServer() {
         if (dateTo) whereClause.createdAt[Op.lte] = new Date(dateTo);
       }
 
-      // Fetch orders
+      // Fetch orders with TenantProduct
       const orders = await Order.findAll({
         where: whereClause,
         include: [
           {
             model: User,
             as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber'],
+            attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'dob'],
           },
           {
             model: Treatment,
             as: 'treatment',
-            attributes: ['id', 'name', 'description', 'isCompound'],
+            attributes: ['id', 'name', 'category'],
           },
           {
             model: ShippingAddress,
             as: 'shippingAddress',
           },
+          {
+            model: TenantProduct,
+            as: 'tenantProduct',
+            include: [
+              {
+                model: Product,
+                as: 'product',
+                attributes: ['id', 'name', 'description', 'dosage', 'category'],
+              }
+            ]
+          },
+          {
+            model: Clinic,
+            as: 'clinic',
+            attributes: ['id', 'name'],
+          }
         ],
         order: [['createdAt', 'DESC']],
         limit: Math.min(parseInt(limit), 200),
@@ -7913,8 +8013,20 @@ async function startServer() {
             lastName: order.user.lastName,
             email: order.user.email,
             phoneNumber: order.user.phoneNumber,
+            dob: order.user.dob,
           } : null,
           treatment: order.treatment,
+          tenantProduct: order.tenantProduct ? {
+            id: order.tenantProduct.id,
+            name: order.tenantProduct.product?.name || 'Product',
+            description: order.tenantProduct.product?.description,
+            dosage: order.tenantProduct.product?.dosage,
+            category: order.tenantProduct.product?.category,
+          } : null,
+          clinic: order.clinic ? {
+            id: order.clinic.id,
+            name: order.clinic.name,
+          } : null,
           shippingAddress: order.shippingAddress,
           questionnaireAnswers: order.questionnaireAnswers,
           mdCaseId: order.mdCaseId,
