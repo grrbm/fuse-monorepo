@@ -393,7 +393,7 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-2xl font-semibold">Chat con tu Doctor</h1>
+          <h1 className="text-2xl font-semibold">Chat with your Doctor</h1>
           {chatData?.doctor && (
             <p className="text-sm text-foreground-500 mt-1">{doctorName}</p>
           )}
