@@ -176,51 +176,65 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                     )}
 
                     {/* Questionnaire Answers */}
-                    {order.questionnaireAnswers && (
-                        <section>
-                            <h3 className="text-lg font-semibold mb-3">Questionnaire Answers</h3>
-                            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                                {/* Check if structured format */}
-                                {order.questionnaireAnswers.answers && order.questionnaireAnswers.metadata ? (
-                                    // Structured format
-                                    <>
-                                        {order.questionnaireAnswers.answers.map((answer: any, index: number) => (
-                                            <div key={index} className="bg-white border border-gray-200 p-3 rounded-md">
-                                                <p className="text-sm font-medium text-gray-900">{answer.questionText}</p>
-                                                <p className="text-sm text-gray-700 mt-1">
-                                                    {answer.selectedOptions && answer.selectedOptions.length > 0 ? (
-                                                        answer.selectedOptions.map((opt: any) => opt.optionText).join(', ')
-                                                    ) : (
-                                                        String(answer.answer)
-                                                    )}
-                                                </p>
-                                                {answer.stepCategory && (
-                                                    <span className="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                                                        {answer.stepCategory}
-                                                    </span>
+                    {(() => {
+                        // Parse questionnaire answers and filter for "normal" category only
+                        if (!order.questionnaireAnswers) return null;
+
+                        const qa = order.questionnaireAnswers;
+                        let normalAnswers: any[] = [];
+
+                        // Try multiple possible formats
+                        let allAnswers: any[] = [];
+
+                        // Format 1: Direct answers array
+                        if (qa.answers && Array.isArray(qa.answers)) {
+                            allAnswers = qa.answers;
+                        }
+                        // Format 2: Wrapped with format property
+                        else if (qa.format === 'structured' && qa.answers && Array.isArray(qa.answers)) {
+                            allAnswers = qa.answers;
+                        }
+                        // Format 3: Legacy format (key-value pairs) - skip as no category info available
+                        else if (typeof qa === 'object' && !qa.answers && !qa.format) {
+                            return null;
+                        }
+
+                        // Filter for only "normal" category questions
+                        normalAnswers = allAnswers.filter((answer: any) => answer.stepCategory === 'normal');
+
+                        // If no normal answers found, don't show this section
+                        if (normalAnswers.length === 0) {
+                            return null;
+                        }
+
+                        return (
+                            <section>
+                                <h3 className="text-lg font-semibold mb-3">Questionnaire Answers</h3>
+                                <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                                    {normalAnswers.map((answer: any, index: number) => (
+                                        <div key={index} className="bg-white border border-gray-200 p-3 rounded-md">
+                                            <p className="text-sm font-medium text-gray-900">{answer.questionText}</p>
+                                            <p className="text-sm text-gray-700 mt-1">
+                                                {answer.selectedOptions && answer.selectedOptions.length > 0 ? (
+                                                    answer.selectedOptions.map((opt: any) => opt.optionText).join(', ')
+                                                ) : (
+                                                    String(answer.answer)
                                                 )}
-                                            </div>
-                                        ))}
-                                        {order.questionnaireAnswers.metadata && (
-                                            <div className="text-xs text-gray-500 mt-2">
-                                                Completed: {new Date(order.questionnaireAnswers.metadata.completedAt).toLocaleString()}
-                                            </div>
-                                        )}
-                                    </>
-                                ) : (
-                                    // Legacy format
-                                    Object.entries(order.questionnaireAnswers).map(([key, value]) => (
-                                        <div key={key} className="bg-white border border-gray-200 p-3 rounded-md">
-                                            <p className="text-sm font-medium text-gray-900 capitalize">
-                                                {key.replace(/([A-Z])/g, ' $1').trim()}
                                             </p>
-                                            <p className="text-sm text-gray-700 mt-1">{String(value)}</p>
+                                            <span className="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                                                Product Question
+                                            </span>
                                         </div>
-                                    ))
-                                )}
-                            </div>
-                        </section>
-                    )}
+                                    ))}
+                                    {qa.metadata && (
+                                        <div className="text-xs text-gray-500 mt-2">
+                                            Completed: {new Date(qa.metadata.completedAt).toLocaleString()}
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                        );
+                    })()}
 
                     {/* Doctor Notes */}
                     {order.doctorNotes && order.doctorNotes.length > 0 && (
