@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './ui/button';
 import { PendingOrder, ApiClient } from '@/lib/api';
@@ -21,22 +21,25 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
     const [submittingNotes, setSubmittingNotes] = useState(false);
     const [approving, setApproving] = useState(false);
 
+    // Pre-populate notes when order changes
+    useEffect(() => {
+        if (order?.doctorNotes) {
+            setNotes(order.doctorNotes);
+        } else {
+            setNotes('');
+        }
+    }, [order?.id]);
+
     if (!isOpen || !order) return null;
 
-    const handleAddNotes = async () => {
-        if (!notes.trim()) {
-            toast.error('Please enter a note');
-            return;
-        }
-
+    const handleSaveNotes = async () => {
         setSubmittingNotes(true);
         try {
             await apiClient.addOrderNotes(order.id, notes);
-            toast.success('Notes added successfully');
-            setNotes('');
+            toast.success('Notes saved successfully');
             onNotesAdded?.();
         } catch (error) {
-            toast.error('Failed to add notes');
+            toast.error('Failed to save notes');
         } finally {
             setSubmittingNotes(false);
         }
@@ -237,37 +240,20 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                     })()}
 
                     {/* Doctor Notes */}
-                    {order.doctorNotes && order.doctorNotes.length > 0 && (
-                        <section>
-                            <h3 className="text-lg font-semibold mb-3">Doctor Notes</h3>
-                            <div className="space-y-2">
-                                {order.doctorNotes.map((note: any, idx: number) => (
-                                    <div key={idx} className="bg-blue-50 p-3 rounded-lg">
-                                        <p className="text-sm">{note.note}</p>
-                                        <p className="text-xs text-gray-600 mt-1">
-                                            {new Date(note.timestamp).toLocaleString()}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-                    )}
-
-                    {/* Add Notes Section */}
                     <section>
-                        <h3 className="text-lg font-semibold mb-3">Add Notes</h3>
+                        <h3 className="text-lg font-semibold mb-3">Doctor Notes</h3>
                         <textarea
-                            className="w-full border rounded-md px-3 py-2 text-sm min-h-[100px]"
+                            className="w-full border rounded-md px-3 py-2 text-sm min-h-[120px]"
                             placeholder="Enter notes about this order..."
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                         />
                         <button
-                            onClick={handleAddNotes}
+                            onClick={handleSaveNotes}
                             disabled={submittingNotes}
                             className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                         >
-                            {submittingNotes ? 'Saving...' : 'Add Notes'}
+                            {submittingNotes ? 'Saving...' : 'Save Notes'}
                         </button>
                     </section>
 

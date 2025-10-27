@@ -240,10 +240,10 @@ export default class Order extends Entity {
   declare mdOfferings?: any;
 
   @Column({
-    type: DataType.JSONB,
+    type: DataType.TEXT,
     allowNull: true,
   })
-  declare doctorNotes?: any;
+  declare doctorNotes?: string;
 
   @Column({
     type: DataType.BOOLEAN,

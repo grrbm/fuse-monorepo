@@ -119,8 +119,18 @@ export default function Requests() {
         loadOrders();
     };
 
-    const handleNotesAdded = () => {
-        loadOrders();
+    const handleNotesAdded = async () => {
+        await loadOrders();
+        // Refresh the selected order with updated data
+        if (selectedOrder) {
+            const response = await apiClient.fetchPendingOrders({ limit: 200 });
+            if (response.success) {
+                const updatedOrder = response.data.find(o => o.id === selectedOrder.id);
+                if (updatedOrder) {
+                    setSelectedOrder(updatedOrder);
+                }
+            }
+        }
     };
 
     const allSelected = orders.length > 0 && selectedOrders.size === orders.length;

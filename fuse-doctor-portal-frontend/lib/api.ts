@@ -24,7 +24,7 @@ export interface PendingOrder {
     approvedByDoctor?: boolean;
     autoApprovedByDoctor?: boolean;
     autoApprovalReason?: string;
-    doctorNotes?: any[];
+    doctorNotes?: string;
     patient: {
         id: string;
         firstName: string;
@@ -119,7 +119,7 @@ export class ApiClient {
     async addOrderNotes(orderId: string, note: string): Promise<{
         success: boolean;
         message: string;
-        data?: { notes: any[] };
+        data?: { note: string };
     }> {
         const response = await this.authenticatedFetch(`${API_URL}/doctor/orders/${orderId}/notes`, {
             method: 'POST',
@@ -130,7 +130,7 @@ export class ApiClient {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to add notes');
+            throw new Error('Failed to save notes');
         }
 
         return response.json();

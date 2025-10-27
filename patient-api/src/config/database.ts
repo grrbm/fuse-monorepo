@@ -119,6 +119,12 @@ export async function initializeDatabase() {
       // ignore
     }
     try {
+      // Change doctorNotes from JSONB to TEXT for single editable note
+      await sequelize.query('ALTER TABLE "Order" ALTER COLUMN "doctorNotes" TYPE TEXT USING "doctorNotes"::text;');
+    } catch (e) {
+      // ignore
+    }
+    try {
       // Clean up any soft-deleted TenantProductForms by hard-deleting
       await sequelize.query('DELETE FROM "TenantProductForms" WHERE "deletedAt" IS NOT NULL;');
     } catch (e) {

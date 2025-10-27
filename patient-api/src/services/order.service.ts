@@ -352,20 +352,8 @@ class OrderService {
                 };
             }
 
-            // Get existing notes or initialize empty array
-            const existingNotes = order.doctorNotes || [];
-
-            // Add new note with timestamp
-            const newNote = {
-                doctorId,
-                note: noteText,
-                timestamp: new Date().toISOString(),
-            };
-
-            const updatedNotes = [...existingNotes, newNote];
-
-            // Update order with new notes
-            await order.update({ doctorNotes: updatedNotes });
+            // Simply replace the note (single note, not array)
+            await order.update({ doctorNotes: noteText });
 
             // Emit WebSocket event
             WebSocketService.emitDoctorNotesAdded({
@@ -373,20 +361,20 @@ class OrderService {
                 orderNumber: order.orderNumber,
                 userId: order.userId,
                 clinicId: order.clinicId,
-                doctorNotes: updatedNotes,
+                doctorNotes: noteText,
             });
 
             return {
                 success: true,
-                message: "Doctor notes added successfully",
-                data: { notes: updatedNotes }
+                message: "Doctor notes saved successfully",
+                data: { note: noteText }
             };
 
         } catch (error) {
-            console.error('Error adding doctor notes:', error);
+            console.error('Error saving doctor notes:', error);
             return {
                 success: false,
-                message: "Failed to add doctor notes",
+                message: "Failed to save doctor notes",
                 error: error instanceof Error ? error.message : 'Unknown error occurred'
             };
         }
