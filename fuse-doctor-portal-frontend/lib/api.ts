@@ -63,6 +63,7 @@ export interface ChatMessage {
     message: string;
     createdAt: string;
     read: boolean;
+    attachments?: string[]; // URLs of attached files
 }
 
 export interface Chat {
@@ -197,7 +198,7 @@ export class ApiClient {
         return response.json();
     }
 
-    async sendMessage(chatId: string, message: string): Promise<{
+    async sendMessage(chatId: string, message: string, attachments?: string[]): Promise<{
         success: boolean;
         data: {
             message: ChatMessage;
@@ -209,7 +210,7 @@ export class ApiClient {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify({ message, attachments }),
         });
 
         if (!response.ok) {
@@ -217,6 +218,31 @@ export class ApiClient {
         }
 
         return response.json();
+    }
+
+    async uploadFile(file: File): Promise<{ success: boolean; data?: { url: string; fileName: string; contentType: string; size: number }; error?: string }> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await this.authenticatedFetch(`${API_URL}/doctor/chat/upload-file`, {
+            method: 'POST',
+            body: formData,
+            // Don't set Content-Type - browser sets it with boundary for FormData
+        });
+
+        if (!response.ok) {
+            const data = await response.json();
+            return {
+                success: false,
+                error: data.message || `Upload failed with status ${response.status}`,
+            };
+        }
+
+        const data = await response.json();
+        return {
+            success: true,
+            data: data.data,
+        };
     }
 
     async markChatAsRead(chatId: string): Promise<{ success: boolean; data: Chat }> {

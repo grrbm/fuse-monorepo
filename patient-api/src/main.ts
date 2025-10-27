@@ -8168,6 +8168,73 @@ async function startServer() {
     }
   });
 
+  // Upload file for chat (doctor only)
+  app.post("/doctor/chat/upload-file", authenticateJWT, upload.single('file'), async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'doctor') {
+        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      }
+
+      // Check if file was uploaded
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "No file uploaded"
+        });
+      }
+
+      // Validate file size
+      if (!isValidFileSize(req.file.size)) {
+        return res.status(400).json({
+          success: false,
+          message: "File too large. Maximum size is 5MB."
+        });
+      }
+
+      // Validate file type (images and PDFs)
+      if (!isValidImageFile(req.file.mimetype)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid file type. Only images (JPEG, PNG, WebP) and PDF files are allowed."
+        });
+      }
+
+      // Upload to S3 in chat-files folder
+      const fileUrl = await uploadToS3(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        'chat-files', // Folder específico para archivos del chat
+        `doctor-${currentUser.id}` // Prefix con ID del doctor
+      );
+
+      console.log('📎 File uploaded for chat:', { 
+        userId: currentUser.id, 
+        fileName: req.file.originalname,
+        fileUrl 
+      });
+
+      res.json({
+        success: true,
+        data: {
+          url: fileUrl,
+          fileName: req.file.originalname,
+          contentType: req.file.mimetype,
+          size: req.file.size
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error uploading chat file:', error);
+      res.status(500).json({ success: false, message: "Failed to upload file" });
+    }
+  });
+
   // Send a message in a conversation
   app.post("/doctor/chats/:chatId/messages", authenticateJWT, async (req: any, res: any) => {
     try {
@@ -8181,10 +8248,24 @@ async function startServer() {
       }
 
       const { chatId } = req.params;
-      const { message } = req.body;
+      const { message, attachments } = req.body;
 
-      if (!message || typeof message !== 'string' || message.trim().length === 0) {
-        return res.status(400).json({ success: false, message: "Message is required" });
+      // Validate: message is required OR attachments are provided
+      if ((!message || typeof message !== 'string' || message.trim().length === 0) && (!attachments || !Array.isArray(attachments) || attachments.length === 0)) {
+        return res.status(400).json({ success: false, message: "Message or attachments are required" });
+      }
+
+      // Validate attachments if provided
+      if (attachments && Array.isArray(attachments)) {
+        if (attachments.length > 10) {
+          return res.status(400).json({ success: false, message: "Maximum 10 attachments allowed per message" });
+        }
+        // Validate that all attachments are valid URLs
+        for (const url of attachments) {
+          if (typeof url !== 'string' || !url.startsWith('https://')) {
+            return res.status(400).json({ success: false, message: "Invalid attachment URL format" });
+          }
+        }
       }
 
       const chat = await DoctorPatientChats.findOne({
@@ -8198,15 +8279,20 @@ async function startServer() {
         return res.status(404).json({ success: false, message: "Chat not found" });
       }
 
-      // Create new message
-      const newMessage = {
+      // Create new message with optional attachments
+      const newMessage: any = {
         id: require('crypto').randomUUID(),
         senderId: currentUser.id,
         senderRole: 'doctor' as const,
-        message: message.trim(),
+        message: message ? message.trim() : '',
         createdAt: new Date().toISOString(),
         read: false
       };
+
+      // Add attachments if provided
+      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        newMessage.attachments = attachments;
+      }
 
       // Add message to array
       const updatedMessages = [...(chat.messages || []), newMessage];
@@ -8389,6 +8475,73 @@ async function startServer() {
     }
   });
 
+  // Upload file for chat (patient only)
+  app.post("/patient/chat/upload-file", authenticateJWT, upload.single('file'), async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'patient') {
+        return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
+      }
+
+      // Check if file was uploaded
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "No file uploaded"
+        });
+      }
+
+      // Validate file size
+      if (!isValidFileSize(req.file.size)) {
+        return res.status(400).json({
+          success: false,
+          message: "File too large. Maximum size is 5MB."
+        });
+      }
+
+      // Validate file type (images and PDFs)
+      if (!isValidImageFile(req.file.mimetype)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid file type. Only images (JPEG, PNG, WebP) and PDF files are allowed."
+        });
+      }
+
+      // Upload to S3 in chat-files folder
+      const fileUrl = await uploadToS3(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        'chat-files', // Folder específico para archivos del chat
+        `patient-${currentUser.id}` // Prefix con ID del paciente
+      );
+
+      console.log('📎 File uploaded for chat:', { 
+        userId: currentUser.id, 
+        fileName: req.file.originalname,
+        fileUrl 
+      });
+
+      res.json({
+        success: true,
+        data: {
+          url: fileUrl,
+          fileName: req.file.originalname,
+          contentType: req.file.mimetype,
+          size: req.file.size
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error uploading chat file:', error);
+      res.status(500).json({ success: false, message: "Failed to upload file" });
+    }
+  });
+
   // Send a message from patient to doctor
   app.post("/patient/chat/messages", authenticateJWT, async (req: any, res: any) => {
     try {
@@ -8401,10 +8554,24 @@ async function startServer() {
         return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
       }
 
-      const { message } = req.body;
+      const { message, attachments } = req.body;
 
-      if (!message || typeof message !== 'string' || message.trim().length === 0) {
-        return res.status(400).json({ success: false, message: "Message is required" });
+      // Validate: message is required OR attachments are provided
+      if ((!message || typeof message !== 'string' || message.trim().length === 0) && (!attachments || !Array.isArray(attachments) || attachments.length === 0)) {
+        return res.status(400).json({ success: false, message: "Message or attachments are required" });
+      }
+
+      // Validate attachments if provided
+      if (attachments && Array.isArray(attachments)) {
+        if (attachments.length > 10) {
+          return res.status(400).json({ success: false, message: "Maximum 10 attachments allowed per message" });
+        }
+        // Validate that all attachments are valid URLs
+        for (const url of attachments) {
+          if (typeof url !== 'string' || !url.startsWith('https://')) {
+            return res.status(400).json({ success: false, message: "Invalid attachment URL format" });
+          }
+        }
       }
 
       // Find or create chat
@@ -8419,15 +8586,20 @@ async function startServer() {
         });
       }
 
-      // Create new message
-      const newMessage = {
+      // Create new message with optional attachments
+      const newMessage: any = {
         id: require('crypto').randomUUID(),
         senderId: currentUser.id,
         senderRole: 'patient' as const,
-        message: message.trim(),
+        message: message ? message.trim() : '',
         createdAt: new Date().toISOString(),
         read: false
       };
+
+      // Add attachments if provided
+      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        newMessage.attachments = attachments;
+      }
 
       // Add message to array
       const updatedMessages = [...(chat.messages || []), newMessage];

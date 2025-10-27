@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar, Button, Card, CardBody, Input, Spinner } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { apiCall } from "../lib/api";
+import { apiCall, uploadFile } from "../lib/api";
 import { useChat } from "../hooks/useChat";
 
 // New interfaces for our chat system
@@ -12,6 +12,7 @@ interface ChatMessage {
   message: string;
   createdAt: string;
   read: boolean;
+  attachments?: string[]; // URLs of attached files
 }
 
 interface Doctor {
@@ -47,6 +48,7 @@ interface Message {
   timestamp: string;
   isUser: boolean;
   createdAt?: string;
+  attachments?: string[]; // URLs of attached files
 }
 
 interface MessengerPageProps {
@@ -106,6 +108,7 @@ const mapChatMessageToUi = (message: ChatMessage, doctorName: string): Message =
     timestamp: formatTimestamp(message.createdAt),
     isUser: isPatient,
     createdAt: message.createdAt,
+    attachments: message.attachments, // Preserve attachments
   };
 };
 
@@ -119,6 +122,11 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
   const [sendError, setSendError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState<boolean>(false);
   const isFetchingRef = useRef<boolean>(false);
+  
+  // File attachments
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadingFiles, setUploadingFiles] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Get auth token from localStorage
   const [authToken, setAuthToken] = useState<string | null>(null);
@@ -266,17 +274,82 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
     loadMessages();
   }, []); // Only load once on mount - WebSocket handles real-time updates
 
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // Validate file count (max 10)
+    if (selectedFiles.length + files.length > 10) {
+      setSendError("Máximo 10 archivos por mensaje");
+      return;
+    }
+
+    // Validate file sizes (max 5MB each)
+    const invalidFiles = files.filter(f => f.size > 5 * 1024 * 1024);
+    if (invalidFiles.length > 0) {
+      setSendError(`Archivos muy grandes: ${invalidFiles.map(f => f.name).join(', ')}. Máximo 5MB por archivo.`);
+      return;
+    }
+
+    // Validate file types
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+    const invalidTypes = files.filter(f => !validTypes.includes(f.type));
+    if (invalidTypes.length > 0) {
+      setSendError(`Tipos de archivo no permitidos: ${invalidTypes.map(f => f.name).join(', ')}. Solo imágenes y PDFs.`);
+      return;
+    }
+
+    setSelectedFiles(prev => [...prev, ...files]);
+    setSendError(null);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Remove file from selection
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSendMessage = async () => {
-    if (isSending || newMessage.trim() === "" || !chatData) return;
+    // Validate: need message or files
+    if (isSending || (newMessage.trim() === "" && selectedFiles.length === 0) || !chatData) return;
 
     const trimmedMessage = newMessage.trim();
     setIsSending(true);
+    setUploadingFiles(true);
     setSendError(null);
 
     try {
+      // Upload files first if any
+      const uploadedUrls: string[] = [];
+      
+      if (selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          console.log(`📤 Uploading file: ${file.name}`);
+          const uploadResult = await uploadFile(file);
+          
+          if (!uploadResult.success) {
+            throw new Error(`Error subiendo ${file.name}: ${uploadResult.error}`);
+          }
+          
+          uploadedUrls.push(uploadResult.data!.url);
+        }
+        console.log('✅ All files uploaded:', uploadedUrls);
+      }
+
+      setUploadingFiles(false);
+
+      // Send message with attachments
       const response = await apiCall<SendMessageResponse>("/patient/chat/messages", {
         method: "POST",
-        body: JSON.stringify({ message: trimmedMessage }),
+        body: JSON.stringify({ 
+          message: trimmedMessage,
+          attachments: uploadedUrls.length > 0 ? uploadedUrls : undefined
+        }),
       });
 
       if (!response.success) {
@@ -292,13 +365,15 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
       // Update chat data (WebSocket will handle adding the message to UI)
       setChatData(payload.chat);
       
-      // Clear input - the message will appear via WebSocket
+      // Clear inputs - the message will appear via WebSocket
       setNewMessage("");
+      setSelectedFiles([]);
     } catch (error) {
       console.error("❌ Error enviando mensaje:", error);
       setSendError(error instanceof Error ? error.message : "No se pudo enviar el mensaje");
     } finally {
       setIsSending(false);
+      setUploadingFiles(false);
     }
   };
 
@@ -385,7 +460,46 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
                                 : "bg-content2 text-foreground"
                             }`}
                           >
-                            <p>{message.content}</p>
+                            {message.content && <p>{message.content}</p>}
+                            
+                            {/* Show attachments if any */}
+                            {(message as any).attachments && (message as any).attachments.length > 0 && (
+                              <div className={`${message.content ? 'mt-2' : ''} space-y-2`}>
+                                {(message as any).attachments.map((url: string, idx: number) => {
+                                  const isImage = url.match(/\.(jpg|jpeg|png|webp)$/i);
+                                  const fileName = url.split('/').pop() || 'file';
+                                  
+                                  return (
+                                    <div key={idx}>
+                                      {isImage ? (
+                                        <a href={url} target="_blank" rel="noopener noreferrer">
+                                          <img 
+                                            src={url} 
+                                            alt={fileName}
+                                            className="max-w-full max-h-[200px] rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                          />
+                                        </a>
+                                      ) : (
+                                        <a 
+                                          href={url} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className={`flex items-center gap-2 p-2 rounded ${
+                                            message.isUser 
+                                              ? 'bg-primary-600 hover:bg-primary-700' 
+                                              : 'bg-content3 hover:bg-content4'
+                                          } transition-colors`}
+                                        >
+                                          <Icon icon="lucide:file-text" width={20} />
+                                          <span className="text-sm truncate max-w-[200px]">{fileName}</span>
+                                          <Icon icon="lucide:download" width={16} />
+                                        </a>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                           <div className="text-xs text-foreground-400 mt-1">
                             {message.timestamp}
@@ -400,7 +514,52 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
               
               {/* Message input */}
               <div className="p-3 border-t border-content3">
+                {/* Selected files preview */}
+                {selectedFiles.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {selectedFiles.map((file, index) => (
+                      <div key={index} className="flex items-center gap-2 bg-content2 rounded-lg px-3 py-2">
+                        <Icon 
+                          icon={file.type.startsWith('image/') ? "lucide:image" : "lucide:file-text"} 
+                          className="text-foreground-500" 
+                        />
+                        <span className="text-sm text-foreground-700 max-w-[150px] truncate">
+                          {file.name}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveFile(index)}
+                          className="text-danger-500 hover:text-danger-700"
+                          disabled={isSending}
+                        >
+                          <Icon icon="lucide:x" width={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex gap-2 items-center">
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  
+                  {/* Attach file button */}
+                  <Button
+                    isIconOnly
+                    variant="light"
+                    aria-label="Attach file"
+                    onPress={() => fileInputRef.current?.click()}
+                    isDisabled={isSending || selectedFiles.length >= 10}
+                  >
+                    <Icon icon="lucide:paperclip" className="text-foreground-500" />
+                  </Button>
+
                   <div className="flex-1">
                     <Input
                       placeholder="Type a message..."
@@ -411,12 +570,14 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
                       className="w-full"
                     />
                   </div>
+                  
                   <Button
                     isIconOnly
                     color="primary"
                     aria-label="Send message"
                     onPress={() => void handleSendMessage()}
-                    isDisabled={newMessage.trim() === "" || isSending}
+                    isDisabled={(newMessage.trim() === "" && selectedFiles.length === 0) || isSending}
+                    isLoading={uploadingFiles}
                   >
                     <Icon icon="lucide:send" />
                   </Button>

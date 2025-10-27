@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
-import { Search, Phone, Video, MoreVertical } from 'lucide-react';
+import { Search, Phone, Video, MoreVertical, Paperclip, X, Image, FileText } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Chat, ChatMessage } from '@/lib/api';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -15,7 +15,10 @@ export default function Patients() {
     const [messageInput, setMessageInput] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [uploadingFiles, setUploadingFiles] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // WebSocket handler for new messages
     const handleNewMessage = useCallback((message: ChatMessage) => {
@@ -104,17 +107,65 @@ export default function Patients() {
         }
     };
 
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        
+        // Filter only valid file types (images and PDFs)
+        const validFiles = files.filter(file => {
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
+            return validTypes.includes(file.type) && file.size <= 5 * 1024 * 1024; // 5MB max
+        });
+
+        // Limit to 10 files total
+        const newFiles = [...selectedFiles, ...validFiles].slice(0, 10);
+        setSelectedFiles(newFiles);
+
+        // Reset input value so same file can be selected again
+        if (e.target) {
+            e.target.value = '';
+        }
+    };
+
+    const handleRemoveFile = (index: number) => {
+        setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!messageInput.trim() || !selectedChat || sending) return;
+        if ((!messageInput.trim() && selectedFiles.length === 0) || !selectedChat || sending) return;
 
         try {
             setSending(true);
-            const response = await apiClient.sendMessage(selectedChat.id, messageInput.trim());
+            setUploadingFiles(true);
+
+            // Upload files first if any
+            const attachmentUrls: string[] = [];
+            if (selectedFiles.length > 0) {
+                for (const file of selectedFiles) {
+                    const uploadResult = await apiClient.uploadFile(file);
+                    if (uploadResult.success && uploadResult.data) {
+                        attachmentUrls.push(uploadResult.data.url);
+                    } else {
+                        console.error('Failed to upload file:', file.name, uploadResult.error);
+                        alert(`Failed to upload ${file.name}. ${uploadResult.error || 'Please try again.'}`);
+                        return;
+                    }
+                }
+            }
+
+            setUploadingFiles(false);
+
+            // Send message with attachments
+            const response = await apiClient.sendMessage(
+                selectedChat.id, 
+                messageInput.trim(), 
+                attachmentUrls.length > 0 ? attachmentUrls : undefined
+            );
             
             if (response.success) {
-                // Just clear the input - WebSocket will handle updating the UI
+                // Clear inputs - WebSocket will handle updating the UI
                 setMessageInput('');
+                setSelectedFiles([]);
                 
                 // Update chat data (without messages, WebSocket handles that)
                 setChats(prevChats => 
@@ -130,6 +181,7 @@ export default function Patients() {
             alert('Failed to send message. Please try again.');
         } finally {
             setSending(false);
+            setUploadingFiles(false);
         }
     };
 
@@ -247,36 +299,36 @@ export default function Patients() {
                                             <div
                                                 key={chat.id}
                                                 onClick={() => handleSelectChat(chat)}
-                                                className={`p-4 border-b border-border cursor-pointer transition-colors hover:bg-accent ${
+                                        className={`p-4 border-b border-border cursor-pointer transition-colors hover:bg-accent ${
                                                     selectedChat?.id === chat.id ? 'bg-accent' : ''
-                                                }`}
-                                            >
-                                                <div className="flex items-start gap-3">
-                                                    <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-semibold">
                                                         {getInitials(chat.patient.firstName, chat.patient.lastName)}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <h3 className="font-semibold text-sm truncate">
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <h3 className="font-semibold text-sm truncate">
                                                                 {chat.patient.firstName} {chat.patient.lastName}
-                                                            </h3>
-                                                            <span className="text-xs text-muted-foreground">
+                                                    </h3>
+                                                    <span className="text-xs text-muted-foreground">
                                                                 {formatTimestamp(chat.lastMessageAt)}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center justify-between">
-                                                            <p className="text-sm text-muted-foreground truncate">
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-sm text-muted-foreground truncate">
                                                                 {getLastMessage(chat.messages)}
-                                                            </p>
+                                                    </p>
                                                             {chat.unreadCountDoctor > 0 && (
-                                                                <span className="ml-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-0.5 rounded-full">
+                                                        <span className="ml-2 bg-primary text-primary-foreground text-xs font-semibold px-2 py-0.5 rounded-full">
                                                                     {chat.unreadCountDoctor}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
+                                        </div>
+                                    </div>
                                         );
                                     })
                                 )}
@@ -324,32 +376,71 @@ export default function Patients() {
                                         ) : (
                                             <>
                                                 {selectedChat.messages.map((message) => (
-                                                    <div
-                                                        key={message.id}
-                                                        className={`flex ${
+                                            <div
+                                                key={message.id}
+                                                className={`flex ${
                                                             message.senderRole === 'doctor' ? 'justify-end' : 'justify-start'
+                                                }`}
+                                            >
+                                                <div
+                                                    className={`max-w-[70%] ${
+                                                                message.senderRole === 'doctor'
+                                                            ? 'bg-primary text-primary-foreground'
+                                                            : 'bg-muted text-foreground'
+                                                    } rounded-lg px-4 py-2 shadow-sm`}
+                                                >
+                                                            {message.message && <p className="text-sm">{message.message}</p>}
+                                                            
+                                                            {/* Show attachments if any */}
+                                                            {(message as any).attachments && (message as any).attachments.length > 0 && (
+                                                                <div className={`${message.message ? 'mt-2' : ''} space-y-2`}>
+                                                                    {(message as any).attachments.map((url: string, idx: number) => {
+                                                                        const isImage = url.match(/\.(jpg|jpeg|png|webp)$/i);
+                                                                        const fileName = url.split('/').pop() || 'file';
+
+                                                                        return (
+                                                                            <div key={idx}>
+                                                                                {isImage ? (
+                                                                                    <a href={url} target="_blank" rel="noopener noreferrer">
+                                                                                        <img
+                                                                                            src={url}
+                                                                                            alt={fileName}
+                                                                                            className="max-w-full max-h-[200px] rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                                                                        />
+                                                                                    </a>
+                                                                                ) : (
+                                                                                    <a
+                                                                                        href={url}
+                                                                                        target="_blank"
+                                                                                        rel="noopener noreferrer"
+                                                                                        className={`flex items-center gap-2 p-2 rounded ${
+                                                                                            message.senderRole === 'doctor'
+                                                                                                ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20'
+                                                                                                : 'bg-muted-foreground/10 hover:bg-muted-foreground/20'
+                                                                                        } transition-colors`}
+                                                                                    >
+                                                                                        <FileText className="h-5 w-5" />
+                                                                                        <span className="text-sm truncate max-w-[200px]">{fileName}</span>
+                                                                                    </a>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                            
+                                                    <p
+                                                        className={`text-xs mt-1 ${
+                                                                    message.senderRole === 'doctor'
+                                                                ? 'text-primary-foreground/70'
+                                                                : 'text-muted-foreground'
                                                         }`}
                                                     >
-                                                        <div
-                                                            className={`max-w-[70%] ${
-                                                                message.senderRole === 'doctor'
-                                                                    ? 'bg-primary text-primary-foreground'
-                                                                    : 'bg-muted text-foreground'
-                                                            } rounded-lg px-4 py-2 shadow-sm`}
-                                                        >
-                                                            <p className="text-sm">{message.message}</p>
-                                                            <p
-                                                                className={`text-xs mt-1 ${
-                                                                    message.senderRole === 'doctor'
-                                                                        ? 'text-primary-foreground/70'
-                                                                        : 'text-muted-foreground'
-                                                                }`}
-                                                            >
                                                                 {formatTimestamp(message.createdAt)}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
                                                 <div ref={messagesEndRef} />
                                             </>
                                         )}
@@ -357,7 +448,53 @@ export default function Patients() {
 
                                     {/* Message Input */}
                                     <div className="p-4 border-t border-border bg-card">
+                                        {/* Selected files preview */}
+                                        {selectedFiles.length > 0 && (
+                                            <div className="mb-2 flex flex-wrap gap-2">
+                                                {selectedFiles.map((file, index) => (
+                                                    <div key={index} className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+                                                        {file.type.startsWith('image/') ? (
+                                                            <Image className="h-4 w-4 text-foreground" />
+                                                        ) : (
+                                                            <FileText className="h-4 w-4 text-foreground" />
+                                                        )}
+                                                        <span className="text-sm text-foreground max-w-[150px] truncate">
+                                                            {file.name}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => handleRemoveFile(index)}
+                                                            className="text-muted-foreground hover:text-foreground"
+                                                            disabled={sending}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
                                         <form onSubmit={handleSendMessage} className="flex gap-2">
+                                            {/* Hidden file input */}
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
+                                                multiple
+                                                onChange={handleFileSelect}
+                                                className="hidden"
+                                            />
+
+                                            {/* Attach file button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={sending || selectedFiles.length >= 10}
+                                                className="px-3 py-2 border border-input rounded-lg bg-background hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                title="Attach file"
+                                            >
+                                                <Paperclip className="h-5 w-5 text-foreground" />
+                                            </button>
+
                                             <input
                                                 type="text"
                                                 placeholder="Type a message..."
@@ -368,10 +505,10 @@ export default function Patients() {
                                             />
                                             <button
                                                 type="submit"
-                                                disabled={!messageInput.trim() || sending}
+                                                disabled={(!messageInput.trim() && selectedFiles.length === 0) || sending}
                                                 className="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                             >
-                                                {sending ? 'Sending...' : 'Send'}
+                                                {uploadingFiles ? 'Uploading...' : sending ? 'Sending...' : 'Send'}
                                             </button>
                                         </form>
                                     </div>

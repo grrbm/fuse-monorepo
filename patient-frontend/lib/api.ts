@@ -132,3 +132,49 @@ export async function fetchWithAuth<T>(endpoint: string): Promise<T | null> {
 
   return result.data || null;
 }
+
+// Upload file function (for chat attachments)
+export async function uploadFile(file: File): Promise<ApiResponse<{
+  url: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+}>> {
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth-token') : null;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${apiUrl}/patient/chat/upload-file`, {
+      method: 'POST',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+        // No Content-Type header - browser sets it automatically with boundary for FormData
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('❌ File upload failed:', response.status);
+      return {
+        success: false,
+        error: data.message || `Upload failed with status ${response.status}`,
+      };
+    }
+
+    return {
+      success: true,
+      data: data.data,
+    };
+  } catch (error) {
+    console.error('Network error on file upload');
+    return {
+      success: false,
+      error: 'Network error occurred during upload. Please try again.',
+    };
+  }
+}
