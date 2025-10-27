@@ -56,6 +56,33 @@ export interface BulkApproveResult {
     error?: string;
 }
 
+export interface ChatMessage {
+    id: string;
+    senderId: string;
+    senderRole: 'doctor' | 'patient';
+    message: string;
+    createdAt: string;
+    read: boolean;
+}
+
+export interface Chat {
+    id: string;
+    doctorId: string;
+    patientId: string;
+    messages: ChatMessage[];
+    lastMessageAt: string;
+    unreadCountDoctor: number;
+    unreadCountPatient: number;
+    createdAt: string;
+    updatedAt: string;
+    patient: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+    };
+}
+
 export class ApiClient {
     constructor(private authenticatedFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) { }
 
@@ -144,6 +171,61 @@ export class ApiClient {
 
         if (!response.ok) {
             throw new Error('Failed to fetch treatments');
+        }
+
+        return response.json();
+    }
+
+    // Chat endpoints
+    async fetchChats(): Promise<{ success: boolean; data: Chat[] }> {
+        const response = await this.authenticatedFetch(`${API_URL}/doctor/chats`);
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch chats');
+        }
+
+        return response.json();
+    }
+
+    async fetchChatById(chatId: string): Promise<{ success: boolean; data: Chat }> {
+        const response = await this.authenticatedFetch(`${API_URL}/doctor/chats/${chatId}`);
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch chat');
+        }
+
+        return response.json();
+    }
+
+    async sendMessage(chatId: string, message: string): Promise<{
+        success: boolean;
+        data: {
+            message: ChatMessage;
+            chat: Chat;
+        };
+    }> {
+        const response = await this.authenticatedFetch(`${API_URL}/doctor/chats/${chatId}/messages`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ message }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to send message');
+        }
+
+        return response.json();
+    }
+
+    async markChatAsRead(chatId: string): Promise<{ success: boolean; data: Chat }> {
+        const response = await this.authenticatedFetch(`${API_URL}/doctor/chats/${chatId}/mark-read`, {
+            method: 'POST',
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to mark chat as read');
         }
 
         return response.json();

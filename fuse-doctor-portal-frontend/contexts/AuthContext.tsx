@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react'
 import { useRouter } from 'next/router'
+import { ApiClient } from '@/lib/api'
 
 interface User {
     id: string
@@ -18,6 +19,7 @@ interface AuthContextType {
     signup: (email: string, password: string, name: string) => Promise<boolean>
     logout: (options?: { message?: string }) => void
     authenticatedFetch: (input: RequestInfo | URL, init?: RequestInit & { skipLogoutOn401?: boolean }) => Promise<Response>
+    apiClient: ApiClient
     isLoading: boolean
     error: string | null
 }
@@ -191,6 +193,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }
 
+    const apiClient = useMemo(() => new ApiClient(authenticatedFetch), [token])
+
     return (
         <AuthContext.Provider
             value={{
@@ -200,6 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 signup,
                 logout,
                 authenticatedFetch,
+                apiClient,
                 isLoading,
                 error,
             }}

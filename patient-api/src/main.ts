@@ -90,6 +90,7 @@ import Questionnaire from "./models/Questionnaire";
 import TenantProductService from "./services/tenantProduct.service";
 import QuestionnaireStep from "./models/QuestionnaireStep";
 import DashboardService from "./services/dashboard.service";
+import DoctorPatientChats from "./models/DoctorPatientChats";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -502,7 +503,7 @@ app.post("/auth/signup", async (req, res) => {
     console.log('✅ No existing user found, proceeding with registration');
 
     // Handle clinic association
-    let clinic = null;
+    let clinic: any = null;
     let finalClinicId = clinicId; // Use provided clinicId from request body
 
     // Create clinic if user is a healthcare provider and no clinicId provided
@@ -3156,7 +3157,7 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
     });
 
     // Create order items
-    const orderItems = [];
+    const orderItems: any[] = [];
     for (const [productId, quantity] of Object.entries(selectedProducts)) {
       if (quantity && Number(quantity) > 0) {
         const product = treatment.products?.find(p => p.id === productId);
@@ -3631,7 +3632,7 @@ app.post("/payments/treatment/sub", async (req, res) => {
 
     const { treatmentId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = validation.data;
 
-    let currentUser = null;
+    let currentUser: any = null;
 
     // Try to get user from auth token if provided
     const authHeader = req.headers.authorization;
@@ -8071,6 +8072,223 @@ async function startServer() {
     } catch (error) {
       console.error('❌ Error fetching doctor stats:', error);
       res.status(500).json({ success: false, message: "Failed to fetch statistics" });
+    }
+  });
+
+  // ============================================
+  // DOCTOR-PATIENT CHAT ENDPOINTS
+  // ============================================
+
+  // Get all conversations for a doctor
+  app.get("/doctor/chats", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'doctor') {
+        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      }
+
+      const chats = await DoctorPatientChats.findAll({
+        where: { doctorId: currentUser.id },
+        order: [['lastMessageAt', 'DESC']]
+      });
+
+      // Manually load patient data for each chat
+      const chatsWithPatients = await Promise.all(
+        chats.map(async (chat) => {
+          const patient = await User.findByPk(chat.patientId, {
+            attributes: ['id', 'firstName', 'lastName', 'email']
+          });
+          
+          return {
+            ...chat.toJSON(),
+            patient: patient ? patient.toJSON() : null
+          };
+        })
+      );
+
+      res.json({
+        success: true,
+        data: chatsWithPatients
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching doctor chats:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch chats" });
+    }
+  });
+
+  // Get specific conversation messages
+  app.get("/doctor/chats/:chatId", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'doctor') {
+        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      }
+
+      const { chatId } = req.params;
+
+      const chat = await DoctorPatientChats.findOne({
+        where: { 
+          id: chatId,
+          doctorId: currentUser.id
+        }
+      });
+
+      if (!chat) {
+        return res.status(404).json({ success: false, message: "Chat not found" });
+      }
+
+      // Manually load patient data
+      const patient = await User.findByPk(chat.patientId, {
+        attributes: ['id', 'firstName', 'lastName', 'email']
+      });
+
+      const chatWithPatient = {
+        ...chat.toJSON(),
+        patient: patient ? patient.toJSON() : null
+      };
+
+      res.json({
+        success: true,
+        data: chatWithPatient
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching chat:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch chat" });
+    }
+  });
+
+  // Send a message in a conversation
+  app.post("/doctor/chats/:chatId/messages", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'doctor') {
+        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      }
+
+      const { chatId } = req.params;
+      const { message } = req.body;
+
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        return res.status(400).json({ success: false, message: "Message is required" });
+      }
+
+      const chat = await DoctorPatientChats.findOne({
+        where: { 
+          id: chatId,
+          doctorId: currentUser.id
+        }
+      });
+
+      if (!chat) {
+        return res.status(404).json({ success: false, message: "Chat not found" });
+      }
+
+      // Create new message
+      const newMessage = {
+        id: require('crypto').randomUUID(),
+        senderId: currentUser.id,
+        senderRole: 'doctor' as const,
+        message: message.trim(),
+        createdAt: new Date().toISOString(),
+        read: false
+      };
+
+      // Add message to array
+      const updatedMessages = [...(chat.messages || []), newMessage];
+
+      // Update chat
+      await chat.update({
+        messages: updatedMessages,
+        lastMessageAt: new Date(),
+        unreadCountPatient: chat.unreadCountPatient + 1
+      });
+
+      // Reload and manually add patient data
+      await chat.reload();
+      const patient = await User.findByPk(chat.patientId, {
+        attributes: ['id', 'firstName', 'lastName', 'email']
+      });
+
+      const chatWithPatient = {
+        ...chat.toJSON(),
+        patient: patient ? patient.toJSON() : null
+      };
+
+      res.json({
+        success: true,
+        data: {
+          message: newMessage,
+          chat: chatWithPatient
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      res.status(500).json({ success: false, message: "Failed to send message" });
+    }
+  });
+
+  // Mark messages as read
+  app.post("/doctor/chats/:chatId/mark-read", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'doctor') {
+        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
+      }
+
+      const { chatId } = req.params;
+
+      const chat = await DoctorPatientChats.findOne({
+        where: { 
+          id: chatId,
+          doctorId: currentUser.id
+        }
+      });
+
+      if (!chat) {
+        return res.status(404).json({ success: false, message: "Chat not found" });
+      }
+
+      // Mark all messages from patient as read
+      const updatedMessages = (chat.messages || []).map((msg: any) => {
+        if (msg.senderRole === 'patient' && !msg.read) {
+          return { ...msg, read: true };
+        }
+        return msg;
+      });
+
+      // Update chat
+      await chat.update({
+        messages: updatedMessages,
+        unreadCountDoctor: 0
+      });
+
+      res.json({
+        success: true,
+        data: chat
+      });
+
+    } catch (error) {
+      console.error('❌ Error marking messages as read:', error);
+      res.status(500).json({ success: false, message: "Failed to mark messages as read" });
     }
   });
 
