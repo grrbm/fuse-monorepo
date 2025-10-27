@@ -336,7 +336,7 @@ export const handleInvoicePaid = async (invoice: Stripe.Invoice): Promise<void> 
                 const clinic = await Clinic.findByPk(sub.clinicId);
                 if (clinic) {
                     await clinic.update({
-                        active: true,
+                        isActive: true,
                         status: PaymentStatus.PAID
                     })
                 }
@@ -469,7 +469,7 @@ export const handleSubscriptionDeleted = async (subscription: Stripe.Subscriptio
             const clinic = await Clinic.findByPk(sub.clinicId);
             if (clinic) {
                 await clinic.update({
-                    active: false,
+                    isActive: false,
                     status: PaymentStatus.CANCELLED
                 })
             }
@@ -645,12 +645,9 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
         const tokenResponse = await MDAuthService.generateToken();
 
         // Create case using MD Integration
+        const { extractCaseQuestions } = await import('../../utils/questionnaireAnswers');
         const caseQuestions = order.questionnaireAnswers
-            ? Object.entries(order.questionnaireAnswers).map(([question, answer]) => ({
-                question: question,
-                answer: String(answer),
-                type: "string"
-            }))
+            ? extractCaseQuestions(order.questionnaireAnswers)
             : [];
 
         // Determine case offerings based on environment

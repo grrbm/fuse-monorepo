@@ -44,7 +44,7 @@ export default class Treatment extends Entity {
         allowNull: false,
         defaultValue: false,
     })
-    declare active: boolean;
+    declare isActive: boolean;
 
     @Column({
         type: DataType.STRING,

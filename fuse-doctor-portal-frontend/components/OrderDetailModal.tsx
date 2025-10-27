@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './ui/button';
 import { PendingOrder, ApiClient } from '@/lib/api';
@@ -21,22 +21,25 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
     const [submittingNotes, setSubmittingNotes] = useState(false);
     const [approving, setApproving] = useState(false);
 
+    // Pre-populate notes when order changes
+    useEffect(() => {
+        if (order?.doctorNotes) {
+            setNotes(order.doctorNotes);
+        } else {
+            setNotes('');
+        }
+    }, [order?.id]);
+
     if (!isOpen || !order) return null;
 
-    const handleAddNotes = async () => {
-        if (!notes.trim()) {
-            toast.error('Please enter a note');
-            return;
-        }
-
+    const handleSaveNotes = async () => {
         setSubmittingNotes(true);
         try {
             await apiClient.addOrderNotes(order.id, notes);
-            toast.success('Notes added successfully');
-            setNotes('');
+            toast.success('Notes saved successfully');
             onNotesAdded?.();
         } catch (error) {
-            toast.error('Failed to add notes');
+            toast.error('Failed to save notes');
         } finally {
             setSubmittingNotes(false);
         }
@@ -91,6 +94,23 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                                 <div>
                                     <p className="text-sm text-gray-600">Phone</p>
                                     <p className="font-medium">{order.patient.phoneNumber}</p>
+                                </div>
+                            )}
+                            <div>
+                                <p className="text-sm text-gray-600">Order Date</p>
+                                <p className="font-medium">{new Date(order.createdAt).toLocaleString()}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Order Total</p>
+                                <p className="font-medium">${order.totalAmount}</p>
+                            </div>
+                            {order.shippingAddress && (
+                                <div className="col-span-2">
+                                    <p className="text-sm text-gray-600">Shipping Address</p>
+                                    <p className="font-medium">
+                                        {order.shippingAddress.street}<br />
+                                        {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -159,59 +179,86 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                     )}
 
                     {/* Questionnaire Answers */}
-                    {order.questionnaireAnswers && Object.keys(order.questionnaireAnswers).length > 0 && (
-                        <section>
-                            <h3 className="text-lg font-semibold mb-3">Questionnaire Answers</h3>
-                            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                                {Object.entries(order.questionnaireAnswers).map(([key, value]) => (
-                                    <div key={key} className="border-b pb-2 last:border-b-0">
-                                        <p className="text-sm font-medium text-gray-700 capitalize">
-                                            {key.replace(/([A-Z])/g, ' $1').trim()}
-                                        </p>
-                                        <p className="text-sm">{String(value)}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-                    )}
+                    {(() => {
+                        // Parse questionnaire answers and filter for "normal" category only
+                        if (!order.questionnaireAnswers) return null;
+
+                        const qa = order.questionnaireAnswers;
+                        let normalAnswers: any[] = [];
+
+                        // Try multiple possible formats
+                        let allAnswers: any[] = [];
+
+                        // Format 1: Direct answers array
+                        if (qa.answers && Array.isArray(qa.answers)) {
+                            allAnswers = qa.answers;
+                        }
+                        // Format 2: Wrapped with format property
+                        else if (qa.format === 'structured' && qa.answers && Array.isArray(qa.answers)) {
+                            allAnswers = qa.answers;
+                        }
+                        // Format 3: Legacy format (key-value pairs) - skip as no category info available
+                        else if (typeof qa === 'object' && !qa.answers && !qa.format) {
+                            return null;
+                        }
+
+                        // Filter for only "normal" category questions
+                        normalAnswers = allAnswers.filter((answer: any) => answer.stepCategory === 'normal');
+
+                        // If no normal answers found, don't show this section
+                        if (normalAnswers.length === 0) {
+                            return null;
+                        }
+
+                        return (
+                            <section>
+                                <h3 className="text-lg font-semibold mb-3">Questionnaire Answers</h3>
+                                <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                                    {normalAnswers.map((answer: any, index: number) => (
+                                        <div key={index} className="bg-white border border-gray-200 p-3 rounded-md">
+                                            <p className="text-sm font-medium text-gray-900">{answer.questionText}</p>
+                                            <p className="text-sm text-gray-700 mt-1">
+                                                {answer.selectedOptions && answer.selectedOptions.length > 0 ? (
+                                                    answer.selectedOptions.map((opt: any) => opt.optionText).join(', ')
+                                                ) : (
+                                                    String(answer.answer)
+                                                )}
+                                            </p>
+                                            <span className="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                                                Product Question
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {qa.metadata && (
+                                        <div className="text-xs text-gray-500 mt-2">
+                                            Completed: {new Date(qa.metadata.completedAt).toLocaleString()}
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                        );
+                    })()}
 
                     {/* Doctor Notes */}
-                    {order.doctorNotes && order.doctorNotes.length > 0 && (
-                        <section>
-                            <h3 className="text-lg font-semibold mb-3">Doctor Notes</h3>
-                            <div className="space-y-2">
-                                {order.doctorNotes.map((note: any, idx: number) => (
-                                    <div key={idx} className="bg-blue-50 p-3 rounded-lg">
-                                        <p className="text-sm">{note.note}</p>
-                                        <p className="text-xs text-gray-600 mt-1">
-                                            {new Date(note.timestamp).toLocaleString()}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-                    )}
-
-                    {/* Add Notes Section */}
                     <section>
-                        <h3 className="text-lg font-semibold mb-3">Add Notes</h3>
+                        <h3 className="text-lg font-semibold mb-3">Doctor Notes</h3>
                         <textarea
-                            className="w-full border rounded-md px-3 py-2 text-sm min-h-[100px]"
+                            className="w-full border rounded-md px-3 py-2 text-sm min-h-[120px]"
                             placeholder="Enter notes about this order..."
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                         />
                         <button
-                            onClick={handleAddNotes}
+                            onClick={handleSaveNotes}
                             disabled={submittingNotes}
                             className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                         >
-                            {submittingNotes ? 'Saving...' : 'Add Notes'}
+                            {submittingNotes ? 'Saving...' : 'Save Notes'}
                         </button>
                     </section>
 
                     {/* Auto Approval Info */}
-                    {order.autoApproved && (
+                    {order.autoApprovedByDoctor && (
                         <section>
                             <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
                                 <p className="font-medium text-yellow-900">Auto-Approved</p>

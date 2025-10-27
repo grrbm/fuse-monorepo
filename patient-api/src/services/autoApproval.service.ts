@@ -80,15 +80,13 @@ class AutoApprovalService {
             const orders = await Order.findAll({
                 where: {
                     status: OrderStatus.PAID,
-                    autoApproved: {
-                        [Op.or]: [null, false]
-                    }
+                    autoApprovedByDoctor: false
                 },
                 include: [
                     {
                         model: User,
                         as: 'user',
-                        attributes: ['id', 'firstName', 'lastName', 'dateOfBirth', 'email']
+                        attributes: ['id', 'firstName', 'lastName', 'dob', 'email']
                     },
                     {
                         model: Treatment,
@@ -145,9 +143,8 @@ class AutoApprovalService {
         // TODO: Add isCompound field to Treatment model if needed
         const isStandardTreatment = treatment ? true : false;
 
-        // Check patient age - field doesn't exist on User model yet
-        // TODO: Add dateOfBirth field to User model if needed
-        const patientAgeValid = true;
+        // Check patient age using dob field
+        const patientAgeValid = this.isPatientAgeValid(order.user.dob);
 
         // Check if has required fields
         const hasRequiredFields = !!(
@@ -208,12 +205,26 @@ class AutoApprovalService {
         return true;
     }
 
-    private calculateAge(dateOfBirth: Date): number {
-        const today = new Date();
-        let age = today.getFullYear() - dateOfBirth.getFullYear();
-        const monthDiff = today.getMonth() - dateOfBirth.getMonth();
+    private isPatientAgeValid(dob: string | undefined): boolean {
+        if (!dob) return false;
 
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dateOfBirth.getDate())) {
+        try {
+            const age = this.calculateAge(dob);
+            return age >= 18 && age <= 100; // Reasonable age range
+        } catch (error) {
+            console.error('Error calculating age from dob:', dob, error);
+            return false;
+        }
+    }
+
+    private calculateAge(dob: string): number {
+        const today = new Date();
+        const birthDate = new Date(dob);
+
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
             age--;
         }
 
@@ -253,7 +264,8 @@ class AutoApprovalService {
 
         // Mark as auto-approved before processing
         await order.update({
-            autoApproved: true,
+            approvedByDoctor: true,
+            autoApprovedByDoctor: true,
             autoApprovalReason: reason,
         });
 
@@ -271,7 +283,7 @@ class AutoApprovalService {
                 userId: order.userId,
                 clinicId: order.clinicId,
                 status: order.status,
-                autoApproved: true,
+                autoApprovedByDoctor: true,
             });
         } else {
             console.error('[AUTO-APPROVE] ❌ Failed to auto-approve', {
@@ -281,7 +293,8 @@ class AutoApprovalService {
 
             // Revert auto-approval flag
             await order.update({
-                autoApproved: false,
+                approvedByDoctor: false,
+                autoApprovedByDoctor: false,
                 autoApprovalReason: null,
             });
         }

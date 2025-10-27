@@ -29,6 +29,7 @@ import FormSectionTemplate from '../models/FormSectionTemplate';
 import TenantProductForm from '../models/TenantProductForm';
 import Sale from '../models/Sale';
 import DoctorPatientChats from '../models/DoctorPatientChats';
+import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
 dotenv.config({ path: '.env.local' });
@@ -98,6 +99,15 @@ export async function initializeDatabase() {
     // await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
 
+    // Run active to isActive migration
+    try {
+      const migrationService = new MigrationService(sequelize);
+      await migrationService.runActiveToIsActiveMigration();
+    } catch (error) {
+      console.error('❌ Error during active to isActive migration:', error);
+      // Don't throw - let the app continue
+    }
+
     // Ensure optional columns are nullable even if previous schema had NOT NULL
     try {
       await sequelize.query('ALTER TABLE "TenantProduct" ALTER COLUMN "questionnaireId" DROP NOT NULL;');
@@ -106,6 +116,12 @@ export async function initializeDatabase() {
     }
     try {
       await sequelize.query('ALTER TABLE "Order" ALTER COLUMN "treatmentId" DROP NOT NULL;');
+    } catch (e) {
+      // ignore
+    }
+    try {
+      // Change doctorNotes from JSONB to TEXT for single editable note
+      await sequelize.query('ALTER TABLE "Order" ALTER COLUMN "doctorNotes" TYPE TEXT USING "doctorNotes"::text;');
     } catch (e) {
       // ignore
     }

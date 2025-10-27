@@ -59,7 +59,7 @@ class TreatmentService {
                 };
             }
 
-            if (user.role !== 'doctor' && user.role !== 'brand' ) {
+            if (user.role !== 'doctor' && user.role !== 'brand') {
                 return {
                     success: false,
                     message: "Access denied",
@@ -235,7 +235,7 @@ class TreatmentService {
             }
 
             if (updateData.active !== undefined) {
-                updateFields.active = updateData.active
+                updateFields.isActive = updateData.active
             }
 
             if (updateData.category !== undefined) {

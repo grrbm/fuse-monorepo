@@ -80,14 +80,6 @@ export default class Product extends Entity {
     declare pharmacyProductId?: string;
 
     @Column({
-        type: DataType.BOOLEAN,
-        allowNull: false,
-        defaultValue: true,
-    })
-    declare active: boolean;
-
-
-    @Column({
         type: DataType.ENUM(...Object.values(PharmacyProvider)),
         allowNull: false,
         defaultValue: PharmacyProvider.ABSOLUTERX

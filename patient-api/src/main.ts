@@ -1292,7 +1292,7 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       pharmacyProductId: product.pharmacyProductId,
       dosage: product.dosage,
       imageUrl: product.imageUrl,
-      active: (product as any).active ?? true,
+      active: (product as any).isActive ?? true,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
       treatments: (product as any).treatments || []
@@ -6845,12 +6845,9 @@ app.post("/md/cases", async (req, res) => {
     }
 
     // Build case questions from stored questionnaire answers
+    const { extractCaseQuestions } = await import('./utils/questionnaireAnswers');
     const caseQuestions = (order as any).questionnaireAnswers
-      ? Object.entries((order as any).questionnaireAnswers).map(([question, answer]) => ({
-        question: String(question),
-        answer: String(answer),
-        type: 'string'
-      }))
+      ? extractCaseQuestions((order as any).questionnaireAnswers)
       : [];
 
     // Generate token and create case
@@ -7058,7 +7055,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
           isCustomDomain: updatedClinic.isCustomDomain,
           customDomain: updatedClinic.customDomain,
           logo: updatedClinic.logo,
-          active: updatedClinic.active,
+          active: updatedClinic.isActive,
           status: updatedClinic.status,
         } : null
       }
@@ -7659,72 +7656,102 @@ async function startServer() {
         where: { userId: currentUser.id },
         order: [["createdAt", "DESC"]] as any,
         limit,
-        offset,
+        offset
       } as any);
 
       const flattened: any[] = [];
       for (const order of orders) {
         const mdCaseId = (order as any).mdCaseId;
         const mdOfferings = (order as any).mdOfferings as any[] | null | undefined;
+        const tenantProduct = (order as any).tenantProduct;
+        const questionnaireAnswers = (order as any).questionnaireAnswers;
 
-        if (Array.isArray(mdOfferings) && mdOfferings.length > 0) {
-          for (const off of mdOfferings) {
-            const status = off?.status || off?.order_status || 'submitted';
-            const title = off?.title || off?.name || 'Offering';
-            const normalized = String(status).toLowerCase();
-            const classification = ['approved', 'submitted', 'completed'].includes(normalized) ? 'approved' : 'pending';
-            flattened.push({
-              orderId: order.id,
-              orderNumber: (order as any).orderNumber,
-              caseId: mdCaseId,
-              offeringId: off?.id,
-              caseOfferingId: off?.case_offering_id,
-              title,
-              productId: off?.product_id,
-              productType: off?.product_type,
-              status,
-              orderStatus: (order as any).status,
-              createdAt: off?.created_at || (order as any).createdAt,
-              updatedAt: off?.updated_at || (order as any).updatedAt,
-              classification,
-              details: {
-                directions: off?.directions ?? null,
-                thankYouNote: off?.thank_you_note ?? null,
-                clinicalNote: off?.clinical_note ?? null,
-                statusDetails: off?.status_details ?? null,
-                offerableType: off?.offerable_type ?? null,
-                offerableId: off?.offerable_id ?? null,
-                orderStatus: off?.order_status ?? null,
-                orderDate: off?.order_date ?? null,
-                orderDetails: off?.order_details ?? null,
-                product: off?.product ? {
-                  id: off?.product?.id ?? null,
-                  title: off?.product?.title ?? null,
-                  description: off?.product?.description ?? null,
-                  pharmacyNotes: off?.product?.pharmacy_notes ?? null,
-                  serviceType: off?.product?.service_type ?? null,
-                } : null
-              }
+        // Helper function to get product details from TenantProduct
+        const getTenantProductDetails = async () => {
+          const tenantProductId = (order as any).tenantProductId;
+          if (!tenantProductId) return null;
+
+          try {
+            const tenantProduct = await TenantProduct.findByPk(tenantProductId, {
+              include: [
+                {
+                  model: Product,
+                  as: 'product'
+                }
+              ]
             });
+
+            if (!tenantProduct) return null;
+
+            return {
+              id: tenantProduct.id,
+              name: tenantProduct.product?.name || 'Product',
+              description: tenantProduct.product?.description || null,
+              dosage: tenantProduct.product?.dosage || null,
+              category: tenantProduct.product?.category || null,
+              stripePriceId: tenantProduct.stripePriceId || null,
+              isActive: tenantProduct.isActive ?? true
+            };
+          } catch (error) {
+            console.error('Error fetching TenantProduct:', error);
+            return null;
           }
-        } else if (mdCaseId) {
-          // Case exists but no offerings captured yet → pending bucket
-          flattened.push({
-            orderId: order.id,
-            orderNumber: (order as any).orderNumber,
-            caseId: mdCaseId,
-            offeringId: null,
-            caseOfferingId: null,
-            title: 'Pending medical review',
-            productId: null,
-            productType: null,
-            status: 'pending',
-            orderStatus: (order as any).status,
-            createdAt: (order as any).createdAt,
-            updatedAt: (order as any).updatedAt,
-            classification: 'pending',
-          });
-        }
+        };
+
+        // Helper function to process questionnaire answers
+        const getQuestionnaireAnswers = () => {
+          if (!questionnaireAnswers) return null;
+
+          // Check if it's the new structured format (simplified check)
+          if (questionnaireAnswers && typeof questionnaireAnswers === 'object' && 'answers' in questionnaireAnswers && 'metadata' in questionnaireAnswers) {
+            return {
+              format: 'structured',
+              answers: questionnaireAnswers.answers,
+              metadata: questionnaireAnswers.metadata
+            };
+          } else {
+            return {
+              format: 'legacy',
+              answers: questionnaireAnswers
+            };
+          }
+        };
+
+        // Get TenantProduct details
+        const tenantProductDetails = await getTenantProductDetails();
+        const questionnaireAnswersData = getQuestionnaireAnswers();
+
+        // Determine status and classification based on approvedByDoctor field
+        const orderStatus = (order as any).status;
+        const approvedByDoctor = (order as any).approvedByDoctor || false;
+        let status = orderStatus || 'pending';
+        let classification: 'approved' | 'pending' = approvedByDoctor ? 'approved' : 'pending';
+        let title = tenantProductDetails?.name || 'Order';
+
+        // Store MD offerings count for reference
+        const hasMdOfferings = Array.isArray(mdOfferings) && mdOfferings.length > 0;
+
+        // Create ONE entry per order (not per MD offering)
+        flattened.push({
+          orderId: order.id,
+          orderNumber: (order as any).orderNumber,
+          caseId: mdCaseId,
+          offeringId: null,
+          caseOfferingId: null,
+          title: title,
+          productId: null,
+          productType: null,
+          status: status,
+          orderStatus: orderStatus,
+          createdAt: (order as any).createdAt,
+          updatedAt: (order as any).updatedAt,
+          classification,
+          // Enhanced details with TenantProduct and questionnaire answers
+          tenantProduct: tenantProductDetails,
+          questionnaireAnswers: questionnaireAnswersData,
+          // Store MD offerings count for reference
+          mdOfferingsCount: hasMdOfferings ? mdOfferings.length : 0
+        });
       }
 
       return res.json({ success: true, data: flattened });
@@ -7779,302 +7806,8 @@ async function startServer() {
   });
 
   // ============= DOCTOR PORTAL ENDPOINTS =============
-
-  // Get pending orders for doctor's clinic
-  app.get("/doctor/orders/pending", authenticateJWT, async (req: any, res: any) => {
-    try {
-      const currentUser = getCurrentUser(req);
-      if (!currentUser) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
-      }
-
-      // Fetch full user data to get clinicId
-      const user = await User.findByPk(currentUser.id);
-      if (!user || user.role !== 'doctor') {
-        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
-      }
-
-      if (!user.clinicId) {
-        return res.status(400).json({ success: false, message: "No clinic associated with this doctor" });
-      }
-
-      // Parse filters from query params
-      const {
-        status = 'paid',
-        treatmentId,
-        dateFrom,
-        dateTo,
-        patientAge,
-        patientGender,
-        limit = '50',
-        offset = '0'
-      } = req.query as any;
-
-      // Build where clause
-      const whereClause: any = {
-        clinicId: user.clinicId,
-        status: status || 'paid',
-      };
-
-      if (treatmentId) {
-        whereClause.treatmentId = treatmentId;
-      }
-
-      if (dateFrom || dateTo) {
-        whereClause.createdAt = {};
-        if (dateFrom) whereClause.createdAt[Op.gte] = new Date(dateFrom);
-        if (dateTo) whereClause.createdAt[Op.lte] = new Date(dateTo);
-      }
-
-      // Fetch orders
-      const orders = await Order.findAll({
-        where: whereClause,
-        include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber'],
-          },
-          {
-            model: Treatment,
-            as: 'treatment',
-            attributes: ['id', 'name', 'description', 'isCompound'],
-          },
-          {
-            model: ShippingAddress,
-            as: 'shippingAddress',
-          },
-        ],
-        order: [['createdAt', 'DESC']],
-        limit: Math.min(parseInt(limit), 200),
-        offset: parseInt(offset),
-      });
-
-      // Note: Demographics filtering removed as fields don't exist on User model
-      // Age and gender can be added when User model is updated
-      const filteredOrders = orders;
-
-      res.json({
-        success: true,
-        data: filteredOrders.map(order => ({
-          id: order.id,
-          orderNumber: order.orderNumber,
-          status: order.status,
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
-          totalAmount: order.totalAmount,
-          autoApproved: order.autoApproved,
-          autoApprovalReason: order.autoApprovalReason,
-          doctorNotes: order.doctorNotes,
-          patient: order.user ? {
-            id: order.user.id,
-            firstName: order.user.firstName,
-            lastName: order.user.lastName,
-            email: order.user.email,
-            phoneNumber: order.user.phoneNumber,
-          } : null,
-          treatment: order.treatment,
-          shippingAddress: order.shippingAddress,
-          questionnaireAnswers: order.questionnaireAnswers,
-          mdCaseId: order.mdCaseId,
-          mdPrescriptions: order.mdPrescriptions,
-          mdOfferings: order.mdOfferings,
-        })),
-        pagination: {
-          limit: parseInt(limit),
-          offset: parseInt(offset),
-          total: filteredOrders.length,
-        }
-      });
-
-    } catch (error) {
-      console.error('❌ Error fetching pending orders for doctor:', error);
-      res.status(500).json({ success: false, message: "Failed to fetch pending orders" });
-    }
-  });
-
-  // Bulk approve orders
-  app.post("/doctor/orders/bulk-approve", authenticateJWT, async (req: any, res: any) => {
-    try {
-      const currentUser = getCurrentUser(req);
-      if (!currentUser) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
-      }
-
-      const user = await User.findByPk(currentUser.id);
-      if (!user || user.role !== 'doctor') {
-        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
-      }
-
-      const { orderIds } = req.body;
-      if (!Array.isArray(orderIds) || orderIds.length === 0) {
-        return res.status(400).json({ success: false, message: "orderIds array is required" });
-      }
-
-      // Validate doctor has access to all orders
-      const orders = await Order.findAll({
-        where: {
-          id: { [Op.in]: orderIds },
-          clinicId: user.clinicId,
-        }
-      });
-
-      if (orders.length !== orderIds.length) {
-        return res.status(403).json({
-          success: false,
-          message: "Access denied. Some orders do not belong to your clinic or do not exist."
-        });
-      }
-
-      // Approve each order
-      const orderService = new OrderService();
-      const results: any[] = [];
-
-      for (const order of orders) {
-        try {
-          const result = await orderService.approveOrder(order.id);
-          results.push({
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            ...result
-          });
-        } catch (error) {
-          results.push({
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            success: false,
-            message: "Failed to approve order",
-            error: error instanceof Error ? error.message : 'Unknown error'
-          });
-        }
-      }
-
-      const successCount = results.filter((r: any) => r.success).length;
-      const failCount = results.length - successCount;
-
-      res.json({
-        success: true,
-        message: `Bulk approval completed: ${successCount} succeeded, ${failCount} failed`,
-        data: {
-          results,
-          summary: {
-            total: results.length,
-            succeeded: successCount,
-            failed: failCount,
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error('❌ Error bulk approving orders:', error);
-      res.status(500).json({ success: false, message: "Failed to bulk approve orders" });
-    }
-  });
-
-  // Add doctor notes to order
-  app.post("/doctor/orders/:orderId/notes", authenticateJWT, async (req: any, res: any) => {
-    try {
-      const currentUser = getCurrentUser(req);
-      if (!currentUser) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
-      }
-
-      const user = await User.findByPk(currentUser.id);
-      if (!user || user.role !== 'doctor') {
-        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
-      }
-
-      const { orderId } = req.params;
-      const { note } = req.body;
-
-      if (!note || typeof note !== 'string') {
-        return res.status(400).json({ success: false, message: "note is required" });
-      }
-
-      // Validate doctor has access to this order
-      const order = await Order.findOne({
-        where: {
-          id: orderId,
-          clinicId: user.clinicId,
-        }
-      });
-
-      if (!order) {
-        return res.status(404).json({ success: false, message: "Order not found or access denied" });
-      }
-
-      // Add notes using order service
-      const orderService = new OrderService();
-      const result = await orderService.addDoctorNotes(orderId, user.id, note);
-
-      res.json(result);
-
-    } catch (error) {
-      console.error('❌ Error adding doctor notes:', error);
-      res.status(500).json({ success: false, message: "Failed to add doctor notes" });
-    }
-  });
-
-  // Get order statistics for doctor's clinic
-  app.get("/doctor/orders/stats", authenticateJWT, async (req: any, res: any) => {
-    try {
-      const currentUser = getCurrentUser(req);
-      if (!currentUser) {
-        return res.status(401).json({ success: false, message: "Unauthorized" });
-      }
-
-      const user = await User.findByPk(currentUser.id);
-      if (!user || user.role !== 'doctor') {
-        return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
-      }
-
-      if (!user.clinicId) {
-        return res.status(400).json({ success: false, message: "No clinic associated with this doctor" });
-      }
-
-      // Get counts for different statuses
-      const totalPending = await Order.count({
-        where: {
-          clinicId: user.clinicId,
-          status: 'paid',
-        }
-      });
-
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-
-      const approvedToday = await Order.count({
-        where: {
-          clinicId: user.clinicId,
-          status: 'processing',
-          updatedAt: {
-            [Op.gte]: startOfToday
-          }
-        }
-      });
-
-      const autoApprovedCount = await Order.count({
-        where: {
-          clinicId: user.clinicId,
-          autoApproved: true,
-        }
-      });
-
-      res.json({
-        success: true,
-        data: {
-          totalPending,
-          approvedToday,
-          autoApprovedCount,
-          requiresAction: totalPending,
-        }
-      });
-
-    } catch (error) {
-      console.error('❌ Error fetching doctor stats:', error);
-      res.status(500).json({ success: false, message: "Failed to fetch statistics" });
-    }
-  });
+  const { registerDoctorEndpoints } = await import('./endpoints/doctor');
+  registerDoctorEndpoints(app, authenticateJWT, getCurrentUser);
 
   // ============================================
   // DOCTOR-PATIENT CHAT ENDPOINTS
@@ -9015,7 +8748,7 @@ app.get("/brand-treatments", authenticateJWT, async (req, res) => {
         id: treatment.id,
         name: treatment.name,
         treatmentLogo: treatment.treatmentLogo,
-        active: treatment.active,
+        active: treatment.isActive,
         selected: Boolean(selection),
         brandLogo: selection?.brandLogo || null,
         brandColor: selection?.brandColor || null,

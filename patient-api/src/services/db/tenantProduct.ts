@@ -84,7 +84,7 @@ export const bulkUpsertTenantProducts = async (
         if (existing) {
             await existing.update({
                 questionnaireId: productData.questionnaireId,
-                active: productData.active !== undefined ? productData.active : true,
+                isActive: productData.active !== undefined ? productData.active : true,
                 price: productData.customPrice ?? existing.price ?? 0,
             } as any);
             tenantProducts.push(existing);
@@ -93,7 +93,7 @@ export const bulkUpsertTenantProducts = async (
                 clinicId,
                 productId: productData.productId,
                 questionnaireId: productData.questionnaireId,
-                active: productData.active !== undefined ? productData.active : true,
+                isActive: productData.active !== undefined ? productData.active : true,
                 price: productData.customPrice ?? 0,
             } as any);
             tenantProducts.push(created);

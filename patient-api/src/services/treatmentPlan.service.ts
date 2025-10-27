@@ -59,7 +59,7 @@ class TreatmentPlanService {
             description: planData.description || '',
             billingInterval: planData.billingInterval,
             price: planData.price,
-            active: planData.active !== undefined ? planData.active : true,
+            isActive: planData.active !== undefined ? planData.active : true,
             popular: planData.popular || false,
             sortOrder: planData.sortOrder || 0,
             treatmentId: planData.treatmentId,
@@ -99,7 +99,7 @@ class TreatmentPlanService {
             ...(updateData.description !== undefined && { description: updateData.description }),
             ...(updateData.billingInterval !== undefined && { billingInterval: updateData.billingInterval }),
             ...(updateData.price !== undefined && { price: updateData.price }),
-            ...(updateData.active !== undefined && { active: updateData.active }),
+            ...(updateData.active !== undefined && { isActive: updateData.active }),
             ...(updateData.popular !== undefined && { popular: updateData.popular }),
             ...(updateData.sortOrder !== undefined && { sortOrder: updateData.sortOrder })
         });

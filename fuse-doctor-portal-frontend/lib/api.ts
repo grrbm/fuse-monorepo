@@ -2,7 +2,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export interface OrderFilters {
     status?: string;
-    treatmentId?: string;
+    tenantProductId?: string;
+    clinicId?: string;
+    patientId?: string;
+    patientSearch?: string;
     dateFrom?: string;
     dateTo?: string;
     patientAge?: number;
@@ -18,9 +21,10 @@ export interface PendingOrder {
     createdAt: string;
     updatedAt: string;
     totalAmount: number;
-    autoApproved?: boolean;
+    approvedByDoctor?: boolean;
+    autoApprovedByDoctor?: boolean;
     autoApprovalReason?: string;
-    doctorNotes?: any[];
+    doctorNotes?: string;
     patient: {
         id: string;
         firstName: string;
@@ -91,7 +95,10 @@ export class ApiClient {
         const params = new URLSearchParams();
 
         if (filters.status) params.append('status', filters.status);
-        if (filters.treatmentId) params.append('treatmentId', filters.treatmentId);
+        if (filters.tenantProductId) params.append('tenantProductId', filters.tenantProductId);
+        if (filters.clinicId) params.append('clinicId', filters.clinicId);
+        if (filters.patientId) params.append('patientId', filters.patientId);
+        if (filters.patientSearch) params.append('patientSearch', filters.patientSearch);
         if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
         if (filters.dateTo) params.append('dateTo', filters.dateTo);
         if (filters.patientAge) params.append('patientAge', filters.patientAge.toString());
@@ -140,7 +147,7 @@ export class ApiClient {
     async addOrderNotes(orderId: string, note: string): Promise<{
         success: boolean;
         message: string;
-        data?: { notes: any[] };
+        data?: { note: string };
     }> {
         const response = await this.authenticatedFetch(`${API_URL}/doctor/orders/${orderId}/notes`, {
             method: 'POST',
@@ -151,7 +158,7 @@ export class ApiClient {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to add notes');
+            throw new Error('Failed to save notes');
         }
 
         return response.json();
@@ -167,11 +174,21 @@ export class ApiClient {
         return response.json();
     }
 
-    async getTreatments(): Promise<{ success: boolean; data: any[] }> {
-        const response = await this.authenticatedFetch(`${API_URL}/treatments`);
+    async getTenantProducts(): Promise<{ success: boolean; data: any[] }> {
+        const response = await this.authenticatedFetch(`${API_URL}/doctor/tenant-products`);
 
         if (!response.ok) {
-            throw new Error('Failed to fetch treatments');
+            throw new Error('Failed to fetch tenant products');
+        }
+
+        return response.json();
+    }
+
+    async getClinics(): Promise<{ success: boolean; data: any[] }> {
+        const response = await this.authenticatedFetch(`${API_URL}/doctor/clinics`);
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch clinics');
         }
 
         return response.json();

@@ -234,74 +234,82 @@ class OrderService {
 
 
 
-            // Check if order can be approved (pending orders with payment intent can be captured)
+            // Mark order as approved by doctor (if not already set by auto-approval)
+            if (!order.approvedByDoctor) {
+                await order.update({ approvedByDoctor: true });
+                console.log(`✅ Order marked as approved by doctor: ${order.orderNumber}`);
+            }
+
+            // Handle payment capture and pharmacy order creation based on order status
             if (order.status === OrderStatus.PAID) {
-                // Order is already paid, proceed with approval
+                // Order is already paid, send to pharmacy
+                console.log(`📦 Order already paid, sending to pharmacy: ${order.orderNumber}`);
+                const pharmacyService = new PharmacyService()
+                await pharmacyService.createPharmacyOrder(order)
             } else if (order.status === OrderStatus.PENDING && order.paymentIntentId) {
                 // Order has pending payment that needs to be captured
                 console.log(`💳 Capturing payment for order ${orderId} with payment intent ${order.paymentIntentId}`);
 
+                try {
+                    // Capture the payment
+                    const capturedPayment = await this.stripeService.capturePaymentIntent(order.paymentIntentId);
 
-                // Capture the payment
-                const capturedPayment = await this.stripeService.capturePaymentIntent(order.paymentIntentId);
+                    console.log(" capturedPayment ", capturedPayment)
 
-                console.log(" capturedPayment ", capturedPayment)
+                    const stripePriceId = order?.treatmentPlan?.stripePriceId
 
-                const stripePriceId = order?.treatmentPlan?.stripePriceId
-
-                // Create subscription after successful payment capture
-                if (capturedPayment.payment_method && capturedPayment.customer && stripePriceId) {
-                    try {
-
-                        // Create subscription with the captured payment method
-                        const subscription = await this.stripeService.createSubscriptionAfterPayment({
-                            customerId: capturedPayment.customer as string,
-                            priceId: stripePriceId,
-                            paymentMethodId: capturedPayment.payment_method as string,
-                            billingInterval: order.billingInterval, // Pass the billing interval from order
-                            metadata: {
-                                userId: order.userId,
+                    // Create subscription after successful payment capture
+                    if (capturedPayment.payment_method && capturedPayment.customer && stripePriceId) {
+                        try {
+                            // Create subscription with the captured payment method
+                            const subscription = await this.stripeService.createSubscriptionAfterPayment({
+                                customerId: capturedPayment.customer as string,
+                                priceId: stripePriceId,
+                                paymentMethodId: capturedPayment.payment_method as string,
+                                billingInterval: order.billingInterval, // Pass the billing interval from order
+                                metadata: {
+                                    userId: order.userId,
+                                    orderId: order.id,
+                                    ...(order?.treatmentId && {
+                                        treatmentId: order?.treatmentId,
+                                    }),
+                                    initial_payment_intent_id: capturedPayment.id
+                                }
+                            });
+                            await Subscription.create({
                                 orderId: order.id,
-                                ...(order?.treatmentId &&{
-                                    treatmentId: order?.treatmentId,
-                                }),
-                                initial_payment_intent_id: capturedPayment.id
-                            }
-                        });
-                        await Subscription.create({
-                            orderId: order.id,
-                            stripeSubscriptionId: subscription.id,
-                            status: PaymentStatus.PAID
-                        })
-                        console.log(`✅ Subscription created and attached to order: ${subscription.id}`);
-
-                    } catch (error) {
-                        console.error(`❌ Failed to create subscription after payment capture:`, error);
-                        // Don't fail the approval process, but log the error
+                                stripeSubscriptionId: subscription.id,
+                                status: PaymentStatus.PAID
+                            })
+                            console.log(`✅ Subscription created and attached to order: ${subscription.id}`);
+                        } catch (error) {
+                            console.error(`❌ Failed to create subscription after payment capture:`, error);
+                            // Don't fail the approval process, but log the error
+                        }
+                    } else {
+                        console.warn(`⚠️ Missing required data for subscription creation: payment_method=${!!capturedPayment.payment_method}, customer=${!!capturedPayment.customer}, stripePriceId=${!!stripePriceId}`);
                     }
-                } else {
-                    console.warn(`⚠️ Missing required data for subscription creation: payment_method=${!!capturedPayment.payment_method}, customer=${!!capturedPayment.customer}, stripePriceId=${!!stripePriceId}`);
+
+                    console.log(`✅ Payment captured successfully for order ${orderId}`);
+
+                    // Update order status to paid
+                    await order.updateStatus(OrderStatus.PAID);
+
+                    // Reload order to get updated status after payment capture
+                    await order.reload();
+
+                    // Send to pharmacy after payment is captured
+                    const pharmacyService = new PharmacyService()
+                    await pharmacyService.createPharmacyOrder(order)
+                } catch (error) {
+                    console.error(`❌ Failed to capture payment for order ${orderId}:`, error);
+                    // Don't fail the approval - doctor approval is independent of payment
+                    console.log(`⚠️ Order approved by doctor but payment capture failed. Will retry when payment is completed.`);
                 }
-
-                console.log(`✅ Payment captured successfully for order ${orderId}`);
-
-                // Update order status to paid
-                await order.updateStatus(OrderStatus.PAID);
-
-                // Reload order to get updated status after payment capture
-                await order.reload();
             } else {
-                return {
-                    success: false,
-                    message: "Order cannot be approved",
-                    error: `Order status is ${order.status}. Only paid orders or pending orders with payment intent can be approved.`
-                };
+                // Order is not paid yet - doctor approval is recorded but pharmacy order not created
+                console.log(`⚠️ Order approved by doctor but not paid yet. Status: ${order.status}. Pharmacy order will be created when payment is completed.`);
             }
-
-
-            // First time creating order 
-            const pharmacyService = new PharmacyService()
-            await pharmacyService.createPharmacyOrder(order)
 
             // Emit WebSocket event for order approval
             WebSocketService.emitOrderApproved({
@@ -310,7 +318,7 @@ class OrderService {
                 userId: order.userId,
                 clinicId: order.clinicId,
                 status: order.status,
-                autoApproved: order.autoApproved || false,
+                autoApproved: order.autoApprovedByDoctor || false,
             });
 
             return {
@@ -344,20 +352,8 @@ class OrderService {
                 };
             }
 
-            // Get existing notes or initialize empty array
-            const existingNotes = order.doctorNotes || [];
-
-            // Add new note with timestamp
-            const newNote = {
-                doctorId,
-                note: noteText,
-                timestamp: new Date().toISOString(),
-            };
-
-            const updatedNotes = [...existingNotes, newNote];
-
-            // Update order with new notes
-            await order.update({ doctorNotes: updatedNotes });
+            // Simply replace the note (single note, not array)
+            await order.update({ doctorNotes: noteText });
 
             // Emit WebSocket event
             WebSocketService.emitDoctorNotesAdded({
@@ -365,20 +361,20 @@ class OrderService {
                 orderNumber: order.orderNumber,
                 userId: order.userId,
                 clinicId: order.clinicId,
-                doctorNotes: updatedNotes,
+                doctorNotes: noteText,
             });
 
             return {
                 success: true,
-                message: "Doctor notes added successfully",
-                data: { notes: updatedNotes }
+                message: "Doctor notes saved successfully",
+                data: { note: noteText }
             };
 
         } catch (error) {
-            console.error('Error adding doctor notes:', error);
+            console.error('Error saving doctor notes:', error);
             return {
                 success: false,
-                message: "Failed to add doctor notes",
+                message: "Failed to save doctor notes",
                 error: error instanceof Error ? error.message : 'Unknown error occurred'
             };
         }

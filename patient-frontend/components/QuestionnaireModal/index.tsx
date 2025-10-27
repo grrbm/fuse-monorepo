@@ -721,9 +721,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     return null;
   };
 
-  // Function to build questionnaire answers object (for real-time logging)
+  // Function to build questionnaire answers object (enhanced structure with metadata)
   const buildQuestionnaireAnswers = (currentAnswers: Record<string, any>) => {
-    const questionnaireAnswers: Record<string, string> = {};
+    const structuredAnswers: any[] = [];
+    const legacyAnswers: Record<string, string> = {};
 
     // Process each questionnaire step and question
     questionnaire?.steps?.forEach(step => {
@@ -732,44 +733,123 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         const answerValue = currentAnswers[answerKey];
 
         if (answerValue !== undefined && answerValue !== '') {
-          // For single/multiple choice and checkbox questions, get the option text
+          // Build structured answer with metadata
+          const structuredAnswer: any = {
+            questionId: question.id,
+            stepId: step.id,
+            stepCategory: step.category, // Add the step category
+            questionText: question.questionText,
+            answerType: question.answerType,
+            answer: answerValue,
+            answeredAt: new Date().toISOString()
+          };
+
+          // Handle option-based questions
           if (question.answerType === 'single_choice' || question.answerType === 'multiple_choice' || question.answerType === 'checkbox') {
+            const selectedOptions: any[] = [];
+
             if (Array.isArray(answerValue)) {
-              // Multiple choice/checkbox - join selected options
+              // Multiple choice/checkbox
+              answerValue.forEach(value => {
+                const option = question.options?.find(opt => opt.optionValue === value);
+                if (option) {
+                  selectedOptions.push({
+                    optionId: option.id,
+                    optionText: option.optionText,
+                    optionValue: option.optionValue
+                  });
+                }
+              });
+            } else {
+              // Single choice
+              const option = question.options?.find(opt => opt.optionValue === answerValue);
+              if (option) {
+                selectedOptions.push({
+                  optionId: option.id,
+                  optionText: option.optionText,
+                  optionValue: option.optionValue
+                });
+              }
+            }
+
+            structuredAnswer.selectedOptions = selectedOptions;
+
+            // For legacy compatibility, also build the simple text version
+            if (Array.isArray(answerValue)) {
               const selectedTexts = answerValue.map(value => {
                 const option = question.options?.find(opt => opt.optionValue === value);
                 return option?.optionText || value;
               });
-              questionnaireAnswers[question.questionText] = selectedTexts.join(', ');
+              legacyAnswers[question.questionText] = selectedTexts.join(', ');
             } else {
-              // Single choice - find the option text
               const option = question.options?.find(opt => opt.optionValue === answerValue);
-              questionnaireAnswers[question.questionText] = option?.optionText || answerValue;
+              legacyAnswers[question.questionText] = option?.optionText || answerValue;
             }
           } else {
-            // For text inputs, number inputs, etc., use the value directly
-            questionnaireAnswers[question.questionText] = String(answerValue);
+            // For text inputs, number inputs, etc.
+            legacyAnswers[question.questionText] = String(answerValue);
           }
+
+          structuredAnswers.push(structuredAnswer);
         }
       });
     });
 
-    // Add form fields from account creation step
-    if (currentAnswers['firstName']) questionnaireAnswers['First Name'] = currentAnswers['firstName'];
-    if (currentAnswers['lastName']) questionnaireAnswers['Last Name'] = currentAnswers['lastName'];
-    if (currentAnswers['email']) questionnaireAnswers['Email Address'] = currentAnswers['email'];
-    if (currentAnswers['mobile']) questionnaireAnswers['Mobile Number'] = currentAnswers['mobile'];
+    // Add form fields from account creation step (these don't have question metadata)
+    const accountFields = [
+      { key: 'firstName', label: 'First Name' },
+      { key: 'lastName', label: 'Last Name' },
+      { key: 'email', label: 'Email Address' },
+      { key: 'mobile', label: 'Mobile Number' }
+    ];
+
+    accountFields.forEach(field => {
+      if (currentAnswers[field.key]) {
+        legacyAnswers[field.label] = currentAnswers[field.key];
+
+        // Add to structured answers as well
+        structuredAnswers.push({
+          questionId: field.key, // Use the key as questionId for account fields
+          stepId: 'account-creation', // Special step ID for account fields
+          stepCategory: 'user_profile', // Account creation is typically user_profile category
+          questionText: field.label,
+          answerType: 'text',
+          answer: currentAnswers[field.key],
+          answeredAt: new Date().toISOString()
+        });
+      }
+    });
 
     // Add calculated BMI fields
-    if (currentAnswers['weight']) questionnaireAnswers['Weight (pounds)'] = currentAnswers['weight'];
-    if (currentAnswers['heightFeet']) questionnaireAnswers['Height Feet'] = currentAnswers['heightFeet'];
-    if (currentAnswers['heightInches']) questionnaireAnswers['Height Inches'] = currentAnswers['heightInches'];
-    if (currentAnswers['heightAndWeight']) questionnaireAnswers['What is your current height and weight?'] = currentAnswers['heightAndWeight'];
+    const bmiFields = [
+      { key: 'weight', label: 'Weight (pounds)' },
+      { key: 'heightFeet', label: 'Height Feet' },
+      { key: 'heightInches', label: 'Height Inches' },
+      { key: 'heightAndWeight', label: 'What is your current height and weight?' }
+    ];
+
+    bmiFields.forEach(field => {
+      if (currentAnswers[field.key]) {
+        legacyAnswers[field.label] = currentAnswers[field.key];
+      }
+    });
+
     if (currentAnswers['bmi'] && currentAnswers['bmiCategory']) {
-      questionnaireAnswers['BMI Result'] = `${currentAnswers['bmi']} - ${currentAnswers['bmiCategory']}`;
+      legacyAnswers['BMI Result'] = `${currentAnswers['bmi']} - ${currentAnswers['bmiCategory']}`;
     }
 
-    return questionnaireAnswers;
+    // Return both structured and legacy formats for backward compatibility
+    return {
+      structured: {
+        answers: structuredAnswers,
+        metadata: {
+          questionnaireId: questionnaire?.id,
+          completedAt: new Date().toISOString(),
+          version: "1.0"
+        }
+      },
+      legacy: legacyAnswers
+    };
   };
 
   // Handle answer changes
@@ -824,7 +904,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const questionnaireAnswers = buildQuestionnaireAnswers(newAnswers);
     console.log('📋 ⚡ Real-time questionnaire update:');
     console.log(`📋 Changed: "${questionId}" = `, value);
-    console.log('📋 Current questionnaire answers:', questionnaireAnswers);
+    console.log('📋 Current questionnaire answers (structured):', questionnaireAnswers.structured);
+    console.log('📋 Current questionnaire answers (legacy):', questionnaireAnswers.legacy);
   };
 
   const handleRadioChange = (questionId: string, value: any) => {
@@ -865,7 +946,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const questionnaireAnswers = buildQuestionnaireAnswers(newAnswers);
     console.log('📋 ⚡ Real-time questionnaire update (Radio):');
     console.log(`📋 Changed: "${questionId}" = `, value);
-    console.log('📋 Current questionnaire answers:', questionnaireAnswers);
+    console.log('📋 Current questionnaire answers (structured):', questionnaireAnswers.structured);
+    console.log('📋 Current questionnaire answers (legacy):', questionnaireAnswers.legacy);
 
     // Generic logic: Clear dependent questions when ANY radio answer actually changes
     const currentStep = getCurrentQuestionnaireStep();
@@ -975,7 +1057,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     });
     console.log('📋 ⚡ Real-time questionnaire update (checkbox):');
     console.log(`📋 Changed: "${questionId}" = `, newValues);
-    console.log('📋 Current questionnaire answers:', questionnaireAnswers);
+    console.log('📋 Current questionnaire answers (structured):', questionnaireAnswers.structured);
+    console.log('📋 Current questionnaire answers (legacy):', questionnaireAnswers.legacy);
 
     // Auto-advance if "None of the above" is selected
     if (isChecked && (optionValue.toLowerCase().includes('none of the above') ||
@@ -1233,78 +1316,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         phoneNumber: answers['mobile']
       };
 
-      // Prepare questionnaire answers in the required format
-      const questionnaireAnswers: Record<string, string> = {};
+      // Prepare questionnaire answers in the enhanced structured format
+      const questionnaireAnswersData = buildQuestionnaireAnswers(answers);
+      const questionnaireAnswers = questionnaireAnswersData.structured;
 
       console.log('📋 Starting questionnaire answers collection...');
       console.log('📋 Raw answers object:', answers);
-
-      // Process each questionnaire step and question
-      questionnaire?.steps?.forEach((step, stepIndex) => {
-        console.log(`📋 Processing Step ${stepIndex + 1}: ${step.title}`);
-
-        step.questions?.forEach((question, questionIndex) => {
-          const answerKey = question.id; // Use question ID as the key
-          const answerValue = answers[answerKey];
-
-          console.log(`📋   Question ${questionIndex + 1}: "${question.questionText}"`);
-          console.log(`📋   Answer key: "${answerKey}", Raw value:`, answerValue);
-
-          if (answerValue !== undefined && answerValue !== '') {
-            let processedAnswer = '';
-
-            // For single/multiple choice questions, get the option text
-            if (question.answerType === 'single_choice' || question.answerType === 'multiple_choice') {
-              if (Array.isArray(answerValue)) {
-                // Multiple choice - join selected options
-                const selectedTexts = answerValue.map(value => {
-                  const option = question.options?.find(opt => opt.optionValue === value);
-                  return option?.optionText || value;
-                });
-                processedAnswer = selectedTexts.join(', ');
-                console.log(`📋   Multiple choice processed:`, selectedTexts);
-              } else {
-                // Single choice - find the option text
-                const option = question.options?.find(opt => opt.optionValue === answerValue);
-                processedAnswer = option?.optionText || answerValue;
-                console.log(`📋   Single choice processed: "${processedAnswer}"`);
-              }
-            } else {
-              // For text inputs, number inputs, etc., use the value directly
-              processedAnswer = String(answerValue);
-              console.log(`📋   Text input processed: "${processedAnswer}"`);
-            }
-
-            questionnaireAnswers[question.questionText] = processedAnswer;
-            console.log(`📋   ✅ Added to answers: "${question.questionText}" = "${processedAnswer}"`);
-          } else {
-            console.log(`📋   ⏭️ Skipped (empty/undefined)`);
-          }
-        });
-
-        console.log(`📋 Step ${stepIndex + 1} complete. Current answers:`, { ...questionnaireAnswers });
-      });
-
-      // Add form fields from account creation step
-      console.log('📋 Adding account creation fields...');
-      if (answers['firstName']) {
-        questionnaireAnswers['First Name'] = answers['firstName'];
-        console.log(`📋 ✅ Added: "First Name" = "${answers['firstName']}"`);
-      }
-      if (answers['lastName']) {
-        questionnaireAnswers['Last Name'] = answers['lastName'];
-        console.log(`📋 ✅ Added: "Last Name" = "${answers['lastName']}"`);
-      }
-      if (answers['email']) {
-        questionnaireAnswers['Email Address'] = answers['email'];
-        console.log(`📋 ✅ Added: "Email Address" = "${answers['email']}"`);
-      }
-      if (answers['mobile']) {
-        questionnaireAnswers['Mobile Number'] = answers['mobile'];
-        console.log(`📋 ✅ Added: "Mobile Number" = "${answers['mobile']}"`);
-      }
-
-      console.log('📋 🎉 Final questionnaire answers object:', questionnaireAnswers);
+      console.log('📋 🎉 Final structured questionnaire answers:', questionnaireAnswers);
 
       console.log('💳 Creating product subscription for selected plan:', {
         tenantProductId,
@@ -1319,7 +1337,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           tenantProductId: tenantProductId,
           stripePriceId: stripePriceId,
           userDetails: userDetails,
-          questionnaireAnswers: questionnaireAnswers,
+          questionnaireAnswers: questionnaireAnswers, // This is now the structured format
           shippingInfo: shippingInfo
         })
       });
