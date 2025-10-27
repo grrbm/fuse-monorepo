@@ -126,6 +126,22 @@ export default function OfferingDetailsPage() {
                         </Card>
                     )}
 
+                    {/* Doctor Notes Card */}
+                    {order.doctorNotes && (
+                        <Card className="transition-shadow hover:shadow-md border-2 border-primary-200">
+                            <CardBody>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Icon icon="lucide:stethoscope" className="text-primary" width={20} />
+                                    <div className="font-medium text-foreground text-lg">Doctor's Notes</div>
+                                </div>
+                                <Divider className="my-3" />
+                                <div className="bg-primary-50/50 p-4 rounded-md">
+                                    <p className="text-sm text-foreground-700 whitespace-pre-wrap">{order.doctorNotes}</p>
+                                </div>
+                            </CardBody>
+                        </Card>
+                    )}
+
                 </div>
             )}
         </div>
