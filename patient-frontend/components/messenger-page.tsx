@@ -340,14 +340,6 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
                     <h3 className="font-medium">{doctorName}</h3>
                     <p className="text-sm text-foreground-500">Doctor</p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button isIconOnly variant="light" aria-label="Call" isDisabled>
-                      <Icon icon="lucide:phone" className="text-foreground-500" />
-                    </Button>
-                    <Button isIconOnly variant="light" aria-label="More options" isDisabled>
-                      <Icon icon="lucide:more-vertical" className="text-foreground-500" />
-                    </Button>
-                  </div>
                 </div>
               )}
               
@@ -416,11 +408,6 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyPress={handleKeyPress}
                       isDisabled={isSending}
-                      endContent={
-                        <Button isIconOnly variant="light" size="sm" aria-label="Attach file" isDisabled>
-                          <Icon icon="lucide:paperclip" className="text-foreground-400" />
-                        </Button>
-                      }
                       className="w-full"
                     />
                   </div>

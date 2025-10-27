@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { Search, Phone, Video, MoreVertical } from 'lucide-react';
@@ -15,6 +15,7 @@ export default function Patients() {
     const [messageInput, setMessageInput] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // WebSocket handler for new messages
     const handleNewMessage = useCallback((message: ChatMessage) => {
@@ -76,6 +77,11 @@ export default function Patients() {
         };
     }, [token, connect, disconnect]);
 
+    // Scroll to bottom when messages change
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [selectedChat?.messages]);
+
     // Fetch all chats on mount
     useEffect(() => {
         fetchChats();
@@ -107,17 +113,17 @@ export default function Patients() {
             const response = await apiClient.sendMessage(selectedChat.id, messageInput.trim());
             
             if (response.success) {
-                // Update selected chat with new message
-                setSelectedChat(response.data.chat);
+                // Just clear the input - WebSocket will handle updating the UI
+                setMessageInput('');
                 
-                // Update chats list
+                // Update chat data (without messages, WebSocket handles that)
                 setChats(prevChats => 
                     prevChats.map(chat => 
-                        chat.id === response.data.chat.id ? response.data.chat : chat
+                        chat.id === response.data.chat.id 
+                            ? { ...chat, lastMessageAt: response.data.chat.lastMessageAt }
+                            : chat
                     )
                 );
-                
-                setMessageInput('');
             }
         } catch (error) {
             console.error('Error sending message:', error);
@@ -135,11 +141,17 @@ export default function Patients() {
             try {
                 const response = await apiClient.markChatAsRead(chat.id);
                 if (response.success) {
-                    // Update the chat in the list
+                    // Update the chat in the list - preserve existing properties (like patient)
+                    const updatedChat = {
+                        ...chat,
+                        unreadCountDoctor: 0,
+                        messages: response.data.messages || chat.messages
+                    };
+                    
                     setChats(prevChats =>
-                        prevChats.map(c => c.id === chat.id ? response.data : c)
+                        prevChats.map(c => c.id === chat.id ? updatedChat : c)
                     );
-                    setSelectedChat(response.data);
+                    setSelectedChat(updatedChat);
                 }
             } catch (error) {
                 console.error('Error marking chat as read:', error);
@@ -310,33 +322,36 @@ export default function Patients() {
                                                 <p>No messages yet. Start the conversation!</p>
                                             </div>
                                         ) : (
-                                            selectedChat.messages.map((message) => (
-                                                <div
-                                                    key={message.id}
-                                                    className={`flex ${
-                                                        message.senderRole === 'doctor' ? 'justify-end' : 'justify-start'
-                                                    }`}
-                                                >
+                                            <>
+                                                {selectedChat.messages.map((message) => (
                                                     <div
-                                                        className={`max-w-[70%] ${
-                                                            message.senderRole === 'doctor'
-                                                                ? 'bg-primary text-primary-foreground'
-                                                                : 'bg-muted text-foreground'
-                                                        } rounded-lg px-4 py-2 shadow-sm`}
+                                                        key={message.id}
+                                                        className={`flex ${
+                                                            message.senderRole === 'doctor' ? 'justify-end' : 'justify-start'
+                                                        }`}
                                                     >
-                                                        <p className="text-sm">{message.message}</p>
-                                                        <p
-                                                            className={`text-xs mt-1 ${
+                                                        <div
+                                                            className={`max-w-[70%] ${
                                                                 message.senderRole === 'doctor'
-                                                                    ? 'text-primary-foreground/70'
-                                                                    : 'text-muted-foreground'
-                                                            }`}
+                                                                    ? 'bg-primary text-primary-foreground'
+                                                                    : 'bg-muted text-foreground'
+                                                            } rounded-lg px-4 py-2 shadow-sm`}
                                                         >
-                                                            {formatTimestamp(message.createdAt)}
-                                                        </p>
+                                                            <p className="text-sm">{message.message}</p>
+                                                            <p
+                                                                className={`text-xs mt-1 ${
+                                                                    message.senderRole === 'doctor'
+                                                                        ? 'text-primary-foreground/70'
+                                                                        : 'text-muted-foreground'
+                                                                }`}
+                                                            >
+                                                                {formatTimestamp(message.createdAt)}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))
+                                                ))}
+                                                <div ref={messagesEndRef} />
+                                            </>
                                         )}
                                     </div>
 
