@@ -91,6 +91,7 @@ import TenantProductService from "./services/tenantProduct.service";
 import QuestionnaireStep from "./models/QuestionnaireStep";
 import DashboardService from "./services/dashboard.service";
 import DoctorPatientChats from "./models/DoctorPatientChats";
+import WebSocketService from "./services/websocket.service";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -8228,6 +8229,14 @@ async function startServer() {
         patient: patient ? patient.toJSON() : null
       };
 
+      // Emit WebSocket event
+      WebSocketService.emitChatMessage({
+        chatId: chat.id,
+        doctorId: chat.doctorId,
+        patientId: chat.patientId,
+        message: newMessage
+      });
+
       res.json({
         success: true,
         data: {
@@ -8284,6 +8293,194 @@ async function startServer() {
       res.json({
         success: true,
         data: chat
+      });
+
+    } catch (error) {
+      console.error('❌ Error marking messages as read:', error);
+      res.status(500).json({ success: false, message: "Failed to mark messages as read" });
+    }
+  });
+
+  // ============================================
+  // PATIENT CHAT ENDPOINTS
+  // ============================================
+
+  // Get patient's chat with their doctor
+  app.get("/patient/chat", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'patient') {
+        return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
+      }
+
+      // A patient only has one chat (with their assigned doctor)
+      const chat = await DoctorPatientChats.findOne({
+        where: { patientId: currentUser.id }
+      });
+
+      if (!chat) {
+        return res.json({
+          success: true,
+          data: null,
+          message: "No chat found. You don't have an assigned doctor yet."
+        });
+      }
+
+      // Manually load doctor data
+      const doctor = await User.findByPk(chat.doctorId, {
+        attributes: ['id', 'firstName', 'lastName', 'email']
+      });
+
+      const chatWithDoctor = {
+        ...chat.toJSON(),
+        doctor: doctor ? doctor.toJSON() : null
+      };
+
+      res.json({
+        success: true,
+        data: chatWithDoctor
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching patient chat:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch chat" });
+    }
+  });
+
+  // Send a message from patient to doctor
+  app.post("/patient/chat/messages", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'patient') {
+        return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
+      }
+
+      const { message } = req.body;
+
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        return res.status(400).json({ success: false, message: "Message is required" });
+      }
+
+      // Find or create chat
+      let chat = await DoctorPatientChats.findOne({
+        where: { patientId: currentUser.id }
+      });
+
+      if (!chat) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "No chat found. You don't have an assigned doctor yet." 
+        });
+      }
+
+      // Create new message
+      const newMessage = {
+        id: require('crypto').randomUUID(),
+        senderId: currentUser.id,
+        senderRole: 'patient' as const,
+        message: message.trim(),
+        createdAt: new Date().toISOString(),
+        read: false
+      };
+
+      // Add message to array
+      const updatedMessages = [...(chat.messages || []), newMessage];
+
+      // Update chat
+      await chat.update({
+        messages: updatedMessages,
+        lastMessageAt: new Date(),
+        unreadCountDoctor: chat.unreadCountDoctor + 1
+      });
+
+      // Reload and manually add doctor data
+      await chat.reload();
+      const doctor = await User.findByPk(chat.doctorId, {
+        attributes: ['id', 'firstName', 'lastName', 'email']
+      });
+
+      const chatWithDoctor = {
+        ...chat.toJSON(),
+        doctor: doctor ? doctor.toJSON() : null
+      };
+
+      // Emit WebSocket event
+      WebSocketService.emitChatMessage({
+        chatId: chat.id,
+        doctorId: chat.doctorId,
+        patientId: chat.patientId,
+        message: newMessage
+      });
+
+      res.json({
+        success: true,
+        data: {
+          message: newMessage,
+          chat: chatWithDoctor
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error sending patient message:', error);
+      res.status(500).json({ success: false, message: "Failed to send message" });
+    }
+  });
+
+  // Mark messages as read for patient
+  app.post("/patient/chat/mark-read", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'patient') {
+        return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
+      }
+
+      const chat = await DoctorPatientChats.findOne({
+        where: { patientId: currentUser.id }
+      });
+
+      if (!chat) {
+        return res.status(404).json({ success: false, message: "Chat not found" });
+      }
+
+      // Mark all messages from doctor as read
+      const updatedMessages = (chat.messages || []).map((msg: any) => {
+        if (msg.senderRole === 'doctor' && !msg.read) {
+          return { ...msg, read: true };
+        }
+        return msg;
+      });
+
+      // Update chat
+      await chat.update({
+        messages: updatedMessages,
+        unreadCountPatient: 0
+      });
+
+      // Load doctor data
+      const doctor = await User.findByPk(chat.doctorId, {
+        attributes: ['id', 'firstName', 'lastName', 'email']
+      });
+
+      const chatWithDoctor = {
+        ...chat.toJSON(),
+        doctor: doctor ? doctor.toJSON() : null
+      };
+
+      res.json({
+        success: true,
+        data: chatWithDoctor
       });
 
     } catch (error) {

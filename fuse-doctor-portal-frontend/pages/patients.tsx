@@ -1,19 +1,80 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { Search, Phone, Video, MoreVertical } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Chat, ChatMessage } from '@/lib/api';
 import { format, formatDistanceToNow } from 'date-fns';
+import { useChat } from '@/hooks/useChat';
 
 export default function Patients() {
-    const { apiClient } = useAuth();
+    const { apiClient, token } = useAuth();
     const [chats, setChats] = useState<Chat[]>([]);
     const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [messageInput, setMessageInput] = useState('');
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+
+    // WebSocket handler for new messages
+    const handleNewMessage = useCallback((message: ChatMessage) => {
+        console.log('📨 New message received via WebSocket:', message);
+        
+        // Update selectedChat if this message belongs to it
+        setSelectedChat(prevChat => {
+            if (!prevChat) return null;
+            
+            // Check if message already exists to avoid duplicates
+            const messageExists = prevChat.messages.some(m => m.id === message.id);
+            if (messageExists) return prevChat;
+            
+            return {
+                ...prevChat,
+                messages: [...prevChat.messages, message],
+                lastMessageAt: message.createdAt,
+            };
+        });
+
+        // Update chats list
+        setChats(prevChats => {
+            return prevChats.map(chat => {
+                // Find the chat this message belongs to
+                const belongsToChat = message.senderRole === 'patient' 
+                    ? chat.patientId === message.senderId
+                    : chat.doctorId === message.senderId;
+                
+                if (!belongsToChat) return chat;
+
+                // Check if message already exists
+                const messageExists = chat.messages.some(m => m.id === message.id);
+                if (messageExists) return chat;
+
+                return {
+                    ...chat,
+                    messages: [...chat.messages, message],
+                    lastMessageAt: message.createdAt,
+                    unreadCountDoctor: message.senderRole === 'patient' 
+                        ? chat.unreadCountDoctor + 1 
+                        : chat.unreadCountDoctor,
+                };
+            });
+        });
+    }, []);
+
+    // Initialize WebSocket
+    const { connect, disconnect } = useChat({
+        onNewMessage: handleNewMessage,
+    });
+
+    // Connect WebSocket when component mounts
+    useEffect(() => {
+        if (token) {
+            connect(token);
+        }
+        return () => {
+            disconnect();
+        };
+    }, [token, connect, disconnect]);
 
     // Fetch all chats on mount
     useEffect(() => {

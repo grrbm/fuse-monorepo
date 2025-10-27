@@ -207,6 +207,49 @@ class WebSocketService {
         this.io.to('admin').emit('order:notes_added', orderData);
     }
 
+    // Emit new chat message event
+    emitChatMessage(chatData: { chatId: string; doctorId: string; patientId: string; message: any }): void {
+        if (!this.io) return;
+
+        console.log('[WS] 💬 Emitting chat:message', {
+            chatId: chatData.chatId,
+            from: chatData.message.senderRole,
+        });
+
+        // Notify the doctor
+        this.io.to(`user:${chatData.doctorId}`).emit('chat:message', {
+            chatId: chatData.chatId,
+            message: chatData.message,
+        });
+
+        // Notify the patient
+        this.io.to(`user:${chatData.patientId}`).emit('chat:message', {
+            chatId: chatData.chatId,
+            message: chatData.message,
+        });
+    }
+
+    // Emit chat messages marked as read
+    emitChatRead(chatData: { chatId: string; doctorId: string; patientId: string; readBy: 'doctor' | 'patient' }): void {
+        if (!this.io) return;
+
+        console.log('[WS] 👁️ Emitting chat:read', {
+            chatId: chatData.chatId,
+            readBy: chatData.readBy,
+        });
+
+        // Notify both users
+        this.io.to(`user:${chatData.doctorId}`).emit('chat:read', {
+            chatId: chatData.chatId,
+            readBy: chatData.readBy,
+        });
+
+        this.io.to(`user:${chatData.patientId}`).emit('chat:read', {
+            chatId: chatData.chatId,
+            readBy: chatData.readBy,
+        });
+    }
+
     getIO(): SocketIOServer | null {
         return this.io;
     }

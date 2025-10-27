@@ -2,7 +2,39 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Avatar, Button, Card, CardBody, Input, Tabs, Tab, Spinner } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { apiCall } from "../lib/api";
+import { useChat } from "../hooks/useChat";
 
+// New interfaces for our chat system
+interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderRole: 'doctor' | 'patient';
+  message: string;
+  createdAt: string;
+  read: boolean;
+}
+
+interface Doctor {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+interface ChatData {
+  id: string;
+  doctorId: string;
+  patientId: string;
+  messages: ChatMessage[];
+  lastMessageAt: string;
+  unreadCountDoctor: number;
+  unreadCountPatient: number;
+  createdAt: string;
+  updatedAt: string;
+  doctor: Doctor | null;
+}
+
+// UI interfaces
 interface Message {
   id: string;
   sender: {
@@ -34,53 +66,23 @@ interface MessengerPageProps {
   isMobileView?: boolean;
 }
 
-interface ApiMessageUser {
-  id: string;
-  first_name?: string;
-  last_name?: string;
-  specialty?: string;
-  profile_url?: string;
-  photo_id?: string;
+// API Response interfaces
+interface GetChatResponse {
+  success: boolean;
+  data: ChatData | null;
+  message?: string;
 }
 
-interface ApiMessage {
-  id: string;
-  patient_id: string;
-  channel: string;
-  text?: string;
-  user_type: string;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-  user?: ApiMessageUser;
-}
-
-interface MessagesEndpointResponse {
+interface SendMessageResponse {
   success: boolean;
   data: {
-    data: ApiMessage[];
+    message: ChatMessage;
+    chat: ChatData;
   };
   message?: string;
 }
 
-interface CreateMessageEndpointResponse {
-  success: boolean;
-  data: ApiMessage;
-  message?: string;
-}
-
 const DEFAULT_CLINICIAN_AVATAR = "https://img.heroui.chat/image/avatar?w=200&h=200&u=10";
-
-const isPatientMessage = (message: ApiMessage) => {
-  const normalizedType = message.user_type?.toLowerCase?.();
-  return normalizedType === "patient" || normalizedType === "patient_user";
-};
-
-const buildDisplayName = (user?: ApiMessageUser) => {
-  if (!user) return "Equipo médico";
-  const parts = [user.first_name, user.last_name].filter(Boolean);
-  return parts.length ? parts.join(" ") : "Equipo médico";
-};
 
 const formatTimestamp = (isoDate: string) => {
   if (!isoDate) return "";
@@ -102,30 +104,26 @@ const formatConversationDate = (isoDate?: string) => {
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
 };
 
-const mapApiMessageToUi = (message: ApiMessage): Message => {
-  const patientAuthored = isPatientMessage(message);
-  const user = message.user;
-
-  const senderName = buildDisplayName(user);
-  const senderRole = patientAuthored ? "Paciente" : user?.specialty || "Doctor";
-  const avatarUrl = user?.profile_url || DEFAULT_CLINICIAN_AVATAR;
+const mapChatMessageToUi = (message: ChatMessage, doctorName: string): Message => {
+  const isPatient = message.senderRole === 'patient';
 
   return {
     id: message.id,
     sender: {
-      id: message.user_id || (patientAuthored ? message.patient_id : "clinician"),
-      name: senderName,
-      role: senderRole,
-      avatar: avatarUrl,
+      id: message.senderId,
+      name: isPatient ? "Tú" : doctorName,
+      role: isPatient ? "Paciente" : "Doctor",
+      avatar: DEFAULT_CLINICIAN_AVATAR,
     },
-    content: message.text || "",
-    timestamp: formatTimestamp(message.created_at),
-    isUser: patientAuthored,
-    createdAt: message.created_at,
+    content: message.message,
+    timestamp: formatTimestamp(message.createdAt),
+    isUser: isPatient,
+    createdAt: message.createdAt,
   };
 };
 
 export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = false }) => {
+  const [chatData, setChatData] = useState<ChatData | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [selectedTab, setSelectedTab] = useState("inbox");
@@ -137,30 +135,108 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
   const [isSending, setIsSending] = useState<boolean>(false);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const isFetchingRef = useRef<boolean>(false);
+  
+  // Get auth token from localStorage
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Use the same key as api.ts: 'auth-token'
+      const token = localStorage.getItem('auth-token');
+      console.log('[Messenger] 🔑 Token from localStorage:', token ? '✅ Found' : '❌ Not found');
+      setAuthToken(token);
+    }
+  }, []);
+
+  // WebSocket handler for new messages
+  const handleNewMessage = useCallback((message: ChatMessage) => {
+    console.log('📨 New message received via WebSocket:', message);
+    
+    // Use functional updates to avoid dependencies
+    setMessages(prev => {
+      // Check if message already exists to avoid duplicates
+      const messageExists = prev.some(m => m.id === message.id);
+      if (messageExists) {
+        console.log('⚠️ Message already exists, skipping');
+        return prev;
+      }
+      
+      return [...prev, {
+        id: message.id,
+        sender: {
+          id: message.senderId,
+          name: message.senderRole === 'patient' ? "Tú" : "Doctor",
+          role: message.senderRole === 'patient' ? "Paciente" : "Doctor",
+          avatar: DEFAULT_CLINICIAN_AVATAR,
+        },
+        content: message.message,
+        timestamp: formatTimestamp(message.createdAt),
+        isUser: message.senderRole === 'patient',
+        createdAt: message.createdAt,
+      }];
+    });
+
+    // Update chat data with new message
+    setChatData(prev => {
+      if (!prev) {
+        console.log('⚠️ No chat data, skipping update');
+        return null;
+      }
+      
+      // Check if message already exists in chat data
+      const messageExists = prev.messages.some((m: ChatMessage) => m.id === message.id);
+      if (messageExists) {
+        return prev;
+      }
+      
+      return {
+        ...prev,
+        messages: [...prev.messages, message],
+        lastMessageAt: message.createdAt,
+        unreadCountPatient: message.senderRole === 'doctor' 
+          ? prev.unreadCountPatient + 1 
+          : prev.unreadCountPatient,
+      };
+    });
+  }, []); // Empty dependencies array - use functional updates instead
+
+  // Initialize WebSocket
+  const { connect, disconnect } = useChat({
+    onNewMessage: handleNewMessage,
+  });
+
+  // Connect WebSocket when auth token is available
+  useEffect(() => {
+    if (authToken) {
+      connect(authToken);
+    }
+    return () => {
+      disconnect();
+    };
+  }, [authToken, connect, disconnect]);
 
   const conversations = useMemo<Conversation[]>(() => {
-    if (!messages.length) return [];
+    if (!chatData || !chatData.doctor) return [];
 
-    const providerMessage = messages.find((message) => !message.isUser);
-    const provider = providerMessage?.sender ?? {
-      id: "clinician",
-      name: "Equipo médico",
-      role: "Doctor",
-      avatar: DEFAULT_CLINICIAN_AVATAR,
-    };
-
-    const lastMessage = messages[messages.length - 1];
+    const doctor = chatData.doctor;
+    const doctorName = `Dr. ${doctor.firstName} ${doctor.lastName}`;
+    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
     return [
       {
-        id: provider.id,
-        participants: [provider],
-        lastMessage: lastMessage?.content || "",
+        id: doctor.id,
+        participants: [{
+          id: doctor.id,
+          name: doctorName,
+          role: "Doctor",
+          avatar: DEFAULT_CLINICIAN_AVATAR,
+        }],
+        lastMessage: lastMessage?.content || "No hay mensajes aún",
         lastMessageTime: formatConversationDate(lastMessage?.createdAt),
-        unread: false,
+        unread: chatData.unreadCountPatient > 0,
       },
     ];
-  }, [messages]);
+  }, [chatData, messages]);
 
   useEffect(() => {
     if (!selectedConversationId && conversations.length > 0) {
@@ -181,26 +257,31 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
     setLoadError(null);
 
     try {
-      const response = await apiCall<MessagesEndpointResponse>("/messages");
+      const response = await apiCall<GetChatResponse>("/patient/chat");
 
       if (!response.success) {
-        throw new Error(response.error || "No se pudieron cargar los mensajes");
+        throw new Error(response.error || "No se pudo cargar el chat");
       }
 
-      const payload = response.data;
+      const chatDataResponse = response.data?.data;
 
-      if (!payload?.success) {
-        throw new Error(payload?.message || "No se pudieron cargar los mensajes");
+      if (!chatDataResponse) {
+        // No chat found - patient doesn't have an assigned doctor yet
+        setChatData(null);
+        setMessages([]);
+        return;
       }
 
-      const apiMessages = payload.data?.data || [];
-      const sortedMessages = [...apiMessages].sort((a, b) => {
-        const dateA = new Date(a.created_at).getTime();
-        const dateB = new Date(b.created_at).getTime();
-        return dateA - dateB;
-      });
+      setChatData(chatDataResponse);
 
-      setMessages(sortedMessages.map(mapApiMessageToUi));
+      // Map messages to UI format
+      const doctorName = chatDataResponse.doctor 
+        ? `Dr. ${chatDataResponse.doctor.firstName} ${chatDataResponse.doctor.lastName}`
+        : "Doctor";
+
+      const uiMessages = chatDataResponse.messages.map(msg => mapChatMessageToUi(msg, doctorName));
+      setMessages(uiMessages);
+
     } catch (error) {
       console.error("❌ Error cargando mensajes:", error);
       setLoadError(error instanceof Error ? error.message : "No se pudieron cargar los mensajes");
@@ -216,38 +297,38 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
     void fetchMessages();
   }, [fetchMessages]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      void fetchMessages(false);
-    }, 15000);
-
-    return () => clearInterval(interval);
-  }, [fetchMessages]);
-
   const handleSendMessage = async () => {
-    if (isSending || newMessage.trim() === "") return;
+    if (isSending || newMessage.trim() === "" || !chatData) return;
 
     const trimmedMessage = newMessage.trim();
     setIsSending(true);
     setSendError(null);
 
     try {
-      const response = await apiCall<CreateMessageEndpointResponse>("/messages", {
+      const response = await apiCall<SendMessageResponse>("/patient/chat/messages", {
         method: "POST",
-        body: JSON.stringify({ text: trimmedMessage }),
+        body: JSON.stringify({ message: trimmedMessage }),
       });
 
       if (!response.success) {
         throw new Error(response.error || "No se pudo enviar el mensaje");
       }
 
-      const payload = response.data;
+      const payload = response.data?.data;
 
-      if (!payload?.success) {
-        throw new Error(payload?.message || "No se pudo enviar el mensaje");
+      if (!payload) {
+        throw new Error("No se recibió respuesta del servidor");
       }
 
-      const mappedMessage = mapApiMessageToUi(payload.data);
+      // Update chat data
+      setChatData(payload.chat);
+
+      // Map the new message to UI format
+      const doctorName = payload.chat.doctor 
+        ? `Dr. ${payload.chat.doctor.firstName} ${payload.chat.doctor.lastName}`
+        : "Doctor";
+
+      const mappedMessage = mapChatMessageToUi(payload.message, doctorName);
       setMessages((prev) => [...prev, mappedMessage]);
       setNewMessage("");
     } catch (error) {
@@ -321,7 +402,7 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
               <div className="flex-1 overflow-y-auto">
                 {conversations.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-foreground-400 text-sm px-4 text-center">
-                    {isLoadingMessages ? "Cargando conversaciones..." : "No hay conversaciones disponibles"}
+                    {isLoadingMessages ? "Cargando conversaciones..." : "Aún no tienes un doctor asignado"}
                   </div>
                 ) : (
                   conversations.map((conversation) => (
@@ -414,9 +495,13 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
                   <div className="text-center text-sm text-danger-600 bg-danger-50 border border-danger-100 rounded-md p-4">
                     {loadError}
                   </div>
+                ) : !chatData ? (
+                  <div className="flex justify-center items-center h-full text-sm text-foreground-400 text-center px-4">
+                    Aún no tienes un doctor asignado. Cuando tengas uno asignado, podrás chatear aquí.
+                  </div>
                 ) : messages.length === 0 ? (
                   <div className="flex justify-center items-center h-full text-sm text-foreground-400">
-                    Aún no hay mensajes disponibles.
+                    Aún no hay mensajes. ¡Escribe el primero!
                   </div>
                 ) : (
                   messages.map((message) => (

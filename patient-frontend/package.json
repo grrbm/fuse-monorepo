@@ -25,7 +25,8 @@
     "framer-motion": "^12.23.12",
     "next": "catalog:next14",
     "react": "catalog:react18",
-    "react-dom": "catalog:react18"
+    "react-dom": "catalog:react18",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/node": "catalog:",
