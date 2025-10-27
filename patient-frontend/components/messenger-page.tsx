@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Avatar, Button, Card, CardBody, Input, Tabs, Tab, Spinner } from "@heroui/react";
+import { Avatar, Button, Card, CardBody, Input, Spinner } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { apiCall } from "../lib/api";
 import { useChat } from "../hooks/useChat";
@@ -47,19 +47,6 @@ interface Message {
   timestamp: string;
   isUser: boolean;
   createdAt?: string;
-}
-
-interface Conversation {
-  id: string;
-  participants: {
-    id: string;
-    name: string;
-    role: string;
-    avatar: string;
-  }[];
-  lastMessage: string;
-  lastMessageTime: string;
-  unread: boolean;
 }
 
 interface MessengerPageProps {
@@ -126,14 +113,11 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
   const [chatData, setChatData] = useState<ChatData | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [selectedTab, setSelectedTab] = useState("inbox");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [showConversationList, setShowConversationList] = useState(!isMobileView);
   const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState<boolean>(false);
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const isFetchingRef = useRef<boolean>(false);
   
   // Get auth token from localStorage
@@ -148,154 +132,139 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
     }
   }, []);
 
-  // WebSocket handler for new messages
+  // Handle new messages from WebSocket
   const handleNewMessage = useCallback((message: ChatMessage) => {
-    console.log('📨 New message received via WebSocket:', message);
+    console.log('[Messenger] 📨 New message received via WebSocket:', message);
     
-    // Use functional updates to avoid dependencies
-    setMessages(prev => {
-      // Check if message already exists to avoid duplicates
-      const messageExists = prev.some(m => m.id === message.id);
-      if (messageExists) {
-        console.log('⚠️ Message already exists, skipping');
-        return prev;
-      }
-      
-      return [...prev, {
-        id: message.id,
-        sender: {
-          id: message.senderId,
-          name: message.senderRole === 'patient' ? "Tú" : "Doctor",
-          role: message.senderRole === 'patient' ? "Paciente" : "Doctor",
-          avatar: DEFAULT_CLINICIAN_AVATAR,
-        },
-        content: message.message,
-        timestamp: formatTimestamp(message.createdAt),
-        isUser: message.senderRole === 'patient',
-        createdAt: message.createdAt,
-      }];
-    });
-
-    // Update chat data with new message
+    // Update chat data first to get doctor info
     setChatData(prev => {
-      if (!prev) {
-        console.log('⚠️ No chat data, skipping update');
-        return null;
-      }
+      if (!prev) return null;
       
-      // Check if message already exists in chat data
-      const messageExists = prev.messages.some((m: ChatMessage) => m.id === message.id);
-      if (messageExists) {
-        return prev;
-      }
+      const messageExists = prev.messages.some(m => m.id === message.id);
+      if (messageExists) return prev;
       
       return {
         ...prev,
         messages: [...prev.messages, message],
-        lastMessageAt: message.createdAt,
-        unreadCountPatient: message.senderRole === 'doctor' 
-          ? prev.unreadCountPatient + 1 
-          : prev.unreadCountPatient,
+        lastMessageAt: message.createdAt
       };
     });
-  }, []); // Empty dependencies array - use functional updates instead
 
-  // Initialize WebSocket
+    // Add to UI messages
+    setMessages(prev => {
+      const messageExists = prev.some(m => m.id === message.id);
+      if (messageExists) {
+        console.log('[Messenger] ⚠️ Message already exists, skipping');
+        return prev;
+      }
+      
+      // Get doctor name from message or default
+      const doctorName = message.senderRole === 'doctor' 
+        ? "Doctor" 
+        : "Tú";
+      
+      const uiMessage = mapChatMessageToUi(message, doctorName);
+      return [...prev, uiMessage];
+    });
+  }, []); // No dependencies - use functional updates
+
+  // Connect to WebSocket for real-time messages
   const { connect, disconnect } = useChat({
-    onNewMessage: handleNewMessage,
+    onNewMessage: handleNewMessage
   });
 
-  // Connect WebSocket when auth token is available
   useEffect(() => {
     if (authToken) {
+      console.log('[Messenger] 🔌 Connecting to WebSocket...');
       connect(authToken);
     }
+
     return () => {
+      console.log('[Messenger] 🔌 Disconnecting from WebSocket...');
       disconnect();
     };
   }, [authToken, connect, disconnect]);
 
-  const conversations = useMemo<Conversation[]>(() => {
-    if (!chatData || !chatData.doctor) return [];
-
-    const doctor = chatData.doctor;
-    const doctorName = `Dr. ${doctor.firstName} ${doctor.lastName}`;
-    const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-
-    return [
-      {
-        id: doctor.id,
-        participants: [{
-          id: doctor.id,
-          name: doctorName,
-          role: "Doctor",
-          avatar: DEFAULT_CLINICIAN_AVATAR,
-        }],
-        lastMessage: lastMessage?.content || "No hay mensajes aún",
-        lastMessageTime: formatConversationDate(lastMessage?.createdAt),
-        unread: chatData.unreadCountPatient > 0,
-      },
-    ];
-  }, [chatData, messages]);
-
+  // Mark messages as read when user enters the chat
   useEffect(() => {
-    if (!selectedConversationId && conversations.length > 0) {
-      setSelectedConversationId(conversations[0].id);
+    const markAsRead = async () => {
+      if (!authToken || !chatData || chatData.unreadCountPatient === 0) return;
+      
+      try {
+        console.log('📖 Marking messages as read on chat enter');
+        await apiCall('/patient/chat/mark-read', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        // Update local chat data
+        setChatData(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+          unreadCountPatient: 0
+        };
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
     }
-  }, [conversations, selectedConversationId]);
+  };
+
+  markAsRead();
+}, [authToken, chatData?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const fetchMessages = useCallback(async (withLoader: boolean = true) => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
-    if (withLoader) {
-      setIsLoadingMessages(true);
-    }
-    setLoadError(null);
-
-    try {
-      const response = await apiCall<GetChatResponse>("/patient/chat");
-
-      if (!response.success) {
-        throw new Error(response.error || "No se pudo cargar el chat");
-      }
-
-      const chatDataResponse = response.data?.data;
-
-      if (!chatDataResponse) {
-        // No chat found - patient doesn't have an assigned doctor yet
-        setChatData(null);
-        setMessages([]);
-        return;
-      }
-
-      setChatData(chatDataResponse);
-
-      // Map messages to UI format
-      const doctorName = chatDataResponse.doctor 
-        ? `Dr. ${chatDataResponse.doctor.firstName} ${chatDataResponse.doctor.lastName}`
-        : "Doctor";
-
-      const uiMessages = chatDataResponse.messages.map(msg => mapChatMessageToUi(msg, doctorName));
-      setMessages(uiMessages);
-
-    } catch (error) {
-      console.error("❌ Error cargando mensajes:", error);
-      setLoadError(error instanceof Error ? error.message : "No se pudieron cargar los mensajes");
-    } finally {
-      if (withLoader) {
-        setIsLoadingMessages(false);
-      }
-      isFetchingRef.current = false;
-    }
-  }, []);
-
+  // Load messages only once on mount
   useEffect(() => {
-    void fetchMessages();
-  }, [fetchMessages]);
+    const loadMessages = async () => {
+      if (isFetchingRef.current) return;
+      isFetchingRef.current = true;
+      setIsLoadingMessages(true);
+      setLoadError(null);
+
+      try {
+        const response = await apiCall<GetChatResponse>("/patient/chat");
+
+        if (!response.success) {
+          throw new Error(response.error || "No se pudo cargar el chat");
+        }
+
+        const chatDataResponse = response.data?.data;
+
+        if (!chatDataResponse) {
+          // No chat found - patient doesn't have an assigned doctor yet
+          setChatData(null);
+          setMessages([]);
+          return;
+        }
+
+        setChatData(chatDataResponse);
+
+        // Map messages to UI format
+        const doctorName = chatDataResponse.doctor 
+          ? `Dr. ${chatDataResponse.doctor.firstName} ${chatDataResponse.doctor.lastName}`
+          : "Doctor";
+
+        const uiMessages = chatDataResponse.messages.map(msg => mapChatMessageToUi(msg, doctorName));
+        setMessages(uiMessages);
+
+      } catch (error) {
+        console.error("❌ Error cargando mensajes:", error);
+        setLoadError(error instanceof Error ? error.message : "No se pudieron cargar los mensajes");
+      } finally {
+        setIsLoadingMessages(false);
+        isFetchingRef.current = false;
+      }
+    };
+
+    loadMessages();
+  }, []); // Only load once on mount - WebSocket handles real-time updates
 
   const handleSendMessage = async () => {
     if (isSending || newMessage.trim() === "" || !chatData) return;
@@ -320,16 +289,10 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
         throw new Error("No se recibió respuesta del servidor");
       }
 
-      // Update chat data
+      // Update chat data (WebSocket will handle adding the message to UI)
       setChatData(payload.chat);
-
-      // Map the new message to UI format
-      const doctorName = payload.chat.doctor 
-        ? `Dr. ${payload.chat.doctor.firstName} ${payload.chat.doctor.lastName}`
-        : "Doctor";
-
-      const mappedMessage = mapChatMessageToUi(payload.message, doctorName);
-      setMessages((prev) => [...prev, mappedMessage]);
+      
+      // Clear input - the message will appear via WebSocket
       setNewMessage("");
     } catch (error) {
       console.error("❌ Error enviando mensaje:", error);
@@ -346,144 +309,47 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
     }
   };
 
-  const handleBackToList = () => {
-    setShowConversationList(true);
-  };
-
-  const handleSelectConversation = (conversationId: string) => {
-    setSelectedConversationId(conversationId);
-    if (isMobileView) {
-      setShowConversationList(false);
-    }
-  };
+  const doctorName = useMemo(() => {
+    if (!chatData?.doctor) return "Doctor";
+    return `Dr. ${chatData.doctor.firstName} ${chatData.doctor.lastName}`;
+  }, [chatData?.doctor]);
 
   return (
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-semibold">Messenger</h1>
-        {isMobileView && !showConversationList && (
-          <Button
-            isIconOnly
-            variant="light"
-            onPress={handleBackToList}
-            aria-label="Back to conversations"
-          >
-            <Icon icon="lucide:chevron-left" className="text-lg" />
-          </Button>
-        )}
+        <div>
+          <h1 className="text-2xl font-semibold">Chat con tu Doctor</h1>
+          {chatData?.doctor && (
+            <p className="text-sm text-foreground-500 mt-1">{doctorName}</p>
+          )}
+        </div>
       </div>
       
-      <div className="flex flex-1 gap-6 h-[calc(100%-2rem)] overflow-hidden">
-        {/* Left sidebar - Conversations */}
-        {(!isMobileView || showConversationList) && (
-          <Card className={`${isMobileView ? 'w-full' : 'w-80'} border border-content3 overflow-hidden`}>
-            <CardBody className="p-0 flex flex-col h-full">
-              <div className="p-3">
-                <Input
-                  placeholder="Search messages..."
-                  startContent={<Icon icon="lucide:search" className="text-foreground-400" />}
-                  size="sm"
-                  className="mb-2"
-                  isDisabled
-                />
-                <Tabs 
-                  selectedKey={selectedTab} 
-                  onSelectionChange={(key) => setSelectedTab(key as string)}
-                  variant="light"
-                  size="sm"
-                  className="w-full"
-                >
-                  <Tab key="inbox" title="Inbox" />
-                  <Tab key="sent" title="Sent" isDisabled />
-                  <Tab key="archived" title="Archived" isDisabled />
-                </Tabs>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto">
-                {conversations.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-foreground-400 text-sm px-4 text-center">
-                    {isLoadingMessages ? "Cargando conversaciones..." : "Aún no tienes un doctor asignado"}
-                  </div>
-                ) : (
-                  conversations.map((conversation) => (
-                    <div
-                      key={conversation.id}
-                      className={`flex items-center gap-3 p-3 hover:bg-content2 cursor-pointer transition-colors ${
-                        conversation.id === selectedConversationId ? "border-l-4 border-primary bg-primary-50" : ""
-                      }`}
-                      onClick={() => handleSelectConversation(conversation.id)}
-                    >
-                      <Avatar src={conversation.participants[0].avatar || DEFAULT_CLINICIAN_AVATAR} size="md" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center">
-                          <h3 className="font-medium text-foreground truncate">
-                            {conversation.participants[0].name}
-                          </h3>
-                          <span className="text-xs text-foreground-400">
-                            {conversation.lastMessageTime}
-                          </span>
-                        </div>
-                        <p className="text-sm text-foreground-500 truncate">
-                          {conversation.participants[0].role}
-                        </p>
-                        <p className="text-sm text-foreground-600 truncate">
-                          {conversation.lastMessage}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              
-              <div className="p-3 border-t border-content3">
-                <Button 
-                  color="primary" 
-                  className="w-full"
-                  startContent={<Icon icon="lucide:plus" />}
-                  isDisabled
-                >
-                  New Message
-                </Button>
-              </div>
-            </CardBody>
-          </Card>
-        )}
-        
-        {/* Right side - Chat */}
-        {(!isMobileView || !showConversationList) && (
-          <Card className="flex-1 border border-content3 overflow-hidden">
+      <div className="flex flex-1 h-[calc(100%-4rem)] overflow-hidden">
+        {/* Chat - Full width */}
+        <Card className="flex-1 border border-content3 overflow-hidden">
             <CardBody className="p-0 flex flex-col h-full">
               {/* Chat header */}
-              <div className="flex items-center gap-3 p-4 border-b border-content3">
-                {isMobileView && (
-                  <Button
-                    isIconOnly
-                    variant="light"
-                    size="sm"
-                    onPress={handleBackToList}
-                    aria-label="Back"
-                    className="mr-1"
-                  >
-                    <Icon icon="lucide:chevron-left" className="text-lg" />
-                  </Button>
-                )}
-                <Avatar
-                  src={conversations[0]?.participants[0]?.avatar || DEFAULT_CLINICIAN_AVATAR}
-                  size="md"
-                />
-                <div className="flex-1">
-                  <h3 className="font-medium">{conversations[0]?.participants[0]?.name || "Equipo médico"}</h3>
-                  <p className="text-sm text-foreground-500">{conversations[0]?.participants[0]?.role || "Doctor"}</p>
+              {chatData?.doctor && (
+                <div className="flex items-center gap-3 p-4 border-b border-content3">
+                  <Avatar
+                    src={DEFAULT_CLINICIAN_AVATAR}
+                    size="md"
+                  />
+                  <div className="flex-1">
+                    <h3 className="font-medium">{doctorName}</h3>
+                    <p className="text-sm text-foreground-500">Doctor</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button isIconOnly variant="light" aria-label="Call" isDisabled>
+                      <Icon icon="lucide:phone" className="text-foreground-500" />
+                    </Button>
+                    <Button isIconOnly variant="light" aria-label="More options" isDisabled>
+                      <Icon icon="lucide:more-vertical" className="text-foreground-500" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button isIconOnly variant="light" aria-label="Call">
-                    <Icon icon="lucide:phone" className="text-foreground-500" />
-                  </Button>
-                  <Button isIconOnly variant="light" aria-label="More options">
-                    <Icon icon="lucide:more-vertical" className="text-foreground-500" />
-                  </Button>
-                </div>
-              </div>
+              )}
               
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -575,31 +441,9 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
                   </div>
                 )}
 
-                <div className="flex mt-3">
-                  <Button
-                    color="primary"
-                    variant="flat"
-                    className="flex-1"
-                    startContent={<Icon icon="lucide:user-round" />}
-                    size={isMobileView ? "sm" : "md"}
-                    isDisabled
-                  >
-                    Doctor
-                  </Button>
-                  <Button
-                    variant="flat"
-                    className="flex-1"
-                    startContent={<Icon icon="lucide:headphones" />}
-                    size={isMobileView ? "sm" : "md"}
-                    isDisabled
-                  >
-                    Support
-                  </Button>
-                </div>
               </div>
             </CardBody>
           </Card>
-        )}
       </div>
     </div>
   );

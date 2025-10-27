@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button, Avatar, Badge } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { motion } from "framer-motion";
+import { useChat } from "../hooks/useChat";
 import { apiCall } from "../lib/api";
+import { motion } from "framer-motion";
 
 interface User {
   id: string;
@@ -30,6 +31,60 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
   const [clinic, setClinic] = React.useState<Clinic | null>(null);
   const [loadingClinic, setLoadingClinic] = React.useState(false);
   const [loadingLogo, setLoadingLogo] = React.useState(false);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+
+  // Get auth token
+  useEffect(() => {
+    const token = localStorage.getItem('auth-token');
+    setAuthToken(token);
+  }, []);
+
+  // Load initial unread count
+  useEffect(() => {
+    const loadUnreadCount = async () => {
+      console.log('🔍 Sidebar - Loading unread count for user:', user);
+      console.log('🔍 Sidebar - Auth token:', authToken);
+      if (!authToken || !user) return;
+      try {
+        const response = await apiCall('/patient/chat/unread-count', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          }
+        });
+        console.log('🔍 Sidebar - Unread count response:', response);
+        if (response.success && response.data) {
+          setUnreadMessagesCount(response.data.data.unreadCount || 0);
+        }
+      } catch (error) {
+        console.error('[Sidebar] Error loading unread count:', error);
+      }
+    };
+
+    loadUnreadCount();
+  }, [authToken, user]);
+
+  // Handle unread count updates from WebSocket
+  const handleUnreadCountUpdate = useCallback((data: { unreadCount: number }) => {
+    console.log('[Sidebar] 🔔 Unread count update:', data.unreadCount);
+    setUnreadMessagesCount(data.unreadCount);
+  }, []);
+
+  // Connect to WebSocket for real-time updates
+  const { connect, disconnect } = useChat({
+    onUnreadCountUpdate: handleUnreadCountUpdate
+  });
+
+  useEffect(() => {
+    if (authToken) {
+      connect(authToken);
+    }
+
+    return () => {
+      disconnect();
+    };
+  }, [authToken, connect, disconnect]);
 
   // Function to preload logo image
   const preloadLogoImage = (logoUrl: string): Promise<void> => {
@@ -158,7 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
       <nav className="flex-1 p-3">
         <ul className="space-y-1">
           {navItems.map((item) => (
-            <li key={item.id}>
+            <li key={item.id} className="relative">
               <Button
                 variant="flat"
                 color={activeTab === item.id ? "primary" : "default"}
@@ -177,6 +232,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
                   {item.label}
                 </span>
               </Button>
+              {item.id === 'messenger' && unreadMessagesCount > 0 && (
+                <div className="absolute top-1.5 right-3 z-10">
+                  <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-white bg-danger rounded-full">
+                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                  </span>
+                </div>
+              )}
             </li>
           ))}
         </ul>

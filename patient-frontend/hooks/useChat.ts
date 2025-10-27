@@ -14,16 +14,17 @@ interface ChatMessage {
 interface UseChatOptions {
   onNewMessage?: (message: ChatMessage) => void;
   onChatRead?: (data: { chatId: string; readBy: 'doctor' | 'patient' }) => void;
+  onUnreadCountUpdate?: (data: { unreadCount: number }) => void;
 }
 
-export function useChat({ onNewMessage, onChatRead }: UseChatOptions = {}) {
+export function useChat({ onNewMessage, onChatRead, onUnreadCountUpdate }: UseChatOptions = {}) {
   const socketRef = useRef<any>(null);
-  const handlersRef = useRef({ onNewMessage, onChatRead });
+  const handlersRef = useRef({ onNewMessage, onChatRead, onUnreadCountUpdate });
 
   // Update handlers ref when they change
   useEffect(() => {
-    handlersRef.current = { onNewMessage, onChatRead };
-  }, [onNewMessage, onChatRead]);
+    handlersRef.current = { onNewMessage, onChatRead, onUnreadCountUpdate };
+  }, [onNewMessage, onChatRead, onUnreadCountUpdate]);
 
   const connect = useCallback(async (token: string) => {
     if (socketRef.current?.connected) {
@@ -72,6 +73,14 @@ export function useChat({ onNewMessage, onChatRead }: UseChatOptions = {}) {
         console.log('[WS] 👁️ Chat read:', data);
         if (handlersRef.current.onChatRead) {
           handlersRef.current.onChatRead(data);
+        }
+      });
+
+      // Listen for unread count updates
+      socket.on('chat:unread-count', (data: { unreadCount: number }) => {
+        console.log('[WS] 🔔 Unread count update:', data);
+        if (handlersRef.current.onUnreadCountUpdate) {
+          handlersRef.current.onUnreadCountUpdate(data);
         }
       });
 

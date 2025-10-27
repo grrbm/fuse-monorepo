@@ -229,6 +229,19 @@ class WebSocketService {
         });
     }
 
+    emitUnreadCountUpdate(userId: string, unreadCount: number): void {
+        if (!this.io) return;
+
+        console.log('[WS] 🔔 Emitting unread count update', {
+            userId,
+            unreadCount,
+        });
+
+        this.io.to(`user:${userId}`).emit('chat:unread-count', {
+            unreadCount,
+        });
+    }
+
     // Emit chat messages marked as read
     emitChatRead(chatData: { chatId: string; doctorId: string; patientId: string; readBy: 'doctor' | 'patient' }): void {
         if (!this.io) return;

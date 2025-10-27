@@ -8211,11 +8211,12 @@ async function startServer() {
       // Add message to array
       const updatedMessages = [...(chat.messages || []), newMessage];
 
-      // Update chat
+      // Update chat - reset doctor's unread count to 0 since they're sending a message
       await chat.update({
         messages: updatedMessages,
         lastMessageAt: new Date(),
-        unreadCountPatient: chat.unreadCountPatient + 1
+        unreadCountPatient: chat.unreadCountPatient + 1,
+        unreadCountDoctor: 0
       });
 
       // Reload and manually add patient data
@@ -8229,13 +8230,19 @@ async function startServer() {
         patient: patient ? patient.toJSON() : null
       };
 
-      // Emit WebSocket event
+      // Emit WebSocket event for new message
       WebSocketService.emitChatMessage({
         chatId: chat.id,
         doctorId: chat.doctorId,
         patientId: chat.patientId,
         message: newMessage
       });
+
+      // Emit updated unread count to patient
+      WebSocketService.emitUnreadCountUpdate(chat.patientId, chat.unreadCountPatient);
+
+      // Emit doctor's unread count (reset to 0 since they sent the message)
+      WebSocketService.emitUnreadCountUpdate(chat.doctorId, 0);
 
       res.json({
         success: true,
@@ -8304,6 +8311,37 @@ async function startServer() {
   // ============================================
   // PATIENT CHAT ENDPOINTS
   // ============================================
+
+  // Get unread messages count for patient (lightweight endpoint)
+  app.get("/patient/chat/unread-count", authenticateJWT, async (req: any, res: any) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      if (currentUser.role !== 'patient') {
+        return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
+      }
+
+      // Find patient's chat
+      const chat = await DoctorPatientChats.findOne({
+        where: { patientId: currentUser.id },
+        attributes: ['unreadCountPatient'] // Only fetch the unread count
+      });
+
+      const unreadCount = chat ? chat.unreadCountPatient : 0;
+
+      res.json({
+        success: true,
+        data: { unreadCount }
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching unread count:', error);
+      res.status(500).json({ success: false, message: "Failed to fetch unread count" });
+    }
+  });
 
   // Get patient's chat with their doctor
   app.get("/patient/chat", authenticateJWT, async (req: any, res: any) => {
@@ -8394,11 +8432,12 @@ async function startServer() {
       // Add message to array
       const updatedMessages = [...(chat.messages || []), newMessage];
 
-      // Update chat
+      // Update chat - reset patient's unread count to 0 since they're sending a message
       await chat.update({
         messages: updatedMessages,
         lastMessageAt: new Date(),
-        unreadCountDoctor: chat.unreadCountDoctor + 1
+        unreadCountDoctor: chat.unreadCountDoctor + 1,
+        unreadCountPatient: 0
       });
 
       // Reload and manually add doctor data
@@ -8412,13 +8451,19 @@ async function startServer() {
         doctor: doctor ? doctor.toJSON() : null
       };
 
-      // Emit WebSocket event
+      // Emit WebSocket event for new message
       WebSocketService.emitChatMessage({
         chatId: chat.id,
         doctorId: chat.doctorId,
         patientId: chat.patientId,
         message: newMessage
       });
+
+      // Emit updated unread count to doctor
+      WebSocketService.emitUnreadCountUpdate(chat.doctorId, chat.unreadCountDoctor);
+
+      // Emit patient's unread count (reset to 0 since they sent the message)
+      WebSocketService.emitUnreadCountUpdate(chat.patientId, 0);
 
       res.json({
         success: true,
@@ -8477,6 +8522,9 @@ async function startServer() {
         ...chat.toJSON(),
         doctor: doctor ? doctor.toJSON() : null
       };
+
+      // Emit updated unread count to patient (reset to 0)
+      WebSocketService.emitUnreadCountUpdate(currentUser.id, 0);
 
       res.json({
         success: true,
