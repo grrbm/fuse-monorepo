@@ -1471,7 +1471,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   };
 
-  const theme = useMemo(() => createTheme(questionnaire?.color), [questionnaire?.color]);
+  // Use questionnaire color first, then clinic default color, then system default
+  const themeColor = questionnaire?.color || domainClinic?.defaultFormColor;
+  const theme = useMemo(() => createTheme(themeColor), [themeColor]);
   const themeVars = useMemo(
     () => ({
       "--q-primary": theme.primary,

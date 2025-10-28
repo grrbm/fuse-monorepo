@@ -29,6 +29,7 @@ import {
   AlertCircle,
   Copy,
   X,
+  Palette,
 } from "lucide-react";
 import Tutorial from "@/components/ui/tutorial";
 
@@ -145,6 +146,7 @@ export default function Settings({
     slug: "",
     isCustomDomain: false,
     customDomain: "",
+    defaultFormColor: "",
   });
   const [organizationErrors, setOrganizationErrors] = useState<Record<string, string>>({});
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -303,6 +305,7 @@ export default function Settings({
           slug: data.slug || "",
           isCustomDomain: data.isCustomDomain || false,
           customDomain: data.customDomain || "",
+          defaultFormColor: data.defaultFormColor || "",
         });
         if (data.logo) {
           setLogoPreview(data.logo);
@@ -1294,6 +1297,86 @@ export default function Settings({
                           </div>
                         </div>
                       )}
+
+                      {/* Form Color Section */}
+                      <div className="pt-8 border-t">
+                        <h3 className="text-lg font-medium mb-2">Default Form Color</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Choose a default color for all your forms. This color will be used as the primary theme color for buttons and accents.
+                        </p>
+                        <div className="space-y-4">
+                          {/* Predefined Color Palette */}
+                          <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+                            {[
+                              { name: "Ocean Blue", color: "#0EA5E9" },
+                              { name: "Purple", color: "#8B5CF6" },
+                              { name: "Emerald", color: "#10B981" },
+                              { name: "Rose", color: "#F43F5E" },
+                              { name: "Amber", color: "#F59E0B" },
+                              { name: "Indigo", color: "#6366F1" },
+                              { name: "Teal", color: "#14B8A6" },
+                              { name: "Pink", color: "#EC4899" },
+                            ].map((preset) => (
+                              <button
+                                key={preset.color}
+                                type="button"
+                                onClick={() => {
+                                  setOrganizationData((prev) => ({ ...prev, defaultFormColor: preset.color }));
+                                }}
+                                className={`relative group h-16 rounded-lg transition-all ${
+                                  organizationData.defaultFormColor === preset.color
+                                    ? "ring-2 ring-offset-2 ring-primary scale-105"
+                                    : "hover:scale-105 hover:shadow-lg"
+                                }`}
+                                style={{ backgroundColor: preset.color }}
+                                title={preset.name}
+                              >
+                                {organizationData.defaultFormColor === preset.color && (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <Check className="h-6 w-6 text-white drop-shadow-lg" />
+                                  </div>
+                                )}
+                                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                  {preset.name}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Selected Color Display */}
+                          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+                            <div className="flex items-center gap-3">
+                              <Palette className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <div className="text-sm font-medium">Selected Color</div>
+                                <div className="text-xs text-muted-foreground font-mono">
+                                  {organizationData.defaultFormColor || "No color selected"}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {organizationData.defaultFormColor && (
+                                <div
+                                  className="w-12 h-12 rounded-lg border-2 border-white shadow-sm"
+                                  style={{ backgroundColor: organizationData.defaultFormColor }}
+                                />
+                              )}
+                              {organizationData.defaultFormColor && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setOrganizationData((prev) => ({ ...prev, defaultFormColor: "" }));
+                                  }}
+                                >
+                                  Reset
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
                       <div className="flex justify-end pt-4">
                         <Button type="submit" disabled={loading}>

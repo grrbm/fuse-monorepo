@@ -7,6 +7,7 @@ export interface Clinic {
   name: string;
   slug: string;
   logo: string;
+  defaultFormColor?: string;
 }
 
 export interface UseClinicFromDomainResult {

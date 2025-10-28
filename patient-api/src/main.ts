@@ -915,7 +915,7 @@ app.get("/clinic/by-slug/:slug", async (req, res) => {
 
     const clinic = await Clinic.findOne({
       where: { slug },
-      attributes: ['id', 'name', 'slug', 'logo'] // Only return public fields
+      attributes: ['id', 'name', 'slug', 'logo', 'defaultFormColor'] // Only return public fields
     });
 
     if (!clinic) {
@@ -924,8 +924,6 @@ app.get("/clinic/by-slug/:slug", async (req, res) => {
         message: "Clinic not found"
       });
     }
-
-    console.log(`✅ Clinic found by slug "${slug}":`, clinic.name);
 
     res.json({
       success: true,
@@ -6968,7 +6966,8 @@ app.get("/organization", authenticateJWT, async (req, res) => {
       logo: clinic?.logo || '',
       slug: clinic?.slug || '',
       isCustomDomain: (clinic as any)?.isCustomDomain || false,
-      customDomain: (clinic as any)?.customDomain || ''
+      customDomain: (clinic as any)?.customDomain || '',
+      defaultFormColor: (clinic as any)?.defaultFormColor || ''
     });
   } catch (error) {
     console.error('Error fetching organization:', error);
@@ -6997,6 +6996,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
     const { businessName, phone, address, city, state, zipCode, website } = validation.data as any;
     const isCustomDomain = (validation.data as any).isCustomDomain as boolean | undefined;
     let customDomain = (validation.data as any).customDomain as string | undefined;
+    const defaultFormColor = (validation.data as any).defaultFormColor as string | undefined;
 
     const user = await User.findByPk(currentUser.id);
     if (!user) {
@@ -7013,7 +7013,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       website: website !== undefined ? website : user.website
     });
 
-    // Update clinic fields (Clinic has name, slug, logo, active, status, isCustomDomain, customDomain)
+    // Update clinic fields (Clinic has name, slug, logo, active, status, isCustomDomain, customDomain, defaultFormColor)
     let updatedClinic: any = null;
     if (user.clinicId) {
       const clinic = await Clinic.findByPk(user.clinicId);
@@ -7041,6 +7041,19 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
             updateData.customDomain = customDomain;
           }
         }
+
+        // Update default form color if provided
+        if (defaultFormColor !== undefined) {
+          // Validate color format if not empty
+          if (defaultFormColor && !/^#([0-9a-fA-F]{6})$/.test(defaultFormColor)) {
+            return res.status(400).json({ 
+              success: false, 
+              message: 'Default form color must be a valid hex code (e.g. #1A2B3C)' 
+            });
+          }
+          updateData.defaultFormColor = defaultFormColor || null;
+        }
+
         await clinic.update(updateData);
         updatedClinic = clinic;
       }
@@ -7057,6 +7070,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
           logo: updatedClinic.logo,
           active: updatedClinic.isActive,
           status: updatedClinic.status,
+          defaultFormColor: updatedClinic.defaultFormColor,
         } : null
       }
     });

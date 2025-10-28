@@ -10,4 +10,5 @@ export const organizationUpdateSchema = z.object({
   website: z.string().optional(),
   isCustomDomain: z.boolean().optional(),
   customDomain: z.string().optional(),
+  defaultFormColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color must be a valid hex code (e.g. #1A2B3C)').optional().or(z.literal('')),
 });
