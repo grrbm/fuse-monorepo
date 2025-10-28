@@ -84,8 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setShowSessionWarning(false);
 
-      // Remove JWT token from localStorage
-      localStorage.removeItem('auth_token');
+      // Remove JWT token from localStorage (using same key as api.ts)
+      localStorage.removeItem('auth-token');
 
       await signOut();
       setUser(null);
