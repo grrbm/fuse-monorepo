@@ -62,7 +62,7 @@ export default function ProductDetail() {
         activeSubscribers: 0
     })
     const [clinicSlug, setClinicSlug] = useState<string | null>(null)
-    const [customizations, setCustomizations] = useState<Record<string, { customColor?: string; isActive: boolean }>>({})
+    const [customizations, setCustomizations] = useState<Record<string, { customColor?: string | null; isActive: boolean }>>({})
     const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
 
     const { user, token, authenticatedFetch } = useAuth()
@@ -445,13 +445,16 @@ export default function ProductDetail() {
         if (!token) return
         
         try {
+            // Empty string means "clear color" - send null to backend
+            const colorValue = color === '' ? null : color;
+            
             const res = await fetch(`${API_URL}/admin/questionnaire-customization/color`, {
                 method: 'PUT',
                 headers: { 
                     'Authorization': `Bearer ${token}`, 
                     'Content-Type': 'application/json' 
                 },
-                body: JSON.stringify({ questionnaireId, customColor: color })
+                body: JSON.stringify({ questionnaireId, customColor: colorValue })
             })
 
             if (!res.ok) {
@@ -462,12 +465,13 @@ export default function ProductDetail() {
                 ...prev,
                 [questionnaireId]: {
                     ...prev[questionnaireId],
-                    customColor: color
+                    customColor: colorValue
                 }
             }))
 
             setColorPickerOpen(null)
-            setError('✅ Color updated successfully!')
+            const message = colorValue ? '✅ Color updated successfully!' : '✅ Color cleared - using clinic default';
+            setError(message)
             setTimeout(() => setError(null), 2000)
         } catch (e: any) {
             setError(e?.message || 'Failed to update color')
@@ -723,18 +727,23 @@ export default function ProductDetail() {
                                                                                             onClick={() => setColorPickerOpen(colorPickerOpen === t.id ? null : t.id)}
                                                                                             className="w-8 h-8 rounded border-2 border-border hover:border-muted-foreground transition-colors flex items-center justify-center"
                                                                                             style={{ 
-                                                                                                backgroundColor: customizations[t.id]?.customColor || '#6B7280' 
+                                                                                                backgroundColor: customizations[t.id]?.customColor || 'transparent',
+                                                                                                backgroundImage: !customizations[t.id]?.customColor 
+                                                                                                    ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb)'
+                                                                                                    : 'none',
+                                                                                                backgroundSize: '8px 8px',
+                                                                                                backgroundPosition: '0 0, 4px 4px'
                                                                                             }}
-                                                                                            title="Change form color"
+                                                                                            title={customizations[t.id]?.customColor ? 'Change form color' : 'Set custom color (currently using clinic default)'}
                                                                                         >
-                                                                                            <Palette className="h-4 w-4 text-white opacity-0 hover:opacity-100 transition-opacity" />
+                                                                                            <Palette className="h-4 w-4 text-muted-foreground" />
                                                                                         </button>
                                                                                         
                                                                                         {/* Color Palette Dropdown */}
                                                                                         {colorPickerOpen === t.id && (
                                                                                             <div className="absolute right-0 mt-2 p-3 bg-card border border-border rounded-lg shadow-lg z-10 w-48">
                                                                                                 <p className="text-xs font-medium text-foreground mb-2">Select Color</p>
-                                                                                                <div className="grid grid-cols-4 gap-2">
+                                                                                                <div className="grid grid-cols-4 gap-2 mb-3">
                                                                                                     {presetColors.map((preset) => (
                                                                                                         <button
                                                                                                             key={preset.color}
@@ -745,6 +754,14 @@ export default function ProductDetail() {
                                                                                                         />
                                                                                                     ))}
                                                                                                 </div>
+                                                                                                {customizations[t.id]?.customColor && (
+                                                                                                    <button
+                                                                                                        onClick={() => updateFormColor(t.id, '')}
+                                                                                                        className="w-full text-xs py-1.5 px-2 text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground rounded transition-colors"
+                                                                                                    >
+                                                                                                        Clear (use clinic default)
+                                                                                                    </button>
+                                                                                                )}
                                                                                             </div>
                                                                                         )}
                                                                                     </div>

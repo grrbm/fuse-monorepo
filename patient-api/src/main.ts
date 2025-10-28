@@ -5249,26 +5249,21 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
         where: { userId: currentUser.id, questionnaireId }
       });
 
-      // Get clinic's default color
-      const clinic = await Clinic.findByPk(user.clinicId);
-      const defaultColor = clinic?.defaultFormColor || null;
-
       if (customization) {
-        // STEP 3A: Already exists, just activate it
+        // STEP 3A: Already exists, just activate it (keep existing color, even if null)
         await customization.update({ 
-          isActive: true,
-          customColor: customization.customColor || defaultColor // Keep existing color or use default
+          isActive: true
         });
-        console.log(`✅ Reactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: ${customization.customColor}`);
+        console.log(`✅ Reactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: ${customization.customColor || 'none (will use defaults)'}`);
       } else {
-        // STEP 3B: Doesn't exist, create it
+        // STEP 3B: Doesn't exist, create it with no color (null) - admin can set it later
         customization = await QuestionnaireCustomization.create({
           userId: currentUser.id,
           questionnaireId,
-          customColor: defaultColor,
+          customColor: null, // Start with no custom color
           isActive: true,
         });
-        console.log(`✅ Created NEW QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: ${defaultColor}`);
+        console.log(`✅ Created NEW QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: none (will use clinic default)`);
       }
     } catch (customizationError) {
       console.error('⚠️ Error managing QuestionnaireCustomization:', customizationError);
@@ -5416,10 +5411,11 @@ app.put("/admin/questionnaire-customization/color", authenticateJWT, async (req,
       });
     }
 
-    // Update the color
-    await customization.update({ customColor: customColor || null });
+    // Update the color (null means "use clinic default")
+    const finalColor = customColor || null;
+    await customization.update({ customColor: finalColor });
     
-    console.log(`🎨 Updated color for user ${currentUser.id}, questionnaire ${questionnaireId} to: ${customColor}`);
+    console.log(`🎨 Updated color for user ${currentUser.id}, questionnaire ${questionnaireId} to: ${finalColor || 'null (will use clinic default)'}`);
     
     res.status(200).json({ 
       success: true, 
@@ -9099,27 +9095,15 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
     // First try legacy enablement via TenantProduct (selected products)
     // First try legacy enablement via TenantProduct (selected products)
     const tenantProduct = await TenantProduct.findOne({
-      where: { clinicId: clinic.id },
+      where: { clinicId: clinic.id, productId: slug },
       include: [
         {
           model: Product,
           required: true,
-          where: { slug },
         },
         {
           model: Questionnaire,
           required: false,
-          include: [
-            {
-              model: QuestionnaireStep,
-              include: [
-                {
-                  model: Question,
-                  include: [QuestionOption],
-                },
-              ],
-            },
-          ],
         },
       ],
     });
