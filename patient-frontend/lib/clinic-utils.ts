@@ -46,8 +46,11 @@ export async function extractClinicSlugFromDomain(): Promise<ClinicDomainInfo> {
   console.log('🔍 Domain analysis:', { hostname, parts });
 
   // FIRST: Try to detect custom domain (vanity domain)
-  // Check if hostname is NOT a .fuse.health subdomain and NOT localhost
-  if (!hostname.endsWith('.fuse.health') && !hostname.includes('.localhost')) {
+  // Check if hostname is NOT a .fuse.health subdomain and NOT localhost and NOT bare localhost
+  // Skip custom domain check for localhost and localhost with port (e.g., localhost:3000)
+  const isLocalhost = hostname === 'localhost' || hostname.startsWith('127.0.0.1');
+
+  if (!hostname.endsWith('.fuse.health') && !hostname.includes('.localhost') && !isLocalhost) {
     try {
       console.log('🔍 Checking for custom domain:', hostname);
       const customDomainResult = await apiCall('/clinic/by-custom-domain', {
@@ -58,7 +61,7 @@ export async function extractClinicSlugFromDomain(): Promise<ClinicDomainInfo> {
       if (customDomainResult.success && customDomainResult.data?.slug) {
         const clinicSlug = customDomainResult.data.slug;
         console.log('✅ Found clinic via custom domain:', clinicSlug);
-        
+
         return {
           hasClinicSubdomain: true,
           clinicSlug,
@@ -71,6 +74,8 @@ export async function extractClinicSlugFromDomain(): Promise<ClinicDomainInfo> {
     } catch (error) {
       console.error('❌ Error fetching clinic by custom domain, falling back to subdomain detection:', error);
     }
+  } else if (isLocalhost) {
+    console.log('🔍 Skipping custom domain check for bare localhost');
   }
 
   // FALLBACK: Subdomain detection logic
