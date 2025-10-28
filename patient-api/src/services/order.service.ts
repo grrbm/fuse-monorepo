@@ -13,6 +13,7 @@ import TreatmentPlan from "../models/TreatmentPlan";
 import Physician from "../models/Physician";
 import PharmacyService from "./pharmacy.service";
 import Treatment from "../models/Treatment";
+import Payment from "../models/Payment";
 import WebSocketService from "./websocket.service";
 
 
@@ -219,6 +220,12 @@ class OrderService {
                         model: Physician,
                         as: 'physician',
                         attributes: ['pharmacyPhysicianId']
+                    },
+                    {
+                        model: Payment,
+                        as: 'payment',
+                        required: false,
+                        attributes: ['id', 'stripePaymentIntentId', 'status', 'amount']
                     }
 
                 ]
@@ -240,23 +247,46 @@ class OrderService {
                 console.log(`✅ Order marked as approved by doctor: ${order.orderNumber}`);
             }
 
+            // Debug: Log order payment details
+            console.log(`🔍 Order payment details:`, {
+                orderNumber: order.orderNumber,
+                status: order.status,
+                paymentIntentId: order.payment?.stripePaymentIntentId,
+                stripePriceId: order.stripePriceId,
+                treatmentPlanStripePriceId: order.treatmentPlan?.stripePriceId,
+                hasPayment: !!order.payment
+            });
+
             // Handle payment capture and pharmacy order creation based on order status
             if (order.status === OrderStatus.PAID) {
                 // Order is already paid, send to pharmacy
                 console.log(`📦 Order already paid, sending to pharmacy: ${order.orderNumber}`);
                 const pharmacyService = new PharmacyService()
                 await pharmacyService.createPharmacyOrder(order)
-            } else if (order.status === OrderStatus.PENDING && order.paymentIntentId) {
+            } else if (order.status === OrderStatus.PENDING && order.payment?.stripePaymentIntentId) {
+                // Get payment intent ID from Payment model (single source of truth)
+                const paymentIntentId = order.payment.stripePaymentIntentId;
+
+                if (!paymentIntentId) {
+                    console.log(`⚠️ Order has no payment intent ID in Payment model: ${order.orderNumber}`);
+                    return {
+                        success: false,
+                        message: "Order has no payment intent ID",
+                        error: "Cannot capture payment without payment intent ID"
+                    };
+                }
+
                 // Order has pending payment that needs to be captured
-                console.log(`💳 Capturing payment for order ${orderId} with payment intent ${order.paymentIntentId}`);
+                console.log(`💳 Capturing payment for order ${orderId} with payment intent ${paymentIntentId}`);
 
                 try {
                     // Capture the payment
-                    const capturedPayment = await this.stripeService.capturePaymentIntent(order.paymentIntentId);
+                    const capturedPayment = await this.stripeService.capturePaymentIntent(paymentIntentId);
 
                     console.log(" capturedPayment ", capturedPayment)
 
-                    const stripePriceId = order?.treatmentPlan?.stripePriceId
+                    // Get stripePriceId from either treatmentPlan or order directly (for product subscriptions)
+                    const stripePriceId = order?.treatmentPlan?.stripePriceId || order?.stripePriceId
 
                     // Create subscription after successful payment capture
                     if (capturedPayment.payment_method && capturedPayment.customer && stripePriceId) {

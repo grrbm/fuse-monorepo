@@ -169,12 +169,6 @@ export default class Order extends Entity {
   })
   declare deliveredAt?: Date;
 
-  @Column({
-    type: DataType.STRING,
-    allowNull: true,
-  })
-  declare paymentIntentId: string;
-
   @HasOne(() => Subscription)
   declare subscription?: Subscription;
 

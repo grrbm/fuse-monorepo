@@ -3596,6 +3596,12 @@ app.post("/payments/product/sub", async (req, res) => {
       setup_future_usage: 'off_session',
     });
 
+    // Store stripePriceId on order for subscription creation after capture
+    await order.update({
+      stripePriceId: stripePriceId || (tenantProduct as any).stripePriceId || null
+    });
+
+    // Create Payment record - this is the single source of truth for payment intent ID
     await Payment.create({
       orderId: order.id,
       stripePaymentIntentId: paymentIntent.id,

@@ -200,13 +200,12 @@ class PaymentService {
                 throw new Error('Failed to create payment intent');
             }
 
-            // Update order with payment intent ID and stripePriceId for later subscription creation
+            // Store stripePriceId on order for subscription creation after capture
             await order.update({
-                paymentIntentId: paymentIntent.id,
                 stripePriceId: stripePriceId
             });
 
-            // Create payment record
+            // Create payment record - this is the single source of truth for payment intent ID
             await Payment.create({
                 orderId: order.id,
                 stripePaymentIntentId: paymentIntent.id,
