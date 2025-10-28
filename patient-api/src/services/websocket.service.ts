@@ -49,7 +49,7 @@ class WebSocketService {
                 const decoded = jwt.verify(token, jwtSecret) as any;
 
                 socket.userId = decoded.userId || decoded.id;
-                socket.userRole = decoded.role;
+                socket.userRole = decoded.userRole || decoded.role; // Support both userRole and role for compatibility
                 socket.clinicId = decoded.clinicId;
 
                 console.log('[WS] ✅ Authenticated', {
