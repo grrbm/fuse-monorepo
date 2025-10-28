@@ -339,8 +339,20 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
   };
 
   const handleSendMessage = async () => {
+    // Validate: need doctor assigned
+    if (!chatData) {
+      showToast('error', "You can't send messages until you have an assigned doctor.");
+      return;
+    }
+
     // Validate: need message or files
-    if (isSending || (newMessage.trim() === "" && selectedFiles.length === 0) || !chatData) return;
+    if (newMessage.trim() === "" && selectedFiles.length === 0) {
+      showToast('info', "Please enter a message or attach a file.");
+      return;
+    }
+
+    // Already sending
+    if (isSending) return;
 
     const trimmedMessage = newMessage.trim();
     setIsSending(true);
@@ -601,19 +613,25 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
                   isIconOnly
                   variant="light"
                   aria-label="Attach file"
-                  onPress={() => fileInputRef.current?.click()}
-                  isDisabled={isSending || selectedFiles.length >= 10}
+                  onPress={() => {
+                    if (!chatData) {
+                      showToast('error', "You can't attach files until you have an assigned doctor.");
+                      return;
+                    }
+                    fileInputRef.current?.click();
+                  }}
+                  isDisabled={!chatData || isSending || selectedFiles.length >= 10}
                 >
                   <Icon icon="lucide:paperclip" className="text-foreground-500" />
                 </Button>
 
                 <div className="flex-1">
                   <Input
-                    placeholder="Type a message..."
+                    placeholder={!chatData ? "Assign a doctor to start messaging..." : "Type a message..."}
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    isDisabled={isSending}
+                    isDisabled={isSending || !chatData}
                     className="w-full"
                   />
                 </div>
@@ -623,7 +641,7 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
                   color="primary"
                   aria-label="Send message"
                   onPress={() => void handleSendMessage()}
-                  isDisabled={(newMessage.trim() === "" && selectedFiles.length === 0) || isSending}
+                  isDisabled={!chatData || (newMessage.trim() === "" && selectedFiles.length === 0) || isSending}
                   isLoading={uploadingFiles}
                 >
                   <Icon icon="lucide:send" />
