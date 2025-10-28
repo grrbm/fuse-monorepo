@@ -210,6 +210,8 @@ app.use(cors({
       (process.env.NODE_ENV === 'production' && /^https:\/\/app\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$/.test(origin)) ||
       // Allow fuse.health root domain and any subdomain (e.g., https://limitless.fuse.health)
       (process.env.NODE_ENV === 'production' && /^https:\/\/([a-zA-Z0-9-]+\.)*fuse\.health$/.test(origin)) ||
+      // Allow any origin containing fusehealth.com (e.g., https://app.fusehealth.com, https://doctor.fusehealth.com)
+      origin.includes('fusehealth.com') ||
       // Allow all subdomains of unboundedhealth.xyz (legacy support)
       /^https:\/\/[a-zA-Z0-9-]+\.unboundedhealth\.xyz$/.test(origin);
 
