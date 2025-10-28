@@ -60,6 +60,9 @@ interface GetChatResponse {
   success: boolean;
   data: ChatData | null;
   message?: string;
+  autoAssigned?: boolean;
+  autoAssignAttempted?: boolean;
+  autoAssignError?: string;
 }
 
 interface SendMessageResponse {
@@ -260,11 +263,24 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
 
         const chatDataResponse = response.data?.data;
 
+        // Check for auto-assignment status
+        if (response.data?.autoAssigned) {
+          // Doctor was successfully auto-assigned!
+          showToast('success', response.data.message || "A doctor has been automatically assigned to you!");
+        } else if (response.data?.autoAssignAttempted && response.data?.autoAssignError) {
+          // Auto-assignment was tried but failed
+          showToast('error', response.data.autoAssignError);
+        }
+
         if (!chatDataResponse) {
           // No chat found - patient doesn't have an assigned doctor yet
           setChatData(null);
           setMessages([]);
-          showToast('info', "You don't have an assigned doctor yet. Once you're assigned a doctor, you'll be able to chat here.");
+
+          // Only show the info toast if auto-assignment wasn't attempted
+          if (!response.data?.autoAssignAttempted) {
+            showToast('info', "You don't have an assigned doctor yet. Once you're assigned a doctor, you'll be able to chat here.");
+          }
           return;
         }
 

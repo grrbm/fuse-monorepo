@@ -7836,7 +7836,7 @@ async function startServer() {
           const patient = await User.findByPk(chat.patientId, {
             attributes: ['id', 'firstName', 'lastName', 'email']
           });
-          
+
           return {
             ...chat.toJSON(),
             patient: patient ? patient.toJSON() : null
@@ -7870,7 +7870,7 @@ async function startServer() {
       const { chatId } = req.params;
 
       const chat = await DoctorPatientChats.findOne({
-        where: { 
+        where: {
           id: chatId,
           doctorId: currentUser.id
         }
@@ -7946,10 +7946,10 @@ async function startServer() {
         `doctor-${currentUser.id}` // Prefix con ID del doctor
       );
 
-      console.log('📎 File uploaded for chat:', { 
-        userId: currentUser.id, 
+      console.log('📎 File uploaded for chat:', {
+        userId: currentUser.id,
         fileName: req.file.originalname,
-        fileUrl 
+        fileUrl
       });
 
       res.json({
@@ -8002,7 +8002,7 @@ async function startServer() {
       }
 
       const chat = await DoctorPatientChats.findOne({
-        where: { 
+        where: {
           id: chatId,
           doctorId: currentUser.id
         }
@@ -8092,7 +8092,7 @@ async function startServer() {
       const { chatId } = req.params;
 
       const chat = await DoctorPatientChats.findOne({
-        where: { 
+        where: {
           id: chatId,
           doctorId: currentUser.id
         }
@@ -8175,16 +8175,68 @@ async function startServer() {
       }
 
       // A patient only has one chat (with their assigned doctor)
-      const chat = await DoctorPatientChats.findOne({
+      let chat = await DoctorPatientChats.findOne({
         where: { patientId: currentUser.id }
       });
 
       if (!chat) {
-        return res.json({
-          success: true,
-          data: null,
-          message: "No chat found. You don't have an assigned doctor yet."
-        });
+        // Try to auto-assign default doctor
+        console.log('📋 No chat found for patient, attempting to auto-assign default doctor...');
+
+        try {
+          // Look up the default doctor by email
+          const defaultDoctor = await User.findOne({
+            where: { email: 'dmeursing@yahoo.com', role: 'doctor' }
+          });
+
+          if (!defaultDoctor) {
+            return res.json({
+              success: true,
+              data: null,
+              message: "No chat found. You don't have an assigned doctor yet.",
+              autoAssignAttempted: true,
+              autoAssignError: "Default doctor (dmeursing@yahoo.com) not found in the system."
+            });
+          }
+
+          // Create new chat with default doctor
+          chat = await DoctorPatientChats.create({
+            doctorId: defaultDoctor.id,
+            patientId: currentUser.id,
+            messages: [],
+            unreadCountDoctor: 0,
+            unreadCountPatient: 0
+          });
+
+          console.log('✅ Successfully auto-assigned default doctor to patient');
+
+          // Load doctor data for response
+          const doctor = await User.findByPk(chat.doctorId, {
+            attributes: ['id', 'firstName', 'lastName', 'email']
+          });
+
+          const chatWithDoctor = {
+            ...chat.toJSON(),
+            doctor: doctor ? doctor.toJSON() : null
+          };
+
+          return res.json({
+            success: true,
+            data: chatWithDoctor,
+            autoAssigned: true,
+            message: `Successfully assigned Dr. ${defaultDoctor.firstName} ${defaultDoctor.lastName} as your doctor.`
+          });
+
+        } catch (autoAssignError: any) {
+          console.error('❌ Error auto-assigning doctor:', autoAssignError);
+          return res.json({
+            success: true,
+            data: null,
+            message: "No chat found. You don't have an assigned doctor yet.",
+            autoAssignAttempted: true,
+            autoAssignError: `Failed to auto-assign doctor: ${autoAssignError.message}`
+          });
+        }
       }
 
       // Manually load doctor data
@@ -8253,10 +8305,10 @@ async function startServer() {
         `patient-${currentUser.id}` // Prefix con ID del paciente
       );
 
-      console.log('📎 File uploaded for chat:', { 
-        userId: currentUser.id, 
+      console.log('📎 File uploaded for chat:', {
+        userId: currentUser.id,
         fileName: req.file.originalname,
-        fileUrl 
+        fileUrl
       });
 
       res.json({
@@ -8313,9 +8365,9 @@ async function startServer() {
       });
 
       if (!chat) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "No chat found. You don't have an assigned doctor yet." 
+        return res.status(404).json({
+          success: false,
+          message: "No chat found. You don't have an assigned doctor yet."
         });
       }
 
