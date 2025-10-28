@@ -55,6 +55,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 }) => {
   const { clinic: domainClinic, isLoading: isLoadingClinic } = useClinicFromDomain();
   const [questionnaire, setQuestionnaire] = React.useState<QuestionnaireData | null>(null);
+  const [customColor, setCustomColor] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [currentStepIndex, setCurrentStepIndex] = React.useState(0);
   const [answers, setAnswers] = React.useState<Record<string, any>>({});
@@ -460,6 +461,57 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     loadQuestionnaire();
   }, [isOpen, treatmentId, questionnaireId, onClose]);
 
+  // Fetch custom color for this questionnaire
+  React.useEffect(() => {
+    const fetchCustomColor = async () => {
+      console.log('🎨 [CUSTOM COLOR] Starting fetch...');
+      console.log('🎨 [CUSTOM COLOR] questionnaireId:', questionnaireId);
+      console.log('🎨 [CUSTOM COLOR] domainClinic:', domainClinic);
+      console.log('🎨 [CUSTOM COLOR] domainClinic?.id:', domainClinic?.id);
+
+      if (!questionnaireId) {
+        console.log('⚠️ [CUSTOM COLOR] No questionnaireId, skipping');
+        return;
+      }
+
+      if (!domainClinic?.id) {
+        console.log('⚠️ [CUSTOM COLOR] No domainClinic.id, skipping');
+        return;
+      }
+
+      try {
+        const url = `/public/questionnaire-customization/${questionnaireId}?clinicId=${domainClinic.id}`;
+        console.log('📡 [CUSTOM COLOR] Fetching from:', url);
+
+        const result = await apiCall(url);
+        
+        console.log('📦 [CUSTOM COLOR] API result:', result);
+        console.log('📦 [CUSTOM COLOR] result.success:', result.success);
+        console.log('📦 [CUSTOM COLOR] result.data:', result.data);
+        console.log('📦 [CUSTOM COLOR] result.data?.data:', result.data?.data);
+        
+        // The apiCall wraps the response, so we need result.data.data
+        const customizationData = result.data?.data || result.data;
+        console.log('📦 [CUSTOM COLOR] customizationData:', customizationData);
+        
+        if (result.success && customizationData?.customColor) {
+          setCustomColor(customizationData.customColor);
+          console.log('✅ [CUSTOM COLOR] Set custom color to:', customizationData.customColor);
+        } else {
+          setCustomColor(null);
+          console.log('⚠️ [CUSTOM COLOR] No custom color found, set to null');
+        }
+      } catch (error) {
+        console.error('❌ [CUSTOM COLOR] Error fetching:', error);
+        setCustomColor(null);
+      }
+    };
+
+    if (isOpen) {
+      fetchCustomColor();
+    }
+  }, [questionnaireId, domainClinic?.id, isOpen]);
+
   // Reset state when modal closes
   React.useEffect(() => {
     if (!isOpen) {
@@ -467,6 +519,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setAnswers({});
       setErrors({});
       setQuestionnaire(null);
+      setCustomColor(null);
       setSelectedProducts({});
       setClientSecret(null);
       setPaymentIntentId(null);
@@ -1471,9 +1524,20 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   };
 
-  // Use questionnaire color first, then clinic default color, then system default
-  const themeColor = questionnaire?.color || domainClinic?.defaultFormColor;
-  const theme = useMemo(() => createTheme(themeColor), [themeColor]);
+  // Priority: custom color (from QuestionnaireCustomization) > questionnaire color > clinic default color > system default
+  const themeColor = customColor || questionnaire?.color || domainClinic?.defaultFormColor;
+  
+  console.log('🎨 [THEME] Computing theme color...');
+  console.log('🎨 [THEME] customColor:', customColor);
+  console.log('🎨 [THEME] questionnaire?.color:', questionnaire?.color);
+  console.log('🎨 [THEME] domainClinic?.defaultFormColor:', domainClinic?.defaultFormColor);
+  console.log('🎨 [THEME] Final themeColor:', themeColor);
+  
+  const theme = useMemo(() => {
+    const result = createTheme(themeColor);
+    console.log('🎨 [THEME] Created theme:', result);
+    return result;
+  }, [themeColor]);
   const themeVars = useMemo(
     () => ({
       "--q-primary": theme.primary,
