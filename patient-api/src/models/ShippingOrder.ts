@@ -56,6 +56,24 @@ export default class ShippingOrder extends Entity {
   declare pharmacyOrderId?: string;
 
   @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare trackingNumber?: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare trackingUrl?: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare shippedAt?: Date;
+
+  @Column({
     type: DataType.DATE,
     allowNull: true,
   })

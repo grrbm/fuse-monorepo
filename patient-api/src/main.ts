@@ -4133,6 +4133,11 @@ app.get("/orders", authenticateJWT, async (req, res) => {
         {
           model: Treatment,
           as: 'treatment'
+        },
+        {
+          model: ShippingOrder,
+          as: 'shippingOrders',
+          required: false // Left join - orders may not have shipping orders yet
         }
       ],
       order: [['createdAt', 'DESC']]

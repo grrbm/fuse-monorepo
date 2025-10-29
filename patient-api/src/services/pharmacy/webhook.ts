@@ -5,6 +5,14 @@ interface PharmacyWebhookEvent {
   erx_number: number;
   erx_id: number;
   metadata: string;
+  tracking_number?: string;
+  tracking_url?: string;
+  shipment?: {
+    tracking_numbers?: Array<{
+      number: string;
+      url: string;
+    }>;
+  };
 }
 
 class PharmacyWebhookService {
@@ -81,11 +89,26 @@ class PharmacyWebhookService {
         return;
       }
 
-      await shippingOrder.update({
-        status: OrderShippingStatus.SHIPPED
-      });
+      // Extract tracking information from webhook data
+      const trackingNumber = eventData.tracking_number || eventData.shipment?.tracking_numbers?.[0]?.number;
+      const trackingUrl = eventData.tracking_url || eventData.shipment?.tracking_numbers?.[0]?.url;
 
-      console.log('✅ ShippingOrder updated to shipped status');
+      const updateData: any = {
+        status: OrderShippingStatus.SHIPPED,
+        shippedAt: new Date()
+      };
+
+      if (trackingNumber) {
+        updateData.trackingNumber = trackingNumber;
+      }
+
+      if (trackingUrl) {
+        updateData.trackingUrl = trackingUrl;
+      }
+
+      await shippingOrder.update(updateData);
+
+      console.log('✅ ShippingOrder updated to shipped status with tracking:', { trackingNumber, trackingUrl });
 
     } catch (error) {
       console.error('❌ Error processing order shipped:', error);
@@ -165,8 +188,27 @@ class PharmacyWebhookService {
         return;
       }
 
-      // Keep current status, just log tracking received
-      console.log('📍 Tracking information received for ShippingOrder');
+      // Extract tracking information from webhook data
+      const trackingNumber = eventData.tracking_number || eventData.shipment?.tracking_numbers?.[0]?.number;
+      const trackingUrl = eventData.tracking_url || eventData.shipment?.tracking_numbers?.[0]?.url;
+
+      const updateData: any = {};
+
+      if (trackingNumber && !shippingOrder.trackingNumber) {
+        updateData.trackingNumber = trackingNumber;
+      }
+
+      if (trackingUrl && !shippingOrder.trackingUrl) {
+        updateData.trackingUrl = trackingUrl;
+      }
+
+      // Only update if there's new tracking information
+      if (Object.keys(updateData).length > 0) {
+        await shippingOrder.update(updateData);
+        console.log('📍 Tracking information updated for ShippingOrder:', updateData);
+      } else {
+        console.log('📍 No new tracking information to update');
+      }
 
     } catch (error) {
       console.error('❌ Error processing order tracking:', error);
