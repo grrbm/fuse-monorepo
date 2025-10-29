@@ -164,23 +164,23 @@ class PharmacyPhysicianService {
   async createPhysician(order: Order) {
     // Use the physician ID from environment variable (PHARMACY_PHYSICIAN_ID)
     const pharmacyPhysicianId = this.config.physicianId;
-    const testPhysician = this.config.testPhysician;
+    const physician = this.config.physician;
 
     console.log(`👨‍⚕️ Using AbsoluteRX physician ID: ${pharmacyPhysicianId}`);
 
     // Check if physician already exists in our database by pharmacyPhysicianId
-    let physician = await Physician.findOne({
+    let physicianRecord = await Physician.findOne({
       where: { pharmacyPhysicianId: pharmacyPhysicianId }
     });
 
-    if (!physician) {
+    if (!physicianRecord) {
       // Create physician record in our database linked to the AbsoluteRX physician
-      physician = await Physician.create({
-        firstName: testPhysician.firstName,
-        lastName: testPhysician.lastName,
+      physicianRecord = await Physician.create({
+        firstName: physician.firstName,
+        lastName: physician.lastName,
         middleName: '',
-        email: testPhysician.email,
-        phoneNumber: testPhysician.phoneNumber.replace(/[^0-9]/g, ''),
+        email: physician.email,
+        phoneNumber: physician.phoneNumber.replace(/[^0-9]/g, ''),
         street: '100 Powell Place #1859',
         city: 'Nashville',
         state: 'TN',
@@ -189,13 +189,13 @@ class PharmacyPhysicianService {
         pharmacyPhysicianId: pharmacyPhysicianId
       });
 
-      console.log('✅ Created physician record in database:', physician.id, physician.fullName);
+      console.log('✅ Created physician record in database:', physicianRecord.id, physicianRecord.fullName);
     } else {
-      console.log(`✅ Using existing physician from database: ${physician.id}, ${physician.fullName}`);
+      console.log(`✅ Using existing physician from database: ${physicianRecord.id}, ${physicianRecord.fullName}`);
     }
 
     // Link physician to order
-    await order.update({ physicianId: physician.id });
+    await order.update({ physicianId: physicianRecord.id });
   }
 }
 
