@@ -2,6 +2,7 @@ import axios, { AxiosResponse } from 'axios';
 import { config, PharmacyApiConfig, PharmacyApiResponse } from './config';
 import Physician, { PhysicianLicense } from '../../models/Physician';
 import Order from '../../models/Order';
+import { Op } from 'sequelize';
 
 interface CreatePhysicianRequest {
   first_name: string;
@@ -161,66 +162,11 @@ class PharmacyPhysicianService {
     }
   }
   async createPhysician(order: Order) {
-    // Use test physician from environment variables (no longer using MD Integrations)
+    // Use the physician ID from environment variable (PHARMACY_PHYSICIAN_ID)
+    const pharmacyPhysicianId = this.config.physicianId;
     const testPhysician = this.config.testPhysician;
-    const npiNumber = testPhysician.npi;
 
-    console.log(`👨‍⚕️ Using test physician NPI: ${npiNumber}`);
-
-    if (!npiNumber || npiNumber === '0000000000') {
-      throw new Error("TEST_PHYSICIAN_NPI environment variable not set or invalid");
-    }
-
-    // Check if physician already exists in AbsoluteRX by NPI number
-    // Note: The GET endpoint doesn't support filtering, so we fetch all and search client-side
-    const pharmacyPhysicianService = new PharmacyPhysicianService();
-    console.log(`🔍 Checking if physician with NPI ${npiNumber} exists in AbsoluteRX...`);
-
-    const existingPhysiciansResponse = await pharmacyPhysicianService.getPhysicians();
-
-    let pharmacyPhysicianId: string;
-    let existingPhysician: any = null;
-
-    // Search for matching NPI in the returned physicians
-    if (existingPhysiciansResponse.success &&
-      existingPhysiciansResponse.data?.data?.length > 0) {
-      existingPhysician = existingPhysiciansResponse.data.data.find(
-        (physician: any) => physician.npi_number?.toString() === npiNumber.toString()
-      );
-    }
-
-    if (existingPhysician) {
-      // Physician already exists in AbsoluteRX
-      // Convert to string since our DB stores it as VARCHAR
-      pharmacyPhysicianId = existingPhysician.id.toString();
-      console.log(`✅ Found existing physician in AbsoluteRX with ID: ${pharmacyPhysicianId} (NPI: ${existingPhysician.npi_number})`);
-    } else {
-      // Create new physician in pharmacy system
-      console.log(`📝 Creating new physician in AbsoluteRX...`);
-      const pharmacyResponse = await pharmacyPhysicianService.postPhysician({
-        first_name: testPhysician.firstName,
-        middle_name: '',
-        last_name: testPhysician.lastName,
-        phone_number: testPhysician.phoneNumber.replace(/[^0-9]/g, ''),
-        email: testPhysician.email,
-        // Approved address for test physician
-        street: '100 Powell Place #1859',
-        city: 'Nashville',
-        state: 'TN',
-        zip: '37204',
-        npi_number: +npiNumber
-      });
-
-      // Check if pharmacy physician creation was successful
-      if (!pharmacyResponse.success || !pharmacyResponse.data?.data?.id) {
-        console.error('❌ Failed to create physician in AbsoluteRX:', pharmacyResponse.error);
-        throw new Error(`Failed to create physician in pharmacy: ${pharmacyResponse.error}`);
-      }
-
-      // Convert to string since our DB stores it as VARCHAR
-      pharmacyPhysicianId = pharmacyResponse.data.data.id.toString();
-      console.log(`✅ Created new physician in AbsoluteRX with ID: ${pharmacyPhysicianId}`);
-    }
+    console.log(`👨‍⚕️ Using AbsoluteRX physician ID: ${pharmacyPhysicianId}`);
 
     // Check if physician already exists in our database by pharmacyPhysicianId
     let physician = await Physician.findOne({
@@ -228,7 +174,7 @@ class PharmacyPhysicianService {
     });
 
     if (!physician) {
-      // Create physician record in our database
+      // Create physician record in our database linked to the AbsoluteRX physician
       physician = await Physician.create({
         firstName: testPhysician.firstName,
         lastName: testPhysician.lastName,

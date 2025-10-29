@@ -69,10 +69,18 @@ class OrderService {
       console.error('Error creating pharmacy order:', error);
 
       if (axios.isAxiosError(error)) {
+        console.error('🔍 AbsoluteRX Order Creation Error:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: JSON.stringify(error.response?.data, null, 2),
+          sentData: JSON.stringify(orderData, null, 2)
+        });
+
         return {
           success: false,
           error: error.response?.data?.message || error.message,
-          message: `HTTP ${error.response?.status}: ${error.response?.statusText}`
+          message: `HTTP ${error.response?.status}: ${error.response?.statusText}`,
+          validationErrors: error.response?.data?.errors
         };
       }
 
@@ -199,12 +207,36 @@ class OrderService {
     console.log(`✅ Patient synced, pharmacy patient ID: ${pharmacyPatientId}`);
 
     // Map order items to pharmacy products
-    const products = order.orderItems.map(item => ({
-      sku: parseInt(item.pharmacyProductId), // Use pharmacy product ID or default
+    // Note: pharmacyProductId can be on OrderItem OR Product (fallback)
+    console.log(`🔍 Order items for mapping:`, order.orderItems.map(item => ({
+      id: item.id,
+      orderItemPharmacyProductId: item.pharmacyProductId,
+      productPharmacyProductId: item.product?.pharmacyProductId,
+      productId: item.productId,
+      productName: item.product?.name,
+      dosage: item.dosage || item.product?.dosage
+    })));
+
+    // Get pharmacyProductId from OrderItem first, fallback to Product
+    const itemsWithSku = order.orderItems.map(item => ({
+      item,
+      pharmacyProductId: item.pharmacyProductId || item.product?.pharmacyProductId
+    }));
+
+    // Validate all products have pharmacyProductId
+    const missingSkus = itemsWithSku.filter(({ pharmacyProductId }) => !pharmacyProductId);
+    if (missingSkus.length > 0) {
+      const missingProducts = missingSkus.map(({ item }) => item.product?.name || item.productId).join(', ');
+      console.error(`❌ Cannot create pharmacy order: Products missing pharmacyProductId: ${missingProducts}`);
+      throw new Error(`Products missing pharmacy SKU: ${missingProducts}`);
+    }
+
+    const products: PharmacyProduct[] = itemsWithSku.map(({ item, pharmacyProductId }) => ({
+      sku: parseInt(pharmacyProductId!),
       quantity: item.quantity,
       refills: 2, // Default refills - could be made configurable
       days_supply: 30, // Default days supply - could be made configurable
-      sig: item.dosage || item.product.dosage || "Use as directed",
+      sig: item.dosage || item.product?.dosage || "Use as directed",
       medical_necessity: item.notes || "Prescribed treatment as part of patient care plan."
     }));
 

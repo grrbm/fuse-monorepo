@@ -2,6 +2,7 @@
 export interface PharmacyApiConfig {
     baseUrl: string;
     apiKey: string;
+    physicianId: string; // AbsoluteRX physician ID to use for all orders
     testPhysician: {
         npi: string;
         firstName: string;
@@ -23,6 +24,7 @@ export interface PharmacyApiResponse<T = any> {
 export const config: PharmacyApiConfig = {
     baseUrl: 'https://portal.absoluterx.com',
     apiKey: process.env.PHARMACY_API_KEY || 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE',
+    physicianId: process.env.PHARMACY_PHYSICIAN_ID || '4141',
     testPhysician: {
         npi: process.env.TEST_PHYSICIAN_NPI || '0000000000',
         firstName: process.env.TEST_PHYSICIAN_FIRST_NAME || 'Test',
