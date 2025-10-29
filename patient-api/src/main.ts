@@ -3190,7 +3190,62 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Create payment intent with Stripe
+    // Calculate distribution: platform fee (% of total), doctor flat, pharmacy wholesale, brand residual
+    // If Clinic has a Stripe Connect account, we transfer only the brand residual to the clinic
+    const platformFeePercent = Number(process.env.FUSE_FEES ?? 1);
+    const doctorFlatUsd = Number(process.env.DOCTOR_AMOUNT ?? 20);
+
+    let brandAmountUsd = 0;
+    let pharmacyWholesaleTotal = 0;
+    let platformFeeUsd = 0;
+    try {
+      // Sum wholesale cost from treatment products aligned with selectedProducts
+      if (treatment.products && selectedProducts) {
+        for (const [productId, qty] of Object.entries(selectedProducts as Record<string, any>)) {
+          const product = treatment.products.find((p: any) => p.id === productId);
+          if (!product) continue;
+          const quantity = Number(qty) || 0;
+          const wholesale = Number((product as any).pharmacyWholesaleCost || 0);
+          pharmacyWholesaleTotal += wholesale * quantity;
+        }
+      }
+      const totalPaid = Number(amount) || 0;
+      platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+      const doctorUsd = Math.max(0, doctorFlatUsd);
+      brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - doctorUsd - pharmacyWholesaleTotal);
+    } catch (e) {
+      console.warn('⚠️ Failed to compute brandAmountUsd, defaulting to 0:', e);
+      brandAmountUsd = 0;
+    }
+
+    // Resolve clinic's Stripe account (via treatment.clinicId if present)
+    let transferData: any = undefined;
+    try {
+      const treatmentWithClinic = await Treatment.findByPk(treatmentId, { include: [{ model: Clinic, as: 'clinic' }] as any });
+      const clinicStripeAccountId = (treatmentWithClinic as any)?.clinic?.stripeAccountId;
+      if (clinicStripeAccountId && brandAmountUsd > 0) {
+        transferData = {
+          destination: clinicStripeAccountId,
+          amount: Math.round(brandAmountUsd * 100), // cents
+        };
+      }
+    } catch (e) {
+      console.warn('⚠️ Could not resolve clinic Stripe account for transfer_data:', e);
+    }
+
+    // Persist payout breakdown on Order
+    try {
+      await order.update({
+        platformFeeAmount: platformFeeUsd,
+        doctorAmount: Number(doctorFlatUsd.toFixed(2)),
+        pharmacyWholesaleAmount: Number(pharmacyWholesaleTotal.toFixed(2)),
+        brandAmount: Number(brandAmountUsd.toFixed(2)),
+      });
+    } catch (e) {
+      console.warn('⚠️ Failed to persist payout breakdown on Order:', e);
+    }
+
+    // Create payment intent with optional transfer_data to send clinic margin
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100), // Convert to cents
       currency,
@@ -3201,9 +3256,15 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
         orderNumber: orderNumber,
         selectedProducts: JSON.stringify(selectedProducts),
         selectedPlan,
-        orderType: 'treatment_order'
+        orderType: 'treatment_order',
+        brandAmountUsd: brandAmountUsd.toFixed(2),
+        platformFeePercent: String(platformFeePercent),
+        platformFeeUsd: platformFeeUsd.toFixed(2),
+        doctorFlatUsd: Number(process.env.DOCTOR_AMOUNT ?? 20).toFixed(2),
+        pharmacyWholesaleTotalUsd: pharmacyWholesaleTotal.toFixed(2),
       },
       description: `Order ${orderNumber} - ${treatment.name}`,
+      ...(transferData ? { transfer_data: transferData } : {}),
     });
 
     // Create payment record
