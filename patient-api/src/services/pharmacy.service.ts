@@ -20,10 +20,13 @@ class PharmacyService {
 
     const provider = order?.treatment?.pharmacyProvider ?? order.tenantProduct?.product.pharmacyProvider;
 
+    console.log(`🏥 Creating pharmacy order for provider: ${provider}, Order: ${order.orderNumber}`);
 
     switch (provider) {
       case PharmacyProvider.ABSOLUTERX:
+        console.log(`📋 Syncing physician to AbsoluteRX...`);
         await this.pharmacyPhysicianService.createPhysician(order)
+        console.log(`✅ Physician synced, creating pharmacy order...`);
         return this.orderService.createOrder(order)
       case PharmacyProvider.TRUEPILL:
         break;

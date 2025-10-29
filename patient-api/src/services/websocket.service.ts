@@ -52,11 +52,11 @@ class WebSocketService {
                 socket.userRole = decoded.role;
                 socket.clinicId = decoded.clinicId;
 
-                console.log('[WS] ✅ Authenticated', {
-                    userId: socket.userId,
-                    role: socket.userRole,
-                    clinicId: socket.clinicId,
-                });
+                // console.log('[WS] ✅ Authenticated', {
+                //     userId: socket.userId,
+                //     role: socket.userRole,
+                //     clinicId: socket.clinicId,
+                // });
 
                 next();
             } catch (error) {
@@ -66,32 +66,32 @@ class WebSocketService {
         });
 
         this.io.on('connection', (socket: AuthenticatedSocket) => {
-            console.log('[WS] 🔌 Client connected', {
-                socketId: socket.id,
-                userId: socket.userId,
-                role: socket.userRole,
-            });
+            // console.log('[WS] 🔌 Client connected', {
+            //     socketId: socket.id,
+            //     userId: socket.userId,
+            //     role: socket.userRole,
+            // });
 
             // Join user-specific room
             if (socket.userId) {
                 socket.join(`user:${socket.userId}`);
-                console.log('[WS] 👤 Joined user room', `user:${socket.userId}`);
+                // console.log('[WS] 👤 Joined user room', `user:${socket.userId}`);
             }
 
             // Join clinic-specific room for doctors/brands
             if (socket.clinicId && (socket.userRole === 'doctor' || socket.userRole === 'brand')) {
                 socket.join(`clinic:${socket.clinicId}`);
-                console.log('[WS] 🏥 Joined clinic room', `clinic:${socket.clinicId}`);
+                // console.log('[WS] 🏥 Joined clinic room', `clinic:${socket.clinicId}`);
             }
 
             // Join admin room for admin users
             if (socket.userRole === 'admin') {
                 socket.join('admin');
-                console.log('[WS] 👑 Joined admin room');
+                // console.log('[WS] 👑 Joined admin room');
             }
 
             socket.on('disconnect', () => {
-                console.log('[WS] 🔌 Client disconnected', socket.id);
+                // console.log('[WS] 🔌 Client disconnected', socket.id);
             });
 
             socket.on('error', (error) => {

@@ -10,6 +10,7 @@ export interface PharmacyApiResponse<T = any> {
     data?: T;
     error?: string;
     message?: string;
+    validationErrors?: any;
 }
 
 

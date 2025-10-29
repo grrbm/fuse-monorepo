@@ -14,6 +14,7 @@ import Physician from "../models/Physician";
 import PharmacyService from "./pharmacy.service";
 import Treatment from "../models/Treatment";
 import Payment from "../models/Payment";
+import TenantProduct from "../models/TenantProduct";
 import WebSocketService from "./websocket.service";
 
 
@@ -226,6 +227,18 @@ class OrderService {
                         as: 'payment',
                         required: false,
                         attributes: ['id', 'stripePaymentIntentId', 'status', 'amount']
+                    },
+                    {
+                        model: TenantProduct,
+                        as: 'tenantProduct',
+                        required: false,
+                        include: [
+                            {
+                                model: Product,
+                                as: 'product',
+                                attributes: ['id', 'name', 'pharmacyProvider', 'pharmacyProductId']
+                            }
+                        ]
                     }
 
                 ]
@@ -331,10 +344,69 @@ class OrderService {
                     // Send to pharmacy after payment is captured
                     const pharmacyService = new PharmacyService()
                     await pharmacyService.createPharmacyOrder(order)
-                } catch (error) {
+                } catch (error: any) {
                     console.error(`❌ Failed to capture payment for order ${orderId}:`, error);
-                    // Don't fail the approval - doctor approval is independent of payment
-                    console.log(`⚠️ Order approved by doctor but payment capture failed. Will retry when payment is completed.`);
+
+                    // Check if payment was already captured (common during testing)
+                    const isAlreadyCaptured = error?.raw?.message?.includes('has already been captured') ||
+                        error?.message?.includes('has already been captured') ||
+                        error?.code === 'charge_already_captured';
+
+                    if (isAlreadyCaptured) {
+                        console.log(`ℹ️ Payment was already captured for order ${orderId}. Continuing with pharmacy order creation...`);
+
+                        // Fetch the payment intent to get details for subscription
+                        try {
+                            const paymentIntent = await this.stripeService.getPaymentIntent(paymentIntentId);
+                            const stripePriceId = order?.treatmentPlan?.stripePriceId || order?.stripePriceId;
+
+                            // Try to create subscription if not already exists
+                            if (paymentIntent.payment_method && paymentIntent.customer && stripePriceId) {
+                                const existingSubscription = await Subscription.findOne({ where: { orderId: order.id } });
+
+                                if (!existingSubscription) {
+                                    try {
+                                        const subscription = await this.stripeService.createSubscriptionAfterPayment({
+                                            customerId: paymentIntent.customer as string,
+                                            priceId: stripePriceId,
+                                            paymentMethodId: paymentIntent.payment_method as string,
+                                            billingInterval: order.billingInterval,
+                                            metadata: {
+                                                userId: order.userId,
+                                                orderId: order.id,
+                                                ...(order?.treatmentId && {
+                                                    treatmentId: order?.treatmentId,
+                                                }),
+                                                initial_payment_intent_id: paymentIntent.id
+                                            }
+                                        });
+                                        await Subscription.create({
+                                            orderId: order.id,
+                                            stripeSubscriptionId: subscription.id,
+                                            status: PaymentStatus.PAID
+                                        });
+                                        console.log(`✅ Subscription created for already-captured payment: ${subscription.id}`);
+                                    } catch (subError) {
+                                        console.error(`❌ Failed to create subscription:`, subError);
+                                    }
+                                }
+                            }
+
+                            // Update order to PAID
+                            await order.updateStatus(OrderStatus.PAID);
+                            await order.reload();
+
+                            // Send to pharmacy
+                            const pharmacyService = new PharmacyService();
+                            await pharmacyService.createPharmacyOrder(order);
+
+                        } catch (retryError) {
+                            console.error(`❌ Failed to handle already-captured payment:`, retryError);
+                        }
+                    } else {
+                        // Different error - don't fail the approval but log it
+                        console.log(`⚠️ Order approved by doctor but payment capture failed. Will retry when payment is completed.`);
+                    }
                 }
             } else {
                 // Order is not paid yet - doctor approval is recorded but pharmacy order not created

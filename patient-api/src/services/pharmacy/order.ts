@@ -197,8 +197,9 @@ class OrderService {
     }
   }
   async createOrder(order: Order) {
+    console.log(`👤 Syncing patient to AbsoluteRX for order: ${order.orderNumber}`);
     const pharmacyPatientId = await this.patientService.syncPatientFromUser(order.user.id, order.shippingAddressId);
-
+    console.log(`✅ Patient synced, pharmacy patient ID: ${pharmacyPatientId}`);
 
     // Map order items to pharmacy products
     const products = order.orderItems.map(item => ({
@@ -225,6 +226,7 @@ class OrderService {
 
 
     // Create pharmacy order
+    console.log(`📦 Creating AbsoluteRX order with ${products.length} product(s)...`);
     const pharmacyResult = await this.postOrder({
       patient_id: parseInt(pharmacyPatientId),
       physician_id: parseInt(pharmacyPhysicianId),
@@ -238,6 +240,7 @@ class OrderService {
     });
 
     if (!pharmacyResult.success) {
+      console.error(`❌ Failed to create AbsoluteRX order: ${pharmacyResult.error}`);
       return {
         success: false,
         message: "Failed to create pharmacy order",
@@ -245,15 +248,18 @@ class OrderService {
       };
     }
 
-    const pharmacyOrderId = pharmacyResult.data?.id?.toString();
+    const pharmacyOrderId = pharmacyResult.data?.data?.number?.toString();
+    console.log(`✅ AbsoluteRX order created successfully! Pharmacy Order #: ${pharmacyOrderId}`);
 
     // Create shipping order with proper address reference
+    console.log(`📋 Creating ShippingOrder record in database...`);
     await ShippingOrder.create({
       orderId: order.id,
       shippingAddressId: order.shippingAddressId,
       status: OrderShippingStatus.PROCESSING,
       pharmacyOrderId: pharmacyOrderId
     });
+    console.log(`✅ ShippingOrder created successfully!`);
   }
 }
 
