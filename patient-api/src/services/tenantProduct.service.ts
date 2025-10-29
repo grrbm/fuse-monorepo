@@ -360,15 +360,21 @@ class TenantProductService {
             if (!stripeProductId) {
                 console.log('📦 Creating Stripe product for tenant product:', tenantProductId);
 
-                const stripeProduct = await stripeService.createProduct({
+                const productParams: any = {
                     name: `${product.name} - ${tenantProduct.clinic?.name || 'Subscription'}`,
-                    description: product.description,
                     metadata: {
                         productId: product.id,
                         tenantProductId: tenantProduct.id,
                         clinicId: tenantProduct.clinicId
                     }
-                });
+                };
+
+                // Only include description if it's not empty
+                if (product.description && product.description.trim() !== '') {
+                    productParams.description = product.description;
+                }
+
+                const stripeProduct = await stripeService.createProduct(productParams);
 
                 stripeProductId = stripeProduct.id;
                 await tenantProduct.update({ stripeProductId });
