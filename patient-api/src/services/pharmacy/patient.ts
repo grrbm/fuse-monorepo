@@ -76,10 +76,18 @@ class PatientService {
       console.error('Error creating patient:', error);
 
       if (axios.isAxiosError(error)) {
+        console.error('🔍 AbsoluteRX Patient Creation Error:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: JSON.stringify(error.response?.data, null, 2),
+          sentData: JSON.stringify(patientData, null, 2)
+        });
+
         return {
           success: false,
           error: error.response?.data?.message || error.message,
-          message: `HTTP ${error.response?.status}: ${error.response?.statusText}`
+          message: `HTTP ${error.response?.status}: ${error.response?.statusText}`,
+          validationErrors: error.response?.data?.errors
         };
       }
 
@@ -127,7 +135,7 @@ class PatientService {
     }
   }
 
-  validateUserForPatientCreation(user: User): UserToPatientValidationResult {
+  validateUserForPatientCreation(user: User, hasShippingAddress: boolean = false): UserToPatientValidationResult {
     const missingFields: string[] = [];
 
     // Required string fields for CreatePatientRequest
@@ -150,29 +158,23 @@ class PatientService {
       missingFields.push('phoneNumber (phone_number)');
     }
 
-    // Required array fields for CreatePatientRequest
-    if (!user.allergies || !Array.isArray(user.allergies)) {
-      missingFields.push('allergies (must be an array)');
-    }
-    if (!user.diseases || !Array.isArray(user.diseases)) {
-      missingFields.push('diseases (must be an array)');
-    }
-    if (!user.medications || !Array.isArray(user.medications)) {
-      missingFields.push('medications (must be an array)');
-    }
+    // Array fields for CreatePatientRequest - will default to empty arrays if missing
+    // No validation needed, as mapUserToPatientRequest will handle defaults
 
-    // Required address fields for CreatePatientRequest
-    if (!user.address?.trim()) {
-      missingFields.push('address (street)');
-    }
-    if (!user.city?.trim()) {
-      missingFields.push('city');
-    }
-    if (!user.state?.trim()) {
-      missingFields.push('state');
-    }
-    if (!user.zipCode?.trim()) {
-      missingFields.push('zipCode (zip)');
+    // Required address fields - only validate if no shipping address is provided
+    if (!hasShippingAddress) {
+      if (!user.address?.trim()) {
+        missingFields.push('address (street)');
+      }
+      if (!user.city?.trim()) {
+        missingFields.push('city');
+      }
+      if (!user.state?.trim()) {
+        missingFields.push('state');
+      }
+      if (!user.zipCode?.trim()) {
+        missingFields.push('zipCode (zip)');
+      }
     }
 
     if (missingFields.length > 0) {
@@ -224,16 +226,28 @@ class PatientService {
       };
     }
 
+    // Format gender for AbsoluteRX (expects "Male" or "Female", capitalized)
+    let formattedGender = user.gender!;
+    if (formattedGender.toLowerCase() === 'male') {
+      formattedGender = 'Male';
+    } else if (formattedGender.toLowerCase() === 'female') {
+      formattedGender = 'Female';
+    }
+
+    // Format phone number: remove all non-digits and take last 10 digits only
+    const cleanPhone = user.phoneNumber!.replace(/[^0-9]/g, '');
+    const phoneNumber = cleanPhone.slice(-10); // Take last 10 digits
+
     return {
       first_name: user.firstName,
       last_name: user.lastName,
       dob: user.dob!, // Format: YYYY-MM-DD
-      gender: user.gender!,
-      allergies: user.allergies!,
-      diseases: user.diseases!,
-      medications: user.medications!,
+      gender: formattedGender,
+      allergies: Array.isArray(user.allergies) ? user.allergies : [],
+      diseases: Array.isArray(user.diseases) ? user.diseases : [],
+      medications: Array.isArray(user.medications) ? user.medications : [],
       email: user.email,
-      phone_number: user.phoneNumber!.replace(/[^0-9]/g, ''), // Remove all special symbols, keep only digits
+      phone_number: phoneNumber,
       address: address
     };
   }
@@ -246,6 +260,16 @@ class PatientService {
       throw Error("User not found")
     }
 
+    console.log(`🔍 Syncing patient for user ${userId}:`, {
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      hasPhoneNumber: !!user.phoneNumber,
+      hasDob: !!user.dob,
+      hasGender: !!user.gender,
+      hasAddress: !!user.address
+    });
+
     const pharmacyPatient = await UserPatient.findOne({
       where: {
         pharmacyProvider: PharmacyProvider.ABSOLUTERX,
@@ -255,10 +279,15 @@ class PatientService {
 
     const pharmacyPatientId = pharmacyPatient?.pharmacyPatientId
 
-    const validation = this.validateUserForPatientCreation(user);
+    const validation = this.validateUserForPatientCreation(user, !!addressId);
 
     if (!validation.valid) {
-      throw Error("Cannot sync patient")
+      console.error('❌ Patient validation failed:', {
+        userId: user.id,
+        missingFields: validation.missingFields,
+        errorMessage: validation.errorMessage
+      });
+      throw Error(`Cannot sync patient: ${validation.errorMessage || validation.missingFields.join(', ')}`)
     }
 
     const patientRequest = await this.mapUserToPatientRequest(user, addressId);
@@ -282,8 +311,15 @@ class PatientService {
             pharmacyPatientId: result.data.id
           }
         );
+        return result.data.id;
+      } else {
+        // Patient creation failed
+        console.error('❌ Failed to create patient in AbsoluteRX:', {
+          error: result.error,
+          validationErrors: result.validationErrors
+        });
+        throw new Error(`Failed to create patient in pharmacy: ${result.error}`);
       }
-      return result.data.id
 
     }
 

@@ -22,6 +22,7 @@ import { apiCall, ApiResponse } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { getClinicSlugFromDomain } from "../hooks/useClinicFromDomain";
 import { QuestionnaireModal } from "./QuestionnaireModal";
+import { OrderTrackingCard } from "./OrderTrackingCard";
 
 interface Treatment {
   id: string;
@@ -44,7 +45,9 @@ interface Treatment {
 
 export const TreatmentsPage: React.FC = () => {
   const [treatments, setTreatments] = React.useState<Treatment[]>([]);
+  const [orders, setOrders] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoadingOrders, setIsLoadingOrders] = React.useState(true);
   const [editingTreatment, setEditingTreatment] = React.useState<Treatment | null>(null);
   const [treatmentName, setTreatmentName] = React.useState("");
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
@@ -101,8 +104,26 @@ export const TreatmentsPage: React.FC = () => {
     }
   };
 
+  const fetchOrders = async () => {
+    if (!user) return;
+    
+    setIsLoadingOrders(true);
+    try {
+      const response = await apiCall('/orders');
+      
+      if (response.success && response.data) {
+        setOrders(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
+
   React.useEffect(() => {
     fetchTreatments();
+    fetchOrders();
   }, [user]);
   // Handle opening add modal
   const handleAddTreatment = () => {
@@ -386,7 +407,7 @@ export const TreatmentsPage: React.FC = () => {
         transition={{ duration: 0.3 }}
         className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0"
       >
-        <h1 className="text-2xl font-semibold">Treatments</h1>
+        <h1 className="text-2xl font-semibold">Treatments & Orders</h1>
         <Button 
           color="primary"
           startContent={<Icon icon="lucide:plus" />}
@@ -397,6 +418,47 @@ export const TreatmentsPage: React.FC = () => {
           {user?.role === 'doctor' ? 'Add New Treatment' : 'Request New Treatment'}
         </Button>
       </motion.div>
+
+      {/* Active Orders Section - Only show for patients */}
+      {user?.role !== 'doctor' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+        >
+          <h2 className="text-xl font-semibold mb-4">Active Orders</h2>
+          {isLoadingOrders ? (
+            <Card className="border border-content3">
+              <CardBody className="p-8 text-center">
+                <div className="flex justify-center mb-3">
+                  <Icon icon="lucide:loader-2" className="text-3xl text-primary animate-spin" />
+                </div>
+                <p className="text-foreground-500">Loading your orders...</p>
+              </CardBody>
+            </Card>
+          ) : orders.length > 0 ? (
+            <div className="space-y-4">
+              {orders.map((order) => (
+                <OrderTrackingCard key={order.id} order={order} />
+              ))}
+            </div>
+          ) : (
+            <Card className="border border-content3">
+              <CardBody className="p-8 text-center">
+                <div className="flex justify-center mb-3">
+                  <div className="p-3 rounded-full bg-content2">
+                    <Icon icon="lucide:package-open" className="text-3xl text-foreground-400" />
+                  </div>
+                </div>
+                <h3 className="text-lg font-medium mb-1">No Orders Yet</h3>
+                <p className="text-foreground-500">
+                  When you order treatments, you'll see them here with tracking information
+                </p>
+              </CardBody>
+            </Card>
+          )}
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 10 }}

@@ -2,9 +2,7 @@ import axios, { AxiosResponse } from 'axios';
 import { config, PharmacyApiConfig, PharmacyApiResponse } from './config';
 import Physician, { PhysicianLicense } from '../../models/Physician';
 import Order from '../../models/Order';
-import MDAuthService from '../mdIntegration/MDAuth.service';
-import MDCaseService from '../mdIntegration/MDCase.service';
-import MDClinicianService from '../mdIntegration/MDClinician.service';
+import { Op } from 'sequelize';
 
 interface CreatePhysicianRequest {
   first_name: string;
@@ -41,6 +39,53 @@ class PharmacyPhysicianService {
     this.config = config;
   }
 
+  async getPhysicians(filters?: { npi_number?: string }): Promise<PharmacyApiResponse> {
+    try {
+      const params = {
+        api_key: this.config.apiKey,
+        ...filters
+      };
+
+      console.log('🔍 GET request params:', params);
+
+      const response: AxiosResponse = await axios.get(
+        `${this.config.baseUrl}/api/clinics/physicians`,
+        {
+          params,
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      console.log('✅ GET physicians response:', {
+        status: response.status,
+        dataCount: response.data?.data?.length || 0,
+        data: JSON.stringify(response.data, null, 2)
+      });
+
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      console.error('❌ Error fetching physicians:', error);
+
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.message || error.message,
+          message: `HTTP ${error.response?.status}: ${error.response?.statusText}`
+        };
+      }
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
   async postPhysician(physicianData: CreatePhysicianRequest): Promise<PharmacyApiResponse> {
     try {
       const response: AxiosResponse = await axios.post(
@@ -61,12 +106,14 @@ class PharmacyPhysicianService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error creating physician:', error);
+      console.error('❌ Error creating physician:', error);
 
       if (axios.isAxiosError(error)) {
+        console.error('🔍 AbsoluteRX API Response:', JSON.stringify(error.response?.data, null, 2));
         return {
           success: false,
           error: error.response?.data?.message || error.message,
+          validationErrors: error.response?.data?.errors,
           message: `HTTP ${error.response?.status}: ${error.response?.statusText}`
         };
       }
@@ -115,77 +162,40 @@ class PharmacyPhysicianService {
     }
   }
   async createPhysician(order: Order) {
+    // Use the physician ID from environment variable (PHARMACY_PHYSICIAN_ID)
+    const pharmacyPhysicianId = this.config.physicianId;
+    const physician = this.config.physician;
 
-      // Get MD Integration access token and fetch case details
-      const tokenResponse = await MDAuthService.generateToken();
+    console.log(`👨‍⚕️ Using AbsoluteRX physician ID: ${pharmacyPhysicianId}`);
 
-      if(!order.mdCaseId){
-        throw Error("Case Id not assigned")
-      }
-      const caseDetails = await MDCaseService.getCase(order.mdCaseId, tokenResponse.access_token);
+    // Check if physician already exists in our database by pharmacyPhysicianId
+    let physicianRecord = await Physician.findOne({
+      where: { pharmacyPhysicianId: pharmacyPhysicianId }
+    });
 
-      // Extract clinician information from case
-      const clinician = caseDetails.case_assignment.clinician;
-
-      // Fetch detailed clinician information using the clinician service
-      const clinicianDetails = await MDClinicianService.getClinician(
-        clinician.clinician_id,
-        tokenResponse.access_token
-      );
-
-      // Check if physician already exists by mdPhysicianId
-      let physician = await Physician.findOne({
-        where: { mdPhysicianId: clinicianDetails.clinician_id }
+    if (!physicianRecord) {
+      // Create physician record in our database linked to the AbsoluteRX physician
+      physicianRecord = await Physician.create({
+        firstName: physician.firstName,
+        lastName: physician.lastName,
+        middleName: '',
+        email: physician.email,
+        phoneNumber: physician.phoneNumber.replace(/[^0-9]/g, ''),
+        street: '100 Powell Place #1859',
+        city: 'Nashville',
+        state: 'TN',
+        zip: '37204',
+        licenses: [],
+        pharmacyPhysicianId: pharmacyPhysicianId
       });
 
-      // Create physician if not exists
-      if (!physician) {
+      console.log('✅ Created physician record in database:', physicianRecord.id, physicianRecord.fullName);
+    } else {
+      console.log(`✅ Using existing physician from database: ${physicianRecord.id}, ${physicianRecord.fullName}`);
+    }
 
-        const npiLicenses = clinicianDetails.licenses
-          .filter(license => license.type === 'npi');
-
-        const npiNumber = npiLicenses[0]?.value
-
-        if (!npiNumber) {
-          throw Error("No Npi number found ini Clinician")
-        }
-
-        // Create physician in pharmacy system
-        const pharmacyPhysicianService = new PharmacyPhysicianService();
-        const pharmacyResponse = await pharmacyPhysicianService.postPhysician({
-          first_name: clinicianDetails.first_name,
-          middle_name: '', // Not provided by MD Integration
-          last_name: clinicianDetails.last_name,
-          phone_number: clinicianDetails.phone_number.replace(/[^0-9]/g, ''),
-          email: clinicianDetails.email,
-          // Approved address for  all MDI clinicians
-          street: '100 Powell Place #1859',
-          city: 'Nashville',
-          state: 'TN',
-          zip: '37204',
-          npi_number: +npiNumber
-        });
-
-
-        physician = await Physician.create({
-          firstName: clinicianDetails.first_name,
-          lastName: clinicianDetails.last_name,
-          middleName: '', // Not provided by MD Integration
-          email: clinicianDetails.email,
-          phoneNumber: clinicianDetails.phone_number.replace(/[^0-9]/g, ''), // Remove formatting
-          street: '100 Powell Place #1859',
-          city: 'Nashville',
-          state: 'TN',
-          zip: '37204',
-          mdPhysicianId: clinicianDetails.clinician_id,
-          pharmacyPhysicianId: pharmacyResponse.data.id
-        });
-
-        console.log('✅ Created new physician:', physician.id, physician.fullName);
-      } else {
-        // Link physician to order
-        await order.update({ physicianId: physician.id });
-      }
+    // Link physician to order
+    await order.update({ physicianId: physicianRecord.id });
   }
 }
 

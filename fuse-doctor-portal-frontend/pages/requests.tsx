@@ -243,9 +243,6 @@ export default function Requests() {
                                                         Date
                                                     </th>
                                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                                        Status
-                                                    </th>
-                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                                         Approval
                                                     </th>
                                                 </tr>
@@ -285,11 +282,6 @@ export default function Requests() {
                                                         </td>
                                                         <td className="px-4 py-3 text-sm text-gray-600">
                                                             {new Date(order.createdAt).toLocaleDateString()}
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                                                                {order.status}
-                                                            </span>
                                                         </td>
                                                         <td className="px-4 py-3">
                                                             {order.approvedByDoctor ? (
