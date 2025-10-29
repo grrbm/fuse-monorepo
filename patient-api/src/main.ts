@@ -5244,15 +5244,15 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       // STEP 1: Deactivate ALL active records for this user (except the one we're activating)
       const deactivatedCount = await QuestionnaireCustomization.update(
         { isActive: false },
-        { 
-          where: { 
+        {
+          where: {
             userId: currentUser.id,
             questionnaireId: { [Op.ne]: questionnaireId }, // All except current
             isActive: true // Only active ones
-          } 
+          }
         }
       );
-      
+
       if (deactivatedCount[0] > 0) {
         console.log(`🔄 Deactivated ${deactivatedCount[0]} previous QuestionnaireCustomization(s) for user ${currentUser.id}`);
       }
@@ -5264,7 +5264,7 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
 
       if (customization) {
         // STEP 3A: Already exists, just activate it (keep existing color, even if null)
-        await customization.update({ 
+        await customization.update({
           isActive: true
         });
         console.log(`✅ Reactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: ${customization.customColor || 'none (will use defaults)'}`);
@@ -5350,11 +5350,11 @@ app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
     try {
       const updated = await QuestionnaireCustomization.update(
         { isActive: false },
-        { 
-          where: { 
-            userId: currentUser.id, 
-            questionnaireId 
-          } 
+        {
+          where: {
+            userId: currentUser.id,
+            questionnaireId
+          }
         }
       );
       if (updated[0] > 0) {
@@ -5399,16 +5399,16 @@ app.put("/admin/questionnaire-customization/color", authenticateJWT, async (req,
     }
 
     const { questionnaireId, customColor } = req.body || {};
-    
+
     if (!questionnaireId) {
       return res.status(400).json({ success: false, message: "questionnaireId is required" });
     }
 
     // Validate hex color format
     if (customColor && !/^#[0-9A-Fa-f]{6}$/.test(customColor)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "customColor must be a valid hex code (e.g. #1A2B3C)" 
+      return res.status(400).json({
+        success: false,
+        message: "customColor must be a valid hex code (e.g. #1A2B3C)"
       });
     }
 
@@ -5418,21 +5418,21 @@ app.put("/admin/questionnaire-customization/color", authenticateJWT, async (req,
     });
 
     if (!customization) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "QuestionnaireCustomization not found. Please enable the form first." 
+      return res.status(404).json({
+        success: false,
+        message: "QuestionnaireCustomization not found. Please enable the form first."
       });
     }
 
     // Update the color (null means "use clinic default")
     const finalColor = customColor || null;
     await customization.update({ customColor: finalColor });
-    
+
     console.log(`🎨 Updated color for user ${currentUser.id}, questionnaire ${questionnaireId} to: ${finalColor || 'null (will use clinic default)'}`);
-    
-    res.status(200).json({ 
-      success: true, 
-      data: customization 
+
+    res.status(200).json({
+      success: true,
+      data: customization
     });
   } catch (error) {
     console.error('❌ Error updating questionnaire color:', error);
@@ -7191,9 +7191,9 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
         if (defaultFormColor !== undefined) {
           // Validate color format if not empty
           if (defaultFormColor && !/^#([0-9a-fA-F]{6})$/.test(defaultFormColor)) {
-            return res.status(400).json({ 
-              success: false, 
-              message: 'Default form color must be a valid hex code (e.g. #1A2B3C)' 
+            return res.status(400).json({
+              success: false,
+              message: 'Default form color must be a valid hex code (e.g. #1A2B3C)'
             });
           }
           updateData.defaultFormColor = defaultFormColor || null;
@@ -9160,11 +9160,12 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
     // First try legacy enablement via TenantProduct (selected products)
     // First try legacy enablement via TenantProduct (selected products)
     const tenantProduct = await TenantProduct.findOne({
-      where: { clinicId: clinic.id, productId: slug },
+      where: { clinicId: clinic.id },
       include: [
         {
           model: Product,
           required: true,
+          where: { slug },
         },
         {
           model: Questionnaire,
@@ -9354,16 +9355,16 @@ app.get("/public/questionnaire-customization/:questionnaireId", async (req, res)
 
     if (!clinicId) {
       console.log('❌ [PUBLIC] Missing clinicId parameter');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'clinicId query parameter is required' 
+      return res.status(400).json({
+        success: false,
+        message: 'clinicId query parameter is required'
       });
     }
 
     // Find an active customization for this questionnaire from any user in this clinic
     const customization = await QuestionnaireCustomization.findOne({
-      where: { 
-        questionnaireId, 
+      where: {
+        questionnaireId,
         isActive: true,
         '$user.clinicId$': clinicId // Use nested where with Sequelize syntax
       },
@@ -9385,7 +9386,7 @@ app.get("/public/questionnaire-customization/:questionnaireId", async (req, res)
 
     if (!customization) {
       console.log('⚠️ [PUBLIC] No customization found, returning null');
-      
+
       // Debug: Let's see what's in the table
       const allCustomizations = await QuestionnaireCustomization.findAll({
         where: { questionnaireId },
@@ -9400,8 +9401,8 @@ app.get("/public/questionnaire-customization/:questionnaireId", async (req, res)
         userClinicId: (c as any).user?.clinicId
       })));
 
-      return res.status(200).json({ 
-        success: true, 
+      return res.status(200).json({
+        success: true,
         data: null // No customization found
       });
     }
@@ -9413,8 +9414,8 @@ app.get("/public/questionnaire-customization/:questionnaireId", async (req, res)
 
     console.log(`✅ [PUBLIC] Returning customization:`, result);
 
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       data: result
     });
   } catch (error) {
