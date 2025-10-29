@@ -1,0 +1,2757 @@
+ABSOLUTE PHARMACY API DOCUMENTATION
+
+
+Dashboard
+As a leading, software-focused pharmacy, we offer a REST API which you can integrate into your clinics's software.
+
+
+Authentication
+The API secured with an API key which can be obtained by contacting customer service as only select clinics are allowed to submit scripts via our API.
+Example
+https://portal.absoluterx.com/api/clinics/products?api_key=AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE
+
+
+GET /api/clinics/physicians
+Returns a paginated list of physicians belonging to your clinic.
+Optional Filters
+page
+string
+example 1
+The page of the results you want returned.
+id
+string
+example 123456789
+The ID of the prescriber.
+dea_number
+string
+example BB1388568
+The prescriber's DEA number.
+npi_number
+string
+example 1234567891
+The prescriber's NPI number.
+first_name
+string
+example John
+The prescriber's first name.
+middle_name
+string
+example Michael
+The prescriber's middle name.
+last_name
+string
+example Doe
+The prescriber's last name.
+Response Sample
+{
+  "data": [
+    {
+      "id": 1,
+      "email": "physician@someclinic.com",
+      "first_name": "JOHN",
+      "middle_name": null,
+      "last_name": "DOE",
+      "phone_number": "7778889999",
+      "first_and_last_name": "JOHN DOE",
+      "first_letter_of_last_name": "S",
+      "dea_number": "BB1388568",
+      "npi_number": "1234567891",
+      "licenses": [
+        {
+          "state": "Montana",
+          "number": "12345",
+          "type": "MEDICAL",
+          "expires_on": "2022-06-31",
+          "approved": 1,
+          "expired": false
+        }
+      ],
+      "links": {
+        "api": {
+          "show": {
+            "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+            "method": "GET",
+            "axios_method": "get"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    }
+  ],
+  "links": {
+    "first": "https://portal.absoluterx.com/api/clinics/physicians?page=1",
+    "last": "https://portal.absoluterx.com/api/clinics/physicians?page=2",
+    "prev": null,
+    "next": "https://portal.absoluterx.com/api/clinics/physicians?page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "path": "https://portal.absoluterx.com/api/clinics/physicians",
+    "per_page": 15,
+    "to": 15,
+    "total": 1
+  }
+}
+
+
+POST /api/clinics/physicians
+Create a new physician record.
+Input Fields
+first_name
+string
+REQUIRED
+example John
+The first name of the prescriber.
+middle_name
+string
+OPTIONAL
+example Michael
+The middle name of the prescriber.
+last_name
+string
+REQUIRED
+example Doe
+The last name of the prescriber.
+phone_number
+string
+REQUIRED
+example 7778889999
+The prescriber's valid 10 digit phone number.
+licenses
+array of objects
+OPTIONAL
+List of the the prescriber's licenses.
+object
+REQUIRED
+state
+string
+REQUIRED
+example Montana
+number
+string
+REQUIRED
+example 12345
+type
+string
+REQUIRED
+Options: MEDICAL, CONTROLLED_SUBSTANCE_REGISTRATION_(CSR), PA, ARNP, OD
+example MEDICAL
+expires_on
+string
+REQUIRED
+example 2022-06-31
+street
+string
+REQUIRED
+example 123 SomeStreet
+street_2
+string
+OPTIONAL
+example APT 123
+city
+string
+REQUIRED
+example Lutz
+state
+string
+REQUIRED
+example FL
+zip
+string
+REQUIRED
+example 33549
+Request Sample
+{
+  "first_name": "JOHN",
+  "middle_name": "MICHAEL",
+  "last_name": "DOE",
+  "phone_number": "7778889999",
+  "email": "john@doe.com",
+  "dea_number": "BB1388568",
+  "npi_number": "1234567891",
+  "street": "101 SOME STREET",
+  "street_2": "SUITE 101",
+  "city": "TAMPA",
+  "state": "FL",
+  "zip": "33601",
+  "licenses": [
+    {
+      "state": "Montana",
+      "number": "12345",
+      "type": "MEDICAL",
+      "expires_on": "2022-06-31"
+    }
+  ]
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "email": "physician@someclinic.com",
+    "first_name": "JOHN",
+    "middle_name": null,
+    "last_name": "DOE",
+    "phone_number": "7778889999",
+    "first_and_last_name": "JOHN DOE",
+    "first_letter_of_last_name": "S",
+    "dea_number": "BB1388568",
+    "npi_number": "1234567891",
+    "licenses": [
+      {
+        "state": "Montana",
+        "number": "12345",
+        "type": "MEDICAL",
+        "expires_on": "2022-06-31",
+        "approved": 1,
+        "expired": false
+      }
+    ],
+    "links": {
+      "api": {
+        "show": {
+          "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+          "method": "GET",
+          "axios_method": "get"
+        },
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        }
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/physicians/{id}
+Returns a physician profile record.
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "email": "physician@someclinic.com",
+    "first_name": "JOHN",
+    "middle_name": null,
+    "last_name": "DOE",
+    "phone_number": "7778889999",
+    "first_and_last_name": "JOHN DOE",
+    "first_letter_of_last_name": "S",
+    "dea_number": "BB1388568",
+    "npi_number": "1234567891",
+    "licenses": [
+      {
+        "state": "Montana",
+        "number": "12345",
+        "type": "MEDICAL",
+        "expires_on": "2022-06-31",
+        "approved": 1,
+        "expired": false
+      }
+    ],
+    "links": {
+      "api": {
+        "show": {
+          "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+          "method": "GET",
+          "axios_method": "get"
+        },
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        }
+      }
+    }
+  }
+}
+
+
+PUT /api/clinics/physicians/{id}
+Update existing physician record.
+Input Fields
+phone_number
+string
+REQUIRED
+example 7778889999
+The prescriber's valid 10 digit phone number.
+licenses
+array of objects
+OPTIONAL
+List of the the prescriber's licenses.
+object
+REQUIRED
+state
+string
+REQUIRED
+example Montana
+number
+string
+REQUIRED
+example 12345
+type
+string
+REQUIRED
+Options: MEDICAL, CONTROLLED_SUBSTANCE_REGISTRATION_(CSR), PA, ARNP, OD
+example MEDICAL
+expires_on
+string
+REQUIRED
+example 2022-06-31
+street
+string
+REQUIRED
+example 123 SomeStreet
+street_2
+string
+OPTIONAL
+example APT 123
+city
+string
+REQUIRED
+example Lutz
+state
+string
+REQUIRED
+example FL
+zip
+string
+REQUIRED
+example 33549
+Request Sample
+{
+  "phone_number": "7778889999",
+  "email": "john@doe.com",
+  "dea_number": "BB1388568",
+  "npi_number": "1234567891",
+  "street": "101 SOME STREET",
+  "street_2": "SUITE 101",
+  "city": "TAMPA",
+  "state": "FL",
+  "zip": "33601",
+  "licenses": [
+    {
+      "state": "Montana",
+      "number": "12345",
+      "type": "MEDICAL",
+      "expires_on": "2022-06-31"
+    }
+  ]
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "email": "physician@someclinic.com",
+    "first_name": "JOHN",
+    "middle_name": null,
+    "last_name": "DOE",
+    "phone_number": "7778889999",
+    "first_and_last_name": "JOHN DOE",
+    "first_letter_of_last_name": "S",
+    "dea_number": "BB1388568",
+    "npi_number": "1234567891",
+    "licenses": [
+      {
+        "state": "Montana",
+        "number": "12345",
+        "type": "MEDICAL",
+        "expires_on": "2022-06-31",
+        "approved": 1,
+        "expired": false
+      }
+    ],
+    "links": {
+      "api": {
+        "show": {
+          "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+          "method": "GET",
+          "axios_method": "get"
+        },
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        }
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/licenses
+Returns a paginated list of licenses of your physicians.
+Optional Filters
+page
+string
+example 1
+The page of the results you want returned.
+number
+string
+example 123456789
+The license number.
+physician_id
+string
+example 123456789
+The ID of the prescriber.
+state
+string
+example Texas
+The license state.
+type
+string
+Options: MEDICAL, CONTROLLED_SUBSTANCE_REGISTRATION_(CSR), PA, ARNP, OD
+example MEDICAL
+The license type.
+Response Sample
+{
+  "data": [
+    {
+      "id": 1,
+      "physician_id": 1,
+      "state": "Texas",
+      "number": "123456789",
+      "type": "MEDICAL",
+      "expires_on": "2023-01-01",
+      "approved": 1,
+      "expired": false,
+      "api": {
+        "get": {
+          "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+          "method": "GET",
+          "axios_method": "get"
+        },
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        },
+        "delete": {
+          "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+          "method": "DELETE",
+          "axios_method": "delete"
+        }
+      }
+    }
+  ],
+  "links": {
+    "first": "https://portal.absoluterx.com/api/clinics/licenses?page=1",
+    "last": "https://portal.absoluterx.com/api/clinics/licenses?page=1",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "path": "https://portal.absoluterx.com/api/clinics/licenses",
+    "per_page": 15,
+    "to": 15,
+    "total": 1
+  }
+}
+
+
+POST /api/clinics/licenses
+Create a new license record for a given physician.
+Input Fields
+physician_id
+string
+REQUIRED
+example 123456789
+The id number of the prescriber.
+number
+string
+example ABC123
+The license number.
+state
+string
+example Texas
+The license state.
+type
+string
+Options: MEDICAL, CONTROLLED_SUBSTANCE_REGISTRATION_(CSR), PA, ARNP, OD
+example Texas
+The license type.
+expires_on
+string
+example 2023-01-01
+The license expiration date.
+Request Sample
+{
+  "physician_id": 1,
+  "number": "123456789",
+  "state": "Texas",
+  "type": "MEDICAL",
+  "expires_on": "2023-01-01"
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "physician_id": 1,
+    "state": "Texas",
+    "number": "123456789",
+    "type": "MEDICAL",
+    "expires_on": "2023-01-01",
+    "approved": 1,
+    "expired": false,
+    "api": {
+      "get": {
+        "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+        "method": "GET",
+        "axios_method": "get"
+      },
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/licenses/{id}
+Returns a single license record.
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "physician_id": 1,
+    "state": "Texas",
+    "number": "123456789",
+    "type": "MEDICAL",
+    "expires_on": "2023-01-01",
+    "approved": 1,
+    "expired": false,
+    "api": {
+      "get": {
+        "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+        "method": "GET",
+        "axios_method": "get"
+      },
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+PUT /api/clinics/licenses/{id}
+Update an existing physician's license record.
+Input Fields
+number
+string
+example ABC123
+The license number.
+state
+string
+example Texas
+The license state.
+type
+string
+Options: MEDICAL, CONTROLLED_SUBSTANCE_REGISTRATION_(CSR), PA, ARNP, OD
+example Texas
+The license type.
+expires_on
+string
+example 2023-01-01
+The license expiration date.
+Request Sample
+{
+  "number": "123456789",
+  "state": "Texas",
+  "type": "MEDICAL",
+  "expires_on": "2023-01-01"
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "physician_id": 1,
+    "state": "Texas",
+    "number": "123456789",
+    "type": "MEDICAL",
+    "expires_on": "2023-01-01",
+    "approved": 1,
+    "expired": false,
+    "api": {
+      "get": {
+        "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+        "method": "GET",
+        "axios_method": "get"
+      },
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/licenses/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+DELETE /api/clinics/licenses/{id}
+Delete a individual license record.
+
+
+GET /api/clinics/patients
+Returns a paginated list of patients belonging to your clinic.
+Optional Filters
+page
+string
+example 1
+The page of the results you want returned.
+id
+string
+example 123456789
+The ID of the patient.
+dob
+string
+example 1980-01-01
+The patients date of birth.
+email
+string
+example john@doe.com
+The patients email address.
+first_name
+string
+example John
+The patients first name.
+middle_name
+string
+example Michael
+The patients middle name.
+last_name
+string
+example Doe
+The patients last name.
+Response Sample
+{
+  "data": [
+    {
+      "id": "123456789",
+      "first_name": "John",
+      "middle_name": null,
+      "last_name": "Doe",
+      "formatted_name": "Doe, John",
+      "email": "john@doe.com",
+      "dob": "1979-01-01",
+      "gender": "Male",
+      "phone_number": "888888888",
+      "drivers_license_number": null,
+      "drivers_license_state": null,
+      "created_at": "2022-01-14T17:49:38.000000Z",
+      "updated_at": "2022-01-14T17:49:38.000000Z",
+      "deleted_at": null,
+      "address": {
+        "full": "101 Some Street, Some City, FL 33549 USA",
+        "street": "101 Some Street",
+        "street_2": null,
+        "city": "Some City",
+        "state": "FL",
+        "zip": "33549",
+        "country": "USA"
+      },
+      "allergies": [
+        {
+          "id": 1,
+          "name": "nuts",
+          "api": {
+            "delete": {
+              "url": "https://portal.absoluterx.com/api/clinics/allergies/123456789?api_key=<your_api_key>",
+              "method": "DELETE",
+              "axios_method": "delete"
+            },
+            "update": {
+              "url": "https://portal.absoluterx.com/api/clinics/allergies/123456789?api_key=<your_api_key>",
+              "method": "PUT",
+              "axios_method": "put"
+            }
+          }
+        }
+      ],
+      "diseases": [
+        {
+          "id": 1,
+          "name": "Depression",
+          "api": {
+            "delete": {
+              "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<your_api_key>",
+              "method": "DELETE",
+              "axios_method": "delete"
+            },
+            "update": {
+              "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<your_api_key>",
+              "method": "PUT",
+              "axios_method": "put"
+            }
+          }
+        }
+      ],
+      "medications": [
+        {
+          "id": 1,
+          "name": "Tylenol",
+          "strength": "500mg",
+          "delete": {
+            "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<your_api_key>",
+            "method": "DELETE",
+            "axios_method": "delete"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<your_api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      ],
+      "links": {
+        "api": {
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/patients/1?api_key=<your_api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    }
+  ],
+  "links": {
+    "first": "https://portal.absoluterx.com/api/clinics/patients?api_key=<your_api_key>&page=1",
+    "last": "https://portal.absoluterx.com/api/clinics/patients?api_key=<your_api_key>&page=1",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "path": "https://portal.absoluterx.com/api/clinics/patients",
+    "per_page": 15,
+    "to": 15,
+    "total": 1
+  }
+}
+
+
+POST /api/clinics/patients
+Create a new patient record.
+Input Fields
+first_name
+string
+REQUIRED
+example John
+The first name of the patient.
+middle_name
+string
+OPTIONAL
+example Michael
+The middle name of the patient.
+last_name
+string
+REQUIRED
+example Doe
+The last name of the patient.
+dob
+string
+REQUIRED
+example 1980-01-01
+The patients date of birth. Must be 18 years or older.
+gender
+string
+REQUIRED
+Options: Male, Female
+The patients gender.
+allergies
+array of objects
+OPTIONAL
+List of the patients allergies.
+object
+REQUIRED
+name
+string
+REQUIRED
+example Tree Pollen
+diseases
+array of objects
+OPTIONAL
+List of the patients diseases.
+object
+REQUIRED
+name
+string
+REQUIRED
+example Heart Disease
+medications
+array of objects
+OPTIONAL
+List of the patients medications.
+object
+REQUIRED
+name
+string
+REQUIRED
+example Tylenol
+strength
+string
+REQUIRED
+example 100mg
+email
+string
+REQUIRED
+example john@doe.com
+The patients email address.
+phone_number
+string
+REQUIRED
+example 7778889999
+The patients 10 digit phone number.
+address
+object
+REQUIRED
+The address the patient is located at.
+street
+string
+REQUIRED
+example 123 SomeStreet
+street_2
+string
+OPTIONAL
+example APT 123
+city
+string
+REQUIRED
+example Lutz
+state
+string
+REQUIRED
+example FL
+zip
+string
+REQUIRED
+example 33549
+Request Sample
+{
+  "first_name": "John",
+  "middle_name": "Michael",
+  "last_name": "Doe",
+  "dob": "1980-01-01",
+  "gender": "Male",
+  "allergies": [
+    {
+      "name": "Tree Pollen"
+    }
+  ],
+  "diseases": [
+    {
+      "name": "Heart Disease"
+    }
+  ],
+  "medications": [
+    {
+      "name": "Tylenol",
+      "strength": "50 MG"
+    }
+  ],
+  "email": "john@doe.com",
+  "phone_number": "8888888888",
+  "address": {
+    "street": "101 Some Street",
+    "street_2": "APT 101",
+    "city": "Lutz",
+    "state": "FL",
+    "zip": "33549"
+  }
+}
+Response Sample
+{
+  "data": {
+    "id": "123456789",
+    "first_name": "John",
+    "middle_name": null,
+    "last_name": "Doe",
+    "formatted_name": "Doe, John",
+    "email": "john@doe.com",
+    "dob": "1979-01-01",
+    "gender": "Male",
+    "phone_number": "888888888",
+    "drivers_license_number": null,
+    "drivers_license_state": null,
+    "created_at": "2022-01-14T17:49:38.000000Z",
+    "updated_at": "2022-01-14T17:49:38.000000Z",
+    "deleted_at": null,
+    "address": {
+      "full": "101 Some Street, Some City, FL 33549 USA",
+      "street": "101 Some Street",
+      "street_2": null,
+      "city": "Some City",
+      "state": "FL",
+      "zip": "33549",
+      "country": "USA"
+    },
+    "allergies": [
+      {
+        "id": 1,
+        "name": "nuts",
+        "api": {
+          "delete": {
+            "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<your_api_key>",
+            "method": "DELETE",
+            "axios_method": "delete"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<your_api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    ],
+    "diseases": [
+      {
+        "id": 1,
+        "name": "Depression",
+        "api": {
+          "delete": {
+            "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<your_api_key>",
+            "method": "DELETE",
+            "axios_method": "delete"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<your_api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    ],
+    "medications": [
+      {
+        "id": 1,
+        "name": "Tylenol",
+        "strength": "500mg",
+        "delete": {
+          "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<your_api_key>",
+          "method": "DELETE",
+          "axios_method": "delete"
+        },
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<your_api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        }
+      }
+    ],
+    "links": {
+      "api": {
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/patients/1?api_key=<your_api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        }
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/patients/{id}
+Returns a patient profile record.
+Response Sample
+{
+  "data": {
+    "id": "123456789",
+    "first_name": "John",
+    "middle_name": null,
+    "last_name": "Doe",
+    "formatted_name": "Doe, John",
+    "email": "john@doe.com",
+    "dob": "1979-01-01",
+    "gender": "Male",
+    "phone_number": "888888888",
+    "drivers_license_number": null,
+    "drivers_license_state": null,
+    "created_at": "2022-01-14T17:49:38.000000Z",
+    "updated_at": "2022-01-14T17:49:38.000000Z",
+    "deleted_at": null,
+    "address": {
+      "full": "101 Some Street, Some City, FL 33549 USA",
+      "street": "101 Some Street",
+      "street_2": null,
+      "city": "Some City",
+      "state": "FL",
+      "zip": "33549",
+      "country": "USA"
+    },
+    "allergies": [
+      {
+        "id": 1,
+        "name": "nuts",
+        "api": {
+          "delete": {
+            "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<your_api_key>",
+            "method": "DELETE",
+            "axios_method": "delete"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<your_api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    ],
+    "diseases": [
+      {
+        "id": 1,
+        "name": "Depression",
+        "api": {
+          "delete": {
+            "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<your_api_key>",
+            "method": "DELETE",
+            "axios_method": "delete"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<your_api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    ],
+    "medications": [
+      {
+        "id": 1,
+        "name": "Tylenol",
+        "strength": "500mg",
+        "delete": {
+          "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<your_api_key>",
+          "method": "DELETE",
+          "axios_method": "delete"
+        },
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<your_api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        }
+      }
+    ],
+    "links": {
+      "api": {
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/patients/1?api_key=<your_api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        }
+      }
+    }
+  }
+}
+
+
+PUT /api/clinics/patients/{id}
+Update an existing patient record.
+Input Fields
+first_name
+string
+REQUIRED
+example John
+The first name of the patient.
+middle_name
+string
+OPTIONAL
+example Michael
+The middle name of the patient.
+last_name
+string
+REQUIRED
+example Doe
+The last name of the patient.
+dob
+string
+REQUIRED
+example 1980-01-01
+The patients date of birth. Must be 18 years or older.
+gender
+string
+REQUIRED
+Options: Male, Female
+The patients gender.
+allergies
+array of objects
+OPTIONAL
+List of the patients allergies.
+object
+REQUIRED
+name
+string
+REQUIRED
+example Tree Pollen
+diseases
+array of objects
+OPTIONAL
+List of the patients diseases.
+object
+REQUIRED
+name
+string
+REQUIRED
+example Heart Disease
+medications
+array of objects
+OPTIONAL
+List of the patients medications.
+object
+REQUIRED
+name
+string
+REQUIRED
+example Tylenol
+strength
+string
+REQUIRED
+example 100mg
+email
+string
+REQUIRED
+example john@doe.com
+The patients email address.
+phone_number
+string
+REQUIRED
+example 7778889999
+The patients 10 digit phone number.
+address
+object
+REQUIRED
+The address the patient is located at.
+street
+string
+REQUIRED
+example 123 SomeStreet
+street_2
+string
+OPTIONAL
+example APT 123
+city
+string
+REQUIRED
+example Lutz
+state
+string
+REQUIRED
+example FL
+zip
+string
+REQUIRED
+example 33549
+Request Sample
+{
+  "first_name": "John",
+  "middle_name": "Michael",
+  "last_name": "Doe",
+  "dob": "1980-01-01",
+  "gender": "Male",
+  "allergies": [
+    {
+      "name": "Tree Pollen"
+    }
+  ],
+  "diseases": [
+    {
+      "name": "Heart Disease"
+    }
+  ],
+  "medications": [
+    {
+      "name": "Tylenol",
+      "strength": "50 MG"
+    }
+  ],
+  "email": "john@doe.com",
+  "phone_number": "8888888888",
+  "address": {
+    "street": "101 Some Street",
+    "street_2": "APT 101",
+    "city": "Lutz",
+    "state": "FL",
+    "zip": "33549"
+  }
+}
+Response Sample
+{
+  "data": {
+    "id": "123456789",
+    "first_name": "John",
+    "middle_name": null,
+    "last_name": "Doe",
+    "formatted_name": "Doe, John",
+    "email": "john@doe.com",
+    "dob": "1979-01-01",
+    "gender": "Male",
+    "phone_number": "888888888",
+    "drivers_license_number": null,
+    "drivers_license_state": null,
+    "created_at": "2022-01-14T17:49:38.000000Z",
+    "updated_at": "2022-01-14T17:49:38.000000Z",
+    "deleted_at": null,
+    "address": {
+      "full": "101 Some Street, Some City, FL 33549 USA",
+      "street": "101 Some Street",
+      "street_2": null,
+      "city": "Some City",
+      "state": "FL",
+      "zip": "33549",
+      "country": "USA"
+    },
+    "allergies": [
+      {
+        "id": 1,
+        "name": "nuts",
+        "api": {
+          "delete": {
+            "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<your_api_key>",
+            "method": "DELETE",
+            "axios_method": "delete"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<your_api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    ],
+    "diseases": [
+      {
+        "id": 1,
+        "name": "Depression",
+        "api": {
+          "delete": {
+            "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<your_api_key>",
+            "method": "DELETE",
+            "axios_method": "delete"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<your_api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    ],
+    "medications": [
+      {
+        "id": 1,
+        "name": "Tylenol",
+        "strength": "500mg",
+        "delete": {
+          "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<your_api_key>",
+          "method": "DELETE",
+          "axios_method": "delete"
+        },
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<your_api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        }
+      }
+    ],
+    "links": {
+      "api": {
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/patients/1?api_key=<your_api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        }
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/allergies
+Returns a paginated list of allergies of your patients.
+Optional Filters
+page
+string
+example 1
+The page of the results you want returned.
+patient_id
+string
+example 123456789
+The ID of the patient.
+name
+string
+example Pollen
+The the name, or partial name, of the allergy.
+Response Sample
+{
+  "data": [
+    {
+      "id": 1,
+      "patient_id": "123456789",
+      "name": "Tree Pollen",
+      "created_at": "2019-08-11T22:50:02.000000Z",
+      "updated_at": "2020-08-03T15:36:35.000000Z",
+      "deleted_at": null,
+      "api": {
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        },
+        "delete": {
+          "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+          "method": "DELETE",
+          "axios_method": "delete"
+        }
+      }
+    }
+  ],
+  "links": {
+    "first": "https://portal.absoluterx.com/api/clinics/allergies?page=1",
+    "last": "https://portal.absoluterx.com/api/clinics/allergies?page=1",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "path": "https://portal.absoluterx.com/api/clinics/allergies",
+    "per_page": 15,
+    "to": 1,
+    "total": 1
+  }
+}
+
+
+POST /api/clinics/allergies
+Create a new allergy record for a given patient.
+Input Fields
+patient_id
+string
+REQUIRED
+example 123456
+The id number of the patient.
+name
+string
+OPTIONAL
+example Tree Pollen
+The name of the allergy.
+Request Sample
+{
+  "patient_id": "123456789",
+  "name": "Tree Pollen"
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Tree Pollen",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": null,
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/allergies/{id}
+Returns a single allergy record.
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Tree Pollen",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": null,
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+PUT /api/clinics/allergies
+Update an existing allergy record for a given patient.
+Input Fields
+name
+string
+OPTIONAL
+example Tree Pollen
+The name of the allergy.
+Request Sample
+{
+  "name": "Pollen"
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Pollen",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": null,
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+DELETE /api/clinics/allergies/{id}
+Delete a individual allergy record.
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Tree Pollen",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": "2020-08-04T11:12:13.000000Z",
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/allergies/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/diseases
+Returns a paginated list of diseases of your patients.
+Optional Filters
+page
+string
+example 1
+The page of the results you want returned.
+patient_id
+string
+example 123456789
+The ID of the patient.
+name
+string
+example Heart Disease
+The the name, or partial name, of the disease.
+Response Sample
+{
+  "data": [
+    {
+      "id": 1,
+      "patient_id": "123456789",
+      "name": "Heart Disease",
+      "created_at": "2019-08-11T22:50:02.000000Z",
+      "updated_at": "2020-08-03T15:36:35.000000Z",
+      "deleted_at": null,
+      "api": {
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        },
+        "delete": {
+          "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+          "method": "DELETE",
+          "axios_method": "delete"
+        }
+      }
+    }
+  ],
+  "links": {
+    "first": "https://portal.absoluterx.com/api/clinics/diseases?page=1",
+    "last": "https://portal.absoluterx.com/api/clinics/diseases?page=1",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "path": "https://portal.absoluterx.com/api/clinics/diseases",
+    "per_page": 15,
+    "to": 1,
+    "total": 1
+  }
+}
+
+
+POST /api/clinics/diseases
+Create a new disease record for a given patient.
+Input Fields
+patient_id
+string
+REQUIRED
+example 123456789
+The id number of the patient.
+name
+string
+OPTIONAL
+example Heart Disease
+The name of the disease.
+Request Sample
+{
+  "patient_id": "123456789",
+  "name": "Heart Disease"
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Heart Disease",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": null,
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/diseases/{id}
+Returns a single disease record.
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Heart Disease",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": null,
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+PUT /api/clinics/diseases
+Update an existing disease record for a given patient.
+Input Fields
+name
+string
+OPTIONAL
+example Tree Heart
+The name of the disease.
+Request Sample
+{
+  "name": "Heart"
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Heart",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": null,
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+DELETE /api/clinics/diseases/{id}
+Delete a individual disease record.
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Heart Disease",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": "2020-08-04T11:12:13.000000Z",
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/diseases/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/medications
+Returns a paginated list of medications of your patients.
+Optional Filters
+page
+string
+example 1
+The page of the results you want returned.
+patient_id
+string
+example 123456789
+The ID of the patient.
+name
+string
+example Tylenol
+The the name, or partial name, of the medication.
+Response Sample
+{
+  "data": [
+    {
+      "id": 1,
+      "patient_id": "123456789",
+      "name": "Tylenol",
+      "strength": "50 MG",
+      "created_at": "2019-08-11T22:50:02.000000Z",
+      "updated_at": "2020-08-03T15:36:35.000000Z",
+      "deleted_at": null,
+      "api": {
+        "update": {
+          "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+          "method": "PUT",
+          "axios_method": "put"
+        },
+        "delete": {
+          "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+          "method": "DELETE",
+          "axios_method": "delete"
+        }
+      }
+    }
+  ],
+  "links": {
+    "first": "https://portal.absoluterx.com/api/clinics/medications?page=1",
+    "last": "https://portal.absoluterx.com/api/clinics/medications?page=1",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "path": "https://portal.absoluterx.com/api/clinics/medications",
+    "per_page": 15,
+    "to": 1,
+    "total": 1
+  }
+}
+
+
+POST /api/clinics/medications
+Create a new medication record for a given patient.
+Input Fields
+patient_id
+string
+REQUIRED
+example 123456789
+The id number of the patient.
+name
+string
+OPTIONAL
+example Tylenol
+The name of the medication.
+strength
+string
+OPTIONAL
+example 50 MG
+The strength of the medication.
+Request Sample
+{
+  "patient_id": "123456789",
+  "name": "Tylenol",
+  "strength": "50 MG"
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Tylenol",
+    "strength": "50 MG",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": null,
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/medications/{id}
+Returns a single medication record.
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Tylenol",
+    "strength": "50 MG",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": null,
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+PUT /api/clinics/medications
+Update an existing medication record for a given patient.
+Input Fields
+name
+string
+OPTIONAL
+example Tylenol
+The name of the medication.
+Request Sample
+{
+  "name": "Bayer",
+  "strength": "10 MG"
+}
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Tylenol",
+    "strength": "50 MG",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": null,
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+DELETE /api/clinics/medications/{id}
+Delete a individual medication record.
+Response Sample
+{
+  "data": {
+    "id": 1,
+    "patient_id": "123456789",
+    "name": "Tylenol",
+    "strength": "50 MG",
+    "created_at": "2019-08-11T22:50:02.000000Z",
+    "updated_at": "2020-08-03T15:36:35.000000Z",
+    "deleted_at": "2020-08-04T11:12:13.000000Z",
+    "api": {
+      "update": {
+        "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+        "method": "PUT",
+        "axios_method": "put"
+      },
+      "delete": {
+        "url": "https://portal.absoluterx.com/api/clinics/medications/1?api_key=<api_key>",
+        "method": "DELETE",
+        "axios_method": "delete"
+      }
+    }
+  }
+}
+
+
+GET /api/clinics/products
+Returns a paginated list of orders.
+Required Filters
+state
+string
+example IA
+The state abbreviation for the destination state of the product would be shipped to.
+physician_id
+string
+example 123456789
+The ordering physician's ID number.
+Optional Filters
+name
+string
+example Anastrozole
+The partial or full name of the product.
+sku
+string
+example 470
+The sku number of the product.
+Response Sample
+{
+  "data": [
+    {
+      "id": 26,
+      "sku": 470,
+      "name": "Anastrozole",
+      "strength": "1mg",
+      "name_with_strength": "Anastrozole (1mg)",
+      "compound": 0,
+      "controlled": 0,
+      "dispense": "Tablet",
+      "label": "ANASTROZOLE - 1MG TABLET"
+    }
+  ]
+}
+
+
+Webhook Notifications Setup
+Follow these steps to configure your webhook and receive real-time notifications.
+Step 1: Access the Webhook Settings via https://portal.absoluterx.com/clinics/preferences/webhook
+		Log in to your portal and Navigate to the Webhook Settings section.
+Step 2: Configure Webhook URL
+		Webhook URL: Enter the URL where you want to receive the webhook notifications.
+		Select Request Method
+		Set Webhook Status
+		provide API Key
+Events
+Supported Events
+order_created
+order_completed
+order_processed
+order_waiting
+order_filled
+order_cancelled
+order_assigned
+order_approved
+order_shipped
+order_problem
+order_rejected
+order_received_tracking
+example Configuration
+Input Fields
+Webhook URL
+string
+REQUIRED
+example https://yourdomain.com/webhook-receiver
+Enter the URL where you want to receive the webhook notifications.
+Request Method
+string
+REQUIRED
+Options: POST, GET
+example POST
+Choose the HTTP method you prefer for the webhook request.
+Is Active
+boolean
+REQUIRED
+Options: true, false
+example true
+Toggle the status to 'Active' to start receiving notifications.
+API Key
+string
+REQUIRED
+example your-api-key
+Enter the API key that will be included in the headers of the webhook request to authenticate the sender.
+Additional Headers
+object
+REQUIRED
+example {"Authorization":"Bearer your-token", "Custom-Header":"value"}
+Include any additional headers required for the webhook request.
+Additional Parameters
+object
+OPTIONAL
+example {"param1":"value1", "param2":"value2"}
+If your webhook request requires additional parameters in the body, include them in this section.
+Request Sample
+{
+  "webhook_url": "https://yourdomain.com/webhook-receiver",
+  "request_method": "POST",
+  "is_active": true,
+  "api_key": "your-api-key",
+  "additional_headers": {
+    "Authorization": "Bearer your-token",
+    "Custom-Header": "value"
+  },
+  "additional_parameters": {
+    "param1": "value1",
+    "param2": "value2"
+  }
+}
+Response Sample
+{
+  "data": {
+    "status": "success",
+    "message": "Webhook configuration saved successfully",
+    "webhook": {
+      "url": "https://yourdomain.com/webhook-receiver",
+      "method": "POST",
+      "active": true,
+      "headers": {
+        "Authorization": "Bearer your-token",
+        "Custom-Header": "value"
+      },
+      "parameters": {
+        "param1": "value1",
+        "param2": "value2"
+      },
+      "created_at": "2024-06-25T13:25:09.000000Z",
+      "updated_at": "2024-06-25T13:25:09.000000Z"
+    }
+  }
+}
+
+
+GET /api/clinics/orders
+Returns a paginated list of orders.
+Optional Filters
+page
+string
+example 1
+The page of the results you want returned.
+number
+string
+example 123456789
+The order number.
+physician_id
+string
+example 123456789
+The ordering physician's ID number.
+patient_id
+string
+example 123456789
+The patient's ID number.
+Response Sample
+{
+  "data": [
+    {
+      "number": 123456789,
+      "external_id": "test",
+      "status": "Pending",
+      "stage": "Filling",
+      "service_type": "fedex_2_day_one_rate",
+      "filled_at": null,
+      "verified_at": null,
+      "shipped_at": null,
+      "created_at": "2022-01-21T13:25:09.000000Z",
+      "updated_at": "2022-01-21T13:25:09.000000Z",
+      "address": {
+        "full": "101 Some Street, Burleson, TX 76028 USA",
+        "street": "101 Some Street",
+        "street_2": null,
+        "city": "Burleson",
+        "state": "TX",
+        "zip": "76028",
+        "country": "USA"
+      },
+      "patient": {
+        "id": 1,
+        "first_name": "John",
+        "middle_name": "Michael",
+        "last_name": "Doe",
+        "formatted_name": "Doe, John Michael",
+        "email": "john@doe.com",
+        "dob": "1979-01-01",
+        "gender": "Male",
+        "phone_number": "7778889999",
+        "drivers_license_number": null,
+        "drivers_license_state": null,
+        "created_at": "2022-01-14T17:49:38.000000Z",
+        "updated_at": "2022-01-14T17:49:38.000000Z",
+        "deleted_at": null,
+        "allergies": [
+          {
+            "name": "Nuts"
+          }
+        ],
+        "diseases": [
+          {
+            "name": "None"
+          }
+        ],
+        "medications": [
+          {
+            "name": "Tylenol",
+            "strength": "500mg"
+          }
+        ],
+        "links": {
+          "api": {
+            "update": {
+              "url": "https://portal.absoluterx.com/api/clinics/patients/1?api_key=<api_key>",
+              "method": "PUT",
+              "axios_method": "put"
+            }
+          }
+        }
+      },
+      "physician": {
+        "id": 1,
+        "email": null,
+        "first_name": "JANE",
+        "middle_name": null,
+        "last_name": "DOE",
+        "phone_number": "9998887777",
+        "first_and_last_name": "JANE DOE",
+        "first_letter_of_last_name": "D",
+        "dea_number": null,
+        "npi_number": "9876543211",
+        "links": {
+          "api": {
+            "show": {
+              "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+              "method": "GET",
+              "axios_method": "get"
+            },
+            "update": {
+              "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+              "method": "PUT",
+              "axios_method": "put"
+            }
+          }
+        }
+      },
+      "shipment": null,
+      "links": {
+        "api": {
+          "show": {
+            "url": "https://portal.absoluterx.com/api/clinics/orders/123456789?api_key=<api_key>",
+            "method": "GET",
+            "axios_method": "get"
+          }
+        }
+      }
+    }
+  ],
+  "links": {
+    "first": "https://portal.absoluterx.com/api/clinics/orders?api_key=<api_key>&page=1",
+    "last": "https://portal.absoluterx.com/api/clinics/orders?api_key=<api_key>&page=1",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "path": "https://portal.absoluterx.com/api/clinics/orders",
+    "per_page": 1,
+    "to": 1,
+    "total": 1
+  }
+}
+
+
+POST /api/clinics/orders
+Create a new order.
+
+Pharmacy Transfer Orders
+Pharmacies transferring prescriptions from clinics must:
+	•	Use their pharmacy API key for authentication
+	•	Include the clinic_id parameter to specify which clinic the order belongs to
+	•	The order will be assigned to the specified clinic with automatic tracking of the pharmacy transfer
+Input Fields
+clinic_id
+string
+OPTIONAL
+example 456
+For pharmacy transfers only: The ID of the clinic this order should be assigned to. Regular clinics cannot specify this field - orders will automatically be assigned to their own clinic.
+patient_id
+string
+REQUIRED
+example 123456789
+The ID number of the patient.
+physician_id
+string
+REQUIRED
+example 123456789
+The id number of the prescriber.
+ship_to_clinic
+string
+REQUIRED
+Options: 1 = Yes, 0 = No
+example 0
+Is the order being shipped to the clinic or the patient?
+service_type
+string
+REQUIRED
+Options: two_day, rush, overnight, priority
+example two_day
+The shipping service type of the order.
+signature_required
+string
+REQUIRED
+Options: 1 = Yes, 0 = No
+example 1
+If a signature is required, the driver will typically try to deliver the package up to three times.
+memo
+string
+REQUIRED
+example Your custom message.
+Assign your own memo to the order.
+external_id
+string
+OPTIONAL
+example ABC12345
+Your clinic's internal ID to reference the order by.
+test_order
+bool
+OPTIONAL
+example 1
+If you're testing should be 1 if not use 0 instead
+products
+array of objects
+REQUIRED
+example Bacteriostatic Water (Manufactured)
+sku
+string
+REQUIRED
+example 123
+The SKU number of the product.
+quantity
+string
+REQUIRED
+example 1
+The product order quantity.
+refills
+string
+REQUIRED
+example 0
+The number of refills prescribed.
+days_supply
+string
+REQUIRED
+example 30
+The number of days the prescription is good for.
+sig
+string (maximum of 98 characters)
+REQUIRED
+The prescriber's instructions to the pharmacist indicating how the patient should use the medication.
+Do not use UAD or "USE AS DIRECTED" as it could lead to delays.
+medical_necessity
+string
+REQUIRED
+Provide a brief explanation of the medical necessity for the prescribed product.
+Patient has a history of diabetes and requires treatment to improve quality of life.
+Request Sample
+{
+  "patient_id": 1,
+  "physician_id": 1,
+  "ship_to_clinic": 0,
+  "service_type": "two_day",
+  "signature_required": 1,
+  "memo": "Test memo",
+  "external_id": "testing",
+  "test_order": 1,
+  "products": [
+    {
+      "sku": 1213,
+      "quantity": 30,
+      "refills": 2,
+      "days_supply": 30,
+      "sig": "Use as directed",
+      "medical_necessity": "Patient has a history of diabetes and requires treatment to improve quality of life."
+    }
+  ]
+}
+Request Sample
+{
+  "clinic_id": 456,
+  "patient_id": 1,
+  "physician_id": 1,
+  "ship_to_clinic": 0,
+  "service_type": "two_day",
+  "signature_required": 1,
+  "memo": "Transferred from ABC Pharmacy",
+  "external_id": "PHARM-12345",
+  "test_order": 1,
+  "products": [
+    {
+      "sku": 1213,
+      "quantity": 30,
+      "refills": 2,
+      "days_supply": 30,
+      "sig": "Take 1 tablet by mouth daily"
+    }
+  ]
+}
+Response Sample
+{
+  "data": {
+    "number": 123456789,
+    "external_id": "test",
+    "test_order": 1,
+    "status": "Pending",
+    "stage": "Filling",
+    "service_type": "two_day",
+    "filled_at": null,
+    "verified_at": null,
+    "shipped_at": null,
+    "created_at": "2022-01-21T13:25:09.000000Z",
+    "updated_at": "2022-01-21T13:25:09.000000Z",
+    "transferred_from": 1,
+    "address": {
+      "full": "101 Some Street, Burleson, TX 76028 USA",
+      "street": "101 Some Street",
+      "street_2": null,
+      "city": "Burleson",
+      "state": "TX",
+      "zip": "76028",
+      "country": "USA"
+    },
+    "patient": {
+      "id": 1,
+      "first_name": "John",
+      "middle_name": "Michael",
+      "last_name": "Doe",
+      "formatted_name": "Doe, John Michael",
+      "email": "john@doe.com",
+      "dob": "1979-01-01",
+      "gender": "Male",
+      "phone_number": "7778889999",
+      "drivers_license_number": null,
+      "drivers_license_state": null,
+      "created_at": "2022-01-14T17:49:38.000000Z",
+      "updated_at": "2022-01-14T17:49:38.000000Z",
+      "deleted_at": null,
+      "allergies": [
+        {
+          "name": "Nuts"
+        }
+      ],
+      "diseases": [
+        {
+          "name": "None"
+        }
+      ],
+      "medications": [
+        {
+          "name": "Tylenol",
+          "strength": "500mg"
+        }
+      ],
+      "links": {
+        "api": {
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/patients/1?api_key=<api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    },
+    "physician": {
+      "id": 1,
+      "email": null,
+      "first_name": "JANE",
+      "middle_name": null,
+      "last_name": "DOE",
+      "phone_number": "9998887777",
+      "first_and_last_name": "JANE DOE",
+      "first_letter_of_last_name": "D",
+      "dea_number": null,
+      "npi_number": "9876543211",
+      "links": {
+        "api": {
+          "show": {
+            "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+            "method": "GET",
+            "axios_method": "get"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    },
+    "products": [
+      {
+        "id": 426977,
+        "order_id": 184992,
+        "base_product_id": 293,
+        "product_type": "App\\ProductVariable",
+        "product_id": 3170,
+        "price": 33,
+        "backorder": 0,
+        "number": null,
+        "part_of_kit": 0,
+        "quantity": 360,
+        "days_supply": 360,
+        "refills": 0,
+        "sig": "DISSOLVE ONE TABLET UNDER THE TONGUE DAILY",
+        "months_supply": 12,
+        "commercially_similar_reason_id": null,
+        "commercially_similar_reason_other": null,
+        "acknowledged_nonrefundable": 0,
+        "acknowledged_nonrefundable_at": null,
+        "acknowledged_nonrefundable_ip": null,
+        "acknowledged_noncredible": 0,
+        "acknowledged_noncredible_at": null,
+        "acknowledged_noncredible_ip": null,
+        "dr_acknowledged": 0,
+        "dr_acknowledged_at": null,
+        "dr_acknowledged_ip": null,
+        "dr_acknowledged_reconstitution": 0,
+        "dr_acknowledged_reconstitution_at": null,
+        "dr_acknowledged_reconstitution_ip": null,
+        "dont_immediately_allocate": 1,
+        "hold_at": null,
+        "dr_acknowledged_hold": 0,
+        "dr_acknowledged_hold_at": null,
+        "dr_acknowledged_hold_ip": null,
+        "hold_too_soon": 0,
+        "auto_remove_hold_on": null,
+        "static_hardcopy_uploaded": 0,
+        "created_at": "2024-06-26 15:02:15",
+        "updated_at": "2024-06-26 15:02:15",
+        "deleted_at": null,
+        "removed_from_subscription": 0,
+        "compound_drug_dosage_units_code": "01",
+        "product": {
+          "id": 3170,
+          "enabled": 1,
+          "clinic_id": 3,
+          "product_id": 293,
+          "price": 33,
+          "custom_pricing_min_sales": 0,
+          "custom_pricing_min_days": 0,
+          "created_at": "2022-08-11 13:08:16",
+          "updated_at": "2024-06-17 19:42:18",
+          "deleted_at": null,
+          "compound_drug_dosage_units_code": "01",
+          "is_new": true,
+          "name_with_strength": "Enclomiphene Citrate SL Tablet (12.5mg)",
+          "name_with_strength_and_pk_number": "Enclomiphene Citrate SL Tablet (12.5mg) - 14176",
+          "product": {
+            "id": 293,
+            "master_id": 41,
+            "active": 1,
+            "discontinued": 0,
+            "prescribable": 1,
+            "discontinued_message": null,
+            "commercially_similar": 0,
+            "commissionable": 1,
+            "compound": 1,
+            "controlled": 0,
+            "bud": 180,
+            "temperature": "Room",
+            "dispense": "Tablet",
+            "dispenable_quantity": null,
+            "dosage": "Sublingual",
+            "generic": 0,
+            "inventory": 1,
+            "show_in_catalog": 1,
+            "force_show_in_catalog": 0,
+            "sterile": 0,
+            "non_sterile": 1,
+            "supply": 0,
+            "refrigerated": 0,
+            "repackaged": 0,
+            "emoji": null,
+            "label": "ENCLOMIPHENE CITRATE 12.5MG COMPOUNDED SUBLINGUAL TABLET",
+            "learn_more_url": null,
+            "manufacturer": "COMPOUNDED",
+            "name": "Enclomiphene Citrate SL Tablet",
+            "strength": "12.5mg",
+            "raw_material_per_quantity": null,
+            "sig": null,
+            "barcode": null,
+            "pk_number": 14176,
+            "product_code": null,
+            "cost": 29,
+            "price": 152,
+            "retail_price": 350,
+            "minimum_sale_price": 0,
+            "days_supply": 28,
+            "custom_pricing_min_sales": 0,
+            "custom_pricing_min_days": 0,
+            "anticipated_replenish_date": null,
+            "created_at": "2022-08-11 13:08:16",
+            "updated_at": "2024-03-13 20:33:50",
+            "deleted_at": null,
+            "compound_drug_dosage_units_code": "01",
+            "name_with_strength": "Enclomiphene Citrate SL Tablet (12.5mg)",
+            "is_new": true,
+            "must_expire_within_a_year_of_being_dispensed": false,
+            "requires_drug_information_pamphlet": true
+          }
+        }
+      }
+    ],
+    "shipment": null,
+    "links": {
+      "api": {
+        "show": {
+          "url": "https://portal.absoluterx.com/api/clinics/orders/123456789?api_key=<api_key>",
+          "method": "GET",
+          "axios_method": "get"
+        }
+      }
+    }
+  }
+}
+Pharmacy Transfer Examples
+Scenario: ABC Pharmacy transferring prescriptions from multiple clinics
+Transfer from Clinic A (ID: 10)
+{
+  "api_key": "pharmacy_api_key_abc123",
+  "clinic_id": 10,
+  "patient_id": 789,
+  "physician_id": 456,
+  "ship_to_clinic": 0,
+  "service_type": "two_day",
+  "signature_required": 1,
+  "products": [
+    {
+      "sku": 1213,
+      "quantity": 30,
+      "refills": 2,
+      "days_supply": 30,
+      "sig": "Take 1 tablet by mouth daily"
+    }
+  ]
+}
+Transfer from Clinic B (ID: 20)
+{
+  "api_key": "pharmacy_api_key_abc123",
+  "clinic_id": 20,
+  "patient_id": 890,
+  "physician_id": 567,
+  "ship_to_clinic": 0,
+  "service_type": "overnight",
+  "signature_required": 1,
+  "products": [
+    {
+      "sku": 2345,
+      "quantity": 60,
+      "refills": 1,
+      "days_supply": 30,
+      "sig": "Take 2 tablets by mouth daily"
+    }
+  ]
+}
+Note:
+	•	The pharmacy uses the same API key for all transfers
+	•	The clinic_id parameter determines which clinic owns the order
+	•	Orders will automatically include the transferred_from field linking to the pharmacy
+
+
+
+GET /api/clinics/orders/{number}
+Returns a single order record.
+Response Sample
+{
+  "data": {
+    "number": 123456789,
+    "external_id": "test",
+    "status": "Pending",
+    "stage": "Filling",
+    "service_type": "two_day",
+    "filled_at": null,
+    "verified_at": null,
+    "shipped_at": null,
+    "created_at": "2022-01-21T13:25:09.000000Z",
+    "updated_at": "2022-01-21T13:25:09.000000Z",
+    "address": {
+      "full": "101 Some Street, Burleson, TX 76028 USA",
+      "street": "101 Some Street",
+      "street_2": null,
+      "city": "Burleson",
+      "state": "TX",
+      "zip": "76028",
+      "country": "USA"
+    },
+    "patient": {
+      "id": 1,
+      "first_name": "John",
+      "middle_name": "Michael",
+      "last_name": "Doe",
+      "formatted_name": "Doe, John Michael",
+      "email": "john@doe.com",
+      "dob": "1979-01-01",
+      "gender": "Male",
+      "phone_number": "7778889999",
+      "drivers_license_number": null,
+      "drivers_license_state": null,
+      "created_at": "2022-01-14T17:49:38.000000Z",
+      "updated_at": "2022-01-14T17:49:38.000000Z",
+      "deleted_at": null,
+      "allergies": [
+        {
+          "name": "Nuts"
+        }
+      ],
+      "diseases": [
+        {
+          "name": "None"
+        }
+      ],
+      "medications": [
+        {
+          "name": "Tylenol",
+          "strength": "500mg"
+        }
+      ],
+      "links": {
+        "api": {
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/patients/1?api_key=<api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    },
+    "physician": {
+      "id": 1,
+      "email": null,
+      "first_name": "JANE",
+      "middle_name": null,
+      "last_name": "DOE",
+      "phone_number": "9998887777",
+      "first_and_last_name": "JANE DOE",
+      "first_letter_of_last_name": "D",
+      "dea_number": null,
+      "npi_number": "9876543211",
+      "links": {
+        "api": {
+          "show": {
+            "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+            "method": "GET",
+            "axios_method": "get"
+          },
+          "update": {
+            "url": "https://portal.absoluterx.com/api/clinics/physicians/1?api_key=<api_key>",
+            "method": "PUT",
+            "axios_method": "put"
+          }
+        }
+      }
+    },
+    "shipment": {
+      "created_at": "2024-03-06T14:35:08.000000Z",
+      "deleted_at": null,
+      "service_type": "fedex_2_day_one_rate",
+      "shipping_labels": [
+        {
+          "created_at": "2024-03-06T14:35:16.000000Z",
+          "deleted_at": null,
+          "label_pdf": "https://production-download.postmen.com/label/2024-03-06/5cbd85c7-5bc6-417b-4499-4e20e790d9e1-1709735714161623.pdf",
+          "service_type": "fedex_2_day_one_rate",
+          "ship_date": "2024-03-06",
+          "status": "created",
+          "tracking_numbers": [
+            {
+              "created_at": "2024-03-06T14:35:16.000000Z",
+              "deleted_at": null,
+              "number": "271812528695",
+              "updated_at": "2024-03-06T14:35:16.000000Z",
+              "url": "https://www.fedex.com/fedextrack/?trknbr=271812528695"
+            }
+          ],
+          "updated_at": "2024-03-06T14:35:16.000000Z"
+        }
+      ],
+      "updated_at": "2024-03-06T14:35:08.000000Z"
+    },
+    "links": {
+      "api": {
+        "show": {
+          "url": "https://portal.absoluterx.com/api/clinics/orders/123456789?api_key=<api_key>",
+          "method": "GET",
+          "axios_method": "get"
+        }
+      }
+    }
+  }
+}
+
+
+DELETE /api/clinics/orders/{number}
+Delete a individual order record.
+Orders can only be deleted (cancelled) as long as they have not been shipped.
+
+
+
+PUT /api/clinics/orders/{number}/patient-address
+Update the patient address for a specific order.
+Input Fields
+api_key
+string
+REQUIRED
+example 9XXXXXX67b04850
+The API key for authentication.
+full
+string
+REQUIRED
+example 117 FOREST HILL DR, Richmond, KY, 40475
+The full address of the patient.
+street
+string
+REQUIRED
+example 117 FOREST HILL DR
+The street part of the address.
+street_2
+string
+REQUIRED
+example Apartment 101
+Additional address details (e.g., apartment number).
+city
+string
+REQUIRED
+example Richmond
+The city of the patient.
+state
+string
+REQUIRED
+example KY
+The state of the patient.
+zip
+string
+REQUIRED
+example 40475
+The zip code of the patient.
+country
+string
+REQUIRED
+example US
+The country of the patient.
+Request Sample
+{
+  "api_key": "9XXXXXX67b04850",
+  "full": "117 FOREST HILL DR, Richmond, KY, 40475",
+  "street": "117 FOREST HILL DR",
+  "street_2": null,
+  "city": "Richmond",
+  "state": "KY",
+  "zip": "40475",
+  "country": "US"
+}
+Response Sample
+{
+  "message": "Shipping address updated successfully",
+  "data": {
+    "order_id": 185081,
+    "full": "117 FOREST HILL DR, Richmond, KY, 40475",
+    "street": "117 FOREST HILL DR",
+    "street_2": null,
+    "city": "Richmond",
+    "state": "KY",
+    "zip": "40475",
+    "country": "US"
+  }
+}
