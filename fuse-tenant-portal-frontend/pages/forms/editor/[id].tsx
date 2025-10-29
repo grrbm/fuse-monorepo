@@ -1437,8 +1437,8 @@ export default function TemplateEditor() {
           {/* Save Message */}
           {saveMessage && (
             <div className={`mb-4 p-4 rounded-lg border ${saveMessage.includes('✅')
-                ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200'
-                : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
+              ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200'
+              : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
               }`}>
               {saveMessage}
             </div>
@@ -1468,10 +1468,10 @@ export default function TemplateEditor() {
                     <Badge
                       variant="secondary"
                       className={`rounded-full px-3 py-1 ${formStatus === 'in_progress'
-                          ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800' :
-                          formStatus === 'ready_for_review'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800' :
-                            'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+                        ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800' :
+                        formStatus === 'ready_for_review'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800' :
+                          'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
                         }`}
                     >
                       {formStatus === 'in_progress' ? 'In Progress' :
@@ -2107,14 +2107,14 @@ export default function TemplateEditor() {
                                               {q.options.map((opt, i) => (
                                                 <div key={i} className="flex items-center gap-3 text-sm text-foreground">
                                                   <div className={`w-4 h-4 rounded-full border-2 ${q.answerType === 'checkbox'
-                                                      ? 'border-teal-500 rounded'
-                                                      : 'border-teal-500'
+                                                    ? 'border-teal-500 rounded'
+                                                    : 'border-teal-500'
                                                     }`}></div>
                                                   <span className="flex-1">{opt.optionText}</span>
                                                   {opt.riskLevel && (
                                                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${opt.riskLevel === 'safe' ? 'bg-green-100 text-green-700 border border-green-300' :
-                                                        opt.riskLevel === 'review' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
-                                                          'bg-red-100 text-red-700 border border-red-300'
+                                                      opt.riskLevel === 'review' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                                                        'bg-red-100 text-red-700 border border-red-300'
                                                       }`}>
                                                       {opt.riskLevel === 'safe' ? '✓ SAFE' : opt.riskLevel === 'review' ? '⚠ REVIEW' : '✕ REJECT'}
                                                     </span>
@@ -2653,8 +2653,8 @@ export default function TemplateEditor() {
                             <div className="flex gap-0.5 bg-muted rounded p-0.5">
                               <button
                                 className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${rule.operator === 'OR'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-transparent text-muted-foreground hover:text-foreground'
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-transparent text-muted-foreground hover:text-foreground'
                                   }`}
                                 onClick={() => {
                                   const newRules = [...editingConditionalStep.rules]
@@ -2666,8 +2666,8 @@ export default function TemplateEditor() {
                               </button>
                               <button
                                 className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${rule.operator === 'AND'
-                                    ? 'bg-purple-600 text-white'
-                                    : 'bg-transparent text-muted-foreground hover:text-foreground'
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-transparent text-muted-foreground hover:text-foreground'
                                   }`}
                                 onClick={() => {
                                   const newRules = [...editingConditionalStep.rules]
