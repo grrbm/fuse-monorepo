@@ -87,6 +87,7 @@ import QuestionOption from "./models/QuestionOption";
 import { assignTemplatesSchema } from "./validators/formTemplates";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
+import QuestionnaireCustomization from "./models/QuestionnaireCustomization";
 import TenantProductService from "./services/tenantProduct.service";
 import QuestionnaireStep from "./models/QuestionnaireStep";
 import DashboardService from "./services/dashboard.service";
@@ -917,7 +918,7 @@ app.get("/clinic/by-slug/:slug", async (req, res) => {
 
     const clinic = await Clinic.findOne({
       where: { slug },
-      attributes: ['id', 'name', 'slug', 'logo'] // Only return public fields
+      attributes: ['id', 'name', 'slug', 'logo', 'defaultFormColor'] // Only return public fields
     });
 
     if (!clinic) {
@@ -926,8 +927,6 @@ app.get("/clinic/by-slug/:slug", async (req, res) => {
         message: "Clinic not found"
       });
     }
-
-    console.log(`✅ Clinic found by slug "${slug}":`, clinic.name);
 
     res.json({
       success: true,
@@ -5240,6 +5239,49 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       currentFormVariant: currentFormVariant ?? null,
     });
 
+    // Handle QuestionnaireCustomization
+    try {
+      // STEP 1: Deactivate ALL active records for this user (except the one we're activating)
+      const deactivatedCount = await QuestionnaireCustomization.update(
+        { isActive: false },
+        { 
+          where: { 
+            userId: currentUser.id,
+            questionnaireId: { [Op.ne]: questionnaireId }, // All except current
+            isActive: true // Only active ones
+          } 
+        }
+      );
+      
+      if (deactivatedCount[0] > 0) {
+        console.log(`🔄 Deactivated ${deactivatedCount[0]} previous QuestionnaireCustomization(s) for user ${currentUser.id}`);
+      }
+
+      // STEP 2: Check if customization already exists for this questionnaire
+      let customization = await QuestionnaireCustomization.findOne({
+        where: { userId: currentUser.id, questionnaireId }
+      });
+
+      if (customization) {
+        // STEP 3A: Already exists, just activate it (keep existing color, even if null)
+        await customization.update({ 
+          isActive: true
+        });
+        console.log(`✅ Reactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: ${customization.customColor || 'none (will use defaults)'}`);
+      } else {
+        // STEP 3B: Doesn't exist, create it with no color (null) - admin can set it later
+        customization = await QuestionnaireCustomization.create({
+          userId: currentUser.id,
+          questionnaireId,
+          customColor: null, // Start with no custom color
+          isActive: true,
+        });
+        console.log(`✅ Created NEW QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: none (will use clinic default)`);
+      }
+    } catch (customizationError) {
+      console.error('⚠️ Error managing QuestionnaireCustomization:', customizationError);
+    }
+
     res.status(201).json({ success: true, data: record });
   } catch (error) {
     console.error('❌ Error enabling tenant product form:', error);
@@ -5303,10 +5345,98 @@ app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
     }
 
     await record.destroy({ force: true } as any);
+
+    // Deactivate the corresponding QuestionnaireCustomization
+    try {
+      const updated = await QuestionnaireCustomization.update(
+        { isActive: false },
+        { 
+          where: { 
+            userId: currentUser.id, 
+            questionnaireId 
+          } 
+        }
+      );
+      if (updated[0] > 0) {
+        console.log(`✅ Deactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}`);
+      }
+    } catch (customizationError) {
+      console.error('⚠️ Error deactivating QuestionnaireCustomization:', customizationError);
+    }
+
     res.status(200).json({ success: true });
   } catch (error) {
     console.error('❌ Error disabling tenant product form:', error);
     res.status(500).json({ success: false, message: 'Failed to disable product form' });
+  }
+});
+
+// Get all QuestionnaireCustomizations for current user
+app.get("/admin/questionnaire-customizations", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const customizations = await QuestionnaireCustomization.findAll({
+      where: { userId: currentUser.id }
+    });
+
+    res.status(200).json({ success: true, data: customizations });
+  } catch (error) {
+    console.error('❌ Error fetching questionnaire customizations:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch customizations' });
+  }
+});
+
+// Update color for a QuestionnaireCustomization
+app.put("/admin/questionnaire-customization/color", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { questionnaireId, customColor } = req.body || {};
+    
+    if (!questionnaireId) {
+      return res.status(400).json({ success: false, message: "questionnaireId is required" });
+    }
+
+    // Validate hex color format
+    if (customColor && !/^#[0-9A-Fa-f]{6}$/.test(customColor)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "customColor must be a valid hex code (e.g. #1A2B3C)" 
+      });
+    }
+
+    // Find the customization
+    const customization = await QuestionnaireCustomization.findOne({
+      where: { userId: currentUser.id, questionnaireId }
+    });
+
+    if (!customization) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "QuestionnaireCustomization not found. Please enable the form first." 
+      });
+    }
+
+    // Update the color (null means "use clinic default")
+    const finalColor = customColor || null;
+    await customization.update({ customColor: finalColor });
+    
+    console.log(`🎨 Updated color for user ${currentUser.id}, questionnaire ${questionnaireId} to: ${finalColor || 'null (will use clinic default)'}`);
+    
+    res.status(200).json({ 
+      success: true, 
+      data: customization 
+    });
+  } catch (error) {
+    console.error('❌ Error updating questionnaire color:', error);
+    res.status(500).json({ success: false, message: 'Failed to update questionnaire color' });
   }
 });
 
@@ -6981,7 +7111,8 @@ app.get("/organization", authenticateJWT, async (req, res) => {
       logo: clinic?.logo || '',
       slug: clinic?.slug || '',
       isCustomDomain: (clinic as any)?.isCustomDomain || false,
-      customDomain: (clinic as any)?.customDomain || ''
+      customDomain: (clinic as any)?.customDomain || '',
+      defaultFormColor: (clinic as any)?.defaultFormColor || ''
     });
   } catch (error) {
     console.error('Error fetching organization:', error);
@@ -7010,6 +7141,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
     const { businessName, phone, address, city, state, zipCode, website } = validation.data as any;
     const isCustomDomain = (validation.data as any).isCustomDomain as boolean | undefined;
     let customDomain = (validation.data as any).customDomain as string | undefined;
+    const defaultFormColor = (validation.data as any).defaultFormColor as string | undefined;
 
     const user = await User.findByPk(currentUser.id);
     if (!user) {
@@ -7026,7 +7158,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       website: website !== undefined ? website : user.website
     });
 
-    // Update clinic fields (Clinic has name, slug, logo, active, status, isCustomDomain, customDomain)
+    // Update clinic fields (Clinic has name, slug, logo, active, status, isCustomDomain, customDomain, defaultFormColor)
     let updatedClinic: any = null;
     if (user.clinicId) {
       const clinic = await Clinic.findByPk(user.clinicId);
@@ -7054,6 +7186,19 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
             updateData.customDomain = customDomain;
           }
         }
+
+        // Update default form color if provided
+        if (defaultFormColor !== undefined) {
+          // Validate color format if not empty
+          if (defaultFormColor && !/^#([0-9a-fA-F]{6})$/.test(defaultFormColor)) {
+            return res.status(400).json({ 
+              success: false, 
+              message: 'Default form color must be a valid hex code (e.g. #1A2B3C)' 
+            });
+          }
+          updateData.defaultFormColor = defaultFormColor || null;
+        }
+
         await clinic.update(updateData);
         updatedClinic = clinic;
       }
@@ -7070,6 +7215,7 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
           logo: updatedClinic.logo,
           active: updatedClinic.isActive,
           status: updatedClinic.status,
+          defaultFormColor: updatedClinic.defaultFormColor,
         } : null
       }
     });
@@ -9014,27 +9160,15 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
     // First try legacy enablement via TenantProduct (selected products)
     // First try legacy enablement via TenantProduct (selected products)
     const tenantProduct = await TenantProduct.findOne({
-      where: { clinicId: clinic.id },
+      where: { clinicId: clinic.id, productId: slug },
       include: [
         {
           model: Product,
           required: true,
-          where: { slug },
         },
         {
           model: Questionnaire,
           required: false,
-          include: [
-            {
-              model: QuestionnaireStep,
-              include: [
-                {
-                  model: Question,
-                  include: [QuestionOption],
-                },
-              ],
-            },
-          ],
         },
       ],
     });
@@ -9207,6 +9341,86 @@ app.get("/public/questionnaires/:id", async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching public questionnaire:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch questionnaire' });
+  }
+});
+
+// Public: get active customization for a questionnaire by clinic
+app.get("/public/questionnaire-customization/:questionnaireId", async (req, res) => {
+  try {
+    const { questionnaireId } = req.params;
+    const clinicId = req.query.clinicId as string;
+
+    console.log(`🎨 [PUBLIC] Fetching customization for questionnaire: ${questionnaireId}, clinic: ${clinicId}`);
+
+    if (!clinicId) {
+      console.log('❌ [PUBLIC] Missing clinicId parameter');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'clinicId query parameter is required' 
+      });
+    }
+
+    // Find an active customization for this questionnaire from any user in this clinic
+    const customization = await QuestionnaireCustomization.findOne({
+      where: { 
+        questionnaireId, 
+        isActive: true,
+        '$user.clinicId$': clinicId // Use nested where with Sequelize syntax
+      },
+      include: [{
+        model: User,
+        as: 'user',
+        required: true,
+        attributes: ['id', 'clinicId'] // Return minimal user data for debugging
+      }]
+    });
+
+    console.log(`📦 [PUBLIC] Found customization:`, customization ? {
+      id: customization.id,
+      questionnaireId: customization.questionnaireId,
+      customColor: customization.customColor,
+      isActive: customization.isActive,
+      userId: customization.userId
+    } : null);
+
+    if (!customization) {
+      console.log('⚠️ [PUBLIC] No customization found, returning null');
+      
+      // Debug: Let's see what's in the table
+      const allCustomizations = await QuestionnaireCustomization.findAll({
+        where: { questionnaireId },
+        include: [{ model: User, as: 'user', attributes: ['id', 'clinicId'] }]
+      });
+      console.log(`🔍 [PUBLIC] All customizations for this questionnaire:`, allCustomizations.map(c => ({
+        id: c.id,
+        questionnaireId: c.questionnaireId,
+        customColor: c.customColor,
+        isActive: c.isActive,
+        userId: c.userId,
+        userClinicId: (c as any).user?.clinicId
+      })));
+
+      return res.status(200).json({ 
+        success: true, 
+        data: null // No customization found
+      });
+    }
+
+    const result = {
+      customColor: customization.customColor,
+      isActive: customization.isActive
+    };
+
+    console.log(`✅ [PUBLIC] Returning customization:`, result);
+
+    res.status(200).json({ 
+      success: true, 
+      data: result
+    });
+  } catch (error) {
+    console.error('❌ [PUBLIC] Error fetching questionnaire customization:', error);
+    console.error('❌ [PUBLIC] Error details:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch customization' });
   }
 });
 

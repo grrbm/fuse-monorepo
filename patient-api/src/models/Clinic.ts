@@ -117,6 +117,12 @@ export default class Clinic extends Entity {
     })
     declare stripeOnboardedAt?: Date;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare defaultFormColor?: string;
+
     @HasOne(() => Subscription)
     declare subscription?: Subscription;
 

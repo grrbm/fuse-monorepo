@@ -19,7 +19,6 @@ import {
   CreditCard,
   Check,
   Camera,
-  Upload,
   Crown,
   RefreshCw,
   Calendar,
@@ -30,6 +29,7 @@ import {
   AlertCircle,
   Copy,
   X,
+  Palette,
 } from "lucide-react";
 import Tutorial from "@/components/ui/tutorial";
 
@@ -146,11 +146,15 @@ export default function Settings({
     slug: "",
     isCustomDomain: false,
     customDomain: "",
+    defaultFormColor: "",
   });
   const [organizationErrors, setOrganizationErrors] = useState<Record<string, string>>({});
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isHoveringLogo, setIsHoveringLogo] = useState(false);
+  const [showLogoModal, setShowLogoModal] = useState(false);
+  const [tempLogoPreview, setTempLogoPreview] = useState<string | null>(null);
+  const [tempLogoFile, setTempLogoFile] = useState<File | null>(null);
   const [showCNAMEInstructions, setShowCNAMEInstructions] = useState(false);
   const [verifyingDomain, setVerifyingDomain] = useState(false);
   const [domainVerificationStatus, setDomainVerificationStatus] = useState<{
@@ -301,6 +305,7 @@ export default function Settings({
           slug: data.slug || "",
           isCustomDomain: data.isCustomDomain || false,
           customDomain: data.customDomain || "",
+          defaultFormColor: data.defaultFormColor || "",
         });
         if (data.logo) {
           setLogoPreview(data.logo);
@@ -456,22 +461,79 @@ export default function Settings({
     }
   };
 
-  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setLogoFile(file);
+      // Validar que sea un archivo PNG
+      if (file.type !== "image/png") {
+        showToast(
+          "error",
+          "Only PNG files are allowed. Please select a .png file"
+        );
+        e.target.value = "";
+        return;
+      }
 
-      if (file.type === "application/pdf") {
-        setLogoPreview(file.name);
-        await uploadLogo(file);
-      } else {
+      // Validar que la imagen sea cuadrada (1:1)
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      img.onload = () => {
+        // Limpiar el object URL
+        URL.revokeObjectURL(objectUrl);
+
+        const width = img.width;
+        const height = img.height;
+
+        // Verificar que la imagen sea cuadrada (1:1)
+        if (width !== height) {
+          showToast(
+            "error",
+            `Image must be square (1:1). Current dimensions: ${width}x${height}px`
+          );
+          // Limpiar el input para que pueda seleccionar otra imagen
+          e.target.value = "";
+          return;
+        }
+
+        // Si es PNG y cuadrada, mostrar preview temporal
+        setTempLogoFile(file);
         const reader = new FileReader();
-        reader.onloadend = async () => {
-          setLogoPreview(reader.result as string);
-          await uploadLogo(file);
+        reader.onloadend = () => {
+          setTempLogoPreview(reader.result as string);
         };
         reader.readAsDataURL(file);
-      }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        showToast("error", "Error loading image. Please try another PNG file.");
+        e.target.value = "";
+      };
+
+      img.src = objectUrl;
+    }
+  };
+
+  const handleConfirmLogoUpload = async () => {
+    if (tempLogoFile) {
+      setLogoFile(tempLogoFile);
+      setLogoPreview(tempLogoPreview);
+      await uploadLogo(tempLogoFile);
+      setShowLogoModal(false);
+      setTempLogoFile(null);
+      setTempLogoPreview(null);
+    }
+  };
+
+  const handleCancelLogoUpload = () => {
+    setShowLogoModal(false);
+    setTempLogoFile(null);
+    setTempLogoPreview(null);
+    // Reset file input
+    const fileInput = document.getElementById('logo-upload-modal') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = "";
     }
   };
 
@@ -724,49 +786,31 @@ export default function Settings({
                   className="relative group cursor-pointer"
                   onMouseEnter={() => setIsHoveringLogo(true)}
                   onMouseLeave={() => setIsHoveringLogo(false)}
+                  onClick={() => setShowLogoModal(true)}
                 >
-                  <input
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={handleLogoChange}
-                    className="hidden"
-                    id="logo-upload"
-                  />
-                  <label htmlFor="logo-upload" className="cursor-pointer">
-                    <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-border bg-muted transition-all group-hover:border-primary">
-                      {logoPreview || organizationData.logo ? (
-                        logoPreview?.endsWith(".pdf") ||
-                          organizationData.logo?.endsWith(".pdf") ? (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                            <div className="text-center">
-                              <Upload className="h-8 w-8 text-gray-400 mx-auto mb-1" />
-                              <p className="text-xs text-gray-500">PDF</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <img
-                            src={logoPreview || organizationData.logo}
-                            alt="Company logo"
-                            className="w-full h-full object-cover"
-                          />
-                        )
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Building2 className="h-10 w-10 text-muted-foreground" />
-                        </div>
-                      )}
+                  <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-border bg-muted transition-all group-hover:border-primary">
+                    {logoPreview || organizationData.logo ? (
+                      <img
+                        src={logoPreview || organizationData.logo}
+                        alt="Company logo"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Building2 className="h-10 w-10 text-muted-foreground" />
+                      </div>
+                    )}
 
-                      {/* Hover Overlay */}
-                      <div
-                        className={`absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center transition-opacity ${isHoveringLogo ? "opacity-100" : "opacity-0"}`}
-                      >
-                        <div className="text-center text-white">
-                          <Camera className="h-6 w-6 mx-auto mb-1" />
-                          <p className="text-xs font-medium">Edit Logo</p>
-                        </div>
+                    {/* Hover Overlay */}
+                    <div
+                      className={`absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center transition-opacity ${isHoveringLogo ? "opacity-100" : "opacity-0"}`}
+                    >
+                      <div className="text-center text-white">
+                        <Camera className="h-6 w-6 mx-auto mb-1" />
+                        <p className="text-xs font-medium">Edit Logo</p>
                       </div>
                     </div>
-                  </label>
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground text-center mt-2">
                   Company Logo
@@ -1253,6 +1297,86 @@ export default function Settings({
                           </div>
                         </div>
                       )}
+
+                      {/* Form Color Section */}
+                      <div className="pt-8 border-t">
+                        <h3 className="text-lg font-medium mb-2">Default Form Color</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Choose a default color for all your forms. This color will be used as the primary theme color for buttons and accents.
+                        </p>
+                        <div className="space-y-4">
+                          {/* Predefined Color Palette */}
+                          <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+                            {[
+                              { name: "Ocean Blue", color: "#0EA5E9" },
+                              { name: "Purple", color: "#8B5CF6" },
+                              { name: "Emerald", color: "#10B981" },
+                              { name: "Rose", color: "#F43F5E" },
+                              { name: "Amber", color: "#F59E0B" },
+                              { name: "Indigo", color: "#6366F1" },
+                              { name: "Teal", color: "#14B8A6" },
+                              { name: "Pink", color: "#EC4899" },
+                            ].map((preset) => (
+                              <button
+                                key={preset.color}
+                                type="button"
+                                onClick={() => {
+                                  setOrganizationData((prev) => ({ ...prev, defaultFormColor: preset.color }));
+                                }}
+                                className={`relative group h-16 rounded-lg transition-all ${
+                                  organizationData.defaultFormColor === preset.color
+                                    ? "ring-2 ring-offset-2 ring-primary scale-105"
+                                    : "hover:scale-105 hover:shadow-lg"
+                                }`}
+                                style={{ backgroundColor: preset.color }}
+                                title={preset.name}
+                              >
+                                {organizationData.defaultFormColor === preset.color && (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <Check className="h-6 w-6 text-white drop-shadow-lg" />
+                                  </div>
+                                )}
+                                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                  {preset.name}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Selected Color Display */}
+                          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+                            <div className="flex items-center gap-3">
+                              <Palette className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <div className="text-sm font-medium">Selected Color</div>
+                                <div className="text-xs text-muted-foreground font-mono">
+                                  {organizationData.defaultFormColor || "No color selected"}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {organizationData.defaultFormColor && (
+                                <div
+                                  className="w-12 h-12 rounded-lg border-2 border-white shadow-sm"
+                                  style={{ backgroundColor: organizationData.defaultFormColor }}
+                                />
+                              )}
+                              {organizationData.defaultFormColor && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setOrganizationData((prev) => ({ ...prev, defaultFormColor: "" }));
+                                  }}
+                                >
+                                  Reset
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
                       <div className="flex justify-end pt-4">
                         <Button type="submit" disabled={loading}>
@@ -1761,6 +1885,134 @@ export default function Settings({
           </div>
         </main>
       </div>
+
+      {/* Logo Upload Modal */}
+      {showLogoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+            {/* Close button */}
+            <button
+              onClick={handleCancelLogoUpload}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Header */}
+            <div className="mb-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Camera className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">
+                  Change Logo
+                </h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Upload your company logo to customize your portal
+              </p>
+            </div>
+
+            {/* Requirements Card */}
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Image Requirements
+              </h4>
+              <ul className="space-y-2 text-sm text-blue-800">
+                <li className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <span><strong>Format:</strong> PNG files only (.png)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <span><strong>Dimensions:</strong> Square image (1:1 ratio)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <span><strong>Examples:</strong> 512×512px, 1024×1024px</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* File Input */}
+            <div className="mb-6">
+              <input
+                type="file"
+                accept="image/png"
+                onChange={handleLogoFileSelect}
+                className="hidden"
+                id="logo-upload-modal"
+              />
+              <label
+                htmlFor="logo-upload-modal"
+                className="block w-full cursor-pointer"
+              >
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary hover:bg-primary/5 transition-all">
+                  {tempLogoPreview ? (
+                    <div className="space-y-4">
+                      <div className="flex justify-center">
+                        <img
+                          src={tempLogoPreview}
+                          alt="Preview"
+                          className="w-32 h-32 object-cover rounded-lg border-2 border-green-500"
+                        />
+                      </div>
+                      <div className="text-sm text-green-600 font-medium flex items-center justify-center gap-2">
+                        <Check className="h-4 w-4" />
+                        Valid image - Ready to upload
+                      </div>
+                      <button
+                        type="button"
+                        className="text-sm text-primary hover:underline"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById('logo-upload-modal')?.click();
+                        }}
+                      >
+                        Change image
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex justify-center">
+                        <div className="p-3 bg-primary/10 rounded-full">
+                          <Building2 className="h-8 w-8 text-primary" />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground mb-1">
+                          Click to select file
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </label>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={handleCancelLogoUpload}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={handleConfirmLogoUpload}
+                disabled={!tempLogoFile || loading}
+              >
+                {loading ? "Uploading..." : "Confirm and Upload"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

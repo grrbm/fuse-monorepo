@@ -9,6 +9,7 @@ import PrescriptionProducts from '../models/PrescriptionProducts';
 import TreatmentProducts from '../models/TreatmentProducts';
 import Clinic from '../models/Clinic';
 import Questionnaire from '../models/Questionnaire';
+import QuestionnaireCustomization from '../models/QuestionnaireCustomization';
 import QuestionnaireStep from '../models/QuestionnaireStep';
 import Question from '../models/Question';
 import QuestionOption from '../models/QuestionOption';
@@ -77,7 +78,7 @@ export const sequelize = new Sequelize(databaseUrl, {
   ...sequelizeConfig,
   models: [User, Entity, Product,
     Prescription, Treatment, PrescriptionProducts,
-    TreatmentProducts, Clinic, Questionnaire,
+    TreatmentProducts, Clinic, Questionnaire, QuestionnaireCustomization,
     QuestionnaireStep, Question, QuestionOption,
     Order, OrderItem, Payment,
     ShippingAddress, ShippingOrder, Subscription,
