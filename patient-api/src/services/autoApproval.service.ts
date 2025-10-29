@@ -21,7 +21,7 @@ class AutoApprovalService {
     // Configuration
     private readonly MIN_INTERVAL = parseInt(process.env.AUTO_APPROVAL_INTERVAL_MIN || '120000'); // 2 minutes
     private readonly MAX_INTERVAL = parseInt(process.env.AUTO_APPROVAL_INTERVAL_MAX || '300000'); // 5 minutes
-    private readonly ENABLED = process.env.AUTO_APPROVAL_ENABLED !== 'false'; // Enabled by default
+    private readonly ENABLED = false //process.env.AUTO_APPROVAL_ENABLED !== 'false'; // Enabled by default
     private readonly MIN_PATIENT_AGE = 18;
     private readonly MAX_PATIENT_AGE = 65;
 

@@ -256,25 +256,26 @@ class OrderService {
 
     // Create pharmacy order
     console.log(`📦 Creating AbsoluteRX order with ${products.length} product(s)...`);
-    const pharmacyResult = await this.postOrder({
+    const orderPayload: CreateOrderRequest = {
       patient_id: parseInt(pharmacyPatientId),
       physician_id: parseInt(pharmacyPhysicianId),
-      ship_to_clinic: 0, // Ship to patient
+      ship_to_clinic: 0 as 0 | 1, // Ship to patient
       service_type: "two_day",
       signature_required: 1,
       memo: order.notes || "Order approved",
       external_id: order.id,
-      test_order: process.env.NODE_ENV === 'production' ? 0 : 1,
+      test_order: (process.env.NODE_ENV === 'production' ? 0 : 1) as 0 | 1,
       products: products
-    });
+    };
+
+    console.log(`🔍 AbsoluteRX order payload:`, JSON.stringify(orderPayload, null, 2));
+
+    const pharmacyResult = await this.postOrder(orderPayload);
 
     if (!pharmacyResult.success) {
       console.error(`❌ Failed to create AbsoluteRX order: ${pharmacyResult.error}`);
-      return {
-        success: false,
-        message: "Failed to create pharmacy order",
-        error: pharmacyResult.error || "Unknown pharmacy error"
-      };
+      console.error(`❌ Validation errors:`, JSON.stringify(pharmacyResult.validationErrors, null, 2));
+      throw new Error(`Failed to create pharmacy order: ${pharmacyResult.error || 'Unknown error'}`);
     }
 
     const pharmacyOrderId = pharmacyResult.data?.data?.number?.toString();

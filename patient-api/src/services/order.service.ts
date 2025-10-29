@@ -274,8 +274,14 @@ class OrderService {
             if (order.status === OrderStatus.PAID) {
                 // Order is already paid, send to pharmacy
                 console.log(`📦 Order already paid, sending to pharmacy: ${order.orderNumber}`);
-                const pharmacyService = new PharmacyService()
-                await pharmacyService.createPharmacyOrder(order)
+                try {
+                    const pharmacyService = new PharmacyService()
+                    await pharmacyService.createPharmacyOrder(order)
+                    console.log(`✅ Pharmacy order creation completed for order ${orderId}`);
+                } catch (pharmacyError) {
+                    console.error(`❌ Failed to create pharmacy order for ${orderId}:`, pharmacyError);
+                    // Don't fail the approval - order is already paid
+                }
             } else if (order.status === OrderStatus.PENDING && order.payment?.stripePaymentIntentId) {
                 // Get payment intent ID from Payment model (single source of truth)
                 const paymentIntentId = order.payment.stripePaymentIntentId;
@@ -342,8 +348,15 @@ class OrderService {
                     await order.reload();
 
                     // Send to pharmacy after payment is captured
-                    const pharmacyService = new PharmacyService()
-                    await pharmacyService.createPharmacyOrder(order)
+                    try {
+                        const pharmacyService = new PharmacyService()
+                        await pharmacyService.createPharmacyOrder(order)
+                        console.log(`✅ Pharmacy order creation completed for order ${orderId}`);
+                    } catch (pharmacyError) {
+                        console.error(`❌ Failed to create pharmacy order for ${orderId}:`, pharmacyError);
+                        // Don't fail the approval - order is paid and approved
+                        // Pharmacy order can be retried manually if needed
+                    }
                 } catch (error: any) {
                     console.error(`❌ Failed to capture payment for order ${orderId}:`, error);
 
@@ -397,8 +410,14 @@ class OrderService {
                             await order.reload();
 
                             // Send to pharmacy
-                            const pharmacyService = new PharmacyService();
-                            await pharmacyService.createPharmacyOrder(order);
+                            try {
+                                const pharmacyService = new PharmacyService();
+                                await pharmacyService.createPharmacyOrder(order);
+                                console.log(`✅ Pharmacy order creation completed for order ${orderId}`);
+                            } catch (pharmacyError) {
+                                console.error(`❌ Failed to create pharmacy order for ${orderId}:`, pharmacyError);
+                                // Don't fail the approval - order is paid
+                            }
 
                         } catch (retryError) {
                             console.error(`❌ Failed to handle already-captured payment:`, retryError);
