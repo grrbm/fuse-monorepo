@@ -28,25 +28,42 @@ class UserService {
     async getOrCreateCustomerId(user: User, metadata?: Record<string, string>): Promise<string> {
         let stripeCustomerId = user.stripeCustomerId;
 
-        if (!stripeCustomerId) {
-           
-
-            const stripeCustomer = await this.stripeService.createCustomer(user.email
-                , `${user.firstName} ${user.lastName}`,
-                metadata || {}
-            );
-
-            await user.update({
-                stripeCustomerId: stripeCustomer.id
-            });
-
-            stripeCustomerId = stripeCustomer.id;
+        // If customer ID exists, verify it's valid in current Stripe environment
+        if (stripeCustomerId) {
+            try {
+                // Try to retrieve the customer to verify it exists
+                await this.stripeService.getCustomer(stripeCustomerId);
+                console.log('✅ Verified existing Stripe customer:', stripeCustomerId);
+                return stripeCustomerId;
+            } catch (error: any) {
+                // Customer doesn't exist (likely switched between test/prod modes)
+                if (error?.code === 'resource_missing' || error?.type === 'StripeInvalidRequestError') {
+                    console.warn(`⚠️ Stored customer ID ${stripeCustomerId} is invalid (likely from different Stripe mode). Creating new customer...`);
+                    // Clear the invalid customer ID so we create a new one
+                    stripeCustomerId = undefined;
+                } else {
+                    // Some other error occurred, re-throw it
+                    throw error;
+                }
+            }
         }
 
-        return stripeCustomerId;
+        // Create new customer if no valid customer ID exists
+        const stripeCustomer = await this.stripeService.createCustomer(
+            user.email,
+            `${user.firstName} ${user.lastName}`,
+            metadata || {}
+        );
+
+        await user.update({
+            stripeCustomerId: stripeCustomer.id
+        });
+
+        console.log('✅ Created new Stripe customer:', stripeCustomer.id);
+        return stripeCustomer.id;
     }
 
-  
+
 
 
 
@@ -138,7 +155,7 @@ class UserService {
         };
     }
 
-    
+
 
     async syncPatientInMD(userId: string, addressId?: string) {
         try {
@@ -275,4 +292,4 @@ class UserService {
 }
 
 export default UserService;
-export type {  UserToPhysicianValidationResult };
+export type { UserToPhysicianValidationResult };
