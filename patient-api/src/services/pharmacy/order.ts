@@ -50,10 +50,7 @@ class OrderService {
     try {
       const response: AxiosResponse = await axios.post(
         `${this.config.baseUrl}/api/clinics/orders`,
-        {
-          ...orderData,
-          clinicId: this.config.clinicId
-        },
+        orderData, // Don't include clinic_id - it's only for pharmacy transfers
         {
           params: {
             api_key: this.config.apiKey

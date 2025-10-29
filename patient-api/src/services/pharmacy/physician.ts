@@ -2,9 +2,6 @@ import axios, { AxiosResponse } from 'axios';
 import { config, PharmacyApiConfig, PharmacyApiResponse } from './config';
 import Physician, { PhysicianLicense } from '../../models/Physician';
 import Order from '../../models/Order';
-import MDAuthService from '../mdIntegration/MDAuth.service';
-import MDCaseService from '../mdIntegration/MDCase.service';
-import MDClinicianService from '../mdIntegration/MDClinician.service';
 
 interface CreatePhysicianRequest {
   first_name: string;
@@ -39,6 +36,53 @@ class PharmacyPhysicianService {
 
   constructor() {
     this.config = config;
+  }
+
+  async getPhysicians(filters?: { npi_number?: string }): Promise<PharmacyApiResponse> {
+    try {
+      const params = {
+        api_key: this.config.apiKey,
+        ...filters
+      };
+
+      console.log('🔍 GET request params:', params);
+
+      const response: AxiosResponse = await axios.get(
+        `${this.config.baseUrl}/api/clinics/physicians`,
+        {
+          params,
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      console.log('✅ GET physicians response:', {
+        status: response.status,
+        dataCount: response.data?.data?.length || 0,
+        data: JSON.stringify(response.data, null, 2)
+      });
+
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      console.error('❌ Error fetching physicians:', error);
+
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.message || error.message,
+          message: `HTTP ${error.response?.status}: ${error.response?.statusText}`
+        };
+      }
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
   }
 
   async postPhysician(physicianData: CreatePhysicianRequest): Promise<PharmacyApiResponse> {
@@ -117,50 +161,49 @@ class PharmacyPhysicianService {
     }
   }
   async createPhysician(order: Order) {
+    // Use test physician from environment variables (no longer using MD Integrations)
+    const testPhysician = this.config.testPhysician;
+    const npiNumber = testPhysician.npi;
 
-    // Get MD Integration access token and fetch case details
-    const tokenResponse = await MDAuthService.generateToken();
+    console.log(`👨‍⚕️ Using test physician NPI: ${npiNumber}`);
 
-    if (!order.mdCaseId) {
-      throw Error("Case Id not assigned")
+    if (!npiNumber || npiNumber === '0000000000') {
+      throw new Error("TEST_PHYSICIAN_NPI environment variable not set or invalid");
     }
-    const caseDetails = await MDCaseService.getCase(order.mdCaseId, tokenResponse.access_token);
 
-    // Extract clinician information from case
-    const clinician = caseDetails.case_assignment.clinician;
+    // Check if physician already exists in AbsoluteRX by NPI number
+    // Note: The GET endpoint doesn't support filtering, so we fetch all and search client-side
+    const pharmacyPhysicianService = new PharmacyPhysicianService();
+    console.log(`🔍 Checking if physician with NPI ${npiNumber} exists in AbsoluteRX...`);
 
-    // Fetch detailed clinician information using the clinician service
-    const clinicianDetails = await MDClinicianService.getClinician(
-      clinician.clinician_id,
-      tokenResponse.access_token
-    );
+    const existingPhysiciansResponse = await pharmacyPhysicianService.getPhysicians();
 
-    // Check if physician already exists by mdPhysicianId
-    let physician = await Physician.findOne({
-      where: { mdPhysicianId: clinicianDetails.clinician_id }
-    });
+    let pharmacyPhysicianId: string;
+    let existingPhysician: any = null;
 
-    // Create physician if not exists
-    if (!physician) {
+    // Search for matching NPI in the returned physicians
+    if (existingPhysiciansResponse.success &&
+      existingPhysiciansResponse.data?.data?.length > 0) {
+      existingPhysician = existingPhysiciansResponse.data.data.find(
+        (physician: any) => physician.npi_number?.toString() === npiNumber.toString()
+      );
+    }
 
-      const npiLicenses = clinicianDetails.licenses
-        .filter(license => license.type === 'npi');
-
-      const npiNumber = npiLicenses[0]?.value
-
-      if (!npiNumber) {
-        throw Error("No Npi number found ini Clinician")
-      }
-
-      // Create physician in pharmacy system
-      const pharmacyPhysicianService = new PharmacyPhysicianService();
+    if (existingPhysician) {
+      // Physician already exists in AbsoluteRX
+      // Convert to string since our DB stores it as VARCHAR
+      pharmacyPhysicianId = existingPhysician.id.toString();
+      console.log(`✅ Found existing physician in AbsoluteRX with ID: ${pharmacyPhysicianId} (NPI: ${existingPhysician.npi_number})`);
+    } else {
+      // Create new physician in pharmacy system
+      console.log(`📝 Creating new physician in AbsoluteRX...`);
       const pharmacyResponse = await pharmacyPhysicianService.postPhysician({
-        first_name: clinicianDetails.first_name,
-        middle_name: '', // Not provided by MD Integration
-        last_name: clinicianDetails.last_name,
-        phone_number: clinicianDetails.phone_number.replace(/[^0-9]/g, ''),
-        email: clinicianDetails.email,
-        // Approved address for  all MDI clinicians
+        first_name: testPhysician.firstName,
+        middle_name: '',
+        last_name: testPhysician.lastName,
+        phone_number: testPhysician.phoneNumber.replace(/[^0-9]/g, ''),
+        email: testPhysician.email,
+        // Approved address for test physician
         street: '100 Powell Place #1859',
         city: 'Nashville',
         state: 'TN',
@@ -174,25 +217,39 @@ class PharmacyPhysicianService {
         throw new Error(`Failed to create physician in pharmacy: ${pharmacyResponse.error}`);
       }
 
+      // Convert to string since our DB stores it as VARCHAR
+      pharmacyPhysicianId = pharmacyResponse.data.data.id.toString();
+      console.log(`✅ Created new physician in AbsoluteRX with ID: ${pharmacyPhysicianId}`);
+    }
+
+    // Check if physician already exists in our database by pharmacyPhysicianId
+    let physician = await Physician.findOne({
+      where: { pharmacyPhysicianId: pharmacyPhysicianId }
+    });
+
+    if (!physician) {
+      // Create physician record in our database
       physician = await Physician.create({
-        firstName: clinicianDetails.first_name,
-        lastName: clinicianDetails.last_name,
-        middleName: '', // Not provided by MD Integration
-        email: clinicianDetails.email,
-        phoneNumber: clinicianDetails.phone_number.replace(/[^0-9]/g, ''), // Remove formatting
+        firstName: testPhysician.firstName,
+        lastName: testPhysician.lastName,
+        middleName: '',
+        email: testPhysician.email,
+        phoneNumber: testPhysician.phoneNumber.replace(/[^0-9]/g, ''),
         street: '100 Powell Place #1859',
         city: 'Nashville',
         state: 'TN',
         zip: '37204',
-        mdPhysicianId: clinicianDetails.clinician_id,
-        pharmacyPhysicianId: pharmacyResponse.data.data.id
+        licenses: [],
+        pharmacyPhysicianId: pharmacyPhysicianId
       });
 
-      console.log('✅ Created new physician:', physician.id, physician.fullName);
+      console.log('✅ Created physician record in database:', physician.id, physician.fullName);
     } else {
-      // Link physician to order
-      await order.update({ physicianId: physician.id });
+      console.log(`✅ Using existing physician from database: ${physician.id}, ${physician.fullName}`);
     }
+
+    // Link physician to order
+    await order.update({ physicianId: physician.id });
   }
 }
 
