@@ -222,7 +222,7 @@ export const OrderTrackingCard: React.FC<OrderTrackingCardProps> = ({ order }) =
               <Divider />
               <div>
                 <h4 className="text-sm font-semibold mb-2">Tracking Details</h4>
-                
+
                 {shippingOrder.pharmacyOrderId && (
                   <div className="flex items-center gap-2 text-sm mb-2">
                     <Icon icon="lucide:package" className="text-default-400" />
@@ -290,7 +290,11 @@ export const OrderTrackingCard: React.FC<OrderTrackingCardProps> = ({ order }) =
           <Divider />
           <div className="flex justify-between items-center">
             <span className="text-sm font-semibold">Total Amount</span>
-            <span className="text-lg font-bold">${order.totalAmount.toFixed(2)}</span>
+            <span className="text-lg font-bold">
+              ${typeof order.totalAmount === 'number'
+                ? order.totalAmount.toFixed(2)
+                : parseFloat(order.totalAmount || '0').toFixed(2)}
+            </span>
           </div>
         </CardBody>
       </Card>

@@ -1,12 +1,12 @@
 import React, { useEffect } from "react";
 import { motion } from "framer-motion";
-import { 
-  Card, 
-  CardBody, 
-  Button, 
-  Chip, 
-  Input, 
-  Tabs, 
+import {
+  Card,
+  CardBody,
+  Button,
+  Chip,
+  Input,
+  Tabs,
   Tab,
   Divider,
   Avatar,
@@ -55,7 +55,7 @@ export const TreatmentsPage: React.FC = () => {
   const [savingTreatment, setSavingTreatment] = React.useState(false);
   const [selectedTreatmentForQuestionnaire, setSelectedTreatmentForQuestionnaire] = React.useState<Treatment | null>(null);
   const { user } = useAuth();
-  
+
   // Modal controls
   const { isOpen: isAddModalOpen, onOpen: onAddModalOpen, onOpenChange: onAddModalOpenChange } = useDisclosure();
   const { isOpen: isEditModalOpen, onOpen: onEditModalOpen, onOpenChange: onEditModalOpenChange } = useDisclosure();
@@ -64,7 +64,7 @@ export const TreatmentsPage: React.FC = () => {
   useEffect(() => {
     setIsLoading(false);
   }, [treatments]);
-  
+
   // Function to get clinic slug from subdomain
 
   // Load treatments for clinic
@@ -96,9 +96,9 @@ export const TreatmentsPage: React.FC = () => {
 
   const fetchTreatments = async () => {
     if (!user) return;
-    
+
     const response = await apiCall('/getTreatments');
-    
+
     if (response.success && response.data?.data) {
       setTreatments(response.data.data);
     }
@@ -106,16 +106,25 @@ export const TreatmentsPage: React.FC = () => {
 
   const fetchOrders = async () => {
     if (!user) return;
-    
+
     setIsLoadingOrders(true);
     try {
       const response = await apiCall('/orders');
-      
+
+      console.log('📦 Orders API Response:', response);
+
       if (response.success && response.data) {
-        setOrders(response.data);
+        // The API returns { success: true, data: { success: true, data: [...orders] } }
+        // So we need to access response.data.data
+        const ordersData = response.data.data || response.data;
+        console.log('📦 Orders array:', ordersData);
+        console.log('📦 Number of orders:', ordersData.length);
+        setOrders(ordersData);
+      } else {
+        console.warn('⚠️ Failed to fetch orders:', response);
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('❌ Error fetching orders:', error);
     } finally {
       setIsLoadingOrders(false);
     }
@@ -230,7 +239,7 @@ export const TreatmentsPage: React.FC = () => {
         onAddModalOpenChange();
         setTreatmentName("");
         setSelectedFile(null);
-        
+
         alert('Treatment created successfully!');
       } else {
         throw new Error(result.error || 'Failed to create treatment');
@@ -260,7 +269,7 @@ export const TreatmentsPage: React.FC = () => {
 
       if (result.success) {
         let logoUrl = editingTreatment.treatmentLogo;
-        
+
         // Upload logo if one was selected
         if (selectedFile) {
           const newLogoUrl = await uploadTreatmentLogo(editingTreatment.id);
@@ -272,9 +281,9 @@ export const TreatmentsPage: React.FC = () => {
         }
 
         // Update the treatment in local state immediately
-        setTreatments(prevTreatments => 
-          prevTreatments.map(treatment => 
-            treatment.id === editingTreatment.id 
+        setTreatments(prevTreatments =>
+          prevTreatments.map(treatment =>
+            treatment.id === editingTreatment.id
               ? { ...treatment, name: treatmentName.trim(), treatmentLogo: logoUrl }
               : treatment
           )
@@ -285,7 +294,7 @@ export const TreatmentsPage: React.FC = () => {
         setEditingTreatment(null);
         setTreatmentName("");
         setSelectedFile(null);
-        
+
         alert('Treatment updated successfully!');
       } else {
         throw new Error(result.error || 'Failed to update treatment');
@@ -304,7 +313,7 @@ export const TreatmentsPage: React.FC = () => {
 
   //   try {
   //     let result: ApiResponse<any> | undefined;
-      
+
   //     // If user is a doctor with a clinicId, fetch by clinic ID
   //     if (user.role === 'doctor' && user.clinicId) {
   //       result = await apiCall(`/treatments/by-clinic-id/${user.clinicId}`);
@@ -408,7 +417,7 @@ export const TreatmentsPage: React.FC = () => {
         className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0"
       >
         <h1 className="text-2xl font-semibold">Treatments & Orders</h1>
-        <Button 
+        <Button
           color="primary"
           startContent={<Icon icon="lucide:plus" />}
           size="sm"
@@ -481,8 +490,8 @@ export const TreatmentsPage: React.FC = () => {
                 />
               </div>
               {user?.role !== 'doctor' && (
-                <Tabs 
-                  selectedKey={selectedTab} 
+                <Tabs
+                  selectedKey={selectedTab}
                   onSelectionChange={(key) => setSelectedTab(key as string)}
                   variant="light"
                   color="primary"
@@ -524,21 +533,21 @@ export const TreatmentsPage: React.FC = () => {
                         <div className="flex flex-col gap-4">
                           <div className="flex gap-3">
                             <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0">
-                              <img 
-                                src={treatment.treatmentLogo || treatment.image || "https://img.heroui.chat/image/medicine?w=100&h=100&u=default"} 
-                                alt={treatment.name} 
+                              <img
+                                src={treatment.treatmentLogo || treatment.image || "https://img.heroui.chat/image/medicine?w=100&h=100&u=default"}
+                                alt={treatment.name}
                                 className="h-full w-full object-cover"
                               />
                             </div>
-                            
+
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap gap-2 items-start justify-between">
                                 <div>
                                   <h3 className="font-medium text-lg">{treatment.name}</h3>
                                   <p className="text-foreground-600 text-sm">{treatment.subtitle || "Treatment"}</p>
                                 </div>
-                                <Chip 
-                                  color={getStatusColor(getTreatmentDisplayStatus(treatment)) as any} 
+                                <Chip
+                                  color={getStatusColor(getTreatmentDisplayStatus(treatment)) as any}
                                   variant="flat"
                                   size="sm"
                                 >
@@ -547,9 +556,9 @@ export const TreatmentsPage: React.FC = () => {
                               </div>
                             </div>
                           </div>
-                          
+
                           <Divider className="my-1" />
-                          
+
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <h4 className="text-sm font-medium mb-2">Treatment Details</h4>
@@ -574,7 +583,7 @@ export const TreatmentsPage: React.FC = () => {
                                 )}
                               </div>
                             </div>
-                            
+
                             <div>
                               <h4 className="text-sm font-medium mb-2">Prescribing Doctor</h4>
                               <div className="flex items-center gap-3">
@@ -584,17 +593,17 @@ export const TreatmentsPage: React.FC = () => {
                                   <p className="text-sm text-foreground-500">{treatment.doctor?.specialty || "General Medicine"}</p>
                                 </div>
                               </div>
-                              
+
                               <h4 className="text-sm font-medium mt-3 mb-1">Instructions</h4>
                               <p className="text-sm text-foreground-600">{treatment.instructions || "No instructions available"}</p>
                             </div>
-                            
+
                             <div className="flex flex-wrap gap-2 mt-2">
                               {user?.role === 'doctor' ? (
                                 // Doctor actions
                                 <>
-                                  <Button 
-                                    size="sm" 
+                                  <Button
+                                    size="sm"
                                     color="primary"
                                     variant="flat"
                                     startContent={<Icon icon="lucide:edit" />}
@@ -603,8 +612,8 @@ export const TreatmentsPage: React.FC = () => {
                                   >
                                     Edit Treatment
                                   </Button>
-                                  <Button 
-                                    size="sm" 
+                                  <Button
+                                    size="sm"
                                     variant="light"
                                     startContent={<Icon icon="lucide:trash-2" />}
                                     className="flex-1 sm:flex-none"
@@ -617,8 +626,8 @@ export const TreatmentsPage: React.FC = () => {
                                 // Patient actions
                                 <>
                                   {getTreatmentDisplayStatus(treatment) === "active" && (
-                                    <Button 
-                                      size="sm" 
+                                    <Button
+                                      size="sm"
                                       color="primary"
                                       variant="flat"
                                       startContent={<Icon icon="lucide:refresh-cw" />}
@@ -636,8 +645,8 @@ export const TreatmentsPage: React.FC = () => {
                                       Request Refill
                                     </Button>
                                   )}
-                                  <Button 
-                                    size="sm" 
+                                  <Button
+                                    size="sm"
                                     variant="light"
                                     startContent={<Icon icon="lucide:message-square" />}
                                     className="flex-1 sm:flex-none"
@@ -662,8 +671,8 @@ export const TreatmentsPage: React.FC = () => {
                   </div>
                   <h3 className="text-lg font-medium">No treatments found</h3>
                   <p className="text-foreground-500">
-                    {searchQuery || selectedTab !== "all" 
-                      ? "Try adjusting your search or filters" 
+                    {searchQuery || selectedTab !== "all"
+                      ? "Try adjusting your search or filters"
                       : "No treatments available for your clinic"}
                   </p>
                 </div>
@@ -674,8 +683,8 @@ export const TreatmentsPage: React.FC = () => {
       </motion.div>
 
       {/* Add Treatment Modal */}
-      <Modal 
-        isOpen={isAddModalOpen} 
+      <Modal
+        isOpen={isAddModalOpen}
         onOpenChange={onAddModalOpenChange}
         placement="center"
       >
@@ -710,8 +719,8 @@ export const TreatmentsPage: React.FC = () => {
                 <Button color="danger" variant="flat" onPress={onClose}>
                   Cancel
                 </Button>
-                <Button 
-                  color="primary" 
+                <Button
+                  color="primary"
                   onPress={handleSaveNewTreatment}
                   isLoading={savingTreatment || uploadingLogo}
                   isDisabled={!treatmentName.trim()}
@@ -725,8 +734,8 @@ export const TreatmentsPage: React.FC = () => {
       </Modal>
 
       {/* Edit Treatment Modal */}
-      <Modal 
-        isOpen={isEditModalOpen} 
+      <Modal
+        isOpen={isEditModalOpen}
         onOpenChange={onEditModalOpenChange}
         placement="center"
       >
@@ -746,9 +755,9 @@ export const TreatmentsPage: React.FC = () => {
                   <label className="text-sm font-medium">Treatment Logo</label>
                   {editingTreatment?.treatmentLogo && (
                     <div className="flex items-center gap-2">
-                      <img 
-                        src={editingTreatment.treatmentLogo} 
-                        alt="Current logo" 
+                      <img
+                        src={editingTreatment.treatmentLogo}
+                        alt="Current logo"
                         className="w-16 h-16 rounded-md object-cover"
                       />
                       <span className="text-sm text-foreground-600">Current logo</span>
@@ -771,8 +780,8 @@ export const TreatmentsPage: React.FC = () => {
                 <Button color="danger" variant="flat" onPress={onClose}>
                   Cancel
                 </Button>
-                <Button 
-                  color="primary" 
+                <Button
+                  color="primary"
                   onPress={handleSaveEditedTreatment}
                   isLoading={savingTreatment || uploadingLogo}
                   isDisabled={!treatmentName.trim()}
