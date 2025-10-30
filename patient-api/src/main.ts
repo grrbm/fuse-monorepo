@@ -6891,6 +6891,16 @@ app.get("/md/cases/latest", authenticateJWT, async (req, res) => {
 // Public endpoint; attempts auth if provided, otherwise infers user from orderId
 app.post("/md/cases", async (req, res) => {
   try {
+    // TEMPORARY: Skip MD Integrations entirely
+    console.log('⚠️ MD Integrations SKIPPED - endpoint disabled temporarily');
+    return res.json({
+      success: true,
+      message: 'MD Integrations skipped (disabled)',
+      data: { skipped: true }
+    });
+
+    // COMMENTED OUT - MD Integrations disabled temporarily
+    /*
     let currentUser: any = null;
     try {
       currentUser = getCurrentUser(req);
@@ -7089,6 +7099,7 @@ app.post("/md/cases", async (req, res) => {
     await order.update({ mdCaseId: (caseResponse as any).case_id });
 
     return res.json({ success: true, message: 'MD case created', data: { caseId: (caseResponse as any).case_id } });
+    */
   } catch (error) {
     console.error('❌ Error creating MD case:', error);
     return res.status(500).json({ success: false, message: 'Failed to create MD case' });
