@@ -3192,8 +3192,8 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
 
     // Calculate distribution: platform fee (% of total), doctor flat, pharmacy wholesale, brand residual
     // If Clinic has a Stripe Connect account, we transfer only the brand residual to the clinic
-    const platformFeePercent = Number(process.env.FUSE_FEES ?? 1);
-    const doctorFlatUsd = Number(process.env.DOCTOR_AMOUNT ?? 20);
+    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
 
     let brandAmountUsd = 0;
     let pharmacyWholesaleTotal = 0;
@@ -3246,26 +3246,40 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
     }
 
     // Create payment intent with optional transfer_data to send clinic margin
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
-      currency,
-      metadata: {
-        userId: currentUser.id,
-        treatmentId,
-        orderId: order.id,
-        orderNumber: orderNumber,
-        selectedProducts: JSON.stringify(selectedProducts),
-        selectedPlan,
-        orderType: 'treatment_order',
-        brandAmountUsd: brandAmountUsd.toFixed(2),
-        platformFeePercent: String(platformFeePercent),
-        platformFeeUsd: platformFeeUsd.toFixed(2),
-        doctorFlatUsd: Number(process.env.DOCTOR_AMOUNT ?? 20).toFixed(2),
-        pharmacyWholesaleTotalUsd: pharmacyWholesaleTotal.toFixed(2),
-      },
-      description: `Order ${orderNumber} - ${treatment.name}`,
-      ...(transferData ? { transfer_data: transferData } : {}),
-    });
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount * 100), // Convert to cents
+        currency,
+        metadata: {
+          userId: currentUser.id,
+          treatmentId,
+          orderId: order.id,
+          orderNumber: orderNumber,
+          selectedProducts: JSON.stringify(selectedProducts),
+          selectedPlan,
+          orderType: 'treatment_order',
+          brandAmountUsd: brandAmountUsd.toFixed(2),
+          platformFeePercent: String(platformFeePercent),
+          platformFeeUsd: platformFeeUsd.toFixed(2),
+          doctorFlatUsd: doctorFlatUsd.toFixed(2),
+          pharmacyWholesaleTotalUsd: pharmacyWholesaleTotal.toFixed(2),
+        },
+        description: `Order ${orderNumber} - ${treatment.name}`,
+        ...(transferData ? { transfer_data: transferData } : {}),
+      });
+    } catch (stripeError: any) {
+      console.error('❌ Stripe payment intent creation failed:', stripeError);
+
+      // Mark order as failed
+      await order.update({ status: 'failed' });
+
+      return res.status(500).json({
+        error: "stripe_payment_intent_failed",
+        message: stripeError.message || "Failed to create payment intent with Stripe",
+        details: stripeError.type || 'unknown_error'
+      });
+    }
 
     // Create payment record
     await Payment.create({
