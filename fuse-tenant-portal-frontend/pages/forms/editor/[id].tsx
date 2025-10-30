@@ -61,6 +61,8 @@ export default function TemplateEditor() {
   const [steps, setSteps] = useState<Step[]>([])
   const [rebuilding, setRebuilding] = useState(false)
   const [productCategory, setProductCategory] = useState<string | null>(null)
+  const [productInfo, setProductInfo] = useState<{ name: string; isActive: boolean } | null>(null)
+  const [activatingProduct, setActivatingProduct] = useState(false)
   const [formStatus, setFormStatus] = useState<'in_progress' | 'ready_for_review' | 'ready'>('in_progress')
   const isAccountTemplate = useMemo(() => template?.formTemplateType === 'user_profile', [template?.formTemplateType])
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
@@ -189,12 +191,13 @@ export default function TemplateEditor() {
     fetchTemplate()
   }, [templateId, token, baseUrl])
 
-  // Load product category if this questionnaire is tied to a product
+  // Load product category and info if this questionnaire is tied to a product
   useEffect(() => {
-    const loadCategory = async () => {
+    const loadProductInfo = async () => {
       try {
         if (!token || !template?.productId) {
           setProductCategory(null)
+          setProductInfo(null)
           return
         }
         const res = await fetch(`${baseUrl}/products/${template.productId}`, {
@@ -203,18 +206,61 @@ export default function TemplateEditor() {
         const data = await res.json().catch(() => ({}))
         if (res.ok && data?.success && data?.data) {
           setProductCategory(data.data.category || null)
+          setProductInfo({
+            name: data.data.name || 'Product',
+            isActive: data.data.isActive || false
+          })
         } else {
           setProductCategory(null)
+          setProductInfo(null)
         }
       } catch {
         setProductCategory(null)
+        setProductInfo(null)
       }
     }
-    loadCategory()
+    loadProductInfo()
   }, [template?.productId, token, baseUrl])
 
   const handleBack = () => {
     router.push("/forms?tab=templates")
+  }
+
+  const handleActivateProduct = async () => {
+    if (!token || !template?.productId || !productInfo) return
+
+    try {
+      setActivatingProduct(true)
+      const response = await fetch(`${baseUrl}/products-management/${template.productId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isActive: true }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || "Failed to activate product")
+      }
+
+      const data = await response.json()
+      setSaveMessage(data.message || "Product activated successfully! You can now add it to your catalog.")
+
+      // Update local state
+      setProductInfo({ ...productInfo, isActive: true })
+
+      // Optionally redirect after a delay
+      setTimeout(() => {
+        router.push("/products")
+      }, 2000)
+    } catch (error: any) {
+      console.error("❌ Error activating product:", error)
+      setError(error.message || "Failed to activate product")
+    } finally {
+      setActivatingProduct(false)
+    }
   }
 
   const handleAddStep = async (stepType: "question" | "info" | "yesno" | "multi" | "textarea" | "deadend") => {
@@ -1434,6 +1480,23 @@ export default function TemplateEditor() {
             Back
           </Button>
 
+          {/* Inactive Product Banner */}
+          {productInfo && !productInfo.isActive && (
+            <Card className="border-blue-500/40 bg-blue-500/10 mb-4">
+              <CardContent className="p-4 flex items-start gap-3">
+                <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                    Product Not Active
+                  </h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    <strong>{productInfo.name}</strong> is currently inactive. Build your form, then click "Activate Product" to make it available in your catalog.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Save Message */}
           {saveMessage && (
             <div className={`mb-4 p-4 rounded-lg border ${saveMessage.includes('✅')
@@ -1555,6 +1618,24 @@ export default function TemplateEditor() {
                   >
                     Add Voucher
                   </Button>
+
+                  {/* Activate Product Button - only show if product is inactive */}
+                  {productInfo && !productInfo.isActive && (
+                    <Button
+                      onClick={handleActivateProduct}
+                      disabled={activatingProduct}
+                      className="rounded-full px-6 bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-shadow"
+                    >
+                      {activatingProduct ? (
+                        <>
+                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                          Activating...
+                        </>
+                      ) : (
+                        "Activate Product"
+                      )}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

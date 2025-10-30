@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useRouter } from "next/router"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -38,6 +39,7 @@ interface PharmacyVendor {
 
 
 export default function Products() {
+  const router = useRouter()
   const { token } = useAuth()
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
@@ -52,6 +54,7 @@ export default function Products() {
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [navigatingToForm, setNavigatingToForm] = useState<string | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -264,6 +267,62 @@ export default function Products() {
 
   const handleToggleActive = async (product: Product) => {
     if (!token) return
+
+    // If activating (product is currently inactive), navigate to form editor
+    if (!product.isActive) {
+      setNavigatingToForm(product.id)
+      try {
+        // Try to find existing product questionnaire
+        const res = await fetch(`${baseUrl}/questionnaires/product/${product.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          const list = Array.isArray(data?.data) ? data.data : []
+          const existing = list
+            .filter((q: any) => q.formTemplateType === 'normal')
+            .sort((a: any, b: any) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())[0]
+            || list[0]
+
+          if (existing?.id) {
+            router.push(`/forms/editor/${existing.id}`)
+            return
+          }
+        }
+
+        // None exists: create one
+        const name = `${product.name} Form`
+        const description = `Questionnaire for ${product.name}`
+        const createRes = await fetch(`${baseUrl}/questionnaires/templates`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            title: name,
+            description,
+            formTemplateType: 'normal',
+            category: product.category || null,
+            productId: product.id,
+          }),
+        })
+
+        if (!createRes.ok) {
+          throw new Error('Failed to create form')
+        }
+
+        const createData = await createRes.json()
+        if (createData?.data?.id) {
+          router.push(`/forms/editor/${createData.data.id}`)
+        }
+      } catch (error: any) {
+        console.error("❌ Error navigating to form editor:", error)
+        toast.error(error.message || 'Failed to open form editor')
+        setNavigatingToForm(null)
+      }
+      return
+    }
+
+    // If deactivating, do it directly
     try {
       const response = await fetch(`${baseUrl}/products-management/${product.id}`, {
         method: "PUT",
@@ -271,16 +330,16 @@ export default function Products() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ isActive: !product.isActive }),
+        body: JSON.stringify({ isActive: false }),
       })
 
-      if (!response.ok) throw new Error("Failed to update product status")
+      if (!response.ok) throw new Error("Failed to deactivate product")
 
       const data = await response.json()
-      setSaveMessage(data.message || (product.isActive ? "Product deactivated" : "Product activated"))
+      setSaveMessage(data.message || "Product deactivated")
       fetchProducts()
     } catch (error: any) {
-      console.error("❌ Error toggling product status:", error)
+      console.error("❌ Error deactivating product:", error)
       setSaveMessage(error.message)
     }
   }
@@ -452,8 +511,18 @@ export default function Products() {
                         <CardDescription className="line-clamp-2 mt-1">{product.description}</CardDescription>
                       </div>
                       <div className="flex gap-2 ml-2">
-                        <Button size="sm" variant={product.isActive ? "destructive" : "default"} onClick={() => handleToggleActive(product)}>
-                          {product.isActive ? 'Deactivate' : 'Activate'}
+                        <Button
+                          size="sm"
+                          variant={product.isActive ? "destructive" : "default"}
+                          onClick={() => handleToggleActive(product)}
+                          disabled={navigatingToForm === product.id}
+                        >
+                          {navigatingToForm === product.id ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Opening...
+                            </>
+                          ) : product.isActive ? 'Deactivate' : 'Activate'}
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
                           <Edit2 className="h-4 w-4" />
