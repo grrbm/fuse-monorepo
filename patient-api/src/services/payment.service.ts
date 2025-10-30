@@ -144,6 +144,65 @@ class PaymentService {
                 country: shippingInfo.country,
                 userId
             });
+
+            // Update user with DOB and gender from questionnaire if present
+            try {
+                if (questionnaireAnswers) {
+                    const updateData: any = {};
+
+                    // Check if questionnaireAnswers has structured format
+                    const answers = (questionnaireAnswers as any).answers || [];
+
+                    // Extract DOB from questionnaire answers
+                    const dobAnswer = answers.find((a: any) =>
+                        a.questionText?.toLowerCase().includes('date of birth') ||
+                        a.questionText?.toLowerCase().includes('birthday') ||
+                        a.questionText?.toLowerCase().includes('dob')
+                    );
+
+                    // Extract gender from questionnaire answers
+                    const genderAnswer = answers.find((a: any) =>
+                        a.questionText?.toLowerCase().includes('gender') ||
+                        a.questionText?.toLowerCase().includes('sex')
+                    );
+
+                    // Only update if user doesn't have these values already
+                    if (dobAnswer?.answer && !user.dob) {
+                        // Normalize DOB to YYYY-MM-DD format
+                        let normalized = String(dobAnswer.answer);
+                        const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+                        const usMatch = mmddyyyy.exec(normalized);
+                        if (usMatch) {
+                            const mm = usMatch[1].padStart(2, '0');
+                            const dd = usMatch[2].padStart(2, '0');
+                            const yyyy = usMatch[3];
+                            normalized = `${yyyy}-${mm}-${dd}`;
+                        }
+                        updateData.dob = normalized;
+                        console.log(`📋 Extracted DOB from questionnaire: ${normalized}`);
+                    }
+
+                    if (genderAnswer?.answer && !user.gender) {
+                        // Extract gender value (could be from selectedOptions or direct answer)
+                        let genderValue = genderAnswer.answer;
+                        if (genderAnswer.selectedOptions && genderAnswer.selectedOptions.length > 0) {
+                            genderValue = genderAnswer.selectedOptions[0].optionText;
+                        }
+                        updateData.gender = String(genderValue).toLowerCase();
+                        console.log(`📋 Extracted gender from questionnaire: ${genderValue}`);
+                    }
+
+                    // Update user if we have new data
+                    if (Object.keys(updateData).length > 0) {
+                        await user.update(updateData);
+                        console.log(`✅ Updated user ${user.id} with questionnaire data:`, updateData);
+                    }
+                }
+            } catch (error) {
+                console.error('⚠️ Error updating user from questionnaire answers:', error);
+                // Don't fail the order creation if user update fails
+            }
+
             // Create order
             const orderNumber = await Order.generateOrderNumber();
             const order = await Order.create({

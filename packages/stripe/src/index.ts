@@ -196,7 +196,7 @@ class StripeService {
         proration_behavior: 'none', // Don't prorate - start fresh next cycle
         payment_settings: {
           save_default_payment_method: 'on_subscription',
-          payment_method_types: ['card']
+          payment_method_types: ['card', 'link'] // Support both card and Stripe Link
         },
         metadata: {
           ...metadata,
