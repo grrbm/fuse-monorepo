@@ -90,12 +90,55 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                                 <p className="text-sm text-gray-600">Email</p>
                                 <p className="font-medium">{order.patient?.email}</p>
                             </div>
-                            {order.patient?.phoneNumber && (
-                                <div>
-                                    <p className="text-sm text-gray-600">Phone</p>
-                                    <p className="font-medium">{order.patient.phoneNumber}</p>
-                                </div>
-                            )}
+                            <div>
+                                <p className="text-sm text-gray-600">Phone</p>
+                                <p className="font-medium">
+                                    {order.patient?.phoneNumber || (
+                                        <span className="text-red-600 text-xs">
+                                            Missing - need to provide this for Pharmacy request to work
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Date of Birth</p>
+                                <p className="font-medium">
+                                    {order.patient?.dateOfBirth ? (
+                                        new Date(order.patient.dateOfBirth).toLocaleDateString()
+                                    ) : (
+                                        <span className="text-red-600 text-xs">
+                                            Missing - need to provide this for Pharmacy request to work
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Gender</p>
+                                <p className="font-medium">
+                                    {order.patient?.gender ? (
+                                        order.patient.gender.charAt(0).toUpperCase() + order.patient.gender.slice(1)
+                                    ) : (
+                                        <span className="text-red-600 text-xs">
+                                            Missing - need to provide this for Pharmacy request to work
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                            <div className="col-span-2">
+                                <p className="text-sm text-gray-600">Patient Address</p>
+                                <p className="font-medium">
+                                    {order.patient?.address && order.patient?.city && order.patient?.state && order.patient?.zipCode ? (
+                                        <>
+                                            {order.patient.address}<br />
+                                            {order.patient.city}, {order.patient.state} {order.patient.zipCode}
+                                        </>
+                                    ) : (
+                                        <span className="text-red-600 text-xs">
+                                            Missing - need to provide this for Pharmacy request to work
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
                             <div>
                                 <p className="text-sm text-gray-600">Order Date</p>
                                 <p className="font-medium">{new Date(order.createdAt).toLocaleString()}</p>

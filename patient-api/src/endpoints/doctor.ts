@@ -158,7 +158,7 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             const userInclude: any = {
                 model: User,
                 as: 'user',
-                attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'dob'],
+                attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'dob', 'gender', 'address', 'city', 'state', 'zipCode'],
             };
 
             // Add patient search filter if provided
@@ -231,7 +231,12 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         lastName: order.user.lastName,
                         email: order.user.email,
                         phoneNumber: order.user.phoneNumber,
-                        dob: order.user.dob,
+                        dateOfBirth: order.user.dob,
+                        gender: order.user.gender,
+                        address: order.user.address,
+                        city: order.user.city,
+                        state: order.user.state,
+                        zipCode: order.user.zipCode,
                     } : null,
                     treatment: order.treatment,
                     tenantProduct: order.tenantProduct ? {

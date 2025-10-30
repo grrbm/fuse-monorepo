@@ -31,6 +31,12 @@ export interface PendingOrder {
         lastName: string;
         email: string;
         phoneNumber?: string;
+        dateOfBirth?: string;
+        gender?: string;
+        address?: string;
+        city?: string;
+        state?: string;
+        zipCode?: string;
     } | null;
     treatment?: {
         id: string;
