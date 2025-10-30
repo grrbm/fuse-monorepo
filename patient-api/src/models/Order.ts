@@ -145,6 +145,35 @@ export default class Order extends Entity {
   })
   declare totalAmount: number;
 
+  // Payout breakdown fields
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare platformFeeAmount: number;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare doctorAmount: number;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare pharmacyWholesaleAmount: number;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare brandAmount: number;
+
   @Column({
     type: DataType.TEXT,
     allowNull: true,
