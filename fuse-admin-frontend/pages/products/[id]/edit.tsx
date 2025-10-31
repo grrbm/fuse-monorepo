@@ -530,7 +530,7 @@ export default function ProductEdit() {
                 <meta name="description" content={`Edit product details for ${product?.name || 'Unknown Product'}`} />
             </Head>
 
-            <div className="min-h-screen bg-background">
+            <div className="w-full bg-background">
                 <div className="bg-gradient-to-br from-background via-background to-primary/5 border-b border-border">
                     <div className="max-w-7xl mx-auto px-6 py-8">
                         <motion.div

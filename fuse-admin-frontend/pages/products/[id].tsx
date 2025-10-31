@@ -552,7 +552,7 @@ export default function ProductDetail() {
                 <title>{product?.name || 'Product'} - Fuse Admin</title>
             </Head>
 
-            <div className="min-h-screen bg-background p-8" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <div className="w-full bg-background p-8" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="max-w-6xl mx-auto">
                     {/* Header */}
                     <Button
