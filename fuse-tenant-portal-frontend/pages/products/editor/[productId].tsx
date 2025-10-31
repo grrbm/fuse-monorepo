@@ -172,14 +172,79 @@ export default function ProductEditor() {
           const formsData = await formsRes.json()
           const forms = Array.isArray(formsData?.data) ? formsData.data : []
           const productForm = forms.find((f: any) => f.formTemplateType === 'normal')
+
           if (productForm) {
+            console.log('✅ Found existing form for product:', productForm.id)
             setTemplateId(productForm.id)
+            setLoadingProduct(false)
+          } else {
+            // No form exists - check if there's any form with this productId
+            console.log('📝 No form found via /questionnaires/product endpoint, checking all forms...')
+
+            // Try to find any form that might be attached to this product
+            const allFormsRes = await fetch(`${baseUrl}/questionnaires/templates/product-forms`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+
+            let foundForm = null
+            if (allFormsRes.ok) {
+              const allFormsData = await allFormsRes.json()
+              const allForms = Array.isArray(allFormsData?.data) ? allFormsData.data : []
+              foundForm = allForms.find((f: any) => f.productId === productId)
+            }
+
+            if (foundForm) {
+              console.log('✅ Found orphaned form for product:', foundForm.id)
+              setTemplateId(foundForm.id)
+              setLoadingProduct(false)
+            } else {
+              // Truly no form exists - create one automatically
+              console.log('📝 Creating new form for product...')
+              const createRes = await fetch(`${baseUrl}/questionnaires/templates`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  title: `${data.data.name} Form`,
+                  description: `Questionnaire for ${data.data.name}`,
+                  category: data.data.category || null,
+                  formTemplateType: 'normal',
+                  productId: productId,
+                }),
+              })
+
+              if (createRes.ok) {
+                const createData = await createRes.json()
+                console.log('✅ Form created successfully:', createData.data.id)
+                setTemplateId(createData.data.id)
+                setSaveMessage("Form created automatically")
+                setTimeout(() => setSaveMessage(null), 3000)
+              } else {
+                const errorData = await createRes.json().catch(() => ({}))
+                console.error('❌ Failed to auto-create form')
+                console.error('Status:', createRes.status, createRes.statusText)
+                console.error('Error data:', errorData)
+                console.error('Request payload:', {
+                  title: `${data.data.name} Form`,
+                  description: `Questionnaire for ${data.data.name}`,
+                  category: data.data.category || 'General',
+                  formTemplateType: 'normal',
+                  productId: productId,
+                })
+                setError(errorData.message || `Failed to create form: ${createRes.status} ${createRes.statusText}`)
+              }
+              setLoadingProduct(false)
+            }
           }
+        } else {
+          console.error('❌ Failed to fetch forms for product')
+          setLoadingProduct(false)
         }
       } catch (err: any) {
         console.error("❌ Error loading product:", err)
         setError(err.message || "Failed to load product")
-      } finally {
         setLoadingProduct(false)
       }
     }
@@ -312,9 +377,9 @@ export default function ProductEditor() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name: `${product?.name} Form`,
+          title: `${product?.name} Form`,
           description: `Questionnaire for ${product?.name}`,
-          category: product?.category || 'General',
+          category: product?.category || null,
           formTemplateType: 'normal',
           productId: productId,
         }),
