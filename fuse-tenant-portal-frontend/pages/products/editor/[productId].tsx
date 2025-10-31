@@ -14,6 +14,7 @@ import { CATEGORY_OPTIONS } from "@fuse/enums"
 import { ProductDetailsEditor } from "@/components/products/ProductDetailsEditor"
 import { FormAttachmentCard } from "@/components/products/FormAttachmentCard"
 import { NoFormAttached } from "@/components/products/NoFormAttached"
+import { PharmacyStateManager } from "@/components/products/PharmacyStateManager"
 
 interface Step {
   id: string
@@ -1812,6 +1813,13 @@ export default function ProductEditor() {
             onUpdate={handleUpdateProduct}
             pharmacyVendors={pharmacyVendors}
           />
+
+          {/* Pharmacy & State Coverage */}
+          {product && (
+            <div className="mb-4">
+              <PharmacyStateManager productId={product.id} />
+            </div>
+          )}
 
           {/* Inactive Product Banner */}
           {product && !product.isActive && (

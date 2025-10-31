@@ -1,0 +1,159 @@
+import { Express } from 'express';
+import Pharmacy from '../models/Pharmacy';
+import PharmacyProduct from '../models/PharmacyProduct';
+
+export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
+
+    // ============= PHARMACY MANAGEMENT ENDPOINTS =============
+
+    // List all pharmacies
+    app.get("/pharmacies", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            const pharmacies = await Pharmacy.findAll({
+                where: { isActive: true },
+                order: [['name', 'ASC']]
+            });
+
+            res.json({ success: true, data: pharmacies });
+        } catch (error) {
+            console.error('Error fetching pharmacies:', error);
+            res.status(500).json({ success: false, message: "Failed to fetch pharmacies" });
+        }
+    });
+
+    // Get pharmacy assignments for a product
+    app.get("/products/:productId/pharmacy-assignments", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            const { productId } = req.params;
+
+            const assignments = await PharmacyProduct.findAll({
+                where: { productId },
+                include: [{ model: Pharmacy, as: 'pharmacy' }],
+                order: [['state', 'ASC']]
+            });
+
+            res.json({ success: true, data: assignments });
+        } catch (error) {
+            console.error('Error fetching pharmacy assignments:', error);
+            res.status(500).json({ success: false, message: "Failed to fetch pharmacy assignments" });
+        }
+    });
+
+    // Assign pharmacy to states for a product
+    app.post("/products/:productId/pharmacy-assignments", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            const { productId } = req.params;
+            const { pharmacyId, states, pharmacyProductId, pharmacyWholesaleCost } = req.body;
+
+            if (!pharmacyId || !states || !Array.isArray(states) || states.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "pharmacyId and states array are required"
+                });
+            }
+
+            // Check for existing assignments in these states
+            const existingAssignments = await PharmacyProduct.findAll({
+                where: {
+                    productId,
+                    state: states
+                }
+            });
+
+            if (existingAssignments.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Some states are already assigned to a pharmacy`,
+                    conflicts: existingAssignments.map(a => a.state)
+                });
+            }
+
+            // Create assignments for each state
+            const assignments = await Promise.all(
+                states.map(state =>
+                    PharmacyProduct.create({
+                        productId,
+                        pharmacyId,
+                        state,
+                        pharmacyProductId,
+                        pharmacyWholesaleCost
+                    })
+                )
+            );
+
+            res.status(201).json({ success: true, data: assignments });
+        } catch (error: any) {
+            console.error('Error creating pharmacy assignments:', error);
+            res.status(500).json({ success: false, message: error.message || "Failed to create pharmacy assignments" });
+        }
+    });
+
+    // Update pharmacy assignment
+    app.put("/pharmacy-assignments/:id", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            const { id } = req.params;
+            const { pharmacyProductId, pharmacyWholesaleCost } = req.body;
+
+            const assignment = await PharmacyProduct.findByPk(id);
+
+            if (!assignment) {
+                return res.status(404).json({ success: false, message: "Assignment not found" });
+            }
+
+            await assignment.update({
+                pharmacyProductId,
+                pharmacyWholesaleCost
+            });
+
+            res.json({ success: true, data: assignment });
+        } catch (error) {
+            console.error('Error updating pharmacy assignment:', error);
+            res.status(500).json({ success: false, message: "Failed to update pharmacy assignment" });
+        }
+    });
+
+    // Delete pharmacy assignment
+    app.delete("/pharmacy-assignments/:id", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            const { id } = req.params;
+
+            const assignment = await PharmacyProduct.findByPk(id);
+            if (!assignment) {
+                return res.status(404).json({ success: false, message: "Assignment not found" });
+            }
+
+            await assignment.destroy();
+            res.json({ success: true, message: "Pharmacy assignment deleted" });
+        } catch (error) {
+            console.error('Error deleting pharmacy assignment:', error);
+            res.status(500).json({ success: false, message: "Failed to delete pharmacy assignment" });
+        }
+    });
+
+}
+

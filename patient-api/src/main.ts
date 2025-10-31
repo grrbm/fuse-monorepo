@@ -8130,6 +8130,10 @@ async function startServer() {
   const { registerDoctorEndpoints } = await import('./endpoints/doctor');
   registerDoctorEndpoints(app, authenticateJWT, getCurrentUser);
 
+  // ============= PHARMACY MANAGEMENT ENDPOINTS =============
+  const { registerPharmacyEndpoints } = await import('./endpoints/pharmacy');
+  registerPharmacyEndpoints(app, authenticateJWT, getCurrentUser);
+
   // ============================================
   // DOCTOR-PATIENT CHAT ENDPOINTS
   // ============================================
