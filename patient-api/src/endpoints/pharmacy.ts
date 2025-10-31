@@ -1,6 +1,7 @@
 import { Express } from 'express';
 import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
+import Product from '../models/Product';
 import { PharmacyIntegrationService } from '../services/pharmacyIntegration';
 
 export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
@@ -123,6 +124,24 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 });
             }
 
+            // HACK: For AbsoluteRX, try to find the price from existing Product model
+            let wholesaleCost = pharmacyWholesaleCost;
+            if (pharmacyProductId && !wholesaleCost) {
+                const pharmacy = await Pharmacy.findByPk(pharmacyId);
+                if (pharmacy && pharmacy.slug === 'absoluterx') {
+                    console.log('🔍 AbsoluteRX detected - looking up price for SKU:', pharmacyProductId);
+                    const existingProduct = await Product.findOne({
+                        where: { pharmacyProductId: pharmacyProductId.toString() }
+                    });
+                    if (existingProduct) {
+                        wholesaleCost = existingProduct.price;
+                        console.log('✅ Found price from existing product:', wholesaleCost);
+                    } else {
+                        console.log('⚠️ No existing product found with SKU:', pharmacyProductId);
+                    }
+                }
+            }
+
             // Create assignments for each state
             const assignments = await Promise.all(
                 states.map(state =>
@@ -132,7 +151,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                         state,
                         pharmacyProductId,
                         pharmacyProductName,
-                        pharmacyWholesaleCost
+                        pharmacyWholesaleCost: wholesaleCost
                     })
                 )
             );

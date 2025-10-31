@@ -452,11 +452,21 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                       <h4 className="font-semibold">{pharmacy.name}</h4>
                       <p className="text-sm text-muted-foreground">{states.length} states covered</p>
                       {firstAssignment?.pharmacyProductName && (
-                        <div className="mt-2 text-sm">
-                          <span className="text-muted-foreground">Pharmacy Product: </span>
-                          <span className="font-medium">{firstAssignment.pharmacyProductName}</span>
-                          {firstAssignment.pharmacyProductId && (
-                            <span className="text-muted-foreground ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
+                        <div className="mt-2 text-sm space-y-1">
+                          <div>
+                            <span className="text-muted-foreground">Pharmacy Product: </span>
+                            <span className="font-medium">{firstAssignment.pharmacyProductName}</span>
+                            {firstAssignment.pharmacyProductId && (
+                              <span className="text-muted-foreground ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
+                            )}
+                          </div>
+                          {firstAssignment.pharmacyWholesaleCost && (
+                            <div>
+                              <span className="text-muted-foreground">Wholesale Cost: </span>
+                              <span className="font-medium text-green-600 dark:text-green-400">
+                                ${Number(firstAssignment.pharmacyWholesaleCost).toFixed(2)}
+                              </span>
+                            </div>
                           )}
                         </div>
                       )}
