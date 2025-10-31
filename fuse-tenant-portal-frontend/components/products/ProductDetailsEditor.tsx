@@ -28,6 +28,7 @@ interface ProductDetailsEditorProps {
 export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditorProps) {
     const [editing, setEditing] = useState(false)
     const [saving, setSaving] = useState(false)
+    const [error, setError] = useState<string | null>(null)
     const [formData, setFormData] = useState({
         name: product.name,
         description: product.description,
@@ -50,6 +51,28 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
     }, [product])
 
     const handleSave = async () => {
+        setError(null)
+
+        // Validate required fields
+        if (!formData.name || formData.name.trim() === "") {
+            setError("Product name is required")
+            return
+        }
+        if (!formData.description || formData.description.trim() === "") {
+            setError("Product description is required")
+            return
+        }
+        if (!formData.dosage || formData.dosage.trim() === "") {
+            setError("Dosage is required")
+            return
+        }
+
+        const activeIngredientsArray = formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean)
+        if (activeIngredientsArray.length === 0) {
+            setError("At least one active ingredient is required")
+            return
+        }
+
         setSaving(true)
         try {
             await onUpdate({
@@ -58,11 +81,13 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                 dosage: formData.dosage,
                 category: formData.category || undefined,
                 medicationSize: formData.medicationSize || undefined,
-                activeIngredients: formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean),
+                activeIngredients: activeIngredientsArray,
             })
             setEditing(false)
-        } catch (error) {
+            setError(null)
+        } catch (error: any) {
             console.error("Failed to update product:", error)
+            setError(error.message || "Failed to update product. Please try again.")
         } finally {
             setSaving(false)
         }
@@ -77,6 +102,7 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             medicationSize: product.medicationSize || "",
             activeIngredients: product.activeIngredients?.join(", ") || "",
         })
+        setError(null)
         setEditing(false)
     }
 
@@ -120,6 +146,14 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                 </div>
             </CardHeader>
             <CardContent className="space-y-4">
+                {/* Error Message */}
+                {error && (
+                    <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm flex items-start gap-2">
+                        <span className="font-semibold">Error:</span>
+                        <span>{error}</span>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Product Name */}
                     <div className="md:col-span-2">

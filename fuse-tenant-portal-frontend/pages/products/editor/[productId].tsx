@@ -383,7 +383,8 @@ export default function ProductEditor() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || "Failed to update product")
+        const errorMessage = errorData.message || "Failed to update product"
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -392,9 +393,8 @@ export default function ProductEditor() {
       setTimeout(() => setSaveMessage(null), 3000)
     } catch (error: any) {
       console.error("❌ Error updating product:", error)
-      setError(error.message || "Failed to update product")
-      setTimeout(() => setError(null), 5000)
-      throw error // Re-throw so the component knows it failed
+      // Don't set the main error state - let the component handle it
+      throw error // Re-throw so the component can catch and display it
     } finally {
       setUpdatingProduct(false)
     }
