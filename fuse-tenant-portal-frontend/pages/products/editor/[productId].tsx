@@ -75,7 +75,6 @@ export default function ProductEditor() {
   // Product state
   const [product, setProduct] = useState<Product | null>(null)
   const [loadingProduct, setLoadingProduct] = useState(true)
-  const [pharmacyVendors, setPharmacyVendors] = useState<Array<{ id: string; name: string }>>([])
   const [updatingProduct, setUpdatingProduct] = useState(false)
 
   // Form editor state
@@ -280,29 +279,6 @@ export default function ProductEditor() {
     }
 
     fetchAvailableForms()
-  }, [token, baseUrl])
-
-  // Fetch pharmacy vendors
-  useEffect(() => {
-    const fetchPharmacyVendors = async () => {
-      if (!token) return
-
-      try {
-        const res = await fetch(`${baseUrl}/pharmacy-vendors`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-
-        if (res.ok) {
-          const data = await res.json()
-          const vendors = Array.isArray(data?.data) ? data.data : []
-          setPharmacyVendors(vendors)
-        }
-      } catch (error) {
-        console.error('Failed to fetch pharmacy vendors:', error)
-      }
-    }
-
-    fetchPharmacyVendors()
   }, [token, baseUrl])
 
   // Fetch form details when templateId is set
@@ -1811,7 +1787,6 @@ export default function ProductEditor() {
           <ProductDetailsEditor
             product={product}
             onUpdate={handleUpdateProduct}
-            pharmacyVendors={pharmacyVendors}
           />
 
           {/* Pharmacy & State Coverage */}

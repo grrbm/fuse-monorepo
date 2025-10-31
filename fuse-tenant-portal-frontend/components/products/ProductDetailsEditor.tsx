@@ -20,24 +20,17 @@ interface Product {
     isActive: boolean
 }
 
-interface PharmacyVendor {
-    id: string
-    name: string
-}
-
 interface ProductDetailsEditorProps {
     product: Product
     onUpdate: (updatedProduct: Partial<Product>) => Promise<void>
-    pharmacyVendors: PharmacyVendor[]
 }
 
-export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: ProductDetailsEditorProps) {
+export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditorProps) {
     const [editing, setEditing] = useState(false)
     const [saving, setSaving] = useState(false)
     const [formData, setFormData] = useState({
         name: product.name,
         description: product.description,
-        price: product.price,
         dosage: product.dosage,
         category: product.category || "",
         medicationSize: product.medicationSize || "",
@@ -49,7 +42,6 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
         setFormData({
             name: product.name,
             description: product.description,
-            price: product.price,
             dosage: product.dosage,
             category: product.category || "",
             medicationSize: product.medicationSize || "",
@@ -63,7 +55,6 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
             await onUpdate({
                 name: formData.name,
                 description: formData.description,
-                price: Number(formData.price),
                 dosage: formData.dosage,
                 category: formData.category || undefined,
                 medicationSize: formData.medicationSize || undefined,
@@ -81,7 +72,6 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
         setFormData({
             name: product.name,
             description: product.description,
-            price: product.price,
             dosage: product.dosage,
             category: product.category || "",
             medicationSize: product.medicationSize || "",
@@ -196,7 +186,7 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
                     </div>
 
                     {/* Medication Size */}
-                    <div>
+                    <div className="md:col-span-2">
                         <label className="text-sm font-medium mb-1 block">Medication Size</label>
                         {editing ? (
                             <Input
@@ -206,23 +196,6 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
                             />
                         ) : (
                             <p className="text-foreground">{product.medicationSize || "——"}</p>
-                        )}
-                    </div>
-
-                    {/* Wholesale Price */}
-                    <div>
-                        <label className="text-sm font-medium mb-1 block">Wholesale Cost *</label>
-                        {editing ? (
-                            <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={formData.price}
-                                onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                                placeholder="0.00"
-                            />
-                        ) : (
-                            <p className="text-foreground">${product.price.toFixed(2)}</p>
                         )}
                     </div>
 
