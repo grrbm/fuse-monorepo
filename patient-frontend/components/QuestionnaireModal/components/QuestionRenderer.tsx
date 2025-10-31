@@ -34,6 +34,19 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         case "text":
         case "email":
         case "phone":
+            const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+                const newValue = e.target.value;
+                // For phone fields, limit to 10 digits (numbers only)
+                if (question.answerType === "phone") {
+                    const numericValue = newValue.replace(/\D/g, ''); // Remove non-numeric characters
+                    if (numericValue.length <= 10) {
+                        onAnswerChange(question.id, numericValue);
+                    }
+                } else {
+                    onAnswerChange(question.id, newValue);
+                }
+            };
+
             return (
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
@@ -44,7 +57,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                         type={question.answerType === "email" ? "email" : question.answerType === "phone" ? "tel" : "text"}
                         placeholder={question.placeholder}
                         value={value}
-                        onChange={(e) => onAnswerChange(question.id, e.target.value)}
+                        onChange={handlePhoneChange}
+                        maxLength={question.answerType === "phone" ? 10 : undefined}
                         className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError ? "border-red-300 bg-red-50" : "border-gray-200 bg-white"}`}
                         style={hasError ? undefined : {
                             borderColor: theme.primaryLight,

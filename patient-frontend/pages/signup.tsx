@@ -164,6 +164,15 @@ export default function SignUp() {
   };
 
   const handleInputChange = (field: keyof FormData, value: string) => {
+    // Limit phone number to 10 digits (numbers only)
+    if (field === 'phoneNumber') {
+      const numericValue = value.replace(/\D/g, ''); // Remove non-numeric characters
+      if (numericValue.length <= 10) {
+        setFormData(prev => ({ ...prev, [field]: numericValue }));
+      }
+      return;
+    }
+
     setFormData(prev => ({ ...prev, [field]: value }));
 
     // Update password strength in real-time
