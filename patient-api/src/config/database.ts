@@ -153,6 +153,28 @@ export async function initializeDatabase() {
       // ignore
     }
 
+    // Ensure Absolute RX pharmacy exists
+    try {
+      const existingPharmacy = await Pharmacy.findOne({
+        where: { name: 'Absolute RX' }
+      });
+
+      if (!existingPharmacy) {
+        await Pharmacy.create({
+          name: 'Absolute RX',
+          slug: 'absoluterx',
+          supportedStates: ['CA'], // Can be expanded to include more states
+          isActive: true
+        });
+        console.log('✅ Created Absolute RX pharmacy');
+      } else {
+        console.log('✅ Absolute RX pharmacy already exists');
+      }
+    } catch (e) {
+      console.error('❌ Error creating Absolute RX pharmacy:', e);
+      // ignore - don't fail startup
+    }
+
     return true;
   } catch (error) {
     console.error('❌ Unable to connect to the database:', error);
