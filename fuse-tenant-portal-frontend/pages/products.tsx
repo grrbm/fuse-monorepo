@@ -162,6 +162,17 @@ export default function Products() {
   const handleCreateProduct = async () => {
     if (!token) return
 
+    const skeletonProduct = {
+      name: "New Product",
+      description: "Edit product details below",
+      price: 1, // Minimum positive price
+      dosage: "TBD",
+      activeIngredients: ["TBD"], // At least one required
+      isActive: false, // Start as inactive
+    }
+
+    console.log('🔄 Creating skeleton product:', skeletonProduct)
+
     try {
       // Create a skeleton product with minimum required fields
       const response = await fetch(`${baseUrl}/products-management`, {
@@ -170,28 +181,41 @@ export default function Products() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          name: "New Product",
-          description: "Edit product details below",
-          price: 1, // Minimum positive price
-          dosage: "TBD",
-          activeIngredients: ["Ingredient"], // At least one required
-          isActive: false, // Start as inactive
-        }),
+        body: JSON.stringify(skeletonProduct),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        console.error('Validation errors:', data.errors)
-        throw new Error(data.message || "Failed to create product")
+        console.error('❌ Failed to create product')
+        console.error('Response status:', response.status, response.statusText)
+        console.error('Response data:', data)
+
+        // Show specific validation errors if available
+        let errorMessage = data.message || "Failed to create product"
+        if (data.errors && Array.isArray(data.errors)) {
+          const errorMessages = data.errors.map((e: any) => {
+            if (typeof e === 'string') return e
+            if (e.message) return e.message
+            return JSON.stringify(e)
+          })
+          errorMessage = errorMessages.join("; ")
+        } else if (data.errors && typeof data.errors === 'object') {
+          errorMessage = Object.entries(data.errors).map(([key, val]) => `${key}: ${val}`).join("; ")
+        }
+
+        setSaveMessage(`Error: ${errorMessage}`)
+        setTimeout(() => setSaveMessage(null), 8000)
+        return
       }
 
+      console.log('✅ Product created successfully:', data.data.id)
       // Navigate to the product editor
       router.push(`/products/editor/${data.data.id}`)
     } catch (error: any) {
-      console.error("❌ Error creating product:", error)
-      setSaveMessage(error.message)
+      console.error("❌ Exception creating product:", error)
+      setSaveMessage(`Error: ${error.message || "Failed to create product"}`)
+      setTimeout(() => setSaveMessage(null), 8000)
     }
   }
 
@@ -405,8 +429,16 @@ export default function Products() {
           </div>
 
           {saveMessage && (
-            <Card className="border-green-500/40 bg-green-500/10">
-              <CardContent className="p-4 text-sm text-green-700 dark:text-green-400">{saveMessage}</CardContent>
+            <Card className={saveMessage.startsWith('Error:')
+              ? "border-red-500/40 bg-red-500/10"
+              : "border-green-500/40 bg-green-500/10"
+            }>
+              <CardContent className={`p-4 text-sm ${saveMessage.startsWith('Error:')
+                ? 'text-red-700 dark:text-red-400'
+                : 'text-green-700 dark:text-green-400'
+                }`}>
+                {saveMessage}
+              </CardContent>
             </Card>
           )}
 

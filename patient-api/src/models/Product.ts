@@ -161,7 +161,9 @@ export default class Product extends Entity {
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '');
-            instance.slug = base || null;
+            // Add timestamp to ensure uniqueness for products with same name
+            const timestamp = Date.now();
+            instance.slug = base ? `${base}-${timestamp}` : `product-${timestamp}`;
         }
     }
 }
