@@ -70,6 +70,14 @@ class QuestionnaireService {
         });
     }
 
+    async listAllProductForms() {
+        return Questionnaire.findAll({
+            where: { isTemplate: true, formTemplateType: 'normal' },
+            attributes: ['id', 'title', 'description', 'productId', 'category', 'createdAt', 'updatedAt'],
+            order: [['updatedAt', 'DESC']],
+        });
+    }
+
     async listTemplatesByProduct(productId: string) {
         return Questionnaire.findAll({
             where: { isTemplate: true, productId },
@@ -147,6 +155,7 @@ class QuestionnaireService {
         createAccountQuestionsSetup?: boolean;
         doctorQuestionsSetup?: boolean;
         status?: 'in_progress' | 'ready_for_review' | 'ready';
+        productId?: string | null;
     }) {
         const template = await Questionnaire.findOne({ where: { id, isTemplate: true } });
 
@@ -161,6 +170,7 @@ class QuestionnaireService {
             createAccountQuestionsSetup: updates.createAccountQuestionsSetup ?? template.createAccountQuestionsSetup,
             doctorQuestionsSetup: updates.doctorQuestionsSetup ?? template.doctorQuestionsSetup,
             ...(updates.status !== undefined && { status: updates.status }),
+            ...(updates.productId !== undefined && { productId: updates.productId }),
         });
 
         return this.getTemplateById(id);
