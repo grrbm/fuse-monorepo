@@ -12,6 +12,7 @@ import { Button, Avatar } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "../contexts/AuthContext";
+import { getAvatarEmoji } from "../lib/avatarUtils";
 
 function HomePage() {
   const { user } = useAuth();
@@ -57,9 +58,12 @@ function HomePage() {
             </div>
           </div>
           <Avatar
-            src="https://img.heroui.chat/image/avatar?w=200&h=200&u=1"
+            name={user?.firstName || user?.email || 'User'}
             className="cursor-pointer"
             size="sm"
+            fallback={
+              <span className="text-xl">{getAvatarEmoji(user)}</span>
+            }
           />
         </div>
 

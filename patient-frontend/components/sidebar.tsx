@@ -4,6 +4,7 @@ import { Icon } from "@iconify/react";
 import { useChat } from "../hooks/useChat";
 import { apiCall } from "../lib/api";
 import { motion } from "framer-motion";
+import { getAvatarEmoji } from "../lib/avatarUtils";
 
 interface User {
   id: string;
@@ -248,8 +249,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
       <div className="mt-auto p-3 border-t border-content3">
         <div className="flex items-center gap-3 py-2">
           <Avatar
-            src="https://img.heroui.chat/image/avatar?w=200&h=200&u=1"
+            name={user?.firstName || user?.email || 'User'}
             size="sm"
+            fallback={
+              <span className="text-xl">{getAvatarEmoji(user)}</span>
+            }
           />
           <div className="flex-1">
             <p className="font-medium text-sm">

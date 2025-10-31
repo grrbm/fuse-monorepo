@@ -15,6 +15,7 @@ import {
 import { Icon } from "@iconify/react";
 import { useAuth } from "../contexts/AuthContext";
 import { authApi } from "../lib/api";
+import { getAvatarEmoji } from "../lib/avatarUtils";
 
 interface PaymentMethod {
   id: string;
@@ -218,8 +219,11 @@ export const AccountPage: React.FC = () => {
                 {/* Profile Photo */}
                 <div className="flex-shrink-0">
                   <Avatar 
-                    src="https://img.heroui.chat/image/avatar?w=200&h=200&u=1" 
+                    name={user?.firstName || user?.email || 'User'}
                     className="w-28 h-28"
+                    fallback={
+                      <span className="text-5xl">{getAvatarEmoji(user)}</span>
+                    }
                   />
                 </div>
                 

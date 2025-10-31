@@ -3,6 +3,7 @@ import { Avatar, Badge, Button, Dropdown, DropdownTrigger, DropdownMenu, Dropdow
 import { Icon } from "@iconify/react";
 import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
+import { getAvatarEmoji } from "../lib/avatarUtils";
 
 export const Header: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -43,9 +44,12 @@ export const Header: React.FC = () => {
         <Dropdown placement="bottom-end">
           <DropdownTrigger>
             <Avatar
-              src="https://img.heroui.chat/image/avatar?w=200&h=200&u=1"
+              name={user?.firstName || user?.email || 'User'}
               className="cursor-pointer transition-transform hover:scale-105"
               size="sm"
+              fallback={
+                <span className="text-2xl">{getAvatarEmoji(user)}</span>
+              }
             />
           </DropdownTrigger>
           <DropdownMenu aria-label="Profile Actions" variant="flat">

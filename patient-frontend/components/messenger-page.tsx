@@ -74,7 +74,7 @@ interface SendMessageResponse {
   message?: string;
 }
 
-const DEFAULT_CLINICIAN_AVATAR = "https://img.heroui.chat/image/avatar?w=200&h=200&u=10";
+const DEFAULT_CLINICIAN_AVATAR_EMOJI = "👨‍⚕️"; // Doctor emoji as default
 
 const formatTimestamp = (isoDate: string) => {
   if (!isoDate) return "";
@@ -105,7 +105,7 @@ const mapChatMessageToUi = (message: ChatMessage, doctorName: string): Message =
       id: message.senderId,
       name: isPatient ? "You" : doctorName,
       role: isPatient ? "Patient" : "Doctor",
-      avatar: DEFAULT_CLINICIAN_AVATAR,
+      avatar: DEFAULT_CLINICIAN_AVATAR_EMOJI,
     },
     content: message.message,
     timestamp: formatTimestamp(message.createdAt),
@@ -485,7 +485,10 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
             {chatData?.doctor && (
               <div className="flex items-center gap-3 p-4 border-b border-content3">
                 <Avatar
-                  src={DEFAULT_CLINICIAN_AVATAR}
+                  name="Clinician"
+                  fallback={
+                    <span className="text-xl">{DEFAULT_CLINICIAN_AVATAR_EMOJI}</span>
+                  }
                   size="md"
                 />
                 <div className="flex-1">
@@ -521,7 +524,14 @@ export const MessengerPage: React.FC<MessengerPageProps> = ({ isMobileView = fal
                   >
                     <div className={`flex gap-3 max-w-[80%] ${message.isUser ? "flex-row-reverse" : ""}`}>
                       {!message.isUser && (
-                        <Avatar src={message.sender.avatar || DEFAULT_CLINICIAN_AVATAR} size="sm" className="mt-1" />
+                        <Avatar 
+                          name={message.sender.name || "Clinician"}
+                          size="sm" 
+                          className="mt-1"
+                          fallback={
+                            <span className="text-sm">{message.sender.avatar || DEFAULT_CLINICIAN_AVATAR_EMOJI}</span>
+                          }
+                        />
                       )}
                       <div>
                         {!message.isUser && (

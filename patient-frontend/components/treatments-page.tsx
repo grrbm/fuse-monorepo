@@ -587,7 +587,13 @@ export const TreatmentsPage: React.FC = () => {
                             <div>
                               <h4 className="text-sm font-medium mb-2">Prescribing Doctor</h4>
                               <div className="flex items-center gap-3">
-                                <Avatar src={treatment.doctor?.avatar || "https://img.heroui.chat/image/avatar?w=200&h=200&u=default"} size="sm" />
+                                <Avatar 
+                                  name={treatment.doctor?.name || "Dr. Unknown"}
+                                  size="sm"
+                                  fallback={
+                                    <span className="text-lg">👨‍⚕️</span>
+                                  }
+                                />
                                 <div>
                                   <p className="font-medium">{treatment.doctor?.name || "Dr. Unknown"}</p>
                                   <p className="text-sm text-foreground-500">{treatment.doctor?.specialty || "General Medicine"}</p>

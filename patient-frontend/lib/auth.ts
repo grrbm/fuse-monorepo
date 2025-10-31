@@ -18,6 +18,7 @@ export interface User {
   clinicId?: string; // For doctors associated with a clinic
   createdAt?: string;
   lastLoginAt?: string;
+  gender?: string; // User gender for avatar display
   // Add other non-PHI user properties as needed
 }
 
