@@ -788,7 +788,21 @@ export default function ProductDetail() {
                                                                             Preview URL: <span className="text-foreground">{previewUrl}</span>
                                                                         </div>
                                                                         <div className="flex items-center gap-2">
-                                                                            <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, '_blank')}>Preview</Button>
+                                                                            <div className="relative group inline-block">
+                                                                                <Button 
+                                                                                    size="sm" 
+                                                                                    variant="outline" 
+                                                                                    onClick={() => window.open(previewUrl, '_blank')}
+                                                                                    disabled={!isVariantEnabled}
+                                                                                >
+                                                                                    Preview
+                                                                                </Button>
+                                                                                {!isVariantEnabled && (
+                                                                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                                                                        Enable form to preview
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
                                                                             <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
                                                                                 Copy
                                                                             </Button>
