@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { Loader2, Plus, Trash2, MapPin, Building2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 
@@ -32,11 +33,22 @@ interface Pharmacy {
   supportedStates: string[]
 }
 
+interface PharmacyProduct {
+  id: string | number
+  sku: string | number
+  name: string
+  strength?: string
+  nameWithStrength?: string
+  dispense?: string
+  label?: string
+}
+
 interface PharmacyAssignment {
   id: string
   pharmacyId: string
   state: string
   pharmacyProductId?: string
+  pharmacyProductName?: string
   pharmacyWholesaleCost?: number
   pharmacy: Pharmacy
 }
@@ -57,6 +69,10 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   const [selectedPharmacy, setSelectedPharmacy] = useState<string>("")
   const [showAddForm, setShowAddForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pharmacyProducts, setPharmacyProducts] = useState<PharmacyProduct[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(false)
+  const [selectedPharmacyProduct, setSelectedPharmacyProduct] = useState<PharmacyProduct | null>(null)
+  const [productSearchQuery, setProductSearchQuery] = useState("")
 
   useEffect(() => {
     fetchData()
@@ -94,14 +110,60 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
     }
   }
 
+  // Fetch pharmacy products when pharmacy and states are selected
+  useEffect(() => {
+    if (!selectedPharmacy || selectedStates.length === 0 || !token) {
+      setPharmacyProducts([])
+      return
+    }
+
+    const fetchPharmacyProducts = async () => {
+      const pharmacy = pharmacies.find(p => p.id === selectedPharmacy)
+      if (!pharmacy) return
+
+      setLoadingProducts(true)
+      try {
+        const statesQuery = selectedStates.join(',')
+        const response = await fetch(
+          `${baseUrl}/pharmacies/${pharmacy.slug}/products?states=${statesQuery}`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        )
+
+        if (response.ok) {
+          const data = await response.json()
+          setPharmacyProducts(data.data || [])
+        } else {
+          console.error('Failed to fetch pharmacy products')
+          setPharmacyProducts([])
+        }
+      } catch (err) {
+        console.error('Error fetching pharmacy products:', err)
+        setPharmacyProducts([])
+      } finally {
+        setLoadingProducts(false)
+      }
+    }
+
+    fetchPharmacyProducts()
+  }, [selectedPharmacy, selectedStates, token, pharmacies, baseUrl])
+
   const assignedStates = assignments.map(a => a.state)
   const availableStates = US_STATES.filter(s => !assignedStates.includes(s.code))
   const availableStatesForSelectedPharmacy = selectedPharmacy
     ? availableStates.filter(s => {
-        const pharmacy = pharmacies.find(p => p.id === selectedPharmacy)
-        return pharmacy?.supportedStates.includes(s.code)
-      })
+      const pharmacy = pharmacies.find(p => p.id === selectedPharmacy)
+      return pharmacy?.supportedStates.includes(s.code)
+    })
     : []
+
+  // Filter pharmacy products by search query
+  const filteredPharmacyProducts = pharmacyProducts.filter(product =>
+    product.nameWithStrength?.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+    product.name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+    product.sku.toString().includes(productSearchQuery)
+  )
 
   const handleAddAssignment = async () => {
     if (!token || !selectedPharmacy || selectedStates.length === 0) return
@@ -110,16 +172,24 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
       setSaving(true)
       setError(null)
 
+      const payload: any = {
+        pharmacyId: selectedPharmacy,
+        states: selectedStates,
+      }
+
+      // Include pharmacy product info if selected
+      if (selectedPharmacyProduct) {
+        payload.pharmacyProductId = selectedPharmacyProduct.sku.toString()
+        payload.pharmacyProductName = selectedPharmacyProduct.nameWithStrength || selectedPharmacyProduct.name
+      }
+
       const response = await fetch(`${baseUrl}/products/${productId}/pharmacy-assignments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          pharmacyId: selectedPharmacy,
-          states: selectedStates,
-        }),
+        body: JSON.stringify(payload),
       })
 
       const data = await response.json()
@@ -131,6 +201,9 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
       // Reset form and refresh
       setSelectedStates([])
       setSelectedPharmacy("")
+      setSelectedPharmacyProduct(null)
+      setPharmacyProducts([])
+      setProductSearchQuery("")
       setShowAddForm(false)
       await fetchData()
     } catch (err: any) {
@@ -263,6 +336,80 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
               </div>
             )}
 
+            {/* Pharmacy Product Selector */}
+            {selectedPharmacy && selectedStates.length > 0 && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Select Pharmacy Product (Optional)
+                </label>
+                {loadingProducts ? (
+                  <div className="flex items-center justify-center p-4 border border-border rounded-md bg-background">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mr-2" />
+                    <span className="text-sm text-muted-foreground">Loading products...</span>
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      type="text"
+                      placeholder="Search products by name or SKU..."
+                      value={productSearchQuery}
+                      onChange={(e) => setProductSearchQuery(e.target.value)}
+                      className="mb-2"
+                    />
+                    <div className="max-h-64 overflow-y-auto border border-border rounded-md bg-background">
+                      {filteredPharmacyProducts.length === 0 ? (
+                        <p className="text-sm text-muted-foreground p-4 text-center">
+                          {productSearchQuery ? "No products found matching your search." : "No products available."}
+                        </p>
+                      ) : (
+                        <div className="divide-y divide-border">
+                          {filteredPharmacyProducts.map((product) => (
+                            <label
+                              key={product.id}
+                              className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors ${selectedPharmacyProduct?.id === product.id ? 'bg-muted' : ''
+                                }`}
+                            >
+                              <input
+                                type="radio"
+                                name="pharmacyProduct"
+                                checked={selectedPharmacyProduct?.id === product.id}
+                                onChange={() => setSelectedPharmacyProduct(product)}
+                                className="mt-1"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm">
+                                  {product.nameWithStrength || product.name}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  SKU: {product.sku}
+                                  {product.dispense && ` • ${product.dispense}`}
+                                </div>
+                                {product.label && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    {product.label}
+                                  </div>
+                                )}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {selectedPharmacyProduct && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => setSelectedPharmacyProduct(null)}
+                      >
+                        Clear Selection
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -296,36 +443,48 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
               </p>
             </div>
           ) : (
-            Object.values(groupedAssignments).map(({ pharmacy, states }) => (
-              <div key={pharmacy.id} className="p-4 border border-border rounded-lg">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h4 className="font-semibold">{pharmacy.name}</h4>
-                    <p className="text-sm text-muted-foreground">{states.length} states covered</p>
+            Object.values(groupedAssignments).map(({ pharmacy, states }) => {
+              const firstAssignment = assignments.find(a => a.pharmacyId === pharmacy.id)
+              return (
+                <div key={pharmacy.id} className="p-4 border border-border rounded-lg">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h4 className="font-semibold">{pharmacy.name}</h4>
+                      <p className="text-sm text-muted-foreground">{states.length} states covered</p>
+                      {firstAssignment?.pharmacyProductName && (
+                        <div className="mt-2 text-sm">
+                          <span className="text-muted-foreground">Pharmacy Product: </span>
+                          <span className="font-medium">{firstAssignment.pharmacyProductName}</span>
+                          {firstAssignment.pharmacyProductId && (
+                            <span className="text-muted-foreground ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {states.map((state) => {
+                      const assignment = assignments.find(a => a.pharmacyId === pharmacy.id && a.state === state)
+                      return (
+                        <Badge
+                          key={state}
+                          variant="secondary"
+                          className="group relative pr-8"
+                        >
+                          {state}
+                          <button
+                            onClick={() => assignment && handleRemoveAssignment(assignment.id)}
+                            className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </button>
+                        </Badge>
+                      )
+                    })}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {states.map((state) => {
-                    const assignment = assignments.find(a => a.pharmacyId === pharmacy.id && a.state === state)
-                    return (
-                      <Badge
-                        key={state}
-                        variant="secondary"
-                        className="group relative pr-8"
-                      >
-                        {state}
-                        <button
-                          onClick={() => assignment && handleRemoveAssignment(assignment.id)}
-                          className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 className="h-3 w-3 text-destructive" />
-                        </button>
-                      </Badge>
-                    )
-                  })}
-                </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </CardContent>

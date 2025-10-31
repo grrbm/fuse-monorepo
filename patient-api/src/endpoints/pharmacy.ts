@@ -1,10 +1,50 @@
 import { Express } from 'express';
 import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
+import { PharmacyIntegrationService } from '../services/pharmacyIntegration';
 
 export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
 
     // ============= PHARMACY MANAGEMENT ENDPOINTS =============
+
+    // Get products from a pharmacy's external API
+    app.get("/pharmacies/:pharmacySlug/products", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            const { pharmacySlug } = req.params;
+            const { state, states } = req.query;
+
+            const pharmacyService = new PharmacyIntegrationService();
+
+            // If multiple states are provided, fetch for all of them
+            if (states && typeof states === 'string') {
+                const stateArray = states.split(',').map(s => s.trim());
+                const products = await pharmacyService.getProductsByPharmacyAndStates(pharmacySlug, stateArray);
+                return res.json({ success: true, data: products });
+            }
+
+            // Single state
+            if (state && typeof state === 'string') {
+                const products = await pharmacyService.getProductsByPharmacy(pharmacySlug, state);
+                return res.json({ success: true, data: products });
+            }
+
+            return res.status(400).json({
+                success: false,
+                message: "Either 'state' or 'states' query parameter is required"
+            });
+        } catch (error: any) {
+            console.error('Error fetching pharmacy products:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || "Failed to fetch pharmacy products"
+            });
+        }
+    });
 
     // List all pharmacies
     app.get("/pharmacies", authenticateJWT, async (req, res) => {
@@ -58,7 +98,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
             }
 
             const { productId } = req.params;
-            const { pharmacyId, states, pharmacyProductId, pharmacyWholesaleCost } = req.body;
+            const { pharmacyId, states, pharmacyProductId, pharmacyProductName, pharmacyWholesaleCost } = req.body;
 
             if (!pharmacyId || !states || !Array.isArray(states) || states.length === 0) {
                 return res.status(400).json({
@@ -91,6 +131,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                         pharmacyId,
                         state,
                         pharmacyProductId,
+                        pharmacyProductName,
                         pharmacyWholesaleCost
                     })
                 )
@@ -112,7 +153,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
             }
 
             const { id } = req.params;
-            const { pharmacyProductId, pharmacyWholesaleCost } = req.body;
+            const { pharmacyProductId, pharmacyProductName, pharmacyWholesaleCost } = req.body;
 
             const assignment = await PharmacyProduct.findByPk(id);
 
@@ -122,6 +163,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
 
             await assignment.update({
                 pharmacyProductId,
+                pharmacyProductName,
                 pharmacyWholesaleCost
             });
 

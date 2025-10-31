@@ -42,8 +42,6 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
         category: product.category || "",
         medicationSize: product.medicationSize || "",
         activeIngredients: product.activeIngredients?.join(", ") || "",
-        pharmacyProvider: product.pharmacyProvider || "",
-        pharmacyProductId: product.pharmacyProductId || "",
     })
 
     // Update form data when product changes
@@ -56,8 +54,6 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
             category: product.category || "",
             medicationSize: product.medicationSize || "",
             activeIngredients: product.activeIngredients?.join(", ") || "",
-            pharmacyProvider: product.pharmacyProvider || "",
-            pharmacyProductId: product.pharmacyProductId || "",
         })
     }, [product])
 
@@ -72,8 +68,6 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
                 category: formData.category || undefined,
                 medicationSize: formData.medicationSize || undefined,
                 activeIngredients: formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean),
-                pharmacyProvider: formData.pharmacyProvider || undefined,
-                pharmacyProductId: formData.pharmacyProductId || undefined,
             })
             setEditing(false)
         } catch (error) {
@@ -92,8 +86,6 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
             category: product.category || "",
             medicationSize: product.medicationSize || "",
             activeIngredients: product.activeIngredients?.join(", ") || "",
-            pharmacyProvider: product.pharmacyProvider || "",
-            pharmacyProductId: product.pharmacyProductId || "",
         })
         setEditing(false)
     }
@@ -245,41 +237,6 @@ export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: Pro
                             />
                         ) : (
                             <p className="text-foreground">{product.activeIngredients?.join(", ") || "——"}</p>
-                        )}
-                    </div>
-
-                    {/* Pharmacy Vendor */}
-                    <div>
-                        <label className="text-sm font-medium mb-1 block">Pharmacy Vendor</label>
-                        {editing ? (
-                            <select
-                                value={formData.pharmacyProvider}
-                                onChange={(e) => setFormData({ ...formData, pharmacyProvider: e.target.value })}
-                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                            >
-                                <option value="">Select vendor...</option>
-                                {pharmacyVendors.map((vendor) => (
-                                    <option key={vendor.id} value={vendor.name}>
-                                        {vendor.name}
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <p className="text-foreground">{product.pharmacyProvider || "——"}</p>
-                        )}
-                    </div>
-
-                    {/* Pharmacy Product ID */}
-                    <div>
-                        <label className="text-sm font-medium mb-1 block">Pharmacy Product ID</label>
-                        {editing ? (
-                            <Input
-                                value={formData.pharmacyProductId}
-                                onChange={(e) => setFormData({ ...formData, pharmacyProductId: e.target.value })}
-                                placeholder="SKU or ID from pharmacy system"
-                            />
-                        ) : (
-                            <p className="text-foreground">{product.pharmacyProductId || "——"}</p>
                         )}
                     </div>
                 </div>

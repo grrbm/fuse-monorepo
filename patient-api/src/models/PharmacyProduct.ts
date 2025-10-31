@@ -49,6 +49,12 @@ export default class PharmacyProduct extends Model {
     declare pharmacyProductId?: string; // SKU or ID from pharmacy system
 
     @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare pharmacyProductName?: string; // Product name from pharmacy system
+
+    @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: true,
     })
