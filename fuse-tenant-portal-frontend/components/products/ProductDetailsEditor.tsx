@@ -1,0 +1,290 @@
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, Save, Package } from "lucide-react"
+import { CATEGORY_OPTIONS } from "@fuse/enums"
+
+interface Product {
+    id: string
+    name: string
+    description: string
+    price: number
+    dosage: string
+    activeIngredients: string[]
+    category?: string
+    medicationSize?: string
+    pharmacyProvider?: string
+    pharmacyProductId?: string
+    isActive: boolean
+}
+
+interface PharmacyVendor {
+    id: string
+    name: string
+}
+
+interface ProductDetailsEditorProps {
+    product: Product
+    onUpdate: (updatedProduct: Partial<Product>) => Promise<void>
+    pharmacyVendors: PharmacyVendor[]
+}
+
+export function ProductDetailsEditor({ product, onUpdate, pharmacyVendors }: ProductDetailsEditorProps) {
+    const [editing, setEditing] = useState(false)
+    const [saving, setSaving] = useState(false)
+    const [formData, setFormData] = useState({
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        dosage: product.dosage,
+        category: product.category || "",
+        medicationSize: product.medicationSize || "",
+        activeIngredients: product.activeIngredients?.join(", ") || "",
+        pharmacyProvider: product.pharmacyProvider || "",
+        pharmacyProductId: product.pharmacyProductId || "",
+    })
+
+    // Update form data when product changes
+    useEffect(() => {
+        setFormData({
+            name: product.name,
+            description: product.description,
+            price: product.price,
+            dosage: product.dosage,
+            category: product.category || "",
+            medicationSize: product.medicationSize || "",
+            activeIngredients: product.activeIngredients?.join(", ") || "",
+            pharmacyProvider: product.pharmacyProvider || "",
+            pharmacyProductId: product.pharmacyProductId || "",
+        })
+    }, [product])
+
+    const handleSave = async () => {
+        setSaving(true)
+        try {
+            await onUpdate({
+                name: formData.name,
+                description: formData.description,
+                price: Number(formData.price),
+                dosage: formData.dosage,
+                category: formData.category || undefined,
+                medicationSize: formData.medicationSize || undefined,
+                activeIngredients: formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean),
+                pharmacyProvider: formData.pharmacyProvider || undefined,
+                pharmacyProductId: formData.pharmacyProductId || undefined,
+            })
+            setEditing(false)
+        } catch (error) {
+            console.error("Failed to update product:", error)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleCancel = () => {
+        setFormData({
+            name: product.name,
+            description: product.description,
+            price: product.price,
+            dosage: product.dosage,
+            category: product.category || "",
+            medicationSize: product.medicationSize || "",
+            activeIngredients: product.activeIngredients?.join(", ") || "",
+            pharmacyProvider: product.pharmacyProvider || "",
+            pharmacyProductId: product.pharmacyProductId || "",
+        })
+        setEditing(false)
+    }
+
+    return (
+        <Card className="mb-6">
+            <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-xl flex items-center gap-2">
+                        <Package className="h-5 w-5" />
+                        Product Details
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                        <Badge variant={product.isActive ? "default" : "secondary"}>
+                            {product.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                        {!editing ? (
+                            <Button size="sm" onClick={() => setEditing(true)}>
+                                Edit Details
+                            </Button>
+                        ) : (
+                            <>
+                                <Button size="sm" variant="outline" onClick={handleCancel} disabled={saving}>
+                                    Cancel
+                                </Button>
+                                <Button size="sm" onClick={handleSave} disabled={saving}>
+                                    {saving ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="mr-2 h-4 w-4" />
+                                            Save Changes
+                                        </>
+                                    )}
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Product Name */}
+                    <div className="md:col-span-2">
+                        <label className="text-sm font-medium mb-1 block">Product Name *</label>
+                        {editing ? (
+                            <Input
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                placeholder="e.g., Semaglutide 2.5mg"
+                            />
+                        ) : (
+                            <p className="text-foreground font-semibold">{product.name}</p>
+                        )}
+                    </div>
+
+                    {/* Description */}
+                    <div className="md:col-span-2">
+                        <label className="text-sm font-medium mb-1 block">Description *</label>
+                        {editing ? (
+                            <textarea
+                                value={formData.description}
+                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                placeholder="Detailed product description..."
+                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm min-h-[80px]"
+                            />
+                        ) : (
+                            <p className="text-muted-foreground">{product.description}</p>
+                        )}
+                    </div>
+
+                    {/* Category */}
+                    <div>
+                        <label className="text-sm font-medium mb-1 block">Category</label>
+                        {editing ? (
+                            <select
+                                value={formData.category}
+                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                            >
+                                <option value="">Select category...</option>
+                                {CATEGORY_OPTIONS.map((cat) => (
+                                    <option key={cat.value} value={cat.value}>
+                                        {cat.label}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <p className="text-foreground">{product.category || "No Category"}</p>
+                        )}
+                    </div>
+
+                    {/* Dosage */}
+                    <div>
+                        <label className="text-sm font-medium mb-1 block">Dosage *</label>
+                        {editing ? (
+                            <Input
+                                value={formData.dosage}
+                                onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
+                                placeholder="e.g., 2.5mg/0.5ml"
+                            />
+                        ) : (
+                            <p className="text-foreground">{product.dosage || "——"}</p>
+                        )}
+                    </div>
+
+                    {/* Medication Size */}
+                    <div>
+                        <label className="text-sm font-medium mb-1 block">Medication Size</label>
+                        {editing ? (
+                            <Input
+                                value={formData.medicationSize}
+                                onChange={(e) => setFormData({ ...formData, medicationSize: e.target.value })}
+                                placeholder="e.g., 10ml vial, 30 tablets"
+                            />
+                        ) : (
+                            <p className="text-foreground">{product.medicationSize || "——"}</p>
+                        )}
+                    </div>
+
+                    {/* Wholesale Price */}
+                    <div>
+                        <label className="text-sm font-medium mb-1 block">Wholesale Cost *</label>
+                        {editing ? (
+                            <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={formData.price}
+                                onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                                placeholder="0.00"
+                            />
+                        ) : (
+                            <p className="text-foreground">${product.price.toFixed(2)}</p>
+                        )}
+                    </div>
+
+                    {/* Active Ingredients */}
+                    <div className="md:col-span-2">
+                        <label className="text-sm font-medium mb-1 block">Active Ingredients *</label>
+                        {editing ? (
+                            <Input
+                                value={formData.activeIngredients}
+                                onChange={(e) => setFormData({ ...formData, activeIngredients: e.target.value })}
+                                placeholder="Comma separated: Ingredient1, Ingredient2"
+                            />
+                        ) : (
+                            <p className="text-foreground">{product.activeIngredients?.join(", ") || "——"}</p>
+                        )}
+                    </div>
+
+                    {/* Pharmacy Vendor */}
+                    <div>
+                        <label className="text-sm font-medium mb-1 block">Pharmacy Vendor</label>
+                        {editing ? (
+                            <select
+                                value={formData.pharmacyProvider}
+                                onChange={(e) => setFormData({ ...formData, pharmacyProvider: e.target.value })}
+                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                            >
+                                <option value="">Select vendor...</option>
+                                {pharmacyVendors.map((vendor) => (
+                                    <option key={vendor.id} value={vendor.name}>
+                                        {vendor.name}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <p className="text-foreground">{product.pharmacyProvider || "——"}</p>
+                        )}
+                    </div>
+
+                    {/* Pharmacy Product ID */}
+                    <div>
+                        <label className="text-sm font-medium mb-1 block">Pharmacy Product ID</label>
+                        {editing ? (
+                            <Input
+                                value={formData.pharmacyProductId}
+                                onChange={(e) => setFormData({ ...formData, pharmacyProductId: e.target.value })}
+                                placeholder="SKU or ID from pharmacy system"
+                            />
+                        ) : (
+                            <p className="text-foreground">{product.pharmacyProductId || "——"}</p>
+                        )}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+

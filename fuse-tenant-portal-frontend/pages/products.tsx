@@ -159,22 +159,40 @@ export default function Products() {
     }
   }
 
-  const handleCreateProduct = () => {
-    setEditingProduct(null)
-    setFormData({
-      name: "",
-      description: "",
-      price: 0,
-      dosage: "",
-      activeIngredients: [],
-      category: "",
-      medicationSize: "",
-      pharmacyProvider: "",
-      pharmacyProductId: "",
-      requiredDoctorQuestions: [],
-      isActive: true,
-    })
-    setShowModal(true)
+  const handleCreateProduct = async () => {
+    if (!token) return
+
+    try {
+      // Create a skeleton product with minimum required fields
+      const response = await fetch(`${baseUrl}/products-management`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: "New Product",
+          description: "Edit product details below",
+          price: 1, // Minimum positive price
+          dosage: "TBD",
+          activeIngredients: ["Ingredient"], // At least one required
+          isActive: false, // Start as inactive
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        console.error('Validation errors:', data.errors)
+        throw new Error(data.message || "Failed to create product")
+      }
+
+      // Navigate to the product editor
+      router.push(`/products/editor/${data.data.id}`)
+    } catch (error: any) {
+      console.error("❌ Error creating product:", error)
+      setSaveMessage(error.message)
+    }
   }
 
   const handleEditProduct = (product: Product) => {

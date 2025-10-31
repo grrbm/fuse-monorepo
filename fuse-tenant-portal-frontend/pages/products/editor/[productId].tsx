@@ -11,7 +11,7 @@ import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, In
 import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../../forms/QuestionEditor"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
-import { ProductHeader } from "@/components/products/ProductHeader"
+import { ProductDetailsEditor } from "@/components/products/ProductDetailsEditor"
 import { FormAttachmentCard } from "@/components/products/FormAttachmentCard"
 import { NoFormAttached } from "@/components/products/NoFormAttached"
 
@@ -74,6 +74,8 @@ export default function ProductEditor() {
   // Product state
   const [product, setProduct] = useState<Product | null>(null)
   const [loadingProduct, setLoadingProduct] = useState(true)
+  const [pharmacyVendors, setPharmacyVendors] = useState<Array<{ id: string; name: string }>>([])
+  const [updatingProduct, setUpdatingProduct] = useState(false)
 
   // Form editor state
   const [templateId, setTemplateId] = useState<string | null>(null)
@@ -279,6 +281,29 @@ export default function ProductEditor() {
     fetchAvailableForms()
   }, [token, baseUrl])
 
+  // Fetch pharmacy vendors
+  useEffect(() => {
+    const fetchPharmacyVendors = async () => {
+      if (!token) return
+
+      try {
+        const res = await fetch(`${baseUrl}/pharmacy-vendors`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          const vendors = Array.isArray(data?.data) ? data.data : []
+          setPharmacyVendors(vendors)
+        }
+      } catch (error) {
+        console.error('Failed to fetch pharmacy vendors:', error)
+      }
+    }
+
+    fetchPharmacyVendors()
+  }, [token, baseUrl])
+
   // Fetch form details when templateId is set
   useEffect(() => {
     if (!token) return
@@ -363,6 +388,39 @@ export default function ProductEditor() {
 
   const handleBack = () => {
     router.push("/products")
+  }
+
+  const handleUpdateProduct = async (updates: Partial<Product>) => {
+    if (!token || !productId || typeof productId !== 'string' || !product) return
+
+    setUpdatingProduct(true)
+    try {
+      const response = await fetch(`${baseUrl}/products-management/${productId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || "Failed to update product")
+      }
+
+      const data = await response.json()
+      setProduct({ ...product, ...updates })
+      setSaveMessage("Product updated successfully")
+      setTimeout(() => setSaveMessage(null), 3000)
+    } catch (error: any) {
+      console.error("❌ Error updating product:", error)
+      setError(error.message || "Failed to update product")
+      setTimeout(() => setError(null), 5000)
+      throw error // Re-throw so the component knows it failed
+    } finally {
+      setUpdatingProduct(false)
+    }
   }
 
   const handleCreateNewForm = async () => {
@@ -1748,8 +1806,12 @@ export default function ProductEditor() {
             Back to Products
           </Button>
 
-          {/* Product Information */}
-          <ProductHeader product={product} />
+          {/* Product Details Editor */}
+          <ProductDetailsEditor
+            product={product}
+            onUpdate={handleUpdateProduct}
+            pharmacyVendors={pharmacyVendors}
+          />
 
           {/* Inactive Product Banner */}
           {product && !product.isActive && (
