@@ -45,6 +45,12 @@ export default function SignUp() {
   const [passwordStrength, setPasswordStrength] = React.useState(0);
   const [agreedToTerms, setAgreedToTerms] = React.useState(false);
   const [agreedToHipaa, setAgreedToHipaa] = React.useState(false);
+  
+  // Date of Birth dropdown states
+  const [dobMonth, setDobMonth] = React.useState("");
+  const [dobDay, setDobDay] = React.useState("");
+  const [dobYear, setDobYear] = React.useState("");
+  
   const router = useRouter();
 
   // Load clinic data based on subdomain
@@ -77,6 +83,74 @@ export default function SignUp() {
 
     loadClinicFromDomain();
   }, []);
+
+  // Sync dateOfBirth from formData when it changes externally
+  React.useEffect(() => {
+    if (formData.dateOfBirth) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(formData.dateOfBirth);
+      if (match) {
+        setDobYear(match[1]);
+        setDobMonth(match[2]);
+        setDobDay(match[3]);
+      }
+    } else {
+      setDobYear("");
+      setDobMonth("");
+      setDobDay("");
+    }
+  }, [formData.dateOfBirth]);
+
+  // Helper functions for DOB dropdowns
+  const getDaysInMonth = (year: string, month: string) => {
+    if (!year || !month) return 31;
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month);
+    return new Date(yearNum, monthNum, 0).getDate();
+  };
+
+  const handleDOBChange = (newYear: string, newMonth: string, newDay: string) => {
+    // Validate and adjust day if needed when month/year changes
+    let adjustedDay = newDay;
+    if (newDay && newMonth && newYear) {
+      const maxDays = getDaysInMonth(newYear, newMonth);
+      const currentDay = parseInt(newDay);
+      if (currentDay > maxDays) {
+        adjustedDay = maxDays.toString().padStart(2, '0');
+      }
+    }
+
+    setDobYear(newYear);
+    setDobMonth(newMonth);
+    setDobDay(adjustedDay);
+
+    // Update formData.dateOfBirth in YYYY-MM-DD format
+    if (newYear && newMonth && adjustedDay) {
+      const formattedDate = `${newYear}-${newMonth}-${adjustedDay}`;
+      handleInputChange('dateOfBirth', formattedDate);
+    } else {
+      handleInputChange('dateOfBirth', '');
+    }
+  };
+
+  // Generate years array (ages 18-120 from current year)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 103 }, (_, i) => (currentYear - 18 - i).toString());
+  const months = [
+    { value: '01', label: 'January' },
+    { value: '02', label: 'February' },
+    { value: '03', label: 'March' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'May' },
+    { value: '06', label: 'June' },
+    { value: '07', label: 'July' },
+    { value: '08', label: 'August' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' },
+  ];
+  const daysInMonth = getDaysInMonth(dobYear, dobMonth);
+  const days = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString().padStart(2, '0'));
 
   // Password strength validation (HIPAA requires strong passwords)
   const validatePasswordStrength = (password: string): number => {
@@ -333,26 +407,115 @@ export default function SignUp() {
                 />
               )}
 
-              {/* Contact Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  type="date"
-                  label="Date of Birth"
-                  value={formData.dateOfBirth}
-                  onValueChange={(value) => handleInputChange('dateOfBirth', value)}
-                  startContent={<Icon icon="lucide:calendar" className="text-foreground-400" />}
-                  variant="bordered"
-                />
-                <Input
-                  type="tel"
-                  label="Phone Number"
-                  placeholder="(555) 123-4567"
-                  value={formData.phoneNumber}
-                  onValueChange={(value) => handleInputChange('phoneNumber', value)}
-                  startContent={<Icon icon="lucide:phone" className="text-foreground-400" />}
-                  variant="bordered"
-                />
+              {/* Date of Birth */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm text-default-700 font-medium">
+                  Date of Birth
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Month */}
+                  <div className="relative group">
+                    <select
+                      value={dobMonth}
+                      onChange={(e) => {
+                        const newMonth = e.target.value;
+                        let newDay = dobDay;
+                        if (dobDay && dobYear) {
+                          const maxDays = getDaysInMonth(dobYear, newMonth);
+                          const currentDay = parseInt(dobDay);
+                          if (currentDay > maxDays) {
+                            newDay = maxDays.toString().padStart(2, '0');
+                          }
+                        }
+                        handleDOBChange(dobYear, newMonth, newDay);
+                      }}
+                      className="w-full h-14 px-4 py-3 rounded-large border-2 border-default-200 bg-transparent text-foreground text-sm font-medium focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer hover:border-default-400"
+                      style={{ paddingRight: '2.5rem' }}
+                    >
+                      <option value="">Month</option>
+                      {months.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Icon 
+                      icon="lucide:chevron-down" 
+                      className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-default-500 group-hover:text-default-700 transition-colors" 
+                      width={20} 
+                      height={20}
+                    />
+                  </div>
+
+                  {/* Day */}
+                  <div className="relative group">
+                    <select
+                      value={dobDay}
+                      onChange={(e) => handleDOBChange(dobYear, dobMonth, e.target.value)}
+                      className="w-full h-14 px-4 py-3 rounded-large border-2 border-default-200 bg-transparent text-foreground text-sm font-medium focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer hover:border-default-400"
+                      style={{ paddingRight: '2.5rem' }}
+                    >
+                      <option value="">Day</option>
+                      {days.map((d) => (
+                        <option key={d} value={d}>
+                          {parseInt(d)}
+                        </option>
+                      ))}
+                    </select>
+                    <Icon 
+                      icon="lucide:chevron-down" 
+                      className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-default-500 group-hover:text-default-700 transition-colors" 
+                      width={20} 
+                      height={20}
+                    />
+                  </div>
+
+                  {/* Year */}
+                  <div className="relative group">
+                    <select
+                      value={dobYear}
+                      onChange={(e) => {
+                        const newYear = e.target.value;
+                        let newDay = dobDay;
+                        if (dobDay && dobMonth) {
+                          const maxDays = getDaysInMonth(newYear, dobMonth);
+                          const currentDay = parseInt(dobDay);
+                          if (currentDay > maxDays) {
+                            newDay = maxDays.toString().padStart(2, '0');
+                          }
+                        }
+                        handleDOBChange(newYear, dobMonth, newDay);
+                      }}
+                      className="w-full h-14 px-4 py-3 rounded-large border-2 border-default-200 bg-transparent text-foreground text-sm font-medium focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer hover:border-default-400"
+                      style={{ paddingRight: '2.5rem' }}
+                    >
+                      <option value="">Year</option>
+                      {years.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                    <Icon 
+                      icon="lucide:chevron-down" 
+                      className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-default-500 group-hover:text-default-700 transition-colors" 
+                      width={20} 
+                      height={20}
+                    />
+                  </div>
+                </div>
               </div>
+
+              {/* Phone Number */}
+              <Input
+                type="tel"
+                label="Phone Number"
+                placeholder="(555) 123-4567"
+                value={formData.phoneNumber}
+                onValueChange={(value) => handleInputChange('phoneNumber', value)}
+                startContent={<Icon icon="lucide:phone" className="text-foreground-400" />}
+                variant="bordered"
+              />
 
               {/* Password */}
               <Input
