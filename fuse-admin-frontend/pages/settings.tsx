@@ -156,6 +156,7 @@ export default function Settings({
   const [tempLogoPreview, setTempLogoPreview] = useState<string | null>(null);
   const [tempLogoFile, setTempLogoFile] = useState<File | null>(null);
   const [showCNAMEInstructions, setShowCNAMEInstructions] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [verifyingDomain, setVerifyingDomain] = useState(false);
   const [domainVerificationStatus, setDomainVerificationStatus] = useState<{
     verified: boolean | null;
@@ -461,48 +462,141 @@ export default function Settings({
     }
   };
 
-  const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validar que sea un archivo PNG
-      if (file.type !== "image/png") {
-        showToast(
-          "error",
-          "Only PNG files are allowed. Please select a .png file"
-        );
-        e.target.value = "";
-        return;
-      }
+  // Función para redimensionar y comprimir imagen
+  const resizeAndCompressImage = (file: File, maxWidth: number = 1024, maxHeight: number = 1024, quality: number = 0.9): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
 
-      // Validar que la imagen sea cuadrada (1:1)
+          // Calcular nuevas dimensiones manteniendo aspecto cuadrado
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = width * ratio;
+            height = height * ratio;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+
+          // Dibujar imagen redimensionada
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convertir a blob y luego a File
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Failed to compress image'));
+                return;
+              }
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/png',
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            },
+            'image/png',
+            quality
+          );
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleLogoFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar que sea un archivo PNG
+    if (file.type !== "image/png") {
+      showToast(
+        "error",
+        "Only PNG files are allowed. Please select a .png file"
+      );
+      e.target.value = "";
+      return;
+    }
+
+    // Validar tamaño máximo (5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      showToast(
+        "error",
+        `File size too large. Maximum size is 5MB. Current size: ${(file.size / 1024 / 1024).toFixed(2)}MB. The image will be compressed automatically.`
+      );
+      // Continuar con el proceso para comprimir
+    }
+
+    try {
+      // Validar que la imagen sea cuadrada (1:1) y redimensionar si es necesario
       const img = new Image();
       const objectUrl = URL.createObjectURL(file);
 
-      img.onload = () => {
-        // Limpiar el object URL
-        URL.revokeObjectURL(objectUrl);
+      img.onload = async () => {
+        try {
+          const width = img.width;
+          const height = img.height;
 
-        const width = img.width;
-        const height = img.height;
+          // Verificar que la imagen sea cuadrada (1:1)
+          if (width !== height) {
+            URL.revokeObjectURL(objectUrl);
+            showToast(
+              "error",
+              `Image must be square (1:1). Current dimensions: ${width}x${height}px`
+            );
+            e.target.value = "";
+            return;
+          }
 
-        // Verificar que la imagen sea cuadrada (1:1)
-        if (width !== height) {
-          showToast(
-            "error",
-            `Image must be square (1:1). Current dimensions: ${width}x${height}px`
-          );
-          // Limpiar el input para que pueda seleccionar otra imagen
+          // Si la imagen es grande (> 1024x1024 o > 1MB), redimensionar y comprimir
+          let processedFile = file;
+          if (width > 1024 || height > 1024 || file.size > 1024 * 1024) {
+            try {
+              showToast("success", "Compressing image...");
+              processedFile = await resizeAndCompressImage(file, 1024, 1024, 0.85);
+            } catch (compressError) {
+              console.error('Error compressing image:', compressError);
+              showToast("error", "Failed to compress image. Trying original file...");
+            }
+          }
+
+          // Limpiar el object URL
+          URL.revokeObjectURL(objectUrl);
+
+          // Si el archivo procesado sigue siendo muy grande, intentar más compresión
+          if (processedFile.size > maxSize) {
+            processedFile = await resizeAndCompressImage(processedFile, 800, 800, 0.7);
+          }
+
+          // Actualizar estado con archivo procesado
+          setTempLogoFile(processedFile);
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setTempLogoPreview(reader.result as string);
+            if (processedFile.size < file.size) {
+              showToast("success", `Image compressed: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(processedFile.size / 1024 / 1024).toFixed(2)}MB`);
+            }
+          };
+          reader.readAsDataURL(processedFile);
+        } catch (error) {
+          URL.revokeObjectURL(objectUrl);
+          showToast("error", "Error processing image. Please try another file.");
           e.target.value = "";
-          return;
         }
-
-        // Si es PNG y cuadrada, mostrar preview temporal
-        setTempLogoFile(file);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setTempLogoPreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
       };
 
       img.onerror = () => {
@@ -512,6 +606,9 @@ export default function Settings({
       };
 
       img.src = objectUrl;
+    } catch (error) {
+      showToast("error", "An error occurred while processing the file.");
+      e.target.value = "";
     }
   };
 
@@ -530,6 +627,7 @@ export default function Settings({
     setShowLogoModal(false);
     setTempLogoFile(null);
     setTempLogoPreview(null);
+    setUploadProgress(0);
     // Reset file input
     const fileInput = document.getElementById('logo-upload-modal') as HTMLInputElement;
     if (fileInput) {
@@ -539,29 +637,92 @@ export default function Settings({
 
   const uploadLogo = async (file: File) => {
     setLoading(true);
+    setUploadProgress(0);
 
     try {
+      // Validar tamaño final antes de subir
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        showToast("error", `File is still too large after compression (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size is 5MB.`);
+        setLoading(false);
+        return;
+      }
+
       const formData = new FormData();
       formData.append("logo", file);
 
-      const uploadResponse = await fetch(`${API_URL}/upload/logo`, {
-        method: "POST",
-        credentials: "include",
-        headers: buildAuthHeaders(),
-        body: formData,
-      });
+      // Usar XMLHttpRequest para poder rastrear el progreso
+      const xhr = new XMLHttpRequest();
 
-      if (uploadResponse.ok) {
-        const uploadData = await uploadResponse.json();
-        setOrganizationData({ ...organizationData, logo: uploadData.url });
-        showToast("success", "Logo uploaded successfully!");
-      } else {
-        showToast("error", "Failed to upload logo");
-      }
-    } catch (error) {
-      showToast("error", "An error occurred while uploading");
-    } finally {
+      return new Promise<void>((resolve, reject) => {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            setUploadProgress(percentComplete);
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const uploadData = JSON.parse(xhr.responseText);
+              if (uploadData.success && uploadData.url) {
+                setOrganizationData({ ...organizationData, logo: uploadData.url });
+                showToast("success", "Logo uploaded successfully!");
+                setUploadProgress(100);
+              } else {
+                throw new Error(uploadData.message || "Upload failed");
+              }
+            } catch (parseError) {
+              showToast("error", "Failed to parse server response");
+              reject(parseError);
+            }
+          } else {
+            let errorMessage = "Failed to upload logo";
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              errorMessage = errorData.message || errorMessage;
+            } catch {
+              if (xhr.status === 413) {
+                errorMessage = "File too large. Maximum size is 5MB.";
+              } else if (xhr.status === 400) {
+                errorMessage = "Invalid file format or file too large.";
+              } else if (xhr.status === 500) {
+                errorMessage = "Server error. Please try again later.";
+              }
+            }
+            showToast("error", errorMessage);
+            reject(new Error(errorMessage));
+          }
+          setLoading(false);
+          resolve();
+        });
+
+        xhr.addEventListener('error', () => {
+          showToast("error", "Network error. Please check your connection and try again.");
+          setLoading(false);
+          reject(new Error("Network error"));
+        });
+
+        xhr.addEventListener('abort', () => {
+          showToast("error", "Upload cancelled");
+          setLoading(false);
+          reject(new Error("Upload cancelled"));
+        });
+
+        const authToken = token || (typeof window !== "undefined" ? localStorage.getItem("admin_token") : null);
+        xhr.open('POST', `${API_URL}/upload/logo`);
+        xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
+        
+        // No establecer Content-Type header, dejar que el navegador lo establezca con el boundary correcto
+        xhr.withCredentials = true;
+        xhr.send(formData);
+      });
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      showToast("error", error?.message || "An error occurred while uploading");
       setLoading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -1932,6 +2093,10 @@ export default function Settings({
                   <Check className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                   <span><strong>Examples:</strong> 512×512px, 1024×1024px</span>
                 </li>
+                <li className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <span><strong>Size:</strong> Maximum 5MB (will be compressed automatically if larger)</span>
+                </li>
               </ul>
             </div>
 
@@ -1943,12 +2108,13 @@ export default function Settings({
                 onChange={handleLogoFileSelect}
                 className="hidden"
                 id="logo-upload-modal"
+                disabled={loading}
               />
               <label
                 htmlFor="logo-upload-modal"
-                className="block w-full cursor-pointer"
+                className={`block w-full ${loading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
               >
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary hover:bg-primary/5 transition-all">
+                <div className={`border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-all ${loading ? '' : 'hover:border-primary hover:bg-primary/5'}`}>
                   {tempLogoPreview ? (
                     <div className="space-y-4">
                       <div className="flex justify-center">
@@ -1962,16 +2128,23 @@ export default function Settings({
                         <Check className="h-4 w-4" />
                         Valid image - Ready to upload
                       </div>
-                      <button
-                        type="button"
-                        className="text-sm text-primary hover:underline"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          document.getElementById('logo-upload-modal')?.click();
-                        }}
-                      >
-                        Change image
-                      </button>
+                      {tempLogoFile && (
+                        <div className="text-xs text-muted-foreground">
+                          File size: {(tempLogoFile.size / 1024).toFixed(0)} KB
+                        </div>
+                      )}
+                      {!loading && (
+                        <button
+                          type="button"
+                          className="text-sm text-primary hover:underline"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            document.getElementById('logo-upload-modal')?.click();
+                          }}
+                        >
+                          Change image
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -1984,12 +2157,31 @@ export default function Settings({
                         <p className="text-sm font-medium text-foreground mb-1">
                           Click to select file
                         </p>
+                        <p className="text-xs text-muted-foreground">
+                          Max 5MB - Images will be automatically compressed if needed
+                        </p>
                       </div>
                     </div>
                   )}
                 </div>
               </label>
             </div>
+
+            {/* Upload Progress Bar */}
+            {loading && uploadProgress > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Uploading...</span>
+                  <span className="text-sm font-medium text-foreground">{Math.round(uploadProgress)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex gap-3">
@@ -2007,7 +2199,14 @@ export default function Settings({
                 onClick={handleConfirmLogoUpload}
                 disabled={!tempLogoFile || loading}
               >
-                {loading ? "Uploading..." : "Confirm and Upload"}
+                {loading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading... {uploadProgress > 0 ? `${Math.round(uploadProgress)}%` : ''}
+                  </>
+                ) : (
+                  "Confirm and Upload"
+                )}
               </Button>
             </div>
           </div>
