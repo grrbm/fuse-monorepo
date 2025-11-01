@@ -175,6 +175,28 @@ export async function initializeDatabase() {
       // ignore - don't fail startup
     }
 
+    // Ensure IronSail pharmacy exists
+    try {
+      const existingIronSail = await Pharmacy.findOne({
+        where: { name: 'IronSail' }
+      });
+
+      if (!existingIronSail) {
+        await Pharmacy.create({
+          name: 'IronSail',
+          slug: 'ironsail',
+          supportedStates: ['FL', 'IL'],
+          isActive: true
+        });
+        console.log('✅ Created IronSail pharmacy');
+      } else {
+        console.log('✅ IronSail pharmacy already exists');
+      }
+    } catch (e) {
+      console.error('❌ Error creating IronSail pharmacy:', e);
+      // ignore - don't fail startup
+    }
+
     return true;
   } catch (error) {
     console.error('❌ Unable to connect to the database:', error);

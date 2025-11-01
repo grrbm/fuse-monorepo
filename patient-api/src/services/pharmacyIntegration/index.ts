@@ -1,4 +1,5 @@
 import { AbsoluteRXService, AbsoluteRXProduct } from './absoluterx.service';
+import { IronSailService, IronSailProduct } from './ironsail.service';
 
 export interface PharmacyProduct {
     id: string | number;
@@ -13,9 +14,11 @@ export interface PharmacyProduct {
 
 export class PharmacyIntegrationService {
     private absoluteRXService: AbsoluteRXService;
+    private ironSailService: IronSailService;
 
     constructor() {
         this.absoluteRXService = new AbsoluteRXService();
+        this.ironSailService = new IronSailService();
     }
 
     /**
@@ -28,6 +31,9 @@ export class PharmacyIntegrationService {
         switch (pharmacySlug.toLowerCase()) {
             case 'absoluterx':
                 return await this.getAbsoluteRXProducts(state);
+
+            case 'ironsail':
+                return await this.getIronSailProducts();
 
             // Add more pharmacy integrations here
             // case 'anotherpharma':
@@ -47,8 +53,12 @@ export class PharmacyIntegrationService {
     async getProductsByPharmacyAndStates(pharmacySlug: string, states: string[]): Promise<PharmacyProduct[]> {
         switch (pharmacySlug.toLowerCase()) {
             case 'absoluterx':
-                const products = await this.absoluteRXService.getProductsByStates(states);
-                return this.normalizeAbsoluteRXProducts(products);
+                const absoluteRxProducts = await this.absoluteRXService.getProductsByStates(states);
+                return this.normalizeAbsoluteRXProducts(absoluteRxProducts);
+
+            case 'ironsail':
+                const ironSailProducts = await this.ironSailService.getProductsByStates(states);
+                return this.normalizeIronSailProducts(ironSailProducts);
 
             // Add more pharmacy integrations here
 
@@ -81,6 +91,31 @@ export class PharmacyIntegrationService {
             nameWithStrength: product.name_with_strength,
             dispense: product.dispense,
             label: product.label,
+            // Keep original data for reference
+            _raw: product,
+        }));
+    }
+
+    /**
+     * Fetch products from IronSail
+     */
+    private async getIronSailProducts(): Promise<PharmacyProduct[]> {
+        const products = await this.ironSailService.getProducts();
+        return this.normalizeIronSailProducts(products);
+    }
+
+    /**
+     * Normalize IronSail products to common format
+     */
+    private normalizeIronSailProducts(products: IronSailProduct[]): PharmacyProduct[] {
+        return products.map(product => ({
+            id: product.id,
+            sku: product.sku,
+            name: product.name,
+            strength: product.strength,
+            nameWithStrength: product.nameWithStrength,
+            dispense: product.dispense,
+            label: product.name, // IronSail doesn't have separate label
             // Keep original data for reference
             _raw: product,
         }));
