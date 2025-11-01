@@ -9349,13 +9349,35 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
         const tpf = await TenantProductForm.findOne({ where: { clinicId: clinic.id, productId: product.id } as any });
         currentFormVariant = (tpf as any)?.currentFormVariant ?? null;
       } catch { }
+
+      // Always check for the most recently attached form via Questionnaire.productId
+      // This takes precedence over TenantProduct.questionnaireId to ensure form switching works
+      let questionnaireId = tenantProduct.questionnaireId || null;
+      try {
+        const productQuestionnaire = await Questionnaire.findOne({
+          where: {
+            productId: product.id,
+            formTemplateType: 'normal'
+          },
+          order: [['updatedAt', 'DESC']]
+        });
+        if (productQuestionnaire) {
+          questionnaireId = productQuestionnaire.id;
+          console.log('✅ Using questionnaire from Questionnaire.productId:', questionnaireId);
+        } else if (questionnaireId) {
+          console.log('⚠️ No Questionnaire.productId found, falling back to TenantProduct.questionnaireId:', questionnaireId);
+        }
+      } catch (e) {
+        console.error('Error finding product questionnaire:', e);
+      }
+
       return res.status(200).json({
         success: true,
         data: {
           id: product.id,
           name: product.name,
           slug: product.slug,
-          questionnaireId: tenantProduct.questionnaireId || null,
+          questionnaireId,
           clinicSlug: clinic.slug,
           category: product.category || null,
           currentFormVariant,
@@ -9382,13 +9404,35 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
 
     if (tenantProductForm && (tenantProductForm as any).product) {
       const product = (tenantProductForm as any).product;
+      
+      // Always check for the most recently attached form via Questionnaire.productId
+      // This takes precedence over TenantProductForm.questionnaireId to ensure form switching works
+      let questionnaireId = tenantProductForm.questionnaireId || null;
+      try {
+        const productQuestionnaire = await Questionnaire.findOne({
+          where: {
+            productId: product.id,
+            formTemplateType: 'normal'
+          },
+          order: [['updatedAt', 'DESC']]
+        });
+        if (productQuestionnaire) {
+          questionnaireId = productQuestionnaire.id;
+          console.log('✅ Using questionnaire from Questionnaire.productId:', questionnaireId);
+        } else if (questionnaireId) {
+          console.log('⚠️ No Questionnaire.productId found, falling back to TenantProductForm.questionnaireId:', questionnaireId);
+        }
+      } catch (e) {
+        console.error('Error finding product questionnaire:', e);
+      }
+
       return res.status(200).json({
         success: true,
         data: {
           id: product.id,
           name: product.name,
           slug: product.slug,
-          questionnaireId: tenantProductForm.questionnaireId || null,
+          questionnaireId,
           clinicSlug: clinic.slug,
           category: product.category || null,
           currentFormVariant: (tenantProductForm as any).currentFormVariant ?? null,
