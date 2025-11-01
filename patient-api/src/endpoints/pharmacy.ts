@@ -216,5 +216,33 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
         }
     });
 
+    // Delete all pharmacy assignments for a product and pharmacy
+    app.delete("/products/:productId/pharmacies/:pharmacyId/assignments", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            const { productId, pharmacyId } = req.params;
+
+            const deletedCount = await PharmacyProduct.destroy({
+                where: {
+                    productId,
+                    pharmacyId
+                }
+            });
+
+            res.json({
+                success: true,
+                message: `Deleted ${deletedCount} pharmacy assignment(s)`,
+                deletedCount
+            });
+        } catch (error) {
+            console.error('Error deleting pharmacy assignments:', error);
+            res.status(500).json({ success: false, message: "Failed to delete pharmacy assignments" });
+        }
+    });
+
 }
 

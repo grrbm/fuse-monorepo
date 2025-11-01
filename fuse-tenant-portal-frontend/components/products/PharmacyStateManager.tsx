@@ -234,6 +234,26 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
     }
   }
 
+  const handleRemoveAllPharmacyAssignments = async (pharmacyId: string, pharmacyName: string) => {
+    if (!token || !confirm(`Remove all ${pharmacyName} coverage? This will delete all state assignments for this pharmacy.`)) return
+
+    try {
+      const response = await fetch(`${baseUrl}/products/${productId}/pharmacies/${pharmacyId}/assignments`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to remove pharmacy coverage")
+      }
+
+      await fetchData()
+    } catch (err) {
+      console.error("Error removing pharmacy coverage:", err)
+      setError("Failed to remove pharmacy coverage")
+    }
+  }
+
   // Group assignments by pharmacy
   const groupedAssignments = assignments.reduce((acc, assignment) => {
     const pharmacyId = assignment.pharmacyId
@@ -471,6 +491,14 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                         </div>
                       )}
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveAllPharmacyAssignments(pharmacy.id, pharmacy.name)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {states.map((state) => {
