@@ -34,6 +34,19 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         case "text":
         case "email":
         case "phone":
+            const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+                const newValue = e.target.value;
+                // For phone fields, limit to 10 digits (numbers only)
+                if (question.answerType === "phone") {
+                    const numericValue = newValue.replace(/\D/g, ''); // Remove non-numeric characters
+                    if (numericValue.length <= 10) {
+                        onAnswerChange(question.id, numericValue);
+                    }
+                } else {
+                    onAnswerChange(question.id, newValue);
+                }
+            };
+
             return (
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
@@ -44,7 +57,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                         type={question.answerType === "email" ? "email" : question.answerType === "phone" ? "tel" : "text"}
                         placeholder={question.placeholder}
                         value={value}
-                        onChange={(e) => onAnswerChange(question.id, e.target.value)}
+                        onChange={handlePhoneChange}
+                        maxLength={question.answerType === "phone" ? 10 : undefined}
                         className={`w-full p-4 rounded-2xl border-2 transition-all ${hasError ? "border-red-300 bg-red-50" : "border-gray-200 bg-white"}`}
                         style={hasError ? undefined : {
                             borderColor: theme.primaryLight,
@@ -139,48 +153,208 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         }
 
         case "date": {
-            const onChange = (v: string) => {
-                // Validate realistic DOB if this is a DOB question
-                const isDobQuestion = (question.questionText || '').toLowerCase().includes('date of birth');
-                if (isDobQuestion) {
-                    const valid = (() => {
-                        // Accept common MM/DD/YYYY and normalize to YYYY-MM-DD for storage
-                        let normalized = v;
-                        const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
-                        const mUs = mmddyyyy.exec(v);
-                        if (mUs) {
-                            const mm = mUs[1].padStart(2, '0');
-                            const dd = mUs[2].padStart(2, '0');
-                            const yyyy = mUs[3];
-                            normalized = `${yyyy}-${mm}-${dd}`;
-                        }
-
-                        const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(normalized);
-                        if (!m) return false;
-                        const year = Number(m[1]);
-                        const month = Number(m[2]);
-                        const day = Number(m[3]);
-                        if (year < 1900) return false;
-                        if (month < 1 || month > 12) return false;
-                        if (day < 1 || day > 31) return false;
-                        const dob = new Date(normalized + 'T00:00:00Z');
-                        if (isNaN(dob.getTime())) return false;
-                        const now = new Date();
-                        const ageYears = (now.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-                        return ageYears >= 18 && ageYears <= 120;
-                    })();
-
-                    if (!valid) {
-                        errors[question.id] = 'Enter a valid date (YYYY-MM-DD), age 18-120.';
-                    } else if (errors[question.id]) {
-                        delete errors[question.id];
+            // Check if this is a Date of Birth question
+            const isDobQuestion = (question.questionText || '').toLowerCase().includes('date of birth');
+            
+            // If it's a DOB question, use dropdown pickers
+            if (isDobQuestion) {
+                // Parse current value to get year, month, day
+                const parseDateValue = (val: string) => {
+                    if (!val) return { year: '', month: '', day: '' };
+                    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
+                    if (match) {
+                        return { year: match[1], month: match[2], day: match[3] };
                     }
-                }
-                // Store normalized YYYY-MM-DD if user used MM/DD/YYYY
-                const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
-                const mUs = mmddyyyy.exec(v);
-                const finalValue = mUs ? `${mUs[3]}-${mUs[1].padStart(2, '0')}-${mUs[2].padStart(2, '0')}` : v;
-                onAnswerChange(question.id, finalValue);
+                    return { year: '', month: '', day: '' };
+                };
+
+                const currentDate = parseDateValue(value);
+                const [year, setYear] = React.useState(currentDate.year);
+                const [month, setMonth] = React.useState(currentDate.month);
+                const [day, setDay] = React.useState(currentDate.day);
+
+                // Update local state when external value changes
+                React.useEffect(() => {
+                    const parsed = parseDateValue(value);
+                    setYear(parsed.year);
+                    setMonth(parsed.month);
+                    setDay(parsed.day);
+                }, [value]);
+
+                // Generate options
+                const currentYear = new Date().getFullYear();
+                const years = Array.from({ length: 103 }, (_, i) => currentYear - 18 - i);
+                const months = [
+                    { value: '01', label: 'January' },
+                    { value: '02', label: 'February' },
+                    { value: '03', label: 'March' },
+                    { value: '04', label: 'April' },
+                    { value: '05', label: 'May' },
+                    { value: '06', label: 'June' },
+                    { value: '07', label: 'July' },
+                    { value: '08', label: 'August' },
+                    { value: '09', label: 'September' },
+                    { value: '10', label: 'October' },
+                    { value: '11', label: 'November' },
+                    { value: '12', label: 'December' },
+                ];
+
+                // Get days in selected month
+                const getDaysInMonth = (y: string, m: string) => {
+                    if (!y || !m) return 31;
+                    const yearNum = parseInt(y);
+                    const monthNum = parseInt(m);
+                    return new Date(yearNum, monthNum, 0).getDate();
+                };
+
+                const daysInMonth = getDaysInMonth(year, month);
+                const days = Array.from({ length: daysInMonth }, (_, i) => (i + 1).toString().padStart(2, '0'));
+
+                const handleDateChange = (newYear: string, newMonth: string, newDay: string) => {
+                    setYear(newYear);
+                    setMonth(newMonth);
+                    setDay(newDay);
+
+                    // Construct YYYY-MM-DD format
+                    if (newYear && newMonth && newDay) {
+                        const formattedDate = `${newYear}-${newMonth}-${newDay}`;
+                        
+                        // Validate date
+                        const yearNum = parseInt(newYear);
+                        const monthNum = parseInt(newMonth);
+                        const dayNum = parseInt(newDay);
+                        
+                        const isValid = (() => {
+                            if (yearNum < 1900) return false;
+                            if (monthNum < 1 || monthNum > 12) return false;
+                            if (dayNum < 1 || dayNum > 31) return false;
+                            const dob = new Date(formattedDate + 'T00:00:00Z');
+                            if (isNaN(dob.getTime())) return false;
+                            const now = new Date();
+                            const ageYears = (now.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+                            return ageYears >= 18 && ageYears <= 120;
+                        })();
+
+                        onAnswerChange(question.id, formattedDate);
+
+                        if (!isValid) {
+                            errors[question.id] = 'Enter a valid date, age 18-120.';
+                        } else if (errors[question.id]) {
+                            delete errors[question.id];
+                        }
+                    } else {
+                        onAnswerChange(question.id, '');
+                    }
+                };
+
+                return (
+                    <div key={question.id} className="space-y-3">
+                        <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
+                            {question.questionText}
+                            {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        <div className="grid grid-cols-3 gap-3">
+                            {/* Month */}
+                            <div>
+                                <select
+                                    value={month}
+                                    onChange={(e) => {
+                                        const newMonth = e.target.value;
+                                        // Validate day doesn't exceed days in new month
+                                        let newDay = day;
+                                        if (newDay && year) {
+                                            const maxDays = getDaysInMonth(year, newMonth);
+                                            const currentDay = parseInt(newDay);
+                                            if (currentDay > maxDays) {
+                                                newDay = maxDays.toString().padStart(2, '0');
+                                            }
+                                        }
+                                        handleDateChange(year, newMonth, newDay);
+                                    }}
+                                    className={`w-full p-4 rounded-2xl border-2 transition-all outline-none cursor-pointer ${
+                                        hasError
+                                            ? "border-red-300 bg-red-50"
+                                            : "border-gray-200 bg-white hover:border-gray-300"
+                                    }`}
+                                    style={!hasError ? { borderColor: theme.primaryLight } : undefined}
+                                >
+                                    <option value="">Month</option>
+                                    {months.map((m) => (
+                                        <option key={m.value} value={m.value}>
+                                            {m.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            
+                            {/* Day */}
+                            <div>
+                                <select
+                                    value={day}
+                                    onChange={(e) => handleDateChange(year, month, e.target.value)}
+                                    className={`w-full p-4 rounded-2xl border-2 transition-all outline-none cursor-pointer ${
+                                        hasError
+                                            ? "border-red-300 bg-red-50"
+                                            : "border-gray-200 bg-white hover:border-gray-300"
+                                    }`}
+                                    style={!hasError ? { borderColor: theme.primaryLight } : undefined}
+                                >
+                                    <option value="">Day</option>
+                                    {days.map((d) => (
+                                        <option key={d} value={d}>
+                                            {parseInt(d)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            
+                            {/* Year */}
+                            <div>
+                                <select
+                                    value={year}
+                                    onChange={(e) => {
+                                        const newYear = e.target.value;
+                                        // Validate day doesn't exceed days in month for new year
+                                        let newDay = day;
+                                        if (newDay && month) {
+                                            const maxDays = getDaysInMonth(newYear, month);
+                                            const currentDay = parseInt(newDay);
+                                            if (currentDay > maxDays) {
+                                                newDay = maxDays.toString().padStart(2, '0');
+                                            }
+                                        }
+                                        handleDateChange(newYear, month, newDay);
+                                    }}
+                                    className={`w-full p-4 rounded-2xl border-2 transition-all outline-none cursor-pointer ${
+                                        hasError
+                                            ? "border-red-300 bg-red-50"
+                                            : "border-gray-200 bg-white hover:border-gray-300"
+                                    }`}
+                                    style={!hasError ? { borderColor: theme.primaryLight } : undefined}
+                                >
+                                    <option value="">Year</option>
+                                    {years.map((y) => (
+                                        <option key={y} value={y}>
+                                            {y}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        {question.helpText && (
+                            <p className="text-sm text-gray-600">{question.helpText}</p>
+                        )}
+                        {hasError && (
+                            <p className="text-sm text-red-600">{errors[question.id]}</p>
+                        )}
+                    </div>
+                );
+            }
+
+            // For non-DOB date questions, keep the original date picker
+            const onChange = (v: string) => {
+                onAnswerChange(question.id, v);
             };
 
             return (

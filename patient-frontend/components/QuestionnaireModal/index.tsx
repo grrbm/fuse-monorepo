@@ -907,6 +907,29 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
   // Handle answer changes
   const handleAnswerChange = (questionId: string, value: any) => {
+    // Limit mobile number to 10 digits (numbers only)
+    if (questionId === 'mobile') {
+      const numericValue = String(value).replace(/\D/g, ''); // Remove non-numeric characters
+      if (numericValue.length <= 10) {
+        const newAnswers = {
+          ...answers,
+          [questionId]: numericValue
+        };
+        setAnswers(newAnswers);
+        
+        // Clear error for this question
+        if (errors[questionId]) {
+          setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[questionId];
+            return newErrors;
+          });
+        }
+        return;
+      }
+      return; // Don't update if exceeds 10 digits
+    }
+
     const newAnswers = {
       ...answers,
       [questionId]: value

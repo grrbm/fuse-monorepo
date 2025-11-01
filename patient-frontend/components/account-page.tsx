@@ -104,6 +104,20 @@ export const AccountPage: React.FC = () => {
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    
+    // Limit phone number to 10 digits (numbers only)
+    if (name === 'phone') {
+      const numericValue = value.replace(/\D/g, ''); // Remove non-numeric characters
+      if (numericValue.length <= 10) {
+        setPersonalInfo(prev => ({
+          ...prev,
+          [name]: numericValue
+        }));
+      }
+      setError(""); // Clear any previous errors
+      return;
+    }
+    
     setPersonalInfo(prev => ({
       ...prev,
       [name]: value
