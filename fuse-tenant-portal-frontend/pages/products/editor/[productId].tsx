@@ -98,6 +98,11 @@ export default function ProductEditor() {
   const [creatingForm, setCreatingForm] = useState(false)
   const [activatingProduct, setActivatingProduct] = useState(false)
 
+  // Form metadata editing state
+  const [editingFormMetadata, setEditingFormMetadata] = useState(false)
+  const [formMetadata, setFormMetadata] = useState({ title: "", description: "" })
+  const [savingFormMetadata, setSavingFormMetadata] = useState(false)
+
   const isAccountTemplate = useMemo(() => template?.formTemplateType === 'user_profile', [template?.formTemplateType])
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
@@ -363,6 +368,16 @@ export default function ProductEditor() {
     fetchTemplate()
   }, [templateId, token, baseUrl])
 
+  // Sync form metadata when template changes
+  useEffect(() => {
+    if (template && !editingFormMetadata) {
+      setFormMetadata({
+        title: template.title || "",
+        description: template.description || "",
+      })
+    }
+  }, [template, editingFormMetadata])
+
   const handleBack = () => {
     router.push("/products")
   }
@@ -528,6 +543,56 @@ export default function ProductEditor() {
       setError(error.message || "Failed to activate product")
     } finally {
       setActivatingProduct(false)
+    }
+  }
+
+  const handleEditFormMetadata = () => {
+    if (!template) return
+    setFormMetadata({
+      title: template.title || "",
+      description: template.description || "",
+    })
+    setEditingFormMetadata(true)
+  }
+
+  const handleCancelEditFormMetadata = () => {
+    setEditingFormMetadata(false)
+    setFormMetadata({ title: "", description: "" })
+  }
+
+  const handleSaveFormMetadata = async () => {
+    if (!token || !templateId) return
+
+    try {
+      setSavingFormMetadata(true)
+      const response = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: formMetadata.title, // Backend expects 'name', not 'title'
+          description: formMetadata.description,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || "Failed to update form metadata")
+      }
+
+      const data = await response.json()
+      setTemplate(data.data)
+      setEditingFormMetadata(false)
+      setSaveMessage("Form metadata updated successfully!")
+      setTimeout(() => setSaveMessage(null), 3000)
+    } catch (error: any) {
+      console.error("❌ Error updating form metadata:", error)
+      setError(error.message || "Failed to update form metadata")
+      setTimeout(() => setError(null), 5000)
+    } finally {
+      setSavingFormMetadata(false)
     }
   }
 
@@ -1831,10 +1896,70 @@ export default function ProductEditor() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* Left: Title and Description */}
                   <div className="lg:col-span-3">
-                    <h1 className="text-3xl font-semibold mb-4 tracking-tight">Intake Form</h1>
-                    <p className="text-muted-foreground text-base leading-relaxed">
-                      {template.description || "Generate a voucher to start using this intake form for patient sign up."}
-                    </p>
+                    <div className="flex items-center justify-between mb-4">
+                      <h1 className="text-3xl font-semibold tracking-tight">Intake Form</h1>
+                      {!editingFormMetadata && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleEditFormMetadata}
+                          className="ml-2"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {editingFormMetadata ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Form Name</label>
+                          <Input
+                            value={formMetadata.title}
+                            onChange={(e) => setFormMetadata({ ...formMetadata, title: e.target.value })}
+                            placeholder="Enter form name"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
+                          <Input
+                            value={formMetadata.description}
+                            onChange={(e) => setFormMetadata({ ...formMetadata, description: e.target.value })}
+                            placeholder="Enter form description"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={handleSaveFormMetadata}
+                            disabled={savingFormMetadata}
+                            className="bg-teal-600 hover:bg-teal-700"
+                          >
+                            {savingFormMetadata ? (
+                              <>
+                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              "Save"
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCancelEditFormMetadata}
+                            disabled={savingFormMetadata}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-base leading-relaxed">
+                        {template.description || "Generate a voucher to start using this intake form for patient sign up."}
+                      </p>
+                    )}
                   </div>
 
                   {/* Middle/Right: Metadata and Actions */}
