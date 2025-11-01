@@ -64,6 +64,7 @@ interface Product {
   medicationSize?: string
   pharmacyProvider?: string
   isActive: boolean
+  slug?: string
 }
 
 export default function ProductEditor() {

@@ -18,6 +18,7 @@ interface Product {
     pharmacyProvider?: string
     pharmacyProductId?: string
     isActive: boolean
+    slug?: string
 }
 
 interface ProductDetailsEditorProps {
@@ -36,6 +37,7 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
         category: product.category || "",
         medicationSize: product.medicationSize || "",
         activeIngredients: product.activeIngredients?.join(", ") || "",
+        slug: product.slug || "",
     })
 
     // Update form data when product changes
@@ -47,6 +49,7 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             category: product.category || "",
             medicationSize: product.medicationSize || "",
             activeIngredients: product.activeIngredients?.join(", ") || "",
+            slug: product.slug || "",
         })
     }, [product])
 
@@ -73,6 +76,15 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             return
         }
 
+        // Validate slug format (alphanumeric and hyphens only)
+        if (formData.slug && formData.slug.trim() !== "") {
+            const slugRegex = /^[a-z0-9-]+$/
+            if (!slugRegex.test(formData.slug.trim())) {
+                setError("URL slug can only contain lowercase letters, numbers, and hyphens")
+                return
+            }
+        }
+
         setSaving(true)
         try {
             await onUpdate({
@@ -82,6 +94,7 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                 category: formData.category || undefined,
                 medicationSize: formData.medicationSize || undefined,
                 activeIngredients: activeIngredientsArray,
+                slug: formData.slug.trim() || undefined,
             })
             setEditing(false)
             setError(null)
@@ -101,6 +114,7 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             category: product.category || "",
             medicationSize: product.medicationSize || "",
             activeIngredients: product.activeIngredients?.join(", ") || "",
+            slug: product.slug || "",
         })
         setError(null)
         setEditing(false)
@@ -166,6 +180,24 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                             />
                         ) : (
                             <p className="text-foreground font-semibold">{product.name}</p>
+                        )}
+                    </div>
+
+                    {/* URL Slug */}
+                    <div className="md:col-span-2">
+                        <label className="text-sm font-medium mb-1 block">
+                            URL Slug
+                            <span className="text-xs text-muted-foreground ml-2">(used in preview URLs)</span>
+                        </label>
+                        {editing ? (
+                            <Input
+                                value={formData.slug}
+                                onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                                placeholder="e.g., my-tirzepatide"
+                                className="font-mono text-sm"
+                            />
+                        ) : (
+                            <p className="text-foreground font-mono text-sm">{product.slug || "——"}</p>
                         )}
                     </div>
 

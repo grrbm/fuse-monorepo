@@ -25,6 +25,7 @@ export const productCreateSchema = z.object({
 export const productUpdateSchema = z.object({
   id: uuidSchema,
   name: z.string().min(1, 'Product name is required').max(200).optional(),
+  slug: z.string().regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens').optional(),
   description: z.string().min(1, 'Product description is required').optional(),
   price: z.number().positive('Price must be positive').optional(),
   activeIngredients: z.array(z.string()).min(1, 'At least one active ingredient is required').optional(),
