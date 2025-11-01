@@ -41,7 +41,19 @@ export const createTenantProduct = async (data: {
     active?: boolean;
     customPrice?: number;
 }): Promise<TenantProduct> => {
-    return TenantProduct.create(data);
+    // Calculate default price: 1% more than base product price
+    let price = data.customPrice || 0;
+    if (!data.customPrice) {
+        const product = await Product.findByPk(data.productId);
+        if (product && product.price) {
+            price = product.price * 1.01; // 1% markup
+        }
+    }
+
+    return TenantProduct.create({
+        ...data,
+        price
+    });
 }
 
 export const updateTenantProduct = async (
@@ -89,12 +101,21 @@ export const bulkUpsertTenantProducts = async (
             } as any);
             tenantProducts.push(existing);
         } else {
+            // Calculate default price: 1% more than base product price
+            let defaultPrice = 0;
+            if (!productData.customPrice) {
+                const product = await Product.findByPk(productData.productId);
+                if (product && product.price) {
+                    defaultPrice = product.price * 1.01; // 1% markup
+                }
+            }
+
             const created = await TenantProduct.create({
                 clinicId,
                 productId: productData.productId,
                 questionnaireId: productData.questionnaireId,
                 isActive: productData.active !== undefined ? productData.active : true,
-                price: productData.customPrice ?? 0,
+                price: productData.customPrice ?? defaultPrice,
             } as any);
             tenantProducts.push(created);
         }

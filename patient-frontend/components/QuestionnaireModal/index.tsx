@@ -65,10 +65,6 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [paymentIntentId, setPaymentIntentId] = React.useState<string | null>(null);
   const [orderId, setOrderId] = React.useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = React.useState<'idle' | 'processing' | 'succeeded' | 'failed'>('idle');
-  const [mdCaseStatus, setMdCaseStatus] = React.useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
-  const [mdCaseError, setMdCaseError] = React.useState<string | null>(null);
-  const [patientDob, setPatientDob] = React.useState('');
-  const [patientDobError, setPatientDobError] = React.useState<string | null>(null);
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -664,8 +660,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Helper functions for checkout steps
   const getTotalSteps = (): number => {
     if (!questionnaire) return 0;
-    // Questionnaire steps + Checkout + MD Case submission step
-    return questionnaire.steps.length + 2;
+    // Questionnaire steps + Checkout
+    return questionnaire.steps.length + 1;
   };
 
   const isProductSelectionStep = (): boolean => {
@@ -681,23 +677,6 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     return currentStepIndex === checkoutStepIndex;
   };
 
-  const isMdCaseStep = (): boolean => {
-    if (!questionnaire) return false;
-    const checkoutPos = questionnaire.checkoutStepPosition;
-    const checkoutStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
-    return currentStepIndex === checkoutStepIndex + 1;
-  };
-
-  // Prefill DOB on entering MD Case step
-  React.useEffect(() => {
-    if (isMdCaseStep()) {
-      // Try to find DOB from answers by common keys
-      const dobFromAnswer = answers['8bee532e-6888-45fa-905b-cf9f2078b45e'] || answers['dob'] || answers['dateOfBirth'];
-      if (typeof dobFromAnswer === 'string' && dobFromAnswer && !patientDob) {
-        setPatientDob(dobFromAnswer);
-      }
-    }
-  }, [currentStepIndex, answers, isMdCaseStep]);
 
   // Helper: Evaluate step-level conditional logic
   const evaluateStepConditionalLogic = (step: any): boolean => {
@@ -1439,57 +1418,6 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   };
 
-  const isRealisticDob = (value: string): boolean => {
-    const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
-    if (!m) return false;
-    const year = Number(m[1]);
-    const month = Number(m[2]);
-    const day = Number(m[3]);
-    if (year < 1900) return false;
-    if (month < 1 || month > 12) return false;
-    if (day < 1 || day > 31) return false;
-    const dobDate = new Date(value + 'T00:00:00Z');
-    if (isNaN(dobDate.getTime())) return false;
-    const now = new Date();
-    const ageYears = (now.getTime() - dobDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-    return ageYears >= 18 && ageYears <= 120;
-  };
-
-  const handleSubmitMdCase = async () => {
-    if (!orderId) {
-      setMdCaseStatus('error');
-      setMdCaseError('Missing order reference. Please try again.');
-      return;
-    }
-    if (!patientDob || !isRealisticDob(patientDob)) {
-      setPatientDobError('Enter a valid date in YYYY-MM-DD (age 18-120).');
-      return;
-    }
-    setPatientDobError(null);
-    try {
-      setMdCaseStatus('submitting');
-      setMdCaseError(null);
-      const overrides: any = { dob: patientDob };
-      if (answers['firstName']) overrides.firstName = answers['firstName'];
-      if (answers['lastName']) overrides.lastName = answers['lastName'];
-      if (answers['email']) overrides.email = answers['email'];
-      if (answers['mobile']) overrides.phoneNumber = answers['mobile'];
-
-      const resp = await apiCall('/md/cases', {
-        method: 'POST',
-        body: JSON.stringify({ orderId, patientOverrides: overrides })
-      });
-      if (!resp.success) {
-        setMdCaseStatus('error');
-        setMdCaseError((resp as any)?.error || 'Failed to submit case');
-        return;
-      }
-      setMdCaseStatus('success');
-    } catch (e) {
-      setMdCaseStatus('error');
-      setMdCaseError('Network error. Please try again.');
-    }
-  };
 
   // Handle payment error
   const handlePaymentError = (error: string) => {
@@ -1607,7 +1535,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     stepDescription = currentStep.description || '';
   }
 
-  if (!currentStep && !isProductSelectionStep() && !isCheckoutStep() && !isMdCaseStep()) {
+  if (!currentStep && !isProductSelectionStep() && !isCheckoutStep()) {
     // No more questionnaire steps - advance to next phase (product selection or checkout)
     handleNext();
     return null; // Prevent rendering empty step
@@ -1709,96 +1637,6 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               Continue
                             </Button>
                           </div>
-                        )}
-                      </div>
-                    </>
-                  ) : isMdCaseStep() ? (
-                    // MD Case submission step
-                    <>
-                      <ProgressBar progressPercent={progressPercent} color={theme.primary} />
-
-                      <StepHeader
-                        onPrevious={handlePrevious}
-                        canGoBack={currentStepIndex > 0}
-                        clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
-                        isLoadingClinic={isLoadingClinic}
-                      />
-
-                      <div className="bg-white rounded-2xl p-6 space-y-6 max-w-2xl mx-auto w-full">
-                        <div className="space-y-2 text-center">
-                          <h3 className="text-2xl font-semibold text-gray-900">Submit for Medical Review</h3>
-                          <p className="text-gray-600">We'll send your answers to our medical team to review your case.</p>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
-                            <div>
-                              <div className="text-gray-500">First Name</div>
-                              <div className="font-medium">{answers['firstName'] || '-'}</div>
-                            </div>
-                            <div>
-                              <div className="text-gray-500">Last Name</div>
-                              <div className="font-medium">{answers['lastName'] || '-'}</div>
-                            </div>
-                            <div className="col-span-2">
-                              <div className="text-gray-500">Email</div>
-                              <div className="font-medium">{answers['email'] || '-'}</div>
-                            </div>
-                            <div className="col-span-2">
-                              <div className="text-gray-500">Phone</div>
-                              <div className="font-medium">{answers['mobile'] || '-'}</div>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
-                            <div>
-                              <div className="text-gray-500">Date of Birth</div>
-                              <div className="font-medium">{patientDob || '-'}</div>
-                            </div>
-                          </div>
-                          {patientDobError && (
-                            <div className="text-red-600 text-sm">{patientDobError}</div>
-                          )}
-                        </div>
-
-                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700">
-                          <div className="flex items-center gap-2">
-                            <Icon icon="lucide:shield-check" className="w-4 h-4 text-emerald-600" />
-                            <span>Payment authorized. Your card will only be charged if prescribed.</span>
-                          </div>
-                        </div>
-
-                        {mdCaseStatus === 'error' && (
-                          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
-                            {mdCaseError || 'There was a problem submitting your case.'}
-                          </div>
-                        )}
-
-                        {mdCaseStatus === 'success' ? (
-                          <div className="space-y-4 text-center">
-                            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-emerald-50 text-emerald-700">
-                              <Icon icon="lucide:check" className="w-4 h-4" />
-                              <span>Case submitted</span>
-                            </div>
-                            <Button
-                              color="primary"
-                              className="w-full"
-                              onPress={onClose}
-                            >
-                              Done
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            color="primary"
-                            size="lg"
-                            className="w-full"
-                            isDisabled={mdCaseStatus === 'submitting' || !patientDob}
-                            onPress={handleSubmitMdCase}
-                            startContent={<Icon icon={mdCaseStatus === 'submitting' ? 'lucide:loader-2' : 'lucide:send'} className={mdCaseStatus === 'submitting' ? 'animate-spin' : ''} />}
-                          >
-                            {mdCaseStatus === 'submitting' ? 'Submitting...' : 'Submit Case'}
-                          </Button>
                         )}
                       </div>
                     </>
