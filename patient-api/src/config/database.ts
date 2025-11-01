@@ -30,6 +30,8 @@ import FormSectionTemplate from '../models/FormSectionTemplate';
 import TenantProductForm from '../models/TenantProductForm';
 import Sale from '../models/Sale';
 import DoctorPatientChats from '../models/DoctorPatientChats';
+import Pharmacy from '../models/Pharmacy';
+import PharmacyProduct from '../models/PharmacyProduct';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -84,7 +86,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
-    TenantProductForm, Sale, DoctorPatientChats
+    TenantProductForm, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct
   ],
 });
 
@@ -149,6 +151,50 @@ export async function initializeDatabase() {
       `);
     } catch (e) {
       // ignore
+    }
+
+    // Ensure Absolute RX pharmacy exists
+    try {
+      const existingPharmacy = await Pharmacy.findOne({
+        where: { name: 'Absolute RX' }
+      });
+
+      if (!existingPharmacy) {
+        await Pharmacy.create({
+          name: 'Absolute RX',
+          slug: 'absoluterx',
+          supportedStates: ['CA'], // Can be expanded to include more states
+          isActive: true
+        });
+        console.log('✅ Created Absolute RX pharmacy');
+      } else {
+        console.log('✅ Absolute RX pharmacy already exists');
+      }
+    } catch (e) {
+      console.error('❌ Error creating Absolute RX pharmacy:', e);
+      // ignore - don't fail startup
+    }
+
+    // Ensure IronSail pharmacy exists
+    try {
+      const existingIronSail = await Pharmacy.findOne({
+        where: { name: 'IronSail' }
+      });
+
+      if (!existingIronSail) {
+        await Pharmacy.create({
+          name: 'IronSail',
+          slug: 'ironsail',
+          supportedStates: ['FL', 'IL'],
+          isActive: true
+        });
+        console.log('✅ Created IronSail pharmacy');
+      } else {
+        console.log('✅ IronSail pharmacy already exists');
+      }
+    } catch (e) {
+      console.error('❌ Error creating IronSail pharmacy:', e);
+      // ignore - don't fail startup
     }
 
     return true;

@@ -6,6 +6,7 @@ import Treatment from './Treatment';
 import TreatmentProducts from './TreatmentProducts';
 import TenantProduct from './TenantProduct';
 import Questionnaire from './Questionnaire';
+import PharmacyProduct from './PharmacyProduct';
 
 export enum PharmacyProvider {
     ABSOLUTERX = 'absoluterx',
@@ -148,6 +149,10 @@ export default class Product extends Entity {
 
     @HasMany(() => Questionnaire)
     declare questionnaires: Questionnaire[];
+
+    @HasMany(() => PharmacyProduct)
+    declare pharmacyProducts: PharmacyProduct[];
+
     // Auto-generate slug from product name if not provided
     @BeforeValidate
     static ensureSlug(instance: Product) {
@@ -156,7 +161,9 @@ export default class Product extends Entity {
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '');
-            instance.slug = base || null;
+            // Add timestamp to ensure uniqueness for products with same name
+            const timestamp = Date.now();
+            instance.slug = base ? `${base}-${timestamp}` : `product-${timestamp}`;
         }
     }
 }

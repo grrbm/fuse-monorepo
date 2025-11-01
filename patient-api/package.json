@@ -18,6 +18,9 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.886.0",
+    "@fuse/stripe": "workspace:*",
+    "@fuse/tsconfig": "workspace:*",
+    "@fuse/validators": "workspace:*",
     "@sendgrid/mail": "^8.1.6",
     "@types/jsonwebtoken": "catalog:",
     "@types/multer": "^2.0.0",
@@ -28,6 +31,8 @@
     "dotenv": "catalog:",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
+    "google-auth-library": "^10.5.0",
+    "googleapis": "^144.0.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "catalog:",
     "multer": "^2.0.2",
@@ -37,10 +42,7 @@
     "sequelize-cli": "^6.6.3",
     "sequelize-typescript": "^2.1.6",
     "socket.io": "^4.8.1",
-    "stripe": "^18.5.0",
-    "@fuse/stripe": "workspace:*",
-    "@fuse/tsconfig": "workspace:*",
-    "@fuse/validators": "workspace:*"
+    "stripe": "^18.5.0"
   },
   "devDependencies": {
     "@types/axios": "^0.14.4",
@@ -52,8 +54,8 @@
     "@types/node": "catalog:",
     "dotenv-cli": "catalog:",
     "ts-node-dev": "^2.0.0",
-    "typescript": "catalog:",
-    "tsup": "^8.5.0"
+    "tsup": "^8.5.0",
+    "typescript": "catalog:"
   },
   "tsup": {
     "entry": [

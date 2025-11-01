@@ -5075,6 +5075,23 @@ app.get("/questionnaires/templates", authenticateJWT, async (req, res) => {
   }
 });
 
+app.get("/questionnaires/templates/product-forms", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const forms = await questionnaireService.listAllProductForms();
+
+    res.status(200).json({ success: true, data: forms });
+  } catch (error) {
+    console.error('❌ Error fetching product forms:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch product forms' });
+  }
+});
+
 app.get("/questionnaires/templates/assigned", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req)
@@ -5275,7 +5292,7 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
     }
 
     const { id } = req.params;
-    const { name, description, schema, status } = req.body;
+    const { name, description, schema, status, productId } = req.body;
 
     if (!id) {
       return res.status(400).json({ success: false, message: 'Template ID is required' });
@@ -5285,6 +5302,7 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
       title: name,
       description,
       status,
+      productId,
     });
 
     res.status(200).json({ success: true, data: template });
@@ -8111,6 +8129,10 @@ async function startServer() {
   // ============= DOCTOR PORTAL ENDPOINTS =============
   const { registerDoctorEndpoints } = await import('./endpoints/doctor');
   registerDoctorEndpoints(app, authenticateJWT, getCurrentUser);
+
+  // ============= PHARMACY MANAGEMENT ENDPOINTS =============
+  const { registerPharmacyEndpoints } = await import('./endpoints/pharmacy');
+  registerPharmacyEndpoints(app, authenticateJWT, getCurrentUser);
 
   // ============================================
   // DOCTOR-PATIENT CHAT ENDPOINTS

@@ -126,6 +126,26 @@ class ProductService {
             }
         } catch (error: any) {
             console.error('❌ Error creating product:', error)
+
+            // Handle Sequelize unique constraint violations
+            if (error.name === 'SequelizeUniqueConstraintError') {
+                const field = error.errors?.[0]?.path || 'field';
+                const value = error.errors?.[0]?.value || '';
+                return {
+                    success: false,
+                    message: `A product with this ${field} already exists: ${value}`,
+                }
+            }
+
+            // Handle Sequelize validation errors
+            if (error.name === 'SequelizeValidationError') {
+                const errors = error.errors?.map((e: any) => e.message).join('; ') || 'Validation failed';
+                return {
+                    success: false,
+                    message: errors,
+                }
+            }
+
             return {
                 success: false,
                 message: error.message || 'Failed to create product',
@@ -214,6 +234,26 @@ class ProductService {
             }
         } catch (error: any) {
             console.error('❌ Error updating product:', error)
+
+            // Handle Sequelize unique constraint violations
+            if (error.name === 'SequelizeUniqueConstraintError') {
+                const field = error.errors?.[0]?.path || 'field';
+                const value = error.errors?.[0]?.value || '';
+                return {
+                    success: false,
+                    message: `A product with this ${field} already exists: ${value}`,
+                }
+            }
+
+            // Handle Sequelize validation errors
+            if (error.name === 'SequelizeValidationError') {
+                const errors = error.errors?.map((e: any) => e.message).join('; ') || 'Validation failed';
+                return {
+                    success: false,
+                    message: errors,
+                }
+            }
+
             return {
                 success: false,
                 message: error.message || 'Failed to update product',

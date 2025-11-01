@@ -7,9 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
-import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle, Link2, Unlink } from "lucide-react"
+import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle, Link2, Unlink, Package, FileText } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
-import { QuestionEditor } from "../QuestionEditor"
+import { QuestionEditor } from "../../forms/QuestionEditor"
+import { CATEGORY_OPTIONS } from "@fuse/enums"
+import { ProductDetailsEditor } from "@/components/products/ProductDetailsEditor"
+import { FormAttachmentCard } from "@/components/products/FormAttachmentCard"
+import { NoFormAttached } from "@/components/products/NoFormAttached"
+import { PharmacyStateManager } from "@/components/products/PharmacyStateManager"
 
 interface Step {
   id: string
@@ -48,33 +53,51 @@ interface ConditionalQuestion {
   options?: string[]
 }
 
-export default function TemplateEditor() {
+interface Product {
+  id: string
+  name: string
+  description: string
+  price: number
+  dosage: string
+  activeIngredients: string[]
+  category?: string
+  medicationSize?: string
+  pharmacyProvider?: string
+  isActive: boolean
+}
+
+export default function ProductEditor() {
   const router = useRouter()
-  const { id: templateId } = router.query
+  const { productId } = router.query
   const { token } = useAuth()
   const baseUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001", [])
 
-  const [loading, setLoading] = useState(true)
+  // Product state
+  const [product, setProduct] = useState<Product | null>(null)
+  const [loadingProduct, setLoadingProduct] = useState(true)
+  const [updatingProduct, setUpdatingProduct] = useState(false)
+
+  // Form editor state
+  const [templateId, setTemplateId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [template, setTemplate] = useState<any>(null)
   const [steps, setSteps] = useState<Step[]>([])
   const [rebuilding, setRebuilding] = useState(false)
-  const [productCategory, setProductCategory] = useState<string | null>(null)
-  const [productInfo, setProductInfo] = useState<{ name: string; isActive: boolean } | null>(null)
-  const [activatingProduct, setActivatingProduct] = useState(false)
   const [formStatus, setFormStatus] = useState<'in_progress' | 'ready_for_review' | 'ready'>('in_progress')
+
+  // Form selection state
   const [availableForms, setAvailableForms] = useState<Array<{ id: string; title: string; description: string }>>([])
-  const [selectedFormId, setSelectedFormId] = useState<string>("")
+  const [selectedFormIdForAttach, setSelectedFormIdForAttach] = useState<string>("")
   const [formSearchQuery, setFormSearchQuery] = useState("")
   const [attachingForm, setAttachingForm] = useState(false)
   const [detachingForm, setDetachingForm] = useState(false)
   const [showFormSelector, setShowFormSelector] = useState(false)
-  const [availableProducts, setAvailableProducts] = useState<Array<{ id: string; name: string }>>([])
-  const [selectedProductId, setSelectedProductId] = useState<string>("")
-  const [productSearchQuery, setProductSearchQuery] = useState("")
-  const [showProductSelector, setShowProductSelector] = useState(false)
+  const [creatingForm, setCreatingForm] = useState(false)
+  const [activatingProduct, setActivatingProduct] = useState(false)
+
   const isAccountTemplate = useMemo(() => template?.formTemplateType === 'user_profile', [template?.formTemplateType])
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
@@ -121,9 +144,152 @@ export default function TemplateEditor() {
     rules: []
   })
 
+  // Fetch product details and check for attached forms
+  useEffect(() => {
+    if (!token || !productId || typeof productId !== 'string') return
+
+    const fetchProduct = async () => {
+      setLoadingProduct(true)
+      setError(null)
+
+      try {
+        // Fetch product details
+        const response = await fetch(`${baseUrl}/products/${productId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to load product")
+        }
+
+        const data = await response.json()
+        setProduct(data.data)
+
+        // Check if product has an attached form
+        const formsRes = await fetch(`${baseUrl}/questionnaires/product/${productId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (formsRes.ok) {
+          const formsData = await formsRes.json()
+          const forms = Array.isArray(formsData?.data) ? formsData.data : []
+          const productForm = forms.find((f: any) => f.formTemplateType === 'normal')
+
+          if (productForm) {
+            console.log('✅ Found existing form for product:', productForm.id)
+            setTemplateId(productForm.id)
+            setLoadingProduct(false)
+          } else {
+            // No form exists - check if there's any form with this productId
+            console.log('📝 No form found via /questionnaires/product endpoint, checking all forms...')
+
+            // Try to find any form that might be attached to this product
+            const allFormsRes = await fetch(`${baseUrl}/questionnaires/templates/product-forms`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+
+            let foundForm = null
+            if (allFormsRes.ok) {
+              const allFormsData = await allFormsRes.json()
+              const allForms = Array.isArray(allFormsData?.data) ? allFormsData.data : []
+              foundForm = allForms.find((f: any) => f.productId === productId)
+            }
+
+            if (foundForm) {
+              console.log('✅ Found orphaned form for product:', foundForm.id)
+              setTemplateId(foundForm.id)
+              setLoadingProduct(false)
+            } else {
+              // Truly no form exists - create one automatically
+              console.log('📝 Creating new form for product...')
+              const createRes = await fetch(`${baseUrl}/questionnaires/templates`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  title: `${data.data.name} Form`,
+                  description: `Questionnaire for ${data.data.name}`,
+                  category: data.data.category || null,
+                  formTemplateType: 'normal',
+                  productId: productId,
+                }),
+              })
+
+              if (createRes.ok) {
+                const createData = await createRes.json()
+                console.log('✅ Form created successfully:', createData.data.id)
+                setTemplateId(createData.data.id)
+                setSaveMessage("Form created automatically")
+                setTimeout(() => setSaveMessage(null), 3000)
+              } else {
+                const errorData = await createRes.json().catch(() => ({}))
+                console.error('❌ Failed to auto-create form')
+                console.error('Status:', createRes.status, createRes.statusText)
+                console.error('Error data:', errorData)
+                console.error('Request payload:', {
+                  title: `${data.data.name} Form`,
+                  description: `Questionnaire for ${data.data.name}`,
+                  category: data.data.category || 'General',
+                  formTemplateType: 'normal',
+                  productId: productId,
+                })
+                setError(errorData.message || `Failed to create form: ${createRes.status} ${createRes.statusText}`)
+              }
+              setLoadingProduct(false)
+            }
+          }
+        } else {
+          console.error('❌ Failed to fetch forms for product')
+          setLoadingProduct(false)
+        }
+      } catch (err: any) {
+        console.error("❌ Error loading product:", err)
+        setError(err.message || "Failed to load product")
+        setLoadingProduct(false)
+      }
+    }
+
+    fetchProduct()
+  }, [productId, token, baseUrl])
+
+  // Fetch available forms for selection
+  useEffect(() => {
+    const fetchAvailableForms = async () => {
+      if (!token) return
+
+      try {
+        const res = await fetch(`${baseUrl}/questionnaires/templates/product-forms`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          const forms = Array.isArray(data?.data) ? data.data : []
+          setAvailableForms(forms.map((f: any) => ({
+            id: f.id,
+            title: f.title || 'Untitled Form',
+            description: f.description || ''
+          })))
+        }
+      } catch (error) {
+        console.error('Failed to fetch available forms:', error)
+      }
+    }
+
+    fetchAvailableForms()
+  }, [token, baseUrl])
+
+  // Fetch form details when templateId is set
   useEffect(() => {
     if (!token) return
-    if (typeof templateId !== 'string' || !templateId) return
+    if (typeof templateId !== 'string' || !templateId) {
+      setTemplate(null)
+      setSteps([])
+      setLoading(false)
+      return
+    }
 
     const fetchTemplate = async () => {
       setLoading(true)
@@ -135,7 +301,6 @@ export default function TemplateEditor() {
         })
 
         let data = await response.json()
-        // If fetching by templates endpoint failed previously, try generic questionnaire endpoint
         if (!response.ok || !data?.data) {
           const qRes = await fetch(`${baseUrl}/questionnaires/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
           const qData = await qRes.json().catch(() => ({}))
@@ -145,9 +310,7 @@ export default function TemplateEditor() {
           data = qData
         }
         setTemplate(data.data)
-        // Set form status from template data
         setFormStatus(data.data?.status || 'in_progress')
-        // Normalize backend steps/questions/options into local editor shape
         const loadedSteps = (data.data?.steps || []).map((s: any, index: number) => ({
           id: String(s.id),
           title: String(s.title || ''),
@@ -156,13 +319,12 @@ export default function TemplateEditor() {
           category: (s.category === 'info' ? 'info' : s.category === 'user_profile' ? 'user_profile' : 'normal') as 'normal' | 'info' | 'user_profile',
           stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
           isDeadEnd: Boolean(s.isDeadEnd),
-          // First step can never have conditional logic - force it to null
           conditionalLogic: index === 0 ? null : (s.conditionalLogic || null),
           questions: (s.questions || []).map((q: any) => ({
             id: String(q.id),
-            type: q.answerType || 'single-choice', // Use actual answerType from backend
-            answerType: q.answerType || 'radio', // Add answerType field
-            questionSubtype: q.questionSubtype || null, // Add questionSubtype for yes/no detection
+            type: q.answerType || 'single-choice',
+            answerType: q.answerType || 'radio',
+            questionSubtype: q.questionSubtype || null,
             questionText: String(q.questionText || ''),
             required: Boolean(q.isRequired),
             placeholder: q.placeholder || null,
@@ -178,7 +340,6 @@ export default function TemplateEditor() {
         })) as Step[]
         setSteps(loadedSteps)
 
-        // Auto-clear conditional logic from first step if it exists in the database
         const firstStep = data.data?.steps?.[0]
         if (firstStep && firstStep.conditionalLogic) {
           console.log('⚠️ First step has conditional logic - auto-clearing it from database')
@@ -202,100 +363,150 @@ export default function TemplateEditor() {
     fetchTemplate()
   }, [templateId, token, baseUrl])
 
-  // Load product category and info if this questionnaire is tied to a product
-  useEffect(() => {
-    const loadProductInfo = async () => {
-      try {
-        if (!token || !template?.productId) {
-          setProductCategory(null)
-          setProductInfo(null)
-          return
-        }
-        const res = await fetch(`${baseUrl}/products/${template.productId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        const data = await res.json().catch(() => ({}))
-        if (res.ok && data?.success && data?.data) {
-          setProductCategory(data.data.category || null)
-          setProductInfo({
-            name: data.data.name || 'Product',
-            isActive: data.data.isActive || false
-          })
-        } else {
-          setProductCategory(null)
-          setProductInfo(null)
-        }
-      } catch {
-        setProductCategory(null)
-        setProductInfo(null)
-      }
-    }
-    loadProductInfo()
-  }, [template?.productId, token, baseUrl])
-
-  // Fetch all available forms for the dropdown
-  useEffect(() => {
-    const fetchAvailableForms = async () => {
-      if (!token || !template) return
-
-      try {
-        const res = await fetch(`${baseUrl}/questionnaires/templates/product-forms`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-
-        if (res.ok) {
-          const data = await res.json()
-          const forms = Array.isArray(data?.data) ? data.data : []
-          setAvailableForms(forms.map((f: any) => ({
-            id: f.id,
-            title: f.title || 'Untitled Form',
-            description: f.description || ''
-          })))
-        }
-      } catch (error) {
-        console.error('Failed to fetch available forms:', error)
-      }
-    }
-
-    fetchAvailableForms()
-  }, [token, template, baseUrl])
-
-  // Fetch all available products for the dropdown (when form is detached)
-  useEffect(() => {
-    const fetchAvailableProducts = async () => {
-      if (!token || !template) return
-
-      try {
-        const res = await fetch(`${baseUrl}/products-management?page=1&limit=100`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-
-        if (res.ok) {
-          const data = await res.json()
-          const products = data?.data?.products || []
-          setAvailableProducts(products.map((p: any) => ({
-            id: p.id,
-            name: p.name || 'Untitled Product'
-          })))
-        }
-      } catch (error) {
-        console.error('Failed to fetch available products:', error)
-      }
-    }
-
-    fetchAvailableProducts()
-  }, [token, template, baseUrl])
-
   const handleBack = () => {
-    router.push("/forms?tab=templates")
+    router.push("/products")
+  }
+
+  const handleUpdateProduct = async (updates: Partial<Product>) => {
+    if (!token || !productId || typeof productId !== 'string' || !product) return
+
+    setUpdatingProduct(true)
+    try {
+      const response = await fetch(`${baseUrl}/products-management/${productId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.message || "Failed to update product"
+        throw new Error(errorMessage)
+      }
+
+      const data = await response.json()
+      setProduct({ ...product, ...updates })
+      setSaveMessage("Product updated successfully")
+      setTimeout(() => setSaveMessage(null), 3000)
+    } catch (error: any) {
+      console.error("❌ Error updating product:", error)
+      // Don't set the main error state - let the component handle it
+      throw error // Re-throw so the component can catch and display it
+    } finally {
+      setUpdatingProduct(false)
+    }
+  }
+
+  const handleCreateNewForm = async () => {
+    if (!token || !productId || typeof productId !== 'string') return
+
+    try {
+      setCreatingForm(true)
+      const response = await fetch(`${baseUrl}/questionnaires/templates`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: `${product?.name} Form`,
+          description: `Questionnaire for ${product?.name}`,
+          category: product?.category || null,
+          formTemplateType: 'normal',
+          productId: productId,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to create form")
+
+      const data = await response.json()
+      setSaveMessage(data.message || "Form created successfully")
+      setTemplateId(data.data.id)
+    } catch (error: any) {
+      console.error("❌ Error creating form:", error)
+      setSaveMessage(error.message)
+    } finally {
+      setCreatingForm(false)
+    }
+  }
+
+  const handleAttachExistingForm = async () => {
+    if (!token || !productId || !selectedFormIdForAttach || typeof productId !== 'string') return
+
+    try {
+      setAttachingForm(true)
+      const response = await fetch(`${baseUrl}/questionnaires/templates/${selectedFormIdForAttach}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productId: productId }),
+      })
+
+      if (!response.ok) throw new Error("Failed to attach form")
+
+      const data = await response.json()
+      setSaveMessage(data.message || "Form attached successfully")
+      setTemplateId(selectedFormIdForAttach)
+      setShowFormSelector(false)
+    } catch (error: any) {
+      console.error("❌ Error attaching form:", error)
+      setSaveMessage(error.message)
+    } finally {
+      setAttachingForm(false)
+    }
+  }
+
+  const handleSwitchForm = async (newFormId: string) => {
+    if (!token || !productId || !templateId || typeof productId !== 'string') return
+
+    try {
+      setAttachingForm(true)
+
+      // Detach current form
+      await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productId: null }),
+      })
+
+      // Attach new form
+      const response = await fetch(`${baseUrl}/questionnaires/templates/${newFormId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productId: productId }),
+      })
+
+      if (!response.ok) throw new Error("Failed to switch form")
+
+      const data = await response.json()
+      setSaveMessage(data.message || "Form switched successfully")
+      setTemplateId(newFormId)
+      setShowFormSelector(false)
+    } catch (error: any) {
+      console.error("❌ Error switching form:", error)
+      setSaveMessage(error.message)
+    } finally {
+      setAttachingForm(false)
+    }
   }
 
   const handleActivateProduct = async () => {
-    if (!token || !template?.productId || !productInfo) return
+    if (!token || !productId || typeof productId !== 'string' || !product) return
 
     try {
       setActivatingProduct(true)
-      const response = await fetch(`${baseUrl}/products-management/${template.productId}`, {
+      const response = await fetch(`${baseUrl}/products-management/${productId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -310,15 +521,8 @@ export default function TemplateEditor() {
       }
 
       const data = await response.json()
-      setSaveMessage(data.message || "Product activated successfully! You can now add it to your catalog.")
-
-      // Update local state
-      setProductInfo({ ...productInfo, isActive: true })
-
-      // Optionally redirect after a delay
-      setTimeout(() => {
-        router.push("/products")
-      }, 2000)
+      setSaveMessage(data.message || "Product activated successfully!")
+      setProduct({ ...product, isActive: true })
     } catch (error: any) {
       console.error("❌ Error activating product:", error)
       setError(error.message || "Failed to activate product")
@@ -327,52 +531,17 @@ export default function TemplateEditor() {
     }
   }
 
-  const handleAttachForm = async () => {
-    if (!token || !template?.productId || !selectedFormId) return
-
-    try {
-      setAttachingForm(true)
-
-      // Update the questionnaire to attach it to the product
-      const response = await fetch(`${baseUrl}/questionnaires/templates/${selectedFormId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ productId: template.productId }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || "Failed to attach form")
-      }
-
-      setSaveMessage("✅ Form attached to product successfully!")
-      setTimeout(() => setSaveMessage(null), 3000)
-
-      // Redirect to the newly attached form
-      router.push(`/forms/editor/${selectedFormId}`)
-    } catch (error: any) {
-      console.error("❌ Error attaching form:", error)
-      setError(error.message || "Failed to attach form")
-      setTimeout(() => setError(null), 5000)
-    } finally {
-      setAttachingForm(false)
-    }
-  }
-
   const handleDetachForm = async () => {
-    if (!token || !templateId || !template?.productId) return
+    if (!token || !templateId) return
 
-    if (!confirm("Are you sure you want to detach this form from the product? The form will still exist but won't be linked to any product.")) {
-      return
-    }
+    const confirmed = window.confirm(
+      "Are you sure you want to detach this form from the product? The form will still exist, but won't be associated with this product."
+    )
+
+    if (!confirmed) return
 
     try {
       setDetachingForm(true)
-
-      // Update the questionnaire to remove product association
       const response = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
         method: "PUT",
         headers: {
@@ -382,60 +551,18 @@ export default function TemplateEditor() {
         body: JSON.stringify({ productId: null }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || "Failed to detach form")
-      }
+      if (!response.ok) throw new Error("Failed to detach form")
 
-      setSaveMessage("✅ Form detached from product successfully!")
-
-      // Update local state
-      setTemplate({ ...template, productId: null })
-      setProductInfo(null)
-      setProductCategory(null)
-
-      setTimeout(() => setSaveMessage(null), 3000)
+      const data = await response.json()
+      setSaveMessage(data.message || "Form detached successfully")
+      setTemplateId(null)
+      setTemplate(null)
+      setSteps([])
     } catch (error: any) {
       console.error("❌ Error detaching form:", error)
-      setError(error.message || "Failed to detach form")
-      setTimeout(() => setError(null), 5000)
+      setSaveMessage(error.message)
     } finally {
       setDetachingForm(false)
-    }
-  }
-
-  const handleAttachToProduct = async () => {
-    if (!token || !templateId || !selectedProductId) return
-
-    try {
-      setAttachingForm(true)
-
-      // Attach the current form to the selected product
-      const response = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ productId: selectedProductId }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || "Failed to attach form to product")
-      }
-
-      setSaveMessage("✅ Form attached to product successfully!")
-      setTimeout(() => setSaveMessage(null), 3000)
-
-      // Reload the page to refresh product info
-      window.location.reload()
-    } catch (error: any) {
-      console.error("❌ Error attaching form to product:", error)
-      setError(error.message || "Failed to attach form to product")
-      setTimeout(() => setError(null), 5000)
-    } finally {
-      setAttachingForm(false)
     }
   }
 
@@ -1602,7 +1729,7 @@ export default function TemplateEditor() {
     }
   }
 
-  if (loading) {
+  if (loadingProduct) {
     return (
       <div className="flex h-screen bg-background">
         <Sidebar />
@@ -1611,7 +1738,7 @@ export default function TemplateEditor() {
           <main className="flex-1 overflow-y-auto p-6 flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">Loading template...</p>
+              <p className="text-muted-foreground">Loading product...</p>
             </div>
           </main>
         </div>
@@ -1619,7 +1746,7 @@ export default function TemplateEditor() {
     )
   }
 
-  if (error || !template) {
+  if (error || !product) {
     return (
       <div className="flex h-screen bg-background">
         <Sidebar />
@@ -1628,13 +1755,13 @@ export default function TemplateEditor() {
           <main className="flex-1 overflow-y-auto p-6">
             <Card className="border-destructive/40 bg-destructive/10">
               <CardHeader>
-                <CardTitle>Error Loading Template</CardTitle>
+                <CardTitle>Error Loading Product</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-destructive mb-4">{error || "Template not found"}</p>
+                <p className="text-sm text-destructive mb-4">{error || "Product not found"}</p>
                 <Button onClick={handleBack} variant="outline">
                   <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back to Forms
+                  Back to Products
                 </Button>
               </CardContent>
             </Card>
@@ -1651,13 +1778,26 @@ export default function TemplateEditor() {
         <Header />
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Back Button */}
-          <Button variant="ghost" size="sm" onClick={handleBack} className="mb-8 -ml-2">
+          <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4 -ml-2">
             <ArrowLeft className="mr-2 h-5 w-5" />
-            Back
+            Back to Products
           </Button>
 
+          {/* Product Details Editor */}
+          <ProductDetailsEditor
+            product={product}
+            onUpdate={handleUpdateProduct}
+          />
+
+          {/* Pharmacy & State Coverage */}
+          {product && (
+            <div className="mb-4">
+              <PharmacyStateManager productId={product.id} />
+            </div>
+          )}
+
           {/* Inactive Product Banner */}
-          {productInfo && !productInfo.isActive && (
+          {product && !product.isActive && (
             <Card className="border-blue-500/40 bg-blue-500/10 mb-4">
               <CardContent className="p-4 flex items-start gap-3">
                 <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
@@ -1666,7 +1806,7 @@ export default function TemplateEditor() {
                     Product Not Active
                   </h3>
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    <strong>{productInfo.name}</strong> is currently inactive. Build your form, then click "Activate Product" to make it available in your catalog.
+                    <strong>{product.name}</strong> is currently inactive. Build your form, then click "Activate Product" to make it available in your catalog.
                   </p>
                 </div>
               </CardContent>
@@ -1683,255 +1823,341 @@ export default function TemplateEditor() {
             </div>
           )}
 
-          {/* Header Section */}
-          <div className="mb-8 pb-8 border-b border-border/40">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Left: Title and Description */}
-              <div className="lg:col-span-3">
-                <h1 className="text-3xl font-semibold mb-4 tracking-tight">Intake Form</h1>
-                <p className="text-muted-foreground text-base leading-relaxed">
-                  {template.description || "Generate a voucher to start using this intake form for patient sign up."}
-                </p>
-              </div>
-
-              {/* Middle/Right: Metadata and Actions */}
-              <div className="lg:col-span-8 space-y-4">
-                {/* Metadata Cards */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
-                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Form Name</p>
-                    <p className="font-semibold text-foreground text-base">{template.title}</p>
+          {/* Form Editor - Only show when form is attached */}
+          {templateId && template && (
+            <>
+              {/* Header Section */}
+              <div className="mb-8 pb-8 border-b border-border/40">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Left: Title and Description */}
+                  <div className="lg:col-span-3">
+                    <h1 className="text-3xl font-semibold mb-4 tracking-tight">Intake Form</h1>
+                    <p className="text-muted-foreground text-base leading-relaxed">
+                      {template.description || "Generate a voucher to start using this intake form for patient sign up."}
+                    </p>
                   </div>
-                  <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
-                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Status</p>
-                    <Badge
-                      variant="secondary"
-                      className={`rounded-full px-3 py-1 ${formStatus === 'in_progress'
-                        ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800' :
-                        formStatus === 'ready_for_review'
-                          ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800' :
-                          'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
-                        }`}
-                    >
-                      {formStatus === 'in_progress' ? 'In Progress' :
-                        formStatus === 'ready_for_review' ? 'Ready for Review' :
-                          'Ready'}
-                    </Badge>
+
+                  {/* Middle/Right: Metadata and Actions */}
+                  <div className="lg:col-span-8 space-y-4">
+                    {/* Metadata Cards */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
+                        <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Form Name</p>
+                        <p className="font-semibold text-foreground text-base">{template.title}</p>
+                      </div>
+                      <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
+                        <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Status</p>
+                        <Badge
+                          variant="secondary"
+                          className={`rounded-full px-3 py-1 ${formStatus === 'in_progress'
+                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800' :
+                            formStatus === 'ready_for_review'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800' :
+                              'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+                            }`}
+                        >
+                          {formStatus === 'in_progress' ? 'In Progress' :
+                            formStatus === 'ready_for_review' ? 'Ready for Review' :
+                              'Ready'}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Product Form Attachment */}
+                    <FormAttachmentCard
+                      templateId={templateId}
+                      template={template}
+                      availableForms={availableForms}
+                      formSearchQuery={formSearchQuery}
+                      setFormSearchQuery={setFormSearchQuery}
+                      selectedFormId={selectedFormIdForAttach}
+                      setSelectedFormId={setSelectedFormIdForAttach}
+                      showFormSelector={showFormSelector}
+                      setShowFormSelector={setShowFormSelector}
+                      attachingForm={attachingForm}
+                      detachingForm={detachingForm}
+                      creatingForm={creatingForm}
+                      onCreateNewForm={handleCreateNewForm}
+                      onAttachExistingForm={handleAttachExistingForm}
+                      onSwitchForm={handleSwitchForm}
+                      onDetachForm={handleDetachForm}
+                    />
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      {formStatus === 'in_progress' && (
+                        <Button
+                          onClick={async () => {
+                            if (!token || !templateId) return
+                            try {
+                              // Update status to ready_for_review
+                              const res = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ status: 'ready_for_review' })
+                              })
+
+                              if (res.ok) {
+                                setFormStatus('ready_for_review')
+                                const updatedData = await res.json()
+                                setTemplate(updatedData.data)
+                                setSaveMessage("✅ Form submitted for review!")
+                                setTimeout(() => setSaveMessage(null), 3000)
+                              } else {
+                                const errorData = await res.json().catch(() => ({}))
+                                setSaveMessage(`❌ ${errorData.message || 'Failed to submit for review'}`)
+                                setTimeout(() => setSaveMessage(null), 5000)
+                              }
+                            } catch (e: any) {
+                              console.error('Failed to submit for review:', e)
+                              setSaveMessage(`❌ ${e.message || 'Failed to submit for review'}`)
+                              setTimeout(() => setSaveMessage(null), 5000)
+                            }
+                          }}
+                          className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
+                        >
+                          Submit for Review
+                        </Button>
+                      )}
+
+                      {formStatus !== 'in_progress' && (
+                        <Button
+                          onClick={handleSave}
+                          disabled={saving}
+                          className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
+                        >
+                          {saving ? (
+                            <>
+                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            "Save Changes"
+                          )}
+                        </Button>
+                      )}
+
+                      <Button
+                        variant="outline"
+                        className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
+                        onClick={() => {
+                          if (!templateId) return
+                          const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
+                          const previewUrl = `${patientFrontendUrl}/preview/questionnaire/${templateId}`
+                          window.open(previewUrl, '_blank')
+                        }}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        Preview
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
+                      >
+                        Add Voucher
+                      </Button>
+
+                      {/* Activate Product Button - only show if product is inactive */}
+                      {product && !product.isActive && (
+                        <Button
+                          onClick={handleActivateProduct}
+                          disabled={activatingProduct || !templateId}
+                          className="rounded-full px-6 bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-shadow"
+                        >
+                          {activatingProduct ? (
+                            <>
+                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                              Activating...
+                            </>
+                          ) : (
+                            "Activate Product"
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Product Form Attachment - always show for product forms */}
-                {template?.formTemplateType === 'normal' && (
-                  <Card className="border-border/40">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        {template?.productId && productInfo ? (
-                          <>
-                            <Link2 className="h-4 w-4" />
-                            Attached to Product: {productInfo.name}
-                          </>
-                        ) : (
-                          <>
-                            <Unlink className="h-4 w-4" />
-                            Not Attached to Any Product
-                          </>
+              {/* Main Content - Three Column Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left Column - Add Step Controls */}
+                <div className="lg:col-span-3 space-y-6 bg-muted/30 rounded-2xl p-4 border border-border/20">
+                  {/* Add New Step Card */}
+                  <div className="bg-card rounded-2xl p-6 shadow-md border border-border/40">
+                    <div className="mb-6">
+                      <h2 className="text-lg font-semibold tracking-tight mb-2">Add New Step</h2>
+                      <p className="text-sm text-muted-foreground">Choose a question type to add to your form</p>
+                    </div>
+
+                    <TooltipProvider>
+                      <div className="space-y-3">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => handleAddStep("question")}
+                              className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
+                              variant="outline"
+                              disabled={isAccountTemplate}
+                            >
+                              <div className="flex items-center gap-4 w-full min-w-0">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center">
+                                  <MessageSquare className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                                </div>
+                                <div className="flex-1 text-left min-w-0 overflow-hidden">
+                                  <div className="font-medium text-base mb-0.5 truncate">Single Option Select</div>
+                                  <div className="text-xs text-muted-foreground truncate">Choose one from multiple options</div>
+                                </div>
+                              </div>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="font-medium">Single Option Select</p>
+                            <p className="text-xs text-muted-foreground">Choose one from multiple options</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => handleAddStep("yesno")}
+                              className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
+                              variant="outline"
+                              disabled={isAccountTemplate}
+                            >
+                              <div className="flex items-center gap-4 w-full min-w-0">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                                  <MessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <div className="flex-1 text-left min-w-0 overflow-hidden">
+                                  <div className="font-medium text-base mb-0.5 truncate">Yes / No</div>
+                                  <div className="text-xs text-muted-foreground truncate">Simple yes or no question</div>
+                                </div>
+                              </div>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="font-medium">Yes / No</p>
+                            <p className="text-xs text-muted-foreground">Simple yes or no question</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => handleAddStep("multi")}
+                              className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
+                              variant="outline"
+                              disabled={isAccountTemplate}
+                            >
+                              <div className="flex items-center gap-4 w-full min-w-0">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
+                                  <MessageSquare className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                                </div>
+                                <div className="flex-1 text-left min-w-0 overflow-hidden">
+                                  <div className="font-medium text-base mb-0.5 truncate">Multi Option Select</div>
+                                  <div className="text-xs text-muted-foreground truncate">Select multiple options</div>
+                                </div>
+                              </div>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="font-medium">Multi Option Select</p>
+                            <p className="text-xs text-muted-foreground">Select multiple options</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => handleAddStep("textarea")}
+                              className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
+                              variant="outline"
+                              disabled={isAccountTemplate}
+                            >
+                              <div className="flex items-center gap-4 w-full min-w-0">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
+                                  <Edit className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                                </div>
+                                <div className="flex-1 text-left min-w-0 overflow-hidden">
+                                  <div className="font-medium text-base mb-0.5 truncate">Multi Line Text</div>
+                                  <div className="text-xs text-muted-foreground truncate">Free-form text response</div>
+                                </div>
+                              </div>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="font-medium">Multi Line Text</p>
+                            <p className="text-xs text-muted-foreground">Free-form text response</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => handleAddStep("info")}
+                              className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
+                              variant="outline"
+                              disabled={isAccountTemplate}
+                            >
+                              <div className="flex items-center gap-4 w-full min-w-0">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                                  <Info className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                                </div>
+                                <div className="flex-1 text-left min-w-0 overflow-hidden">
+                                  <div className="font-medium text-base mb-0.5 truncate">Information Step</div>
+                                  <div className="text-xs text-muted-foreground truncate">Display information only</div>
+                                </div>
+                              </div>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="font-medium">Information Step</p>
+                            <p className="text-xs text-muted-foreground">Display information only</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => handleAddStep("deadend")}
+                              className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-red-200 hover:border-red-300 hover:bg-red-50/50 transition-all"
+                              variant="outline"
+                              disabled={isAccountTemplate}
+                            >
+                              <div className="flex items-center gap-4 w-full min-w-0">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
+                                  <StopCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                                </div>
+                                <div className="flex-1 text-left min-w-0 overflow-hidden">
+                                  <div className="font-medium text-base mb-0.5 truncate">Dead End</div>
+                                  <div className="text-xs text-muted-foreground truncate">Terminates form automatically</div>
+                                </div>
+                              </div>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="font-medium">Dead End</p>
+                            <p className="text-xs text-muted-foreground">Terminates form automatically</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        {isAccountTemplate && (
+                          <p className="text-xs text-muted-foreground text-center mt-4 py-3 bg-muted/30 rounded-lg">
+                            Account templates cannot be modified
+                          </p>
                         )}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {template?.productId && productInfo ? (
-                        <>
-                          <p className="text-sm text-muted-foreground">
-                            This form is currently attached to the product above. You can switch to a different form or detach this form.
-                          </p>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setShowFormSelector(!showFormSelector)}
-                            >
-                              {showFormSelector ? 'Hide' : 'Switch Form'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={handleDetachForm}
-                              disabled={detachingForm}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              {detachingForm ? (
-                                <>
-                                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                                  Detaching...
-                                </>
-                              ) : (
-                                <>
-                                  <Unlink className="mr-2 h-3 w-3" />
-                                  Detach Form
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm text-muted-foreground">
-                            This form is not attached to any product. You can attach it to a product by selecting a product below.
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setShowProductSelector(!showProductSelector)}
-                          >
-                            {showProductSelector ? 'Hide' : 'Attach to Product'}
-                          </Button>
-                        </>
-                      )}
+                      </div>
+                    </TooltipProvider>
+                  </div>
 
-                      {/* Form Selector Dropdown - for switching forms when attached */}
-                      {showFormSelector && template?.productId && (
-                        <div className="space-y-3 pt-3 border-t border-border/40">
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Search & Select Form</label>
-                            <Input
-                              placeholder="Search forms..."
-                              value={formSearchQuery}
-                              onChange={(e) => setFormSearchQuery(e.target.value)}
-                              className="mb-2"
-                            />
-                            <select
-                              value={selectedFormId}
-                              onChange={(e) => setSelectedFormId(e.target.value)}
-                              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                            >
-                              <option value="">Select a form...</option>
-                              {availableForms
-                                .filter(form =>
-                                  form.title.toLowerCase().includes(formSearchQuery.toLowerCase()) ||
-                                  form.description.toLowerCase().includes(formSearchQuery.toLowerCase())
-                                )
-                                .map((form) => (
-                                  <option key={form.id} value={form.id}>
-                                    {form.title}
-                                  </option>
-                                ))}
-                            </select>
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={handleAttachForm}
-                            disabled={!selectedFormId || attachingForm}
-                            className="w-full"
-                          >
-                            {attachingForm ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Attaching...
-                              </>
-                            ) : (
-                              <>
-                                <Link2 className="mr-2 h-4 w-4" />
-                                Attach Selected Form
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      )}
-
-                      {/* Product Selector Dropdown - for attaching to product when detached */}
-                      {showProductSelector && !template?.productId && (
-                        <div className="space-y-3 pt-3 border-t border-border/40">
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Search & Select Product</label>
-                            <Input
-                              placeholder="Search products..."
-                              value={productSearchQuery}
-                              onChange={(e) => setProductSearchQuery(e.target.value)}
-                              className="mb-2"
-                            />
-                            <select
-                              value={selectedProductId}
-                              onChange={(e) => setSelectedProductId(e.target.value)}
-                              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                            >
-                              <option value="">Select a product...</option>
-                              {availableProducts
-                                .filter(product =>
-                                  product.name.toLowerCase().includes(productSearchQuery.toLowerCase())
-                                )
-                                .map((product) => (
-                                  <option key={product.id} value={product.id}>
-                                    {product.name}
-                                  </option>
-                                ))}
-                            </select>
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={handleAttachToProduct}
-                            disabled={!selectedProductId || attachingForm}
-                            className="w-full"
-                          >
-                            {attachingForm ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Attaching...
-                              </>
-                            ) : (
-                              <>
-                                <Link2 className="mr-2 h-4 w-4" />
-                                Attach to Selected Product
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex gap-3">
-                  {formStatus === 'in_progress' && (
-                    <Button
-                      onClick={async () => {
-                        if (!token || !templateId) return
-                        try {
-                          // Update status to ready_for_review
-                          const res = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                            body: JSON.stringify({ status: 'ready_for_review' })
-                          })
-
-                          if (res.ok) {
-                            setFormStatus('ready_for_review')
-                            const updatedData = await res.json()
-                            setTemplate(updatedData.data)
-                            setSaveMessage("✅ Form submitted for review!")
-                            setTimeout(() => setSaveMessage(null), 3000)
-                          } else {
-                            const errorData = await res.json().catch(() => ({}))
-                            setSaveMessage(`❌ ${errorData.message || 'Failed to submit for review'}`)
-                            setTimeout(() => setSaveMessage(null), 5000)
-                          }
-                        } catch (e: any) {
-                          console.error('Failed to submit for review:', e)
-                          setSaveMessage(`❌ ${e.message || 'Failed to submit for review'}`)
-                          setTimeout(() => setSaveMessage(null), 5000)
-                        }
-                      }}
-                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
-                    >
-                      Submit for Review
-                    </Button>
-                  )}
-
-                  {formStatus !== 'in_progress' && (
+                  {/* Save Actions Card */}
+                  <div className="bg-card rounded-2xl p-6 shadow-md border border-border/40 space-y-3">
                     <Button
                       onClick={handleSave}
                       disabled={saving}
-                      className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
+                      className="w-full rounded-full py-6 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
                     >
                       {saving ? (
                         <>
@@ -1939,865 +2165,651 @@ export default function TemplateEditor() {
                           Saving...
                         </>
                       ) : (
-                        "Save Changes"
-                      )}
-                    </Button>
-                  )}
-
-                  <Button
-                    variant="outline"
-                    className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
-                    onClick={() => {
-                      if (!templateId) return
-                      const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
-                      const previewUrl = `${patientFrontendUrl}/preview/questionnaire/${templateId}`
-                      window.open(previewUrl, '_blank')
-                    }}
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    Preview
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
-                  >
-                    Add Voucher
-                  </Button>
-
-                  {/* Activate Product Button - only show if product is inactive */}
-                  {productInfo && !productInfo.isActive && (
-                    <Button
-                      onClick={handleActivateProduct}
-                      disabled={activatingProduct}
-                      className="rounded-full px-6 bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-shadow"
-                    >
-                      {activatingProduct ? (
                         <>
-                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          Activating...
+                          <Save className="mr-2 h-5 w-5" />
+                          Save Changes
                         </>
-                      ) : (
-                        "Activate Product"
                       )}
                     </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Main Content - Three Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Column - Add Step Controls */}
-            <div className="lg:col-span-3 space-y-6 bg-muted/30 rounded-2xl p-4 border border-border/20">
-              {/* Add New Step Card */}
-              <div className="bg-card rounded-2xl p-6 shadow-md border border-border/40">
-                <div className="mb-6">
-                  <h2 className="text-lg font-semibold tracking-tight mb-2">Add New Step</h2>
-                  <p className="text-sm text-muted-foreground">Choose a question type to add to your form</p>
-                </div>
+                    <Button
+                      variant="outline"
+                      className="w-full rounded-full py-6 border-border/60 shadow-sm hover:bg-muted/50"
+                      onClick={() => {
+                        if (!templateId) return
+                        const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
+                        const previewUrl = `${patientFrontendUrl}/preview/questionnaire/${templateId}`
+                        window.open(previewUrl, '_blank')
+                      }}
+                    >
+                      <Eye className="mr-2 h-5 w-5" />
+                      Preview Form
+                    </Button>
 
-                <TooltipProvider>
-                  <div className="space-y-3">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={() => handleAddStep("question")}
-                          className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
-                          variant="outline"
-                          disabled={isAccountTemplate}
-                        >
-                          <div className="flex items-center gap-4 w-full min-w-0">
-                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center">
-                              <MessageSquare className="h-5 w-5 text-teal-600 dark:text-teal-400" />
-                            </div>
-                            <div className="flex-1 text-left min-w-0 overflow-hidden">
-                              <div className="font-medium text-base mb-0.5 truncate">Single Option Select</div>
-                              <div className="text-xs text-muted-foreground truncate">Choose one from multiple options</div>
-                            </div>
-                          </div>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p className="font-medium">Single Option Select</p>
-                        <p className="text-xs text-muted-foreground">Choose one from multiple options</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={() => handleAddStep("yesno")}
-                          className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
-                          variant="outline"
-                          disabled={isAccountTemplate}
-                        >
-                          <div className="flex items-center gap-4 w-full min-w-0">
-                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                              <MessageSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <div className="flex-1 text-left min-w-0 overflow-hidden">
-                              <div className="font-medium text-base mb-0.5 truncate">Yes / No</div>
-                              <div className="text-xs text-muted-foreground truncate">Simple yes or no question</div>
-                            </div>
-                          </div>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p className="font-medium">Yes / No</p>
-                        <p className="text-xs text-muted-foreground">Simple yes or no question</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={() => handleAddStep("multi")}
-                          className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
-                          variant="outline"
-                          disabled={isAccountTemplate}
-                        >
-                          <div className="flex items-center gap-4 w-full min-w-0">
-                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
-                              <MessageSquare className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                            </div>
-                            <div className="flex-1 text-left min-w-0 overflow-hidden">
-                              <div className="font-medium text-base mb-0.5 truncate">Multi Option Select</div>
-                              <div className="text-xs text-muted-foreground truncate">Select multiple options</div>
-                            </div>
-                          </div>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p className="font-medium">Multi Option Select</p>
-                        <p className="text-xs text-muted-foreground">Select multiple options</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={() => handleAddStep("textarea")}
-                          className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
-                          variant="outline"
-                          disabled={isAccountTemplate}
-                        >
-                          <div className="flex items-center gap-4 w-full min-w-0">
-                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
-                              <Edit className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                            </div>
-                            <div className="flex-1 text-left min-w-0 overflow-hidden">
-                              <div className="font-medium text-base mb-0.5 truncate">Multi Line Text</div>
-                              <div className="text-xs text-muted-foreground truncate">Free-form text response</div>
-                            </div>
-                          </div>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p className="font-medium">Multi Line Text</p>
-                        <p className="text-xs text-muted-foreground">Free-form text response</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={() => handleAddStep("info")}
-                          className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
-                          variant="outline"
-                          disabled={isAccountTemplate}
-                        >
-                          <div className="flex items-center gap-4 w-full min-w-0">
-                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                              <Info className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                            </div>
-                            <div className="flex-1 text-left min-w-0 overflow-hidden">
-                              <div className="font-medium text-base mb-0.5 truncate">Information Step</div>
-                              <div className="text-xs text-muted-foreground truncate">Display information only</div>
-                            </div>
-                          </div>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p className="font-medium">Information Step</p>
-                        <p className="text-xs text-muted-foreground">Display information only</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          onClick={() => handleAddStep("deadend")}
-                          className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-red-200 hover:border-red-300 hover:bg-red-50/50 transition-all"
-                          variant="outline"
-                          disabled={isAccountTemplate}
-                        >
-                          <div className="flex items-center gap-4 w-full min-w-0">
-                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-                              <StopCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                            </div>
-                            <div className="flex-1 text-left min-w-0 overflow-hidden">
-                              <div className="font-medium text-base mb-0.5 truncate">Dead End</div>
-                              <div className="text-xs text-muted-foreground truncate">Terminates form automatically</div>
-                            </div>
-                          </div>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p className="font-medium">Dead End</p>
-                        <p className="text-xs text-muted-foreground">Terminates form automatically</p>
-                      </TooltipContent>
-                    </Tooltip>
-
-                    {isAccountTemplate && (
-                      <p className="text-xs text-muted-foreground text-center mt-4 py-3 bg-muted/30 rounded-lg">
-                        Account templates cannot be modified
-                      </p>
-                    )}
-                  </div>
-                </TooltipProvider>
-              </div>
-
-              {/* Save Actions Card */}
-              <div className="bg-card rounded-2xl p-6 shadow-md border border-border/40 space-y-3">
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="w-full rounded-full py-6 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
-                >
-                  {saving ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-5 w-5" />
-                      Save Changes
-                    </>
-                  )}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="w-full rounded-full py-6 border-border/60 shadow-sm hover:bg-muted/50"
-                  onClick={() => {
-                    if (!templateId) return
-                    const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
-                    const previewUrl = `${patientFrontendUrl}/preview/questionnaire/${templateId}`
-                    window.open(previewUrl, '_blank')
-                  }}
-                >
-                  <Eye className="mr-2 h-5 w-5" />
-                  Preview Form
-                </Button>
-
-                {productCategory === 'weight_loss' && (
-                  <Button
-                    variant="outline"
-                    onClick={async () => {
-                      if (!token || !templateId) return
-                      if (!confirm('This will delete all steps in this questionnaire and rebuild from the master doctor template. Continue?')) return
-                      try {
-                        setRebuilding(true)
-                        const res = await fetch(`${baseUrl}/questionnaires/reset-doctor-from-master`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                          body: JSON.stringify({ questionnaireId: templateId })
-                        })
-                        const data = await res.json().catch(() => ({}))
-                        if (!res.ok || data?.success === false) {
-                          throw new Error(data?.message || 'Failed to rebuild from template')
-                        }
-                        // Re-fetch template using the same logic as initial load (templates endpoint, fallback to generic)
-                        setLoading(true)
-                        let refData: any = null
-                        let refOk = false
-                        try {
-                          const tRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
-                          const tData = await tRes.json().catch(() => ({}))
-                          if (tRes.ok && tData?.data) {
-                            refData = tData
-                            refOk = true
-                          }
-                        } catch { }
-
-                        if (!refOk) {
+                    {product?.category === 'weight_loss' && (
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          if (!token || !templateId) return
+                          if (!confirm('This will delete all steps in this questionnaire and rebuild from the master doctor template. Continue?')) return
                           try {
-                            const qRes = await fetch(`${baseUrl}/questionnaires/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
-                            const qData = await qRes.json().catch(() => ({}))
-                            if (qRes.ok && qData?.data) {
-                              refData = qData
-                              refOk = true
+                            setRebuilding(true)
+                            const res = await fetch(`${baseUrl}/questionnaires/reset-doctor-from-master`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ questionnaireId: templateId })
+                            })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok || data?.success === false) {
+                              throw new Error(data?.message || 'Failed to rebuild from template')
                             }
-                          } catch { }
-                        }
+                            // Re-fetch template using the same logic as initial load (templates endpoint, fallback to generic)
+                            setLoading(true)
+                            let refData: any = null
+                            let refOk = false
+                            try {
+                              const tRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
+                              const tData = await tRes.json().catch(() => ({}))
+                              if (tRes.ok && tData?.data) {
+                                refData = tData
+                                refOk = true
+                              }
+                            } catch { }
 
-                        if (refOk && refData?.data) {
-                          setTemplate(refData.data)
-                          const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
-                            id: String(s.id),
-                            title: String(s.title || ''),
-                            description: String(s.description || ''),
-                            stepOrder: Number(s.stepOrder || 0),
-                            category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info',
-                            stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
-                            questions: (s.questions || []).map((q: any) => ({
-                              id: String(q.id),
-                              type: q.answerType || 'single-choice',
-                              answerType: q.answerType || 'radio',
-                              questionSubtype: q.questionSubtype || null,
-                              questionText: String(q.questionText || ''),
-                              required: Boolean(q.isRequired),
-                              placeholder: q.placeholder || null,
-                              helpText: q.helpText || null,
-                              options: (q.options || []).map((o: any) => ({
-                                optionText: String(o.optionText || ''),
-                                optionValue: String(o.optionValue || o.optionText || ''),
-                                riskLevel: o.riskLevel || null
-                              })),
-                            })),
-                          })) as Step[]
-                          setSteps(loadedSteps)
-                        }
-                      } catch (e: any) {
-                        alert(e?.message || 'Failed to rebuild from template')
-                      } finally {
-                        setRebuilding(false)
-                        setLoading(false)
-                      }
-                    }}
-                    disabled={rebuilding}
-                    className="w-full rounded-full"
-                  >
-                    <RefreshCw className="mr-2 h-4 w-4" /> {rebuilding ? 'Rebuilding...' : 'Rebuild from Template'}
-                  </Button>
-                )}
-              </div>
-            </div>
+                            if (!refOk) {
+                              try {
+                                const qRes = await fetch(`${baseUrl}/questionnaires/${templateId}`, { headers: { Authorization: `Bearer ${token}` } })
+                                const qData = await qRes.json().catch(() => ({}))
+                                if (qRes.ok && qData?.data) {
+                                  refData = qData
+                                  refOk = true
+                                }
+                              } catch { }
+                            }
 
-            {/* Middle Column - Steps List */}
-            <div className="lg:col-span-8 space-y-6">
-              {/* Questions Section Header */}
-              <div className="bg-gradient-to-r from-muted/50 to-transparent rounded-xl p-5 border border-border/30">
-                <h2 className="text-2xl font-semibold tracking-tight mb-2">Questions</h2>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  These are the intake form questions. Some questions will be automatically added to every form when needed.
-                </p>
-              </div>
-
-              {steps.length > 0 ? (
-                <div className="space-y-3 relative">
-
-                  {steps.map((step, index) => {
-                    // Check if this step or any question in it is referenced by the hovered conditional step
-                    const referencedQuestionIds = hoveredConditionalStepId && steps.find(s => s.id === hoveredConditionalStepId)?.conditionalLogic
-                      ? getReferencedQuestionIds(steps.find(s => s.id === hoveredConditionalStepId)!.conditionalLogic!)
-                      : []
-                    const isReferencedByHovered = step.questions?.some(q => referencedQuestionIds.includes(q.id))
-
-                    return (
-                      <div
-                        key={step.id}
-                        ref={(el) => {
-                          if (el) {
-                            stepRefs.current.set(step.id, el)
-                          } else {
-                            stepRefs.current.delete(step.id)
+                            if (refOk && refData?.data) {
+                              setTemplate(refData.data)
+                              const loadedSteps = (refData.data?.steps || []).map((s: any) => ({
+                                id: String(s.id),
+                                title: String(s.title || ''),
+                                description: String(s.description || ''),
+                                stepOrder: Number(s.stepOrder || 0),
+                                category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info',
+                                stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+                                questions: (s.questions || []).map((q: any) => ({
+                                  id: String(q.id),
+                                  type: q.answerType || 'single-choice',
+                                  answerType: q.answerType || 'radio',
+                                  questionSubtype: q.questionSubtype || null,
+                                  questionText: String(q.questionText || ''),
+                                  required: Boolean(q.isRequired),
+                                  placeholder: q.placeholder || null,
+                                  helpText: q.helpText || null,
+                                  options: (q.options || []).map((o: any) => ({
+                                    optionText: String(o.optionText || ''),
+                                    optionValue: String(o.optionValue || o.optionText || ''),
+                                    riskLevel: o.riskLevel || null
+                                  })),
+                                })),
+                              })) as Step[]
+                              setSteps(loadedSteps)
+                            }
+                          } catch (e: any) {
+                            alert(e?.message || 'Failed to rebuild from template')
+                          } finally {
+                            setRebuilding(false)
+                            setLoading(false)
                           }
                         }}
-                        className={`
+                        disabled={rebuilding}
+                        className="w-full rounded-full"
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" /> {rebuilding ? 'Rebuilding...' : 'Rebuild from Template'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Middle Column - Steps List */}
+                <div className="lg:col-span-8 space-y-6">
+                  {/* Questions Section Header */}
+                  <div className="bg-gradient-to-r from-muted/50 to-transparent rounded-xl p-5 border border-border/30">
+                    <h2 className="text-2xl font-semibold tracking-tight mb-2">Questions</h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      These are the intake form questions. Some questions will be automatically added to every form when needed.
+                    </p>
+                  </div>
+
+                  {steps.length > 0 ? (
+                    <div className="space-y-3 relative">
+
+                      {steps.map((step, index) => {
+                        // Check if this step or any question in it is referenced by the hovered conditional step
+                        const referencedQuestionIds = hoveredConditionalStepId && steps.find(s => s.id === hoveredConditionalStepId)?.conditionalLogic
+                          ? getReferencedQuestionIds(steps.find(s => s.id === hoveredConditionalStepId)!.conditionalLogic!)
+                          : []
+                        const isReferencedByHovered = step.questions?.some(q => referencedQuestionIds.includes(q.id))
+
+                        return (
+                          <div
+                            key={step.id}
+                            ref={(el) => {
+                              if (el) {
+                                stepRefs.current.set(step.id, el)
+                              } else {
+                                stepRefs.current.delete(step.id)
+                              }
+                            }}
+                            className={`
                         bg-card rounded-xl overflow-hidden transition-all relative
                         ${step.conditionalLogic ? "ml-8 shadow-[-8px_0_12px_-4px_rgba(0,0,0,0.1)]" : ""}
                         ${step.isDeadEnd
-                            ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10 shadow-sm"
-                            : "border border-border/40 shadow-sm hover:shadow-md"}
+                                ? "border-2 border-red-300 bg-red-50/30 dark:bg-red-900/10 shadow-sm"
+                                : "border border-border/40 shadow-sm hover:shadow-md"}
                         ${editingStepId === step.id ? "ring-2 ring-teal-500/50 shadow-md" : ""}
                         ${draggedStepId === step.id ? "opacity-50" : ""}
                         ${isReferencedByHovered ? "ring-2 ring-orange-400 shadow-md" : ""}
                       `}
-                        style={{ zIndex: 1 }}
-                        draggable
-                        onDragStart={() => handleDragStart(step.id)}
-                        onDragOver={(e) => handleDragOver(e, step.id)}
-                        onDragEnd={handleDragEnd}
-                        onMouseEnter={() => step.conditionalLogic && setHoveredConditionalStepId(step.id)}
-                        onMouseLeave={() => setHoveredConditionalStepId(null)}
-                      >
-                        <div className="p-4">
-                          <div className="flex items-start gap-3">
-                            {/* Icon based on question type - smaller and more compact */}
-                            {(() => {
-                              const firstQuestion = step.questions?.[0]
-                              const isDeadEnd = step.isDeadEnd
-                              const isInfo = step.stepType === "info"
-                              const isYesNo = firstQuestion?.questionSubtype === 'yesno'
-                              const isMulti = firstQuestion?.answerType === 'checkbox'
-                              const isTextarea = firstQuestion?.answerType === 'textarea'
+                            style={{ zIndex: 1 }}
+                            draggable
+                            onDragStart={() => handleDragStart(step.id)}
+                            onDragOver={(e) => handleDragOver(e, step.id)}
+                            onDragEnd={handleDragEnd}
+                            onMouseEnter={() => step.conditionalLogic && setHoveredConditionalStepId(step.id)}
+                            onMouseLeave={() => setHoveredConditionalStepId(null)}
+                          >
+                            <div className="p-4">
+                              <div className="flex items-start gap-3">
+                                {/* Icon based on question type - smaller and more compact */}
+                                {(() => {
+                                  const firstQuestion = step.questions?.[0]
+                                  const isDeadEnd = step.isDeadEnd
+                                  const isInfo = step.stepType === "info"
+                                  const isYesNo = firstQuestion?.questionSubtype === 'yesno'
+                                  const isMulti = firstQuestion?.answerType === 'checkbox'
+                                  const isTextarea = firstQuestion?.answerType === 'textarea'
 
-                              let bgColor = "bg-teal-50 dark:bg-teal-900/20"
-                              let iconColor = "text-teal-600 dark:text-teal-400"
-                              let icon = <MessageSquare className="h-5 w-5" />
+                                  let bgColor = "bg-teal-50 dark:bg-teal-900/20"
+                                  let iconColor = "text-teal-600 dark:text-teal-400"
+                                  let icon = <MessageSquare className="h-5 w-5" />
 
-                              if (isDeadEnd) {
-                                bgColor = "bg-red-50 dark:bg-red-900/20"
-                                iconColor = "text-red-600 dark:text-red-400"
-                                icon = <StopCircle className="h-5 w-5" />
-                              } else if (isInfo) {
-                                bgColor = "bg-gray-100 dark:bg-gray-800"
-                                iconColor = "text-gray-600 dark:text-gray-400"
-                                icon = <Info className="h-5 w-5" />
-                              } else if (isYesNo) {
-                                bgColor = "bg-blue-50 dark:bg-blue-900/20"
-                                iconColor = "text-blue-600 dark:text-blue-400"
-                              } else if (isMulti) {
-                                bgColor = "bg-purple-50 dark:bg-purple-900/20"
-                                iconColor = "text-purple-600 dark:text-purple-400"
-                              } else if (isTextarea) {
-                                bgColor = "bg-orange-50 dark:bg-orange-900/20"
-                                iconColor = "text-orange-600 dark:text-orange-400"
-                                icon = <Edit className="h-5 w-5" />
-                              }
-
-                              return (
-                                <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${bgColor}`}>
-                                  <div className={iconColor}>
-                                    {icon}
-                                  </div>
-                                </div>
-                              )
-                            })()}
-
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Badge variant="outline" className="text-xs rounded-full px-3 py-1 border-border/60">
-                                  Step {index + 1}
-                                </Badge>
-                                {step.category === 'user_profile' && (
-                                  <Badge variant="secondary" className="text-xs rounded-full px-3 py-1 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800">
-                                    Auto-added
-                                  </Badge>
-                                )}
-                                {step.isDeadEnd && (
-                                  <Badge variant="destructive" className="text-xs rounded-full px-3 py-1 bg-red-500 text-white border-red-600">
-                                    <StopCircle className="h-3 w-3 mr-1" />
-                                    DEAD END
-                                  </Badge>
-                                )}
-                                {step.conditionalLogic && (
-                                  <div className="flex items-center gap-1 text-[10px] text-orange-600 font-medium">
-                                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                                    Conditional
-                                  </div>
-                                )}
-                              </div>
-                              {/* Always show collapsed view */}
-                              <div className="space-y-2">
-                                {step.stepType === "question" && (step.questions || []).map((q) => {
-                                  // Only render the conditional header once for the first conditional question
-                                  const isFirstConditional = (q.conditionalLevel || 0) > 0 &&
-                                    step.questions?.findIndex(sq => (sq.conditionalLevel || 0) > 0) === step.questions?.findIndex(sq => sq.id === q.id)
-
-                                  // Check if this is a conditional question
-                                  const fullStep = template?.steps?.find((s: any) => s.id === step.id)
-                                  const fullQuestion = fullStep?.questions?.find((fq: any) => fq.id === q.id)
-                                  const hasConditionalLogic = !!fullQuestion?.conditionalLogic
-                                  const isConditional = (q.conditionalLevel || 0) > 0 || hasConditionalLogic
+                                  if (isDeadEnd) {
+                                    bgColor = "bg-red-50 dark:bg-red-900/20"
+                                    iconColor = "text-red-600 dark:text-red-400"
+                                    icon = <StopCircle className="h-5 w-5" />
+                                  } else if (isInfo) {
+                                    bgColor = "bg-gray-100 dark:bg-gray-800"
+                                    iconColor = "text-gray-600 dark:text-gray-400"
+                                    icon = <Info className="h-5 w-5" />
+                                  } else if (isYesNo) {
+                                    bgColor = "bg-blue-50 dark:bg-blue-900/20"
+                                    iconColor = "text-blue-600 dark:text-blue-400"
+                                  } else if (isMulti) {
+                                    bgColor = "bg-purple-50 dark:bg-purple-900/20"
+                                    iconColor = "text-purple-600 dark:text-purple-400"
+                                  } else if (isTextarea) {
+                                    bgColor = "bg-orange-50 dark:bg-orange-900/20"
+                                    iconColor = "text-orange-600 dark:text-orange-400"
+                                    icon = <Edit className="h-5 w-5" />
+                                  }
 
                                   return (
-                                    <div key={q.id} className="space-y-3">
-                                      {/* Show conditional steps (both inline and new-step) */}
-                                      {isConditional && (() => {
-                                        const parentQ = step.questions?.find(pq => (pq.conditionalLevel || 0) === 0)
-                                        const conditionalLogic = fullQuestion?.conditionalLogic || ''
-                                        const currentStepIndex = steps.findIndex(s => s.id === step.id)
-                                        const isInline = (fullQuestion?.conditionalLevel || 0) > 0
+                                    <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${bgColor}`}>
+                                      <div className={iconColor}>
+                                        {icon}
+                                      </div>
+                                    </div>
+                                  )
+                                })()}
 
-                                        return (
-                                          <div className={`bg-blue-50 dark:bg-blue-950 border border-blue-200 rounded-lg p-4 ${isInline ? 'ml-6' : ''}`}>
-                                            <div className="flex items-start justify-between gap-3 mb-3">
-                                              <div className="flex items-center gap-2 flex-wrap">
-                                                <GitBranch className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                                <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
-                                                  Conditional
-                                                </Badge>
-                                                <Badge variant="outline" className="text-[10px] bg-blue-100 dark:bg-blue-800 border-blue-300">
-                                                  {q.answerType === 'checkbox' ? 'Multi' :
-                                                    q.answerType === 'textarea' ? 'Text' :
-                                                      q.questionSubtype === 'yesno' ? 'Yes/No' :
-                                                        'Single'}
-                                                </Badge>
-                                                {isInline ? (
-                                                  <Badge variant="secondary" className="text-[10px] bg-teal-50 text-teal-700 border-teal-200">
-                                                    Same Step
-                                                  </Badge>
-                                                ) : (
-                                                  <Badge variant="secondary" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
-                                                    New Step
-                                                  </Badge>
-                                                )}
-                                              </div>
-                                              <div className="flex gap-1">
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() => {
-                                                    if (parentQ) {
-                                                      handleOpenEditConditionalModal(step.id, parentQ.id, q)
-                                                    }
-                                                  }}
-                                                  className="h-7 text-xs"
-                                                >
-                                                  <Edit className="h-3 w-3 mr-1" />
-                                                  Manage
-                                                </Button>
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() => handleDeleteConditionalStep(step.id, q.id)}
-                                                  className="h-7 text-xs text-destructive hover:text-destructive"
-                                                >
-                                                  <Trash2 className="h-3 w-3" />
-                                                </Button>
-                                              </div>
-                                            </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge variant="outline" className="text-xs rounded-full px-3 py-1 border-border/60">
+                                      Step {index + 1}
+                                    </Badge>
+                                    {step.category === 'user_profile' && (
+                                      <Badge variant="secondary" className="text-xs rounded-full px-3 py-1 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800">
+                                        Auto-added
+                                      </Badge>
+                                    )}
+                                    {step.isDeadEnd && (
+                                      <Badge variant="destructive" className="text-xs rounded-full px-3 py-1 bg-red-500 text-white border-red-600">
+                                        <StopCircle className="h-3 w-3 mr-1" />
+                                        DEAD END
+                                      </Badge>
+                                    )}
+                                    {step.conditionalLogic && (
+                                      <div className="flex items-center gap-1 text-[10px] text-orange-600 font-medium">
+                                        <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                                        Conditional
+                                      </div>
+                                    )}
+                                  </div>
+                                  {/* Always show collapsed view */}
+                                  <div className="space-y-2">
+                                    {step.stepType === "question" && (step.questions || []).map((q) => {
+                                      // Only render the conditional header once for the first conditional question
+                                      const isFirstConditional = (q.conditionalLevel || 0) > 0 &&
+                                        step.questions?.findIndex(sq => (sq.conditionalLevel || 0) > 0) === step.questions?.findIndex(sq => sq.id === q.id)
 
-                                            <div className="space-y-2">
-                                              <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">{q.questionText}</p>
+                                      // Check if this is a conditional question
+                                      const fullStep = template?.steps?.find((s: any) => s.id === step.id)
+                                      const fullQuestion = fullStep?.questions?.find((fq: any) => fq.id === q.id)
+                                      const hasConditionalLogic = !!fullQuestion?.conditionalLogic
+                                      const isConditional = (q.conditionalLevel || 0) > 0 || hasConditionalLogic
 
-                                              {/* Show rules inline */}
-                                              {conditionalLogic && (
-                                                <div className="bg-white/50 dark:bg-blue-900/30 rounded p-2 border border-blue-200/50">
-                                                  <div className="flex flex-wrap items-center gap-1 text-[10px]">
-                                                    <span className="text-muted-foreground">IF:</span>
-                                                    <span className="px-1.5 py-0.5 bg-blue-100/50 dark:bg-blue-800/30 rounded font-medium">
-                                                      {currentStepIndex + 1}. {parentQ?.questionText?.substring(0, 20)}...
-                                                    </span>
-                                                    <span>is</span>
-                                                    {(() => {
-                                                      const tokens = conditionalLogic.split(' ')
-                                                      const parts: Array<{ type: 'condition' | 'operator', value: string }> = []
-                                                      for (let i = 0; i < tokens.length; i++) {
-                                                        const token = tokens[i]
-                                                        if (token.startsWith('answer_equals:')) {
-                                                          parts.push({ type: 'condition', value: token.replace('answer_equals:', '') })
-                                                        } else if (token === 'OR' || token === 'AND') {
-                                                          parts.push({ type: 'operator', value: token })
-                                                        }
-                                                      }
-                                                      return parts.map((part, pidx) => (
-                                                        part.type === 'condition' ? (
-                                                          <span key={pidx} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800 rounded font-semibold">
-                                                            {part.value}
-                                                          </span>
-                                                        ) : (
-                                                          <span key={pidx} className={`px-1 py-0.5 rounded font-bold ${part.value === 'OR' ? 'bg-blue-200 dark:bg-blue-700' : 'bg-purple-200 dark:bg-purple-700'
-                                                            }`}>
-                                                            {part.value}
-                                                          </span>
-                                                        )
-                                                      ))
-                                                    })()}
+                                      return (
+                                        <div key={q.id} className="space-y-3">
+                                          {/* Show conditional steps (both inline and new-step) */}
+                                          {isConditional && (() => {
+                                            const parentQ = step.questions?.find(pq => (pq.conditionalLevel || 0) === 0)
+                                            const conditionalLogic = fullQuestion?.conditionalLogic || ''
+                                            const currentStepIndex = steps.findIndex(s => s.id === step.id)
+                                            const isInline = (fullQuestion?.conditionalLevel || 0) > 0
+
+                                            return (
+                                              <div className={`bg-blue-50 dark:bg-blue-950 border border-blue-200 rounded-lg p-4 ${isInline ? 'ml-6' : ''}`}>
+                                                <div className="flex items-start justify-between gap-3 mb-3">
+                                                  <div className="flex items-center gap-2 flex-wrap">
+                                                    <GitBranch className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                                    <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
+                                                      Conditional
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-[10px] bg-blue-100 dark:bg-blue-800 border-blue-300">
+                                                      {q.answerType === 'checkbox' ? 'Multi' :
+                                                        q.answerType === 'textarea' ? 'Text' :
+                                                          q.questionSubtype === 'yesno' ? 'Yes/No' :
+                                                            'Single'}
+                                                    </Badge>
+                                                    {isInline ? (
+                                                      <Badge variant="secondary" className="text-[10px] bg-teal-50 text-teal-700 border-teal-200">
+                                                        Same Step
+                                                      </Badge>
+                                                    ) : (
+                                                      <Badge variant="secondary" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                                                        New Step
+                                                      </Badge>
+                                                    )}
                                                   </div>
+                                                  <div className="flex gap-1">
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      onClick={() => {
+                                                        if (parentQ) {
+                                                          handleOpenEditConditionalModal(step.id, parentQ.id, q)
+                                                        }
+                                                      }}
+                                                      className="h-7 text-xs"
+                                                    >
+                                                      <Edit className="h-3 w-3 mr-1" />
+                                                      Manage
+                                                    </Button>
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      onClick={() => handleDeleteConditionalStep(step.id, q.id)}
+                                                      className="h-7 text-xs text-destructive hover:text-destructive"
+                                                    >
+                                                      <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">{q.questionText}</p>
+
+                                                  {/* Show rules inline */}
+                                                  {conditionalLogic && (
+                                                    <div className="bg-white/50 dark:bg-blue-900/30 rounded p-2 border border-blue-200/50">
+                                                      <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                                                        <span className="text-muted-foreground">IF:</span>
+                                                        <span className="px-1.5 py-0.5 bg-blue-100/50 dark:bg-blue-800/30 rounded font-medium">
+                                                          {currentStepIndex + 1}. {parentQ?.questionText?.substring(0, 20)}...
+                                                        </span>
+                                                        <span>is</span>
+                                                        {(() => {
+                                                          const tokens = conditionalLogic.split(' ')
+                                                          const parts: Array<{ type: 'condition' | 'operator', value: string }> = []
+                                                          for (let i = 0; i < tokens.length; i++) {
+                                                            const token = tokens[i]
+                                                            if (token.startsWith('answer_equals:')) {
+                                                              parts.push({ type: 'condition', value: token.replace('answer_equals:', '') })
+                                                            } else if (token === 'OR' || token === 'AND') {
+                                                              parts.push({ type: 'operator', value: token })
+                                                            }
+                                                          }
+                                                          return parts.map((part, pidx) => (
+                                                            part.type === 'condition' ? (
+                                                              <span key={pidx} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800 rounded font-semibold">
+                                                                {part.value}
+                                                              </span>
+                                                            ) : (
+                                                              <span key={pidx} className={`px-1 py-0.5 rounded font-bold ${part.value === 'OR' ? 'bg-blue-200 dark:bg-blue-700' : 'bg-purple-200 dark:bg-purple-700'
+                                                                }`}>
+                                                                {part.value}
+                                                              </span>
+                                                            )
+                                                          ))
+                                                        })()}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )
+                                          })()}
+
+                                          {/* Collapsed Question View */}
+                                          {(q.conditionalLevel || 0) === 0 && (
+                                            <div className="bg-card rounded-lg border border-border/40 p-3 transition-all hover:shadow-sm">
+                                              <div className="flex items-start justify-between gap-4 mb-4">
+                                                <div className="flex-1">
+                                                  <p className="text-base font-semibold text-foreground mb-2">{q.questionText}</p>
+                                                  {q.helpText && (
+                                                    <p className="text-sm text-muted-foreground mb-3">{q.helpText}</p>
+                                                  )}
+                                                </div>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => handleOpenEditModal(step.id, q)}
+                                                  className="flex-shrink-0 rounded-lg"
+                                                >
+                                                  <Edit className="h-4 w-4 mr-1.5" />
+                                                  Edit
+                                                </Button>
+                                              </div>
+
+                                              {/* Show options for non-textarea questions */}
+                                              {q.answerType !== 'textarea' && q.options && q.options.length > 0 && (
+                                                <div className="space-y-2">
+                                                  {q.options.map((opt, i) => (
+                                                    <div key={i} className="flex items-center gap-3 text-sm text-foreground">
+                                                      <div className={`w-4 h-4 rounded-full border-2 ${q.answerType === 'checkbox'
+                                                        ? 'border-teal-500 rounded'
+                                                        : 'border-teal-500'
+                                                        }`}></div>
+                                                      <span className="flex-1">{opt.optionText}</span>
+                                                      {opt.riskLevel && (
+                                                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${opt.riskLevel === 'safe' ? 'bg-green-100 text-green-700 border border-green-300' :
+                                                          opt.riskLevel === 'review' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
+                                                            'bg-red-100 text-red-700 border border-red-300'
+                                                          }`}>
+                                                          {opt.riskLevel === 'safe' ? '✓ SAFE' : opt.riskLevel === 'review' ? '⚠ REVIEW' : '✕ REJECT'}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+
+                                              {/* Show textarea preview */}
+                                              {q.answerType === 'textarea' && (
+                                                <div className="bg-muted/30 rounded-lg p-4 border border-dashed border-border/60">
+                                                  <p className="text-sm text-muted-foreground italic">
+                                                    {q.placeholder || "Multi-line text area for patient response"}
+                                                  </p>
                                                 </div>
                                               )}
                                             </div>
-                                          </div>
-                                        )
-                                      })()}
+                                          )}
 
-                                      {/* Collapsed Question View */}
-                                      {(q.conditionalLevel || 0) === 0 && (
-                                        <div className="bg-card rounded-lg border border-border/40 p-3 transition-all hover:shadow-sm">
-                                          <div className="flex items-start justify-between gap-4 mb-4">
+                                          {/* Add Conditional Step Button - Only for main questions with options */}
+                                          {(q.conditionalLevel || 0) === 0 && q.answerType !== 'textarea' && q.options && q.options.length > 0 && (
+                                            <div className="mt-4">
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleOpenConditionalModal(step.id, q.id)}
+                                                className="w-full rounded-full border-border/60 hover:bg-muted/50 py-4"
+                                              >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Add Conditional Step
+                                              </Button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+
+                                  {step.stepType === "info" && (
+                                    <div className="bg-card rounded-lg border border-border/40 p-3">
+                                      {editingStepId === step.id ? (
+                                        // Edit mode
+                                        <div className="space-y-4">
+                                          <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-foreground">Step Title</label>
+                                            <input
+                                              type="text"
+                                              value={step.title}
+                                              onChange={(e) => {
+                                                const newSteps = steps.map(s => s.id === step.id ? { ...s, title: e.target.value } : s)
+                                                setSteps(newSteps)
+                                              }}
+                                              className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                                              placeholder="Enter step title"
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <label className="text-xs font-semibold text-foreground">Description</label>
+                                            <textarea
+                                              value={step.description}
+                                              onChange={(e) => {
+                                                const newSteps = steps.map(s => s.id === step.id ? { ...s, description: e.target.value } : s)
+                                                setSteps(newSteps)
+                                              }}
+                                              className="w-full px-3 py-2 border rounded-md bg-background text-sm resize-none"
+                                              rows={3}
+                                              placeholder="Enter description or information text"
+                                            />
+                                          </div>
+                                          <div className="flex gap-2 justify-end pt-2 border-t">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => setEditingStepId(null)}
+                                            >
+                                              Done
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        // View mode
+                                        <>
+                                          <div className="flex items-start justify-between gap-4">
                                             <div className="flex-1">
-                                              <p className="text-base font-semibold text-foreground mb-2">{q.questionText}</p>
-                                              {q.helpText && (
-                                                <p className="text-sm text-muted-foreground mb-3">{q.helpText}</p>
-                                              )}
+                                              <p className="font-medium text-base mb-1">{step.title || 'Information Step'}</p>
+                                              <p className="text-sm text-muted-foreground">{step.description || 'No description provided'}</p>
                                             </div>
                                             <Button
                                               variant="ghost"
                                               size="sm"
-                                              onClick={() => handleOpenEditModal(step.id, q)}
+                                              onClick={() => setEditingStepId(step.id)}
                                               className="flex-shrink-0 rounded-lg"
                                             >
                                               <Edit className="h-4 w-4 mr-1.5" />
                                               Edit
                                             </Button>
                                           </div>
-
-                                          {/* Show options for non-textarea questions */}
-                                          {q.answerType !== 'textarea' && q.options && q.options.length > 0 && (
-                                            <div className="space-y-2">
-                                              {q.options.map((opt, i) => (
-                                                <div key={i} className="flex items-center gap-3 text-sm text-foreground">
-                                                  <div className={`w-4 h-4 rounded-full border-2 ${q.answerType === 'checkbox'
-                                                    ? 'border-teal-500 rounded'
-                                                    : 'border-teal-500'
-                                                    }`}></div>
-                                                  <span className="flex-1">{opt.optionText}</span>
-                                                  {opt.riskLevel && (
-                                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${opt.riskLevel === 'safe' ? 'bg-green-100 text-green-700 border border-green-300' :
-                                                      opt.riskLevel === 'review' ? 'bg-yellow-100 text-yellow-700 border border-yellow-300' :
-                                                        'bg-red-100 text-red-700 border border-red-300'
-                                                      }`}>
-                                                      {opt.riskLevel === 'safe' ? '✓ SAFE' : opt.riskLevel === 'review' ? '⚠ REVIEW' : '✕ REJECT'}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-
-                                          {/* Show textarea preview */}
-                                          {q.answerType === 'textarea' && (
-                                            <div className="bg-muted/30 rounded-lg p-4 border border-dashed border-border/60">
-                                              <p className="text-sm text-muted-foreground italic">
-                                                {q.placeholder || "Multi-line text area for patient response"}
+                                          {step.isDeadEnd && (
+                                            <div className="mt-3 pt-3 border-t">
+                                              <p className="text-xs text-red-600 font-medium">
+                                                ⚠ This step will terminate the form
                                               </p>
                                             </div>
                                           )}
-                                        </div>
-                                      )}
-
-                                      {/* Add Conditional Step Button - Only for main questions with options */}
-                                      {(q.conditionalLevel || 0) === 0 && q.answerType !== 'textarea' && q.options && q.options.length > 0 && (
-                                        <div className="mt-4">
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleOpenConditionalModal(step.id, q.id)}
-                                            className="w-full rounded-full border-border/60 hover:bg-muted/50 py-4"
-                                          >
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Add Conditional Step
-                                          </Button>
-                                        </div>
+                                        </>
                                       )}
                                     </div>
-                                  )
-                                })}
-                              </div>
-
-                              {step.stepType === "info" && (
-                                <div className="bg-card rounded-lg border border-border/40 p-3">
-                                  {editingStepId === step.id ? (
-                                    // Edit mode
-                                    <div className="space-y-4">
-                                      <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-foreground">Step Title</label>
-                                        <input
-                                          type="text"
-                                          value={step.title}
-                                          onChange={(e) => {
-                                            const newSteps = steps.map(s => s.id === step.id ? { ...s, title: e.target.value } : s)
-                                            setSteps(newSteps)
-                                          }}
-                                          className="w-full px-3 py-2 border rounded-md bg-background text-sm"
-                                          placeholder="Enter step title"
-                                        />
-                                      </div>
-                                      <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-foreground">Description</label>
-                                        <textarea
-                                          value={step.description}
-                                          onChange={(e) => {
-                                            const newSteps = steps.map(s => s.id === step.id ? { ...s, description: e.target.value } : s)
-                                            setSteps(newSteps)
-                                          }}
-                                          className="w-full px-3 py-2 border rounded-md bg-background text-sm resize-none"
-                                          rows={3}
-                                          placeholder="Enter description or information text"
-                                        />
-                                      </div>
-                                      <div className="flex gap-2 justify-end pt-2 border-t">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => setEditingStepId(null)}
-                                        >
-                                          Done
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    // View mode
-                                    <>
-                                      <div className="flex items-start justify-between gap-4">
-                                        <div className="flex-1">
-                                          <p className="font-medium text-base mb-1">{step.title || 'Information Step'}</p>
-                                          <p className="text-sm text-muted-foreground">{step.description || 'No description provided'}</p>
-                                        </div>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => setEditingStepId(step.id)}
-                                          className="flex-shrink-0 rounded-lg"
-                                        >
-                                          <Edit className="h-4 w-4 mr-1.5" />
-                                          Edit
-                                        </Button>
-                                      </div>
-                                      {step.isDeadEnd && (
-                                        <div className="mt-3 pt-3 border-t">
-                                          <p className="text-xs text-red-600 font-medium">
-                                            ⚠ This step will terminate the form
-                                          </p>
-                                        </div>
-                                      )}
-                                    </>
                                   )}
                                 </div>
-                              )}
-                            </div>
 
-                            {/* Action Icons */}
-                            <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                              {/* Only show "Create Rule" button if this is NOT the first step */}
-                              {index > 0 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleOpenStepConditionalModal(step.id)}
-                                  className="h-8 text-xs px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                                  title={step.conditionalLogic ? "Edit conditional logic" : "Create conditional rule"}
-                                >
-                                  <GitBranch className="h-3.5 w-3.5 mr-1" />
-                                  {step.conditionalLogic ? 'Edit Rule' : 'Create Rule'}
-                                </Button>
-                              )}
-                              <div className="flex items-start gap-1">
-                                {!isAccountTemplate && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 rounded-lg hover:bg-destructive/10 transition-colors"
-                                    onClick={() => handleDeleteStep(step.id)}
-                                    title="Delete step"
-                                  >
-                                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                                  </Button>
-                                )}
-                                <div
-                                  className="h-8 w-8 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-lg hover:bg-muted/50 transition-colors"
-                                  title="Drag to reorder"
-                                >
-                                  <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                {/* Action Icons */}
+                                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                  {/* Only show "Create Rule" button if this is NOT the first step */}
+                                  {index > 0 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleOpenStepConditionalModal(step.id)}
+                                      className="h-8 text-xs px-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                      title={step.conditionalLogic ? "Edit conditional logic" : "Create conditional rule"}
+                                    >
+                                      <GitBranch className="h-3.5 w-3.5 mr-1" />
+                                      {step.conditionalLogic ? 'Edit Rule' : 'Create Rule'}
+                                    </Button>
+                                  )}
+                                  <div className="flex items-start gap-1">
+                                    {!isAccountTemplate && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-lg hover:bg-destructive/10 transition-colors"
+                                        onClick={() => handleDeleteStep(step.id)}
+                                        title="Delete step"
+                                      >
+                                        <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                                      </Button>
+                                    )}
+                                    <div
+                                      className="h-8 w-8 flex items-center justify-center cursor-grab active:cursor-grabbing rounded-lg hover:bg-muted/50 transition-colors"
+                                      title="Drag to reorder"
+                                    >
+                                      <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="bg-card rounded-2xl shadow-sm border border-dashed border-border/60 p-12 text-center">
+                      <div className="flex flex-col items-center">
+                        <div className="w-16 h-16 rounded-2xl bg-muted/30 flex items-center justify-center mb-4">
+                          <Info className="h-8 w-8 text-muted-foreground" />
                         </div>
+                        <p className="text-base font-medium text-foreground mb-2">No steps added yet</p>
+                        <p className="text-sm text-muted-foreground max-w-sm">
+                          Use the "Add New Step" panel on the left to get started building your form.
+                        </p>
                       </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="bg-card rounded-2xl shadow-sm border border-dashed border-border/60 p-12 text-center">
-                  <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-2xl bg-muted/30 flex items-center justify-center mb-4">
-                      <Info className="h-8 w-8 text-muted-foreground" />
                     </div>
-                    <p className="text-base font-medium text-foreground mb-2">No steps added yet</p>
-                    <p className="text-sm text-muted-foreground max-w-sm">
-                      Use the "Add New Step" panel on the left to get started building your form.
-                    </p>
+                  )}
+
+                  {/* Help Card */}
+                  {template.formTemplateType === 'master_template' && (
+                    <div className="bg-purple-50 dark:bg-purple-950/20 rounded-2xl shadow-sm border border-purple-200/60 dark:border-purple-800/40 p-6">
+                      <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
+                        <span className="text-2xl">🌐</span>
+                        Global Template - All Tenants
+                      </h3>
+                      <div className="text-sm space-y-3 text-purple-900 dark:text-purple-100">
+                        <p>
+                          <strong>This is a master template used by ALL tenants across the entire platform.</strong>
+                        </p>
+                        <p>
+                          {template.category
+                            ? `All ${template.category} products from every tenant will use these questions.`
+                            : 'All products from every tenant will use these questions.'}
+                        </p>
+                        <p className="text-purple-700 dark:text-purple-300 font-medium flex items-start gap-2 pt-2 border-t border-purple-200/60 dark:border-purple-800/40">
+                          <span>⚠️</span>
+                          <span>Changes here affect all tenants instantly. Use dynamic variables like {`{{companyName}}`} for personalization.</span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column - Connection Indicators Track */}
+                <div className="lg:col-span-1 relative hidden lg:block">
+                  <div className="absolute top-0 left-0 right-0 pointer-events-none" style={{ height: '100%' }}>
+                    {/* Show circles when hovering over a conditional step */}
+                    {hoveredConditionalStepId && (() => {
+                      const hoveredStep = steps.find(s => s.id === hoveredConditionalStepId)
+                      if (!hoveredStep || !hoveredStep.conditionalLogic) return null
+
+                      const hoveredStepEl = stepRefs.current.get(hoveredConditionalStepId)
+                      if (!hoveredStepEl) return null
+
+                      const referencedQuestionIds = getReferencedQuestionIds(hoveredStep.conditionalLogic)
+
+                      return steps.map((refStep) => {
+                        // Check if this step contains any referenced questions
+                        if (!refStep.questions?.some(q => referencedQuestionIds.includes(q.id))) return null
+
+                        const refStepEl = stepRefs.current.get(refStep.id)
+                        if (!refStepEl) return null
+
+                        // Get actual center position of the card
+                        const refRect = refStepEl.getBoundingClientRect()
+                        const centerY = refRect.top + refRect.height / 2
+
+                        return (
+                          <div
+                            key={`circle-${refStep.id}`}
+                            className="absolute left-0 transition-opacity duration-200"
+                            style={{
+                              top: `${centerY}px`,
+                              transform: 'translateY(-50%)'
+                            }}
+                          >
+                            {/* Orange circle at card center */}
+                            <div className="w-3 h-3 rounded-full bg-orange-500 shadow-md"></div>
+                          </div>
+                        )
+                      })
+                    })()}
+
+                    {/* Show circle on hovered conditional step */}
+                    {hoveredConditionalStepId && (() => {
+                      const hoveredStepEl = stepRefs.current.get(hoveredConditionalStepId)
+                      if (!hoveredStepEl) return null
+
+                      const hoveredRect = hoveredStepEl.getBoundingClientRect()
+                      const centerY = hoveredRect.top + hoveredRect.height / 2
+
+                      return (
+                        <div
+                          key={`circle-hovered-${hoveredConditionalStepId}`}
+                          className="absolute left-0 transition-opacity duration-200"
+                          style={{
+                            top: `${centerY}px`,
+                            transform: 'translateY(-50%)'
+                          }}
+                        >
+                          {/* Orange circle at card center */}
+                          <div className="w-3 h-3 rounded-full bg-orange-500 shadow-md"></div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
-              )}
-
-              {/* Help Card */}
-              {template.formTemplateType === 'master_template' && (
-                <div className="bg-purple-50 dark:bg-purple-950/20 rounded-2xl shadow-sm border border-purple-200/60 dark:border-purple-800/40 p-6">
-                  <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
-                    <span className="text-2xl">🌐</span>
-                    Global Template - All Tenants
-                  </h3>
-                  <div className="text-sm space-y-3 text-purple-900 dark:text-purple-100">
-                    <p>
-                      <strong>This is a master template used by ALL tenants across the entire platform.</strong>
-                    </p>
-                    <p>
-                      {template.category
-                        ? `All ${template.category} products from every tenant will use these questions.`
-                        : 'All products from every tenant will use these questions.'}
-                    </p>
-                    <p className="text-purple-700 dark:text-purple-300 font-medium flex items-start gap-2 pt-2 border-t border-purple-200/60 dark:border-purple-800/40">
-                      <span>⚠️</span>
-                      <span>Changes here affect all tenants instantly. Use dynamic variables like {`{{companyName}}`} for personalization.</span>
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Right Column - Connection Indicators Track */}
-            <div className="lg:col-span-1 relative hidden lg:block">
-              <div className="absolute top-0 left-0 right-0 pointer-events-none" style={{ height: '100%' }}>
-                {/* Show circles when hovering over a conditional step */}
-                {hoveredConditionalStepId && (() => {
-                  const hoveredStep = steps.find(s => s.id === hoveredConditionalStepId)
-                  if (!hoveredStep || !hoveredStep.conditionalLogic) return null
-
-                  const hoveredStepEl = stepRefs.current.get(hoveredConditionalStepId)
-                  if (!hoveredStepEl) return null
-
-                  const referencedQuestionIds = getReferencedQuestionIds(hoveredStep.conditionalLogic)
-
-                  return steps.map((refStep) => {
-                    // Check if this step contains any referenced questions
-                    if (!refStep.questions?.some(q => referencedQuestionIds.includes(q.id))) return null
-
-                    const refStepEl = stepRefs.current.get(refStep.id)
-                    if (!refStepEl) return null
-
-                    // Get actual center position of the card
-                    const refRect = refStepEl.getBoundingClientRect()
-                    const centerY = refRect.top + refRect.height / 2
-
-                    return (
-                      <div
-                        key={`circle-${refStep.id}`}
-                        className="absolute left-0 transition-opacity duration-200"
-                        style={{
-                          top: `${centerY}px`,
-                          transform: 'translateY(-50%)'
-                        }}
-                      >
-                        {/* Orange circle at card center */}
-                        <div className="w-3 h-3 rounded-full bg-orange-500 shadow-md"></div>
-                      </div>
-                    )
-                  })
-                })()}
-
-                {/* Show circle on hovered conditional step */}
-                {hoveredConditionalStepId && (() => {
-                  const hoveredStepEl = stepRefs.current.get(hoveredConditionalStepId)
-                  if (!hoveredStepEl) return null
-
-                  const hoveredRect = hoveredStepEl.getBoundingClientRect()
-                  const centerY = hoveredRect.top + hoveredRect.height / 2
-
-                  return (
-                    <div
-                      key={`circle-hovered-${hoveredConditionalStepId}`}
-                      className="absolute left-0 transition-opacity duration-200"
-                      style={{
-                        top: `${centerY}px`,
-                        transform: 'translateY(-50%)'
-                      }}
-                    >
-                      {/* Orange circle at card center */}
-                      <div className="w-3 h-3 rounded-full bg-orange-500 shadow-md"></div>
-                    </div>
-                  )
-                })()}
               </div>
-            </div>
-          </div>
+            </>
+          )}
+
+          {/* No Form Attached Message */}
+          {!templateId && (
+            <NoFormAttached
+              availableForms={availableForms}
+              formSearchQuery={formSearchQuery}
+              setFormSearchQuery={setFormSearchQuery}
+              selectedFormId={selectedFormIdForAttach}
+              setSelectedFormId={setSelectedFormIdForAttach}
+              showFormSelector={showFormSelector}
+              setShowFormSelector={setShowFormSelector}
+              attachingForm={attachingForm}
+              creatingForm={creatingForm}
+              onCreateNewForm={handleCreateNewForm}
+              onAttachExistingForm={handleAttachExistingForm}
+            />
+          )}
         </main>
       </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useRouter } from "next/router"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -38,6 +39,7 @@ interface PharmacyVendor {
 
 
 export default function Products() {
+  const router = useRouter()
   const { token } = useAuth()
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
@@ -157,22 +159,64 @@ export default function Products() {
     }
   }
 
-  const handleCreateProduct = () => {
-    setEditingProduct(null)
-    setFormData({
-      name: "",
-      description: "",
-      price: 0,
-      dosage: "",
-      activeIngredients: [],
-      category: "",
-      medicationSize: "",
-      pharmacyProvider: "",
-      pharmacyProductId: "",
-      requiredDoctorQuestions: [],
-      isActive: true,
-    })
-    setShowModal(true)
+  const handleCreateProduct = async () => {
+    if (!token) return
+
+    const skeletonProduct = {
+      name: "New Product",
+      description: "Edit product details below",
+      price: 1, // Minimum positive price
+      dosage: "TBD",
+      activeIngredients: ["TBD"], // At least one required
+      isActive: false, // Start as inactive
+    }
+
+    console.log('🔄 Creating skeleton product:', skeletonProduct)
+
+    try {
+      // Create a skeleton product with minimum required fields
+      const response = await fetch(`${baseUrl}/products-management`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(skeletonProduct),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        console.error('❌ Failed to create product')
+        console.error('Response status:', response.status, response.statusText)
+        console.error('Response data:', data)
+
+        // Show specific validation errors if available
+        let errorMessage = data.message || "Failed to create product"
+        if (data.errors && Array.isArray(data.errors)) {
+          const errorMessages = data.errors.map((e: any) => {
+            if (typeof e === 'string') return e
+            if (e.message) return e.message
+            return JSON.stringify(e)
+          })
+          errorMessage = errorMessages.join("; ")
+        } else if (data.errors && typeof data.errors === 'object') {
+          errorMessage = Object.entries(data.errors).map(([key, val]) => `${key}: ${val}`).join("; ")
+        }
+
+        setSaveMessage(`Error: ${errorMessage}`)
+        setTimeout(() => setSaveMessage(null), 8000)
+        return
+      }
+
+      console.log('✅ Product created successfully:', data.data.id)
+      // Navigate to the product editor
+      router.push(`/products/editor/${data.data.id}`)
+    } catch (error: any) {
+      console.error("❌ Exception creating product:", error)
+      setSaveMessage(`Error: ${error.message || "Failed to create product"}`)
+      setTimeout(() => setSaveMessage(null), 8000)
+    }
   }
 
   const handleEditProduct = (product: Product) => {
@@ -264,6 +308,14 @@ export default function Products() {
 
   const handleToggleActive = async (product: Product) => {
     if (!token) return
+
+    // If activating (product is currently inactive), navigate to product editor
+    if (!product.isActive) {
+      router.push(`/products/editor/${product.id}`)
+      return
+    }
+
+    // If deactivating, do it directly
     try {
       const response = await fetch(`${baseUrl}/products-management/${product.id}`, {
         method: "PUT",
@@ -271,16 +323,16 @@ export default function Products() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ isActive: !product.isActive }),
+        body: JSON.stringify({ isActive: false }),
       })
 
-      if (!response.ok) throw new Error("Failed to update product status")
+      if (!response.ok) throw new Error("Failed to deactivate product")
 
       const data = await response.json()
-      setSaveMessage(data.message || (product.isActive ? "Product deactivated" : "Product activated"))
+      setSaveMessage(data.message || "Product deactivated")
       fetchProducts()
     } catch (error: any) {
-      console.error("❌ Error toggling product status:", error)
+      console.error("❌ Error deactivating product:", error)
       setSaveMessage(error.message)
     }
   }
@@ -377,8 +429,16 @@ export default function Products() {
           </div>
 
           {saveMessage && (
-            <Card className="border-green-500/40 bg-green-500/10">
-              <CardContent className="p-4 text-sm text-green-700 dark:text-green-400">{saveMessage}</CardContent>
+            <Card className={saveMessage.startsWith('Error:')
+              ? "border-red-500/40 bg-red-500/10"
+              : "border-green-500/40 bg-green-500/10"
+            }>
+              <CardContent className={`p-4 text-sm ${saveMessage.startsWith('Error:')
+                ? 'text-red-700 dark:text-red-400'
+                : 'text-green-700 dark:text-green-400'
+                }`}>
+                {saveMessage}
+              </CardContent>
             </Card>
           )}
 
@@ -452,9 +512,33 @@ export default function Products() {
                         <CardDescription className="line-clamp-2 mt-1">{product.description}</CardDescription>
                       </div>
                       <div className="flex gap-2 ml-2">
-                        <Button size="sm" variant={product.isActive ? "destructive" : "default"} onClick={() => handleToggleActive(product)}>
-                          {product.isActive ? 'Deactivate' : 'Activate'}
-                        </Button>
+                        {product.isActive ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => router.push(`/products/editor/${product.id}`)}
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleToggleActive(product)}
+                            >
+                              Deactivate
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => handleToggleActive(product)}
+                          >
+                            Configure
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
                           <Edit2 className="h-4 w-4" />
                         </Button>
