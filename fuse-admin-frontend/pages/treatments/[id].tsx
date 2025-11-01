@@ -75,6 +75,8 @@ interface Treatment {
         name: string
         slug: string
         logo?: string
+        customDomain?: string
+        isCustomDomain?: boolean
     }
 }
 
@@ -513,10 +515,21 @@ export default function TreatmentDetail() {
                                                 const isSaving = savingColors[questionnaire.id]
                                                 const clinicSlug = treatment?.clinic?.slug || 'limitless'
                                                 const slug = treatment?.slug || treatment?.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-                                                const devUrl = `http://${clinicSlug}.localhost:3000/my-treatments/${slug}`
-                                                const prodDisplay = `${clinicSlug}.fuse.health/my-treatments/${slug}`
-                                                const previewDisplay = process.env.NODE_ENV === 'production' ? prodDisplay : devUrl
-                                                const previewHref = process.env.NODE_ENV === 'production' ? `https://${prodDisplay}` : devUrl
+                                                
+                                                // Build preview URL with custom domain support
+                                                let previewDisplay = ''
+                                                let previewHref = ''
+                                                if (treatment?.clinic?.isCustomDomain && treatment?.clinic?.customDomain) {
+                                                    previewDisplay = `app.${treatment.clinic.customDomain}/my-treatments/${slug}`
+                                                    previewHref = `https://${previewDisplay}`
+                                                } else {
+                                                    const isLocalhost = process.env.NODE_ENV !== 'production'
+                                                    const devUrl = `http://${clinicSlug}.localhost:3000/my-treatments/${slug}`
+                                                    const prodDisplay = `${clinicSlug}.fuse.health/my-treatments/${slug}`
+                                                    previewDisplay = isLocalhost ? devUrl : prodDisplay
+                                                    previewHref = isLocalhost ? devUrl : `https://${prodDisplay}`
+                                                }
+                                                
                                                 const isCopied = copiedQuestionnaireId === questionnaire.id
                                                 return (
                                                     <div key={questionnaire.id} className="p-4 border rounded-lg space-y-3">

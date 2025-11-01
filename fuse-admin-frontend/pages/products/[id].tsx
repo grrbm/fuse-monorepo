@@ -62,6 +62,8 @@ export default function ProductDetail() {
         activeSubscribers: 0
     })
     const [clinicSlug, setClinicSlug] = useState<string | null>(null)
+    const [clinicCustomDomain, setClinicCustomDomain] = useState<string | null>(null)
+    const [clinicIsCustomDomain, setClinicIsCustomDomain] = useState<boolean>(false)
     const [customizations, setCustomizations] = useState<Record<string, { customColor?: string | null; isActive: boolean }>>({})
     const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
 
@@ -145,6 +147,8 @@ export default function ProductDetail() {
                     const data = await response.json()
                     if (data.success && data.data) {
                         setClinicSlug(data.data.slug)
+                        setClinicCustomDomain(data.data.customDomain || null)
+                        setClinicIsCustomDomain(data.data.isCustomDomain || false)
                     }
                 }
             } catch (err) {
@@ -492,10 +496,18 @@ export default function ProductDetail() {
     }
 
     const buildPreviewUrl = () => {
-        if (!product?.slug || !clinicSlug) return null
+        if (!product?.slug) return null
         
-        // Build dynamic subdomain URL based on user's clinic
+        // Build dynamic URL based on user's clinic
         const isLocalhost = process.env.NODE_ENV !== 'production'
+        
+        // Priority 1: Use custom domain if set up and enabled
+        if (clinicIsCustomDomain && clinicCustomDomain) {
+            return `https://app.${clinicCustomDomain}/my-products/${product.slug}`
+        }
+        
+        // Priority 2: Use subdomain URL
+        if (!clinicSlug) return null
         const baseUrl = isLocalhost 
             ? `http://${clinicSlug}.localhost:3000`
             : `https://${clinicSlug}.fuse.health`
