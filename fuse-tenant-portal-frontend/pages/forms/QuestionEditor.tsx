@@ -1,7 +1,7 @@
 import { ChangeEvent, useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Edit, Save, X, Loader2 } from "lucide-react"
+import { Edit, Save, X, Loader2, Code2, ChevronDown, ChevronUp } from "lucide-react"
 
 interface QuestionnaireOptionTemplate {
     id: string
@@ -70,6 +70,8 @@ export function QuestionEditor({
     )
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [showVariables, setShowVariables] = useState(false)
+    const [copiedVariable, setCopiedVariable] = useState<string | null>(null)
     
     // Computed values that update with state
     const isYesNoType = question.questionSubtype === 'yesno'
@@ -170,6 +172,109 @@ export function QuestionEditor({
             }))
         )
     }
+
+    const handleCopyVariable = async (variable: string) => {
+        try {
+            await navigator.clipboard.writeText(variable)
+            setCopiedVariable(variable)
+            setTimeout(() => setCopiedVariable(null), 2000)
+        } catch (err) {
+            console.error('Failed to copy:', err)
+        }
+    }
+
+    // Dynamic Variables Dropdown Component
+    const DynamicVariablesDropdown = () => (
+        <div className="relative">
+            <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => setShowVariables(!showVariables)}
+                className="flex items-center gap-2 h-7 text-xs"
+            >
+                <Code2 className="h-3 w-3" />
+                Variables
+                {showVariables ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </Button>
+
+            {showVariables && (
+                <>
+                    {/* Backdrop to close dropdown when clicking outside */}
+                    <div 
+                        className="fixed inset-0 z-10" 
+                        onClick={() => setShowVariables(false)}
+                    />
+                    
+                    <div className="absolute right-0 z-20 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2">
+                        <div className="text-xs font-semibold text-gray-500 mb-2 px-2">
+                            Click to copy variable
+                        </div>
+                        
+                        {/* Company Name */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                handleCopyVariable('{{companyName}}')
+                                setShowVariables(false)
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm flex items-center justify-between group transition-colors"
+                        >
+                            <div className="flex-1">
+                                <div className="font-mono font-medium text-sm">{'{{companyName}}'}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">Tenant's company name</div>
+                            </div>
+                            {copiedVariable === '{{companyName}}' && (
+                                <span className="text-green-600 text-xs font-medium">Copied!</span>
+                            )}
+                        </button>
+
+                        {/* Clinic Name */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                handleCopyVariable('{{clinicName}}')
+                                setShowVariables(false)
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm flex items-center justify-between group transition-colors"
+                        >
+                            <div className="flex-1">
+                                <div className="font-mono font-medium text-sm">{'{{clinicName}}'}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">Tenant's clinic name</div>
+                            </div>
+                            {copiedVariable === '{{clinicName}}' && (
+                                <span className="text-green-600 text-xs font-medium">Copied!</span>
+                            )}
+                        </button>
+
+                        {/* Patient Name */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                handleCopyVariable('{{patientName}}')
+                                setShowVariables(false)
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm flex items-center justify-between group transition-colors"
+                        >
+                            <div className="flex-1">
+                                <div className="font-mono font-medium text-sm">{'{{patientName}}'}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">Patient's first name</div>
+                            </div>
+                            {copiedVariable === '{{patientName}}' && (
+                                <span className="text-green-600 text-xs font-medium">Copied!</span>
+                            )}
+                        </button>
+
+                        <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <p className="text-[10px] text-gray-500 px-2 leading-relaxed">
+                                Variables are replaced automatically when patients view the form.
+                            </p>
+                        </div>
+                    </div>
+                </>
+            )}
+        </div>
+    )
 
     const handleSave = async () => {
         if (!token) return
@@ -307,9 +412,12 @@ export function QuestionEditor({
 
             {/* Question Text */}
             <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-foreground">
-                    Question Text {isEditing && <span className="text-destructive">*</span>}
-                </label>
+                <div className="flex items-center justify-between">
+                    <label className="block text-xs font-semibold text-foreground">
+                        Question Text {isEditing && <span className="text-destructive">*</span>}
+                    </label>
+                    {isEditing && <DynamicVariablesDropdown />}
+                </div>
                 {isEditing ? (
                     <Input
                         value={questionText}
@@ -324,9 +432,12 @@ export function QuestionEditor({
 
             {/* Help Text */}
             <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-muted-foreground">
-                    Help Text <span className="text-xs">(optional)</span>
-                </label>
+                <div className="flex items-center justify-between">
+                    <label className="block text-xs font-medium text-muted-foreground">
+                        Help Text <span className="text-xs">(optional)</span>
+                    </label>
+                    {isEditing && <DynamicVariablesDropdown />}
+                </div>
                 {isEditing ? (
                     <textarea
                         value={helpText}

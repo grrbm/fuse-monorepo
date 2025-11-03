@@ -796,6 +796,99 @@ export default function TemplateEditor() {
     }
   }
 
+  // Dynamic Variables Dropdown Component
+  const DynamicVariablesDropdown = () => (
+    <div className="relative">
+      <Button
+        variant="outline"
+        size="sm"
+        type="button"
+        onClick={() => setShowVariables(!showVariables)}
+        className="flex items-center gap-2 h-8 text-xs"
+      >
+        <Code2 className="h-3.5 w-3.5" />
+        Variables
+        {showVariables ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </Button>
+
+      {showVariables && (
+        <>
+          {/* Backdrop to close dropdown when clicking outside */}
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setShowVariables(false)}
+          />
+
+          <div className="absolute z-20 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2">
+            <div className="text-xs font-semibold text-gray-500 mb-2 px-2">
+              Click to copy variable
+            </div>
+
+            {/* Company Name */}
+            <button
+              type="button"
+              onClick={() => {
+                handleCopyVariable('{{companyName}}')
+                setShowVariables(false)
+              }}
+              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm flex items-center justify-between group transition-colors"
+            >
+              <div className="flex-1">
+                <div className="font-mono font-medium text-sm">{'{{companyName}}'}</div>
+                <div className="text-xs text-gray-500 mt-0.5">Tenant's company name</div>
+              </div>
+              {copiedVariable === '{{companyName}}' && (
+                <span className="text-green-600 text-xs font-medium">Copied!</span>
+              )}
+            </button>
+
+            {/* Clinic Name */}
+            <button
+              type="button"
+              onClick={() => {
+                handleCopyVariable('{{clinicName}}')
+                setShowVariables(false)
+              }}
+              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm flex items-center justify-between group transition-colors"
+            >
+              <div className="flex-1">
+                <div className="font-mono font-medium text-sm">{'{{clinicName}}'}</div>
+                <div className="text-xs text-gray-500 mt-0.5">Tenant's clinic name</div>
+              </div>
+              {copiedVariable === '{{clinicName}}' && (
+                <span className="text-green-600 text-xs font-medium">Copied!</span>
+              )}
+            </button>
+
+            {/* Patient Name */}
+            <button
+              type="button"
+              onClick={() => {
+                handleCopyVariable('{{patientName}}')
+                setShowVariables(false)
+              }}
+              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm flex items-center justify-between group transition-colors"
+            >
+              <div className="flex-1">
+                <div className="font-mono font-medium text-sm">{'{{patientName}}'}</div>
+                <div className="text-xs text-gray-500 mt-0.5">Patient's first name</div>
+              </div>
+              {copiedVariable === '{{patientName}}' && (
+                <span className="text-green-600 text-xs font-medium">Copied!</span>
+              )}
+            </button>
+
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-[10px] text-gray-500 px-2 leading-relaxed">
+                Variables are replaced automatically when patients view the form based on their clinic.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+
   // Helper: Extract question IDs from conditional logic
   const getReferencedQuestionIds = (conditionalLogic: string): string[] => {
     if (!conditionalLogic) return []
@@ -2587,7 +2680,10 @@ export default function TemplateEditor() {
                                     // Edit mode
                                     <div className="space-y-4">
                                       <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-foreground">Step Title</label>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className="text-xs font-semibold text-foreground">Step Title</label>
+                                          <DynamicVariablesDropdown />
+                                        </div>
                                         <input
                                           type="text"
                                           value={step.title}
@@ -2600,7 +2696,10 @@ export default function TemplateEditor() {
                                         />
                                       </div>
                                       <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-foreground">Description</label>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className="text-xs font-semibold text-foreground">Description</label>
+                                          <DynamicVariablesDropdown />
+                                        </div>
                                         <textarea
                                           value={step.description}
                                           onChange={(e) => {
@@ -3252,9 +3351,12 @@ export default function TemplateEditor() {
                       <div className="space-y-4">
                         {/* Title/Question Text */}
                         <div className="space-y-1.5">
-                          <label className="block text-xs font-semibold text-foreground">
-                            {editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend' ? 'Message Title' : 'Question Text'} <span className="text-destructive">*</span>
-                          </label>
+                          <div className="flex items-center justify-between">
+                            <label className="block text-xs font-semibold text-foreground">
+                              {editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend' ? 'Message Title' : 'Question Text'} <span className="text-destructive">*</span>
+                            </label>
+                            <DynamicVariablesDropdown />
+                          </div>
                           <input
                             type="text"
                             value={editingConditionalStep.text}
@@ -3271,9 +3373,12 @@ export default function TemplateEditor() {
 
                         {/* Description / Help Text */}
                         <div className="space-y-1.5">
-                          <label className="block text-xs font-medium text-muted-foreground">
-                            {editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend' ? 'Description' : 'Help Text'} <span className="text-xs">(optional)</span>
-                          </label>
+                          <div className="flex items-center justify-between">
+                            <label className="block text-xs font-medium text-muted-foreground">
+                              {editingConditionalStep.stepType === 'info' || editingConditionalStep.stepType === 'deadend' ? 'Description' : 'Help Text'} <span className="text-xs">(optional)</span>
+                            </label>
+                            <DynamicVariablesDropdown />
+                          </div>
                           <textarea
                             value={editingConditionalStep.helpText}
                             onChange={(e) => setEditingConditionalStep({ ...editingConditionalStep, helpText: e.target.value })}
