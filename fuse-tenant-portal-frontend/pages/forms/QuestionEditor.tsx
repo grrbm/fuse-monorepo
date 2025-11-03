@@ -72,7 +72,7 @@ export function QuestionEditor({
     const [error, setError] = useState<string | null>(null)
     const [showVariables, setShowVariables] = useState(false)
     const [copiedVariable, setCopiedVariable] = useState<string | null>(null)
-    
+
     // Computed values that update with state
     const isYesNoType = question.questionSubtype === 'yesno'
     const isTextArea = answerType === 'textarea' || question.answerType === 'textarea'
@@ -201,16 +201,16 @@ export function QuestionEditor({
             {showVariables && (
                 <>
                     {/* Backdrop to close dropdown when clicking outside */}
-                    <div 
-                        className="fixed inset-0 z-10" 
+                    <div
+                        className="fixed inset-0 z-10"
                         onClick={() => setShowVariables(false)}
                     />
-                    
+
                     <div className="absolute right-0 z-20 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2">
                         <div className="text-xs font-semibold text-gray-500 mb-2 px-2">
                             Click to copy variable
                         </div>
-                        
+
                         {/* Company Name */}
                         <button
                             type="button"
@@ -310,12 +310,12 @@ export function QuestionEditor({
                 answerType: answerType || 'radio',
                 helpText: helpText.trim() || null,
             }
-            
+
             // Only include options for non-textarea questions
             if (!isTextArea) {
                 payload.options = cleanedOptions
             }
-            
+
             // Only include placeholder for textarea questions
             if (isTextArea) {
                 payload.placeholder = placeholder.trim() || null
