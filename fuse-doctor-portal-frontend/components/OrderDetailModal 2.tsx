@@ -1,0 +1,425 @@
+import { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
+import { Button } from './ui/button';
+import { PendingOrder, ApiClient } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+
+interface OrderDetailModalProps {
+    order: PendingOrder | null;
+    isOpen: boolean;
+    onClose: () => void;
+    onApprove?: (orderId: string) => void;
+    onNotesAdded?: () => void;
+}
+
+export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdded }: OrderDetailModalProps) {
+    const { authenticatedFetch } = useAuth();
+    const apiClient = new ApiClient(authenticatedFetch);
+
+    const [notes, setNotes] = useState('');
+    const [submittingNotes, setSubmittingNotes] = useState(false);
+    const [approving, setApproving] = useState(false);
+    const [pharmacyCoverage, setPharmacyCoverage] = useState<any>(null);
+    const [loadingCoverage, setLoadingCoverage] = useState(false);
+    const [coverageError, setCoverageError] = useState<string | null>(null);
+
+    // Pre-populate notes when order changes
+    useEffect(() => {
+        if (order?.doctorNotes) {
+            setNotes(order.doctorNotes);
+        } else {
+            setNotes('');
+        }
+    }, [order?.id]);
+
+    // Fetch pharmacy coverage when order changes
+    useEffect(() => {
+        if (order?.id && isOpen) {
+            fetchPharmacyCoverage();
+        }
+    }, [order?.id, isOpen]);
+
+    const fetchPharmacyCoverage = async () => {
+        if (!order?.id) return;
+        
+        setLoadingCoverage(true);
+        setCoverageError(null);
+        
+        try {
+            const response = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/doctor/orders/${order.id}/pharmacy-coverage`);
+            const data = await response.json();
+            
+            if (data.success && data.hasCoverage) {
+                setPharmacyCoverage(data.data);
+            } else {
+                setCoverageError(data.error || 'No pharmacy coverage found');
+                setPharmacyCoverage(null);
+            }
+        } catch (error) {
+            console.error('Failed to fetch pharmacy coverage:', error);
+            setCoverageError('Failed to check pharmacy coverage');
+            setPharmacyCoverage(null);
+        } finally {
+            setLoadingCoverage(false);
+        }
+    };
+
+    if (!isOpen || !order) return null;
+
+    const handleSaveNotes = async () => {
+        setSubmittingNotes(true);
+        try {
+            await apiClient.addOrderNotes(order.id, notes);
+            toast.success('Notes saved successfully');
+            onNotesAdded?.();
+        } catch (error) {
+            toast.error('Failed to save notes');
+        } finally {
+            setSubmittingNotes(false);
+        }
+    };
+
+    const handleApprove = async () => {
+        setApproving(true);
+        try {
+            await apiClient.bulkApproveOrders([order.id]);
+            toast.success(`Order ${order.orderNumber} approved successfully`);
+            onApprove?.(order.id);
+            onClose();
+        } catch (error) {
+            toast.error('Failed to approve order');
+        } finally {
+            setApproving(false);
+        }
+    };
+
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                {/* Header */}
+                <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-2xl font-semibold">Order Details</h2>
+                        <p className="text-sm text-gray-600">Order #{order.orderNumber}</p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                        <X className="h-6 w-6" />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 space-y-6">
+                    {/* Patient Information */}
+                    <section>
+                        <h3 className="text-lg font-semibold mb-3">Patient Information</h3>
+                        <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                            <div>
+                                <p className="text-sm text-gray-600">Name</p>
+                                <p className="font-medium">
+                                    {order.patient?.firstName} {order.patient?.lastName}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Email</p>
+                                <p className="font-medium">{order.patient?.email}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Phone</p>
+                                <p className="font-medium">
+                                    {order.patient?.phoneNumber || (
+                                        <span className="text-red-600 text-xs">
+                                            Missing - need to provide this for Pharmacy request to work
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Date of Birth</p>
+                                <p className="font-medium">
+                                    {order.patient?.dateOfBirth ? (
+                                        new Date(order.patient.dateOfBirth).toLocaleDateString()
+                                    ) : (
+                                        <span className="text-red-600 text-xs">
+                                            Missing - need to provide this for Pharmacy request to work
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Gender</p>
+                                <p className="font-medium">
+                                    {order.patient?.gender ? (
+                                        order.patient.gender.charAt(0).toUpperCase() + order.patient.gender.slice(1)
+                                    ) : (
+                                        <span className="text-red-600 text-xs">
+                                            Missing - need to provide this for Pharmacy request to work
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                            <div className="col-span-2">
+                                <p className="text-sm text-gray-600">Patient Address</p>
+                                <p className="font-medium">
+                                    {order.patient?.address && order.patient?.city && order.patient?.state && order.patient?.zipCode ? (
+                                        <>
+                                            {order.patient.address}<br />
+                                            {order.patient.city}, {order.patient.state} {order.patient.zipCode}
+                                        </>
+                                    ) : (
+                                        <span className="text-red-600 text-xs">
+                                            Missing - need to provide this for Pharmacy request to work
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Order Date</p>
+                                <p className="font-medium">{new Date(order.createdAt).toLocaleString()}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Order Total</p>
+                                <p className="font-medium">${order.totalAmount}</p>
+                            </div>
+                            {order.shippingAddress && (
+                                <div className="col-span-2">
+                                    <p className="text-sm text-gray-600">Shipping Address</p>
+                                    <p className="font-medium">
+                                        {order.shippingAddress.street}<br />
+                                        {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
+                    {/* Pharmacy Coverage */}
+                    <section>
+                        <h3 className="text-lg font-semibold mb-3">Pharmacy Coverage</h3>
+                        {loadingCoverage ? (
+                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                                <p className="text-blue-800">Checking pharmacy coverage...</p>
+                            </div>
+                        ) : coverageError ? (
+                            <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                                <p className="text-red-800 font-semibold mb-2">⚠️ No Pharmacy Coverage</p>
+                                <p className="text-red-700 text-sm">{coverageError}</p>
+                                <p className="text-red-600 text-xs mt-2">
+                                    Please ensure the product has pharmacy coverage configured for the patient's state before approving this order.
+                                </p>
+                            </div>
+                        ) : pharmacyCoverage ? (
+                            <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                                <div className="flex items-center mb-2">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                    <p className="text-green-800 font-semibold">Coverage Available</p>
+                                </div>
+                                <div className="space-y-2 text-sm">
+                                    <div>
+                                        <span className="text-gray-600">Pharmacy:</span>{' '}
+                                        <span className="font-medium text-gray-900">{pharmacyCoverage.pharmacy.name}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-600">State:</span>{' '}
+                                        <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.state}</span>
+                                    </div>
+                                    {pharmacyCoverage.coverage.pharmacyProductName && (
+                                        <div>
+                                            <span className="text-gray-600">Pharmacy Product:</span>{' '}
+                                            <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.pharmacyProductName}</span>
+                                        </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.pharmacyProductId && (
+                                        <div>
+                                            <span className="text-gray-600">SKU:</span>{' '}
+                                            <span className="font-mono text-sm text-gray-900">{pharmacyCoverage.coverage.pharmacyProductId}</span>
+                                        </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.pharmacyWholesaleCost && (
+                                        <div>
+                                            <span className="text-gray-600">Wholesale Cost:</span>{' '}
+                                            <span className="font-medium text-gray-900">${pharmacyCoverage.coverage.pharmacyWholesaleCost}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : null}
+                    </section>
+
+                    {/* Treatment Information */}
+                    {order.treatment && (
+                        <section>
+                            <h3 className="text-lg font-semibold mb-3">Treatment Information</h3>
+                            <div className="bg-gray-50 p-4 rounded-lg">
+                                <p className="font-medium text-lg">{order.treatment.name}</p>
+                                {order.treatment.description && (
+                                    <p className="text-sm text-gray-600 mt-2">{order.treatment.description}</p>
+                                )}
+                                {order.treatment.isCompound && (
+                                    <span className="inline-block mt-2 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">
+                                        Compound Medication
+                                    </span>
+                                )}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* MD Prescriptions */}
+                    {order.mdPrescriptions && order.mdPrescriptions.length > 0 && (
+                        <section>
+                            <h3 className="text-lg font-semibold mb-3">Prescriptions (MD Integrations)</h3>
+                            <div className="space-y-2">
+                                {order.mdPrescriptions.map((rx: any, idx: number) => (
+                                    <div key={idx} className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                                        <p className="font-medium">{rx.title || rx.name}</p>
+                                        {rx.directions && (
+                                            <p className="text-sm text-gray-700 mt-1">Directions: {rx.directions}</p>
+                                        )}
+                                        <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
+                                            {rx.quantity && <span>Qty: {rx.quantity}</span>}
+                                            {rx.refills !== undefined && <span>Refills: {rx.refills}</span>}
+                                            {rx.days_supply && <span>Days: {rx.days_supply}</span>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* MD Offerings */}
+                    {order.mdOfferings && order.mdOfferings.length > 0 && (
+                        <section>
+                            <h3 className="text-lg font-semibold mb-3">Services/Offerings (MD Integrations)</h3>
+                            <div className="space-y-2">
+                                {order.mdOfferings.map((offering: any, idx: number) => (
+                                    <div key={idx} className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                                        <p className="font-medium">{offering.title || offering.name}</p>
+                                        {offering.directions && (
+                                            <p className="text-sm text-gray-700 mt-1">{offering.directions}</p>
+                                        )}
+                                        {offering.status && (
+                                            <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
+                                                {offering.status}
+                                            </span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Questionnaire Answers */}
+                    {(() => {
+                        // Parse questionnaire answers and filter for "normal" category only
+                        if (!order.questionnaireAnswers) return null;
+
+                        const qa = order.questionnaireAnswers;
+                        let normalAnswers: any[] = [];
+
+                        // Try multiple possible formats
+                        let allAnswers: any[] = [];
+
+                        // Format 1: Direct answers array
+                        if (qa.answers && Array.isArray(qa.answers)) {
+                            allAnswers = qa.answers;
+                        }
+                        // Format 2: Wrapped with format property
+                        else if (qa.format === 'structured' && qa.answers && Array.isArray(qa.answers)) {
+                            allAnswers = qa.answers;
+                        }
+                        // Format 3: Legacy format (key-value pairs) - skip as no category info available
+                        else if (typeof qa === 'object' && !qa.answers && !qa.format) {
+                            return null;
+                        }
+
+                        // Filter for only "normal" category questions
+                        normalAnswers = allAnswers.filter((answer: any) => answer.stepCategory === 'normal');
+
+                        // If no normal answers found, don't show this section
+                        if (normalAnswers.length === 0) {
+                            return null;
+                        }
+
+                        return (
+                            <section>
+                                <h3 className="text-lg font-semibold mb-3">Questionnaire Answers</h3>
+                                <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                                    {normalAnswers.map((answer: any, index: number) => (
+                                        <div key={index} className="bg-white border border-gray-200 p-3 rounded-md">
+                                            <p className="text-sm font-medium text-gray-900">{answer.questionText}</p>
+                                            <p className="text-sm text-gray-700 mt-1">
+                                                {answer.selectedOptions && answer.selectedOptions.length > 0 ? (
+                                                    answer.selectedOptions.map((opt: any) => opt.optionText).join(', ')
+                                                ) : (
+                                                    String(answer.answer)
+                                                )}
+                                            </p>
+                                            <span className="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                                                Product Question
+                                            </span>
+                                        </div>
+                                    ))}
+                                    {qa.metadata && (
+                                        <div className="text-xs text-gray-500 mt-2">
+                                            Completed: {new Date(qa.metadata.completedAt).toLocaleString()}
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                        );
+                    })()}
+
+                    {/* Doctor Notes */}
+                    <section>
+                        <h3 className="text-lg font-semibold mb-3">Doctor Notes</h3>
+                        <textarea
+                            className="w-full border rounded-md px-3 py-2 text-sm min-h-[120px]"
+                            placeholder="Enter notes about this order..."
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                        />
+                        <button
+                            onClick={handleSaveNotes}
+                            disabled={submittingNotes}
+                            className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {submittingNotes ? 'Saving...' : 'Save Notes'}
+                        </button>
+                    </section>
+
+                    {/* Auto Approval Info */}
+                    {order.autoApprovedByDoctor && (
+                        <section>
+                            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                                <p className="font-medium text-yellow-900">Auto-Approved</p>
+                                {order.autoApprovalReason && (
+                                    <p className="text-sm text-yellow-800 mt-1">{order.autoApprovalReason}</p>
+                                )}
+                            </div>
+                        </section>
+                    )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex justify-end gap-3">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                    >
+                        Close
+                    </button>
+                    <button
+                        onClick={handleApprove}
+                        disabled={approving || loadingCoverage || !!coverageError || !pharmacyCoverage}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={coverageError ? 'Cannot approve: ' + coverageError : ''}
+                    >
+                        {approving ? 'Approving...' : 'Approve Order'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+

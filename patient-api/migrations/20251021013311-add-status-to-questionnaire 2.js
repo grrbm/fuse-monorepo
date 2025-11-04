@@ -6,7 +6,7 @@ module.exports = {
     // Add status ENUM type (only if it doesn't exist)
     await queryInterface.sequelize.query(`
       DO $$ BEGIN
-      CREATE TYPE "enum_Questionnaire_status" AS ENUM ('in_progress', 'ready_for_review', 'ready');
+        CREATE TYPE "enum_Questionnaire_status" AS ENUM ('in_progress', 'ready_for_review', 'ready');
       EXCEPTION
         WHEN duplicate_object THEN null;
       END $$;
@@ -15,11 +15,11 @@ module.exports = {
     // Add status column to Questionnaire table (only if it doesn't exist)
     const tableDescription = await queryInterface.describeTable('Questionnaire');
     if (!tableDescription.status) {
-    await queryInterface.addColumn('Questionnaire', 'status', {
-      type: Sequelize.ENUM('in_progress', 'ready_for_review', 'ready'),
-      allowNull: false,
-      defaultValue: 'in_progress',
-    });
+      await queryInterface.addColumn('Questionnaire', 'status', {
+        type: Sequelize.ENUM('in_progress', 'ready_for_review', 'ready'),
+        allowNull: false,
+        defaultValue: 'in_progress',
+      });
     }
   },
 
