@@ -454,8 +454,10 @@ export default function ProductEditor() {
 
     try {
       setAttachingForm(true)
-      const response = await fetch(`${baseUrl}/questionnaires/templates/${selectedFormIdForAttach}`, {
-        method: "PUT",
+      
+      // Clone the template to create an independent copy for this product
+      const response = await fetch(`${baseUrl}/questionnaires/templates/${selectedFormIdForAttach}/clone-for-product`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -463,12 +465,19 @@ export default function ProductEditor() {
         body: JSON.stringify({ productId: productId }),
       })
 
-      if (!response.ok) throw new Error("Failed to attach form")
+      if (!response.ok) throw new Error("Failed to clone template for product")
 
       const data = await response.json()
-      setSaveMessage(data.message || "Form attached successfully")
-      setTemplateId(selectedFormIdForAttach)
+      const clonedQuestionnaireId = data.data?.id
+      
+      if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
+      
+      setSaveMessage("Form template cloned and attached successfully! You can now customize it for this product.")
+      setTemplateId(clonedQuestionnaireId) // Use the clone's ID, not the template's
       setShowFormSelector(false)
+      
+      // Reload the page to show the cloned form
+      window.location.reload()
     } catch (error: any) {
       console.error("❌ Error attaching form:", error)
       setSaveMessage(error.message)
@@ -483,19 +492,18 @@ export default function ProductEditor() {
     try {
       setAttachingForm(true)
 
-      // Detach current form
-      await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
-        method: "PUT",
+      // Delete current form (it's a clone specific to this product)
+      await fetch(`${baseUrl}/questionnaires/${templateId}`, {
+        method: "DELETE",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ productId: null }),
-      })
+      }).catch(() => console.log('Old form deletion failed or already deleted'))
 
-      // Attach new form
-      const response = await fetch(`${baseUrl}/questionnaires/templates/${newFormId}`, {
-        method: "PUT",
+      // Clone the new template for this product
+      const response = await fetch(`${baseUrl}/questionnaires/templates/${newFormId}/clone-for-product`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -503,12 +511,19 @@ export default function ProductEditor() {
         body: JSON.stringify({ productId: productId }),
       })
 
-      if (!response.ok) throw new Error("Failed to switch form")
+      if (!response.ok) throw new Error("Failed to clone new template")
 
       const data = await response.json()
-      setSaveMessage(data.message || "Form switched successfully")
-      setTemplateId(newFormId)
+      const clonedQuestionnaireId = data.data?.id
+      
+      if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
+      
+      setSaveMessage("Form template switched! Cloned and attached successfully.")
+      setTemplateId(clonedQuestionnaireId)
       setShowFormSelector(false)
+      
+      // Reload to show the new cloned form
+      window.location.reload()
     } catch (error: any) {
       console.error("❌ Error switching form:", error)
       setSaveMessage(error.message)
