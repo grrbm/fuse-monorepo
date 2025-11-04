@@ -332,25 +332,42 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                       All states supported by this pharmacy are already assigned.
                     </p>
                   ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                      {availableStatesForSelectedPharmacy.map((state) => (
-                        <label key={state.code} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted p-1 rounded">
-                          <input
-                            type="checkbox"
-                            checked={selectedStates.includes(state.code)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedStates([...selectedStates, state.code])
-                              } else {
-                                setSelectedStates(selectedStates.filter(s => s !== state.code))
-                              }
-                            }}
-                            className="rounded"
-                          />
-                          <span>{state.code}</span>
-                        </label>
-                      ))}
-                    </div>
+                    <>
+                      <label className="flex items-center gap-2 text-sm font-medium cursor-pointer hover:bg-muted p-2 rounded mb-2 border-b border-border">
+                        <input
+                          type="checkbox"
+                          checked={selectedStates.length === availableStatesForSelectedPharmacy.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedStates(availableStatesForSelectedPharmacy.map(s => s.code))
+                            } else {
+                              setSelectedStates([])
+                            }
+                          }}
+                          className="rounded"
+                        />
+                        <span>Select All ({availableStatesForSelectedPharmacy.length} states)</span>
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {availableStatesForSelectedPharmacy.map((state) => (
+                          <label key={state.code} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted p-1 rounded">
+                            <input
+                              type="checkbox"
+                              checked={selectedStates.includes(state.code)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedStates([...selectedStates, state.code])
+                                } else {
+                                  setSelectedStates(selectedStates.filter(s => s !== state.code))
+                                }
+                              }}
+                              className="rounded"
+                            />
+                            <span>{state.code}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
