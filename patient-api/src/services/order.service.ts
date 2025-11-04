@@ -16,6 +16,8 @@ import Treatment from "../models/Treatment";
 import Payment from "../models/Payment";
 import TenantProduct from "../models/TenantProduct";
 import WebSocketService from "./websocket.service";
+import PharmacyProduct from "../models/PharmacyProduct";
+import Pharmacy from "../models/Pharmacy";
 
 
 interface ListOrdersByClinicResult {
@@ -270,19 +272,67 @@ class OrderService {
                 hasPayment: !!order.payment
             });
 
+            // Check pharmacy coverage before proceeding
+            const patientState = order.shippingAddress?.state || order.user?.state;
+            const productId = order.tenantProduct?.product?.id;
+
+            if (!patientState) {
+                console.error(`❌ No patient state found for order: ${order.orderNumber}`);
+                return {
+                    success: false,
+                    message: "Patient state not found",
+                    error: "Cannot determine patient state for pharmacy order"
+                };
+            }
+
+            if (!productId) {
+                console.error(`❌ No product found for order: ${order.orderNumber}`);
+                return {
+                    success: false,
+                    message: "Product not found",
+                    error: "Cannot determine product for pharmacy order"
+                };
+            }
+
+            // Find pharmacy coverage
+            const coverage = await PharmacyProduct.findOne({
+                where: {
+                    productId,
+                    state: patientState
+                },
+                include: [
+                    {
+                        model: Pharmacy,
+                        as: 'pharmacy',
+                        attributes: ['id', 'name', 'slug', 'isActive']
+                    }
+                ]
+            });
+
+            if (!coverage || !coverage.pharmacy?.isActive) {
+                console.error(`❌ No active pharmacy coverage for product ${productId} in ${patientState}`);
+                return {
+                    success: false,
+                    message: `No pharmacy coverage for this product in ${patientState}`,
+                    error: "Pharmacy coverage not configured"
+                };
+            }
+
+            console.log(`✅ Found pharmacy coverage: ${coverage.pharmacy.name} (${coverage.pharmacy.slug}) for ${patientState}`);
+
             // Handle payment capture and pharmacy order creation based on order status
             if (order.status === OrderStatus.PAID) {
                 // Order is already paid, send to pharmacy
                 console.log(`📦 Order already paid, sending to pharmacy: ${order.orderNumber}`);
                 try {
                     const pharmacyService = new PharmacyService()
-                    await pharmacyService.createPharmacyOrder(order)
+                    await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
                     console.log(`✅ Pharmacy order creation completed for order ${orderId}`);
                 } catch (pharmacyError) {
                     console.error(`❌ Failed to create pharmacy order for ${orderId}:`, pharmacyError);
                     // Don't fail the approval - order is already paid
                 }
-            } else if (order.status === OrderStatus.PENDING && order.payment?.stripePaymentIntentId) {
+            } else if ((order.status === OrderStatus.PENDING || order.status === OrderStatus.PROCESSING) && order.payment?.stripePaymentIntentId) {
                 // Get payment intent ID from Payment model (single source of truth)
                 const paymentIntentId = order.payment.stripePaymentIntentId;
 
@@ -350,7 +400,7 @@ class OrderService {
                     // Send to pharmacy after payment is captured
                     try {
                         const pharmacyService = new PharmacyService()
-                        await pharmacyService.createPharmacyOrder(order)
+                        await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
                         console.log(`✅ Pharmacy order creation completed for order ${orderId}`);
                     } catch (pharmacyError) {
                         console.error(`❌ Failed to create pharmacy order for ${orderId}:`, pharmacyError);
@@ -412,7 +462,7 @@ class OrderService {
                             // Send to pharmacy
                             try {
                                 const pharmacyService = new PharmacyService();
-                                await pharmacyService.createPharmacyOrder(order);
+                                await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage);
                                 console.log(`✅ Pharmacy order creation completed for order ${orderId}`);
                             } catch (pharmacyError) {
                                 console.error(`❌ Failed to create pharmacy order for ${orderId}:`, pharmacyError);
