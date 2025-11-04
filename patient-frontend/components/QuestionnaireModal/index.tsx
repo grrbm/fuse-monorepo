@@ -343,7 +343,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
               if (clinicRes.ok && clinicData?.success && clinicData?.data) {
                 const clinic = clinicData.data;
-                const variables = getVariablesFromClinic(clinic);
+                const variables = {
+                  ...getVariablesFromClinic(clinic),
+                  productName: productName || ''
+                };
 
                 // Replace variables in all step titles, descriptions, and questions
                 if (questionnaireData.steps && questionnaireData.steps.length > 0) {
@@ -407,7 +410,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           }
 
           // Get template variables from clinic/treatment data
-          const variables = getVariablesFromClinic(treatmentData.clinic || {});
+          const variables = {
+            ...getVariablesFromClinic(treatmentData.clinic || {}),
+            productName: productName || ''
+          };
 
           // Replace variables in all step titles, descriptions, and questions
           if (questionnaireData.steps && questionnaireData.steps.length > 0) {

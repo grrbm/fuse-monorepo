@@ -214,6 +214,30 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
     }
   }
 
+  const handleUpdateCustomPrice = async (assignmentId: string, customPrice: number) => {
+    if (!token) return
+
+    try {
+      const response = await fetch(`${baseUrl}/pharmacy-assignments/${assignmentId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ pharmacyWholesaleCost: customPrice }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update custom price")
+      }
+
+      await fetchData() // Refresh to show the updated price
+    } catch (err) {
+      console.error("Error updating custom price:", err)
+      setError("Failed to update custom price")
+    }
+  }
+
   const handleRemoveAssignment = async (assignmentId: string) => {
     if (!token || !confirm("Remove this pharmacy assignment?")) return
 
@@ -488,8 +512,9 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                     <div>
                       <h4 className="font-semibold">{pharmacy.name}</h4>
                       <p className="text-sm text-muted-foreground">{states.length} states covered</p>
-                      {firstAssignment?.pharmacyProductName && (
-                        <div className="mt-2 text-sm space-y-1">
+                      <div className="mt-2 text-sm space-y-1">
+                        {/* Show pharmacy product info if selected */}
+                        {firstAssignment?.pharmacyProductName && (
                           <div>
                             <span className="text-muted-foreground">Pharmacy Product: </span>
                             <span className="font-medium">{firstAssignment.pharmacyProductName}</span>
@@ -497,16 +522,43 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                               <span className="text-muted-foreground ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
                             )}
                           </div>
-                          {firstAssignment.pharmacyWholesaleCost && (
+                        )}
+                        
+                        {/* Pricing section - always show */}
+                        {firstAssignment && (
+                          firstAssignment.pharmacyWholesaleCost ? (
                             <div>
                               <span className="text-muted-foreground">Wholesale Cost: </span>
                               <span className="font-medium text-green-600 dark:text-green-400">
                                 ${Number(firstAssignment.pharmacyWholesaleCost).toFixed(2)}
                               </span>
+                              <Badge variant="outline" className="ml-2 text-xs">From Pharmacy API</Badge>
                             </div>
-                          )}
-                        </div>
-                      )}
+                          ) : (
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-muted-foreground text-sm">Custom Wholesale Price:</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm">$</span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  className="w-24 h-8 text-sm"
+                                  defaultValue={firstAssignment.pharmacyWholesaleCost || ""}
+                                  onBlur={(e) => {
+                                    const customPrice = parseFloat(e.target.value)
+                                    if (!isNaN(customPrice) && customPrice > 0) {
+                                      handleUpdateCustomPrice(firstAssignment.id, customPrice)
+                                    }
+                                  }}
+                                />
+                              </div>
+                              <Badge variant="secondary" className="text-xs">Manual Entry</Badge>
+                            </div>
+                          )
+                        )}
+                      </div>
                     </div>
                     <Button
                       variant="ghost"

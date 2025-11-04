@@ -5255,6 +5255,237 @@ app.post("/questionnaires/templates/account-from-master", authenticateJWT, async
   }
 });
 
+// Save a product-specific questionnaire as a reusable template
+app.post("/questionnaires/:id/save-as-template", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id: questionnaireId } = req.params;
+    const { templateName } = req.body;
+
+    if (!questionnaireId || !templateName) {
+      return res.status(400).json({ success: false, message: "questionnaireId and templateName are required" });
+    }
+
+    // Fetch the questionnaire to convert to template
+    const questionnaire = await Questionnaire.findByPk(questionnaireId, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
+        }]
+      }]
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'Questionnaire not found' });
+    }
+
+    // Create the new template (clone of the questionnaire)
+    const newTemplate = await Questionnaire.create({
+      title: templateName,
+      description: questionnaire.description,
+      checkoutStepPosition: questionnaire.checkoutStepPosition,
+      treatmentId: questionnaire.treatmentId,
+      productId: null, // Templates don't belong to specific products
+      category: questionnaire.category,
+      formTemplateType: 'normal',
+      isTemplate: true, // Mark as template for reuse
+      userId: currentUser.id,
+      personalizationQuestionsSetup: questionnaire.personalizationQuestionsSetup,
+      createAccountQuestionsSetup: questionnaire.createAccountQuestionsSetup,
+      doctorQuestionsSetup: questionnaire.doctorQuestionsSetup,
+      color: questionnaire.color,
+    });
+
+    // Clone all steps with their questions and options
+    const steps: any[] = (questionnaire as any).steps || [];
+    for (const step of steps) {
+      const clonedStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: step.stepOrder,
+        isDeadEnd: step.isDeadEnd,
+        conditionalLogic: step.conditionalLogic,
+        questionnaireId: newTemplate.id,
+      });
+
+      // Clone all questions in this step
+      for (const question of (step.questions || [])) {
+        const clonedQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: question.questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: question.subQuestionOrder,
+          conditionalLevel: question.conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: question.footerNote,
+          conditionalLogic: question.conditionalLogic,
+          stepId: clonedStep.id,
+        });
+
+        // Clone all options for this question
+        if (question.options?.length) {
+          await QuestionOption.bulkCreate(
+            question.options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              riskLevel: opt.riskLevel,
+              questionId: clonedQuestion.id,
+            }))
+          );
+        }
+      }
+    }
+
+    console.log('✅ Saved questionnaire as template:', {
+      originalQuestionnaireId: questionnaireId,
+      newTemplateId: newTemplate.id,
+      templateName: templateName
+    });
+
+    return res.status(201).json({ 
+      success: true, 
+      data: { id: newTemplate.id, title: templateName },
+      message: `Template "${templateName}" created successfully!`
+    });
+  } catch (error) {
+    console.error('❌ Error saving as template:', error);
+    return res.status(500).json({ success: false, message: 'Failed to save as template' });
+  }
+});
+
+// Clone a template for a specific product (creates independent copy)
+app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id: templateId } = req.params;
+    const { productId } = req.body;
+
+    if (!templateId || !productId) {
+      return res.status(400).json({ success: false, message: "templateId and productId are required" });
+    }
+
+    // Fetch the template to clone
+    const template = await Questionnaire.findByPk(templateId, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
+        }]
+      }]
+    });
+
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+
+    // Create the cloned questionnaire for this specific product
+    const clonedQuestionnaire = await Questionnaire.create({
+      title: template.title,
+      description: template.description,
+      checkoutStepPosition: template.checkoutStepPosition,
+      treatmentId: template.treatmentId,
+      productId: productId, // Link to specific product
+      category: template.category,
+      formTemplateType: 'normal', // Clones are not templates themselves
+      isTemplate: false, // This is a product-specific instance, not a template
+      userId: currentUser.id,
+      personalizationQuestionsSetup: template.personalizationQuestionsSetup,
+      createAccountQuestionsSetup: template.createAccountQuestionsSetup,
+      doctorQuestionsSetup: template.doctorQuestionsSetup,
+      color: template.color,
+    });
+
+    // Clone all steps with their questions and options
+    const steps: any[] = (template as any).steps || [];
+    for (const step of steps) {
+      const clonedStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: step.stepOrder,
+        isDeadEnd: step.isDeadEnd,
+        conditionalLogic: step.conditionalLogic,
+        questionnaireId: clonedQuestionnaire.id,
+      });
+
+      // Clone all questions in this step
+      for (const question of (step.questions || [])) {
+        const clonedQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: question.questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: question.subQuestionOrder,
+          conditionalLevel: question.conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: question.footerNote,
+          conditionalLogic: question.conditionalLogic,
+          stepId: clonedStep.id,
+        });
+
+        // Clone all options for this question
+        if (question.options?.length) {
+          await QuestionOption.bulkCreate(
+            question.options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              riskLevel: opt.riskLevel,
+              questionId: clonedQuestion.id,
+            }))
+          );
+        }
+      }
+    }
+
+    // Return the full cloned questionnaire
+    const fullClone = await Questionnaire.findByPk(clonedQuestionnaire.id, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
+        }]
+      }]
+    });
+
+    console.log('✅ Cloned template for product:', {
+      originalTemplateId: templateId,
+      clonedQuestionnaireId: clonedQuestionnaire.id,
+      productId: productId
+    });
+
+    return res.status(201).json({ success: true, data: fullClone });
+  } catch (error) {
+    console.error('❌ Error cloning template for product:', error);
+    return res.status(500).json({ success: false, message: 'Failed to clone template for product' });
+  }
+});
+
 // IMPORTANT: This route must come AFTER all specific /questionnaires/templates/* routes
 app.get("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
   try {
