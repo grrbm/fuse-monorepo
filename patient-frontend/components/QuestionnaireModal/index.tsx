@@ -480,16 +480,16 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         console.log('📡 [CUSTOM COLOR] Fetching from:', url);
 
         const result = await apiCall(url);
-        
+
         console.log('📦 [CUSTOM COLOR] API result:', result);
         console.log('📦 [CUSTOM COLOR] result.success:', result.success);
         console.log('📦 [CUSTOM COLOR] result.data:', result.data);
         console.log('📦 [CUSTOM COLOR] result.data?.data:', result.data?.data);
-        
+
         // The apiCall wraps the response, so we need result.data.data
         const customizationData = result.data?.data || result.data;
         console.log('📦 [CUSTOM COLOR] customizationData:', customizationData);
-        
+
         if (result.success && customizationData?.customColor) {
           setCustomColor(customizationData.customColor);
           console.log('✅ [CUSTOM COLOR] Set custom color to:', customizationData.customColor);
@@ -895,7 +895,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           [questionId]: numericValue
         };
         setAnswers(newAnswers);
-        
+
         // Clear error for this question
         if (errors[questionId]) {
           setErrors(prev => {
@@ -1463,27 +1463,27 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
         // Here you would integrate with your actual payment processing
         // For now, we'll just show a success message
-        alert('Order submitted successfully! (Payment processing implementation pending)');
+        alert('Order submitted successfully!');
         onClose();
       } catch (error) {
         console.error('Checkout error:', error);
         alert('There was an error processing your order. Please try again.');
       }
     } else {
-      alert('Questionnaire submitted! (Implementation pending)');
+      alert('Questionnaire submitted!');
       onClose();
     }
   };
 
   // Priority: custom color (from QuestionnaireCustomization) > questionnaire color > clinic default color > system default
   const themeColor = customColor || questionnaire?.color || domainClinic?.defaultFormColor;
-  
+
   console.log('🎨 [THEME] Computing theme color...');
   console.log('🎨 [THEME] customColor:', customColor);
   console.log('🎨 [THEME] questionnaire?.color:', questionnaire?.color);
   console.log('🎨 [THEME] domainClinic?.defaultFormColor:', domainClinic?.defaultFormColor);
   console.log('🎨 [THEME] Final themeColor:', themeColor);
-  
+
   const theme = useMemo(() => {
     const result = createTheme(themeColor);
     console.log('🎨 [THEME] Created theme:', result);
