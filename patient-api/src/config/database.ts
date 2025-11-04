@@ -185,7 +185,14 @@ export async function initializeDatabase() {
         await Pharmacy.create({
           name: 'IronSail',
           slug: 'ironsail',
-          supportedStates: ['FL', 'IL'],
+          supportedStates: [
+            'AL', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+            'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+            'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH',
+            'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA',
+            'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA',
+            'WV', 'WI', 'WY', 'DC'
+          ], // All US states except Alaska (AK) and Hawaii (HI)
           isActive: true
         });
         console.log('✅ Created IronSail pharmacy');

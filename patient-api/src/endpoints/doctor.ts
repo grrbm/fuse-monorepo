@@ -8,6 +8,8 @@ import Product from '../models/Product';
 import Treatment from '../models/Treatment';
 import ShippingAddress from '../models/ShippingAddress';
 import OrderService from '../services/order.service';
+import PharmacyProduct from '../models/PharmacyProduct';
+import Pharmacy from '../models/Pharmacy';
 
 export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
 
@@ -346,6 +348,125 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
         } catch (error) {
             console.error('❌ Error bulk approving orders:', error);
             res.status(500).json({ success: false, message: "Failed to bulk approve orders" });
+        }
+    });
+
+    // Get pharmacy coverage for an order
+    app.get("/doctor/orders/:orderId/pharmacy-coverage", authenticateJWT, async (req: any, res: any) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Unauthorized" });
+            }
+
+            const { orderId } = req.params;
+
+            // Fetch order with product and patient state
+            const order = await Order.findOne({
+                where: { id: orderId },
+                include: [
+                    {
+                        model: User,
+                        as: 'user',
+                        attributes: ['id', 'state']
+                    },
+                    {
+                        model: ShippingAddress,
+                        as: 'shippingAddress',
+                        attributes: ['state']
+                    },
+                    {
+                        model: TenantProduct,
+                        as: 'tenantProduct',
+                        required: false,
+                        include: [
+                            {
+                                model: Product,
+                                as: 'product',
+                                attributes: ['id', 'name']
+                            }
+                        ]
+                    }
+                ]
+            });
+
+            if (!order) {
+                return res.status(404).json({ success: false, message: "Order not found" });
+            }
+
+            // Determine patient's state (prefer shipping address)
+            const patientState = order.shippingAddress?.state || order.user?.state;
+            const productId = order.tenantProduct?.product?.id;
+
+            if (!patientState) {
+                return res.json({
+                    success: false,
+                    hasCoverage: false,
+                    error: "Patient state not found"
+                });
+            }
+
+            if (!productId) {
+                return res.json({
+                    success: false,
+                    hasCoverage: false,
+                    error: "Product not found for order"
+                });
+            }
+
+            // Find pharmacy coverage for this product and state
+            const coverage = await PharmacyProduct.findOne({
+                where: {
+                    productId,
+                    state: patientState
+                },
+                include: [
+                    {
+                        model: Pharmacy,
+                        as: 'pharmacy',
+                        attributes: ['id', 'name', 'slug', 'isActive']
+                    }
+                ]
+            });
+
+            if (!coverage || !coverage.pharmacy?.isActive) {
+                return res.json({
+                    success: false,
+                    hasCoverage: false,
+                    error: `No active pharmacy coverage for ${order.tenantProduct?.product?.name || 'this product'} in ${patientState}`,
+                    data: {
+                        productId,
+                        productName: order.tenantProduct?.product?.name,
+                        state: patientState
+                    }
+                });
+            }
+
+            res.json({
+                success: true,
+                hasCoverage: true,
+                data: {
+                    pharmacy: {
+                        id: coverage.pharmacy.id,
+                        name: coverage.pharmacy.name,
+                        slug: coverage.pharmacy.slug
+                    },
+                    coverage: {
+                        state: patientState,
+                        pharmacyProductId: coverage.pharmacyProductId,
+                        pharmacyProductName: coverage.pharmacyProductName,
+                        pharmacyWholesaleCost: coverage.pharmacyWholesaleCost
+                    },
+                    product: {
+                        id: productId,
+                        name: order.tenantProduct?.product?.name
+                    }
+                }
+            });
+
+        } catch (error) {
+            console.error('❌ Error checking pharmacy coverage:', error);
+            res.status(500).json({ success: false, message: "Failed to check pharmacy coverage" });
         }
     });
 

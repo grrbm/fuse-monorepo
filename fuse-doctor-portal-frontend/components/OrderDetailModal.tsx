@@ -20,6 +20,9 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
     const [notes, setNotes] = useState('');
     const [submittingNotes, setSubmittingNotes] = useState(false);
     const [approving, setApproving] = useState(false);
+    const [pharmacyCoverage, setPharmacyCoverage] = useState<any>(null);
+    const [loadingCoverage, setLoadingCoverage] = useState(false);
+    const [coverageError, setCoverageError] = useState<string | null>(null);
 
     // Pre-populate notes when order changes
     useEffect(() => {
@@ -29,6 +32,38 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
             setNotes('');
         }
     }, [order?.id]);
+
+    // Fetch pharmacy coverage when order changes
+    useEffect(() => {
+        if (order?.id && isOpen) {
+            fetchPharmacyCoverage();
+        }
+    }, [order?.id, isOpen]);
+
+    const fetchPharmacyCoverage = async () => {
+        if (!order?.id) return;
+        
+        setLoadingCoverage(true);
+        setCoverageError(null);
+        
+        try {
+            const response = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/doctor/orders/${order.id}/pharmacy-coverage`);
+            const data = await response.json();
+            
+            if (data.success && data.hasCoverage) {
+                setPharmacyCoverage(data.data);
+            } else {
+                setCoverageError(data.error || 'No pharmacy coverage found');
+                setPharmacyCoverage(null);
+            }
+        } catch (error) {
+            console.error('Failed to fetch pharmacy coverage:', error);
+            setCoverageError('Failed to check pharmacy coverage');
+            setPharmacyCoverage(null);
+        } finally {
+            setLoadingCoverage(false);
+        }
+    };
 
     if (!isOpen || !order) return null;
 
@@ -157,6 +192,59 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                                 </div>
                             )}
                         </div>
+                    </section>
+
+                    {/* Pharmacy Coverage */}
+                    <section>
+                        <h3 className="text-lg font-semibold mb-3">Pharmacy Coverage</h3>
+                        {loadingCoverage ? (
+                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                                <p className="text-blue-800">Checking pharmacy coverage...</p>
+                            </div>
+                        ) : coverageError ? (
+                            <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                                <p className="text-red-800 font-semibold mb-2">⚠️ No Pharmacy Coverage</p>
+                                <p className="text-red-700 text-sm">{coverageError}</p>
+                                <p className="text-red-600 text-xs mt-2">
+                                    Please ensure the product has pharmacy coverage configured for the patient's state before approving this order.
+                                </p>
+                            </div>
+                        ) : pharmacyCoverage ? (
+                            <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                                <div className="flex items-center mb-2">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                    <p className="text-green-800 font-semibold">Coverage Available</p>
+                                </div>
+                                <div className="space-y-2 text-sm">
+                                    <div>
+                                        <span className="text-gray-600">Pharmacy:</span>{' '}
+                                        <span className="font-medium text-gray-900">{pharmacyCoverage.pharmacy.name}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-600">State:</span>{' '}
+                                        <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.state}</span>
+                                    </div>
+                                    {pharmacyCoverage.coverage.pharmacyProductName && (
+                                        <div>
+                                            <span className="text-gray-600">Pharmacy Product:</span>{' '}
+                                            <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.pharmacyProductName}</span>
+                                        </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.pharmacyProductId && (
+                                        <div>
+                                            <span className="text-gray-600">SKU:</span>{' '}
+                                            <span className="font-mono text-sm text-gray-900">{pharmacyCoverage.coverage.pharmacyProductId}</span>
+                                        </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.pharmacyWholesaleCost && (
+                                        <div>
+                                            <span className="text-gray-600">Wholesale Cost:</span>{' '}
+                                            <span className="font-medium text-gray-900">${pharmacyCoverage.coverage.pharmacyWholesaleCost}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : null}
                     </section>
 
                     {/* Treatment Information */}
@@ -323,8 +411,9 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                     </button>
                     <button
                         onClick={handleApprove}
-                        disabled={approving}
-                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                        disabled={approving || loadingCoverage || !!coverageError || !pharmacyCoverage}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={coverageError ? 'Cannot approve: ' + coverageError : ''}
                     >
                         {approving ? 'Approving...' : 'Approve Order'}
                     </button>
