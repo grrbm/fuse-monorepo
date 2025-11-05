@@ -64,9 +64,10 @@ export default class Product extends Entity {
 
     @Column({
         type: DataType.STRING,
-        allowNull: false,
+        allowNull: true,
+        defaultValue: 'As prescribed',
     })
-    declare placeholderSig: string;
+    declare placeholderSig?: string;
 
     @Column({
         type: DataType.TEXT,

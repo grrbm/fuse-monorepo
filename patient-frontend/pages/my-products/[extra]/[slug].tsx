@@ -121,9 +121,7 @@ export default function PublicProductPage() {
                     onClose={handleModalClose}
                     questionnaireId={product.questionnaireId}
                     productName={product.name}
-                    productCategory={Array.isArray(product.categories) && product.categories.length > 0
-                        ? product.categories[0]
-                        : product.category || undefined}
+                    productCategory={product.category || undefined}
                     productFormVariant={typeof extra === 'string' ? extra : undefined}
                     // Pass pricing data for fallback plan rendering
                     productPrice={typeof product.price === 'number' ? product.price : undefined}
