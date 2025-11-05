@@ -383,6 +383,27 @@ export default function ProductEditor() {
     router.push("/products")
   }
 
+  // Replace dynamic variables with actual product data
+  const replaceVariables = (text: string): string => {
+    if (!product || !text) return text
+
+    const variables: Record<string, string> = {
+      '{{productName}}': product.name || '',
+      '{{dosage}}': product.dosage || '',
+      '{{medicationSize}}': product.medicationSize || '',
+      '{{activeIngredients}}': product.activeIngredients?.join(', ') || '',
+      '{{category}}': product.category || '',
+      '{{description}}': product.description || '',
+    }
+
+    let replacedText = text
+    Object.entries(variables).forEach(([variable, value]) => {
+      replacedText = replacedText.replace(new RegExp(variable.replace(/[{}]/g, '\\$&'), 'g'), value)
+    })
+
+    return replacedText
+  }
+
   const handleUpdateProduct = async (updates: Partial<Product>) => {
     if (!token || !productId || typeof productId !== 'string' || !product) return
 
@@ -2593,7 +2614,7 @@ export default function ProductEditor() {
                                                 </div>
 
                                                 <div className="space-y-2">
-                                                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">{q.questionText}</p>
+                                                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">{replaceVariables(q.questionText)}</p>
 
                                                   {/* Show rules inline */}
                                                   {conditionalLogic && (
@@ -2641,9 +2662,9 @@ export default function ProductEditor() {
                                             <div className="bg-card rounded-lg border border-border/40 p-3 transition-all hover:shadow-sm">
                                               <div className="flex items-start justify-between gap-4 mb-4">
                                                 <div className="flex-1">
-                                                  <p className="text-base font-semibold text-foreground mb-2">{q.questionText}</p>
+                                                  <p className="text-base font-semibold text-foreground mb-2">{replaceVariables(q.questionText)}</p>
                                                   {q.helpText && (
-                                                    <p className="text-sm text-muted-foreground mb-3">{q.helpText}</p>
+                                                    <p className="text-sm text-muted-foreground mb-3">{replaceVariables(q.helpText)}</p>
                                                   )}
                                                 </div>
                                                 <Button
@@ -2684,7 +2705,7 @@ export default function ProductEditor() {
                                               {q.answerType === 'textarea' && (
                                                 <div className="bg-muted/30 rounded-lg p-4 border border-dashed border-border/60">
                                                   <p className="text-sm text-muted-foreground italic">
-                                                    {q.placeholder || "Multi-line text area for patient response"}
+                                                    {replaceVariables(q.placeholder || "Multi-line text area for patient response")}
                                                   </p>
                                                 </div>
                                               )}
@@ -2752,12 +2773,12 @@ export default function ProductEditor() {
                                           </div>
                                         </div>
                                       ) : (
-                                        // View mode
+                                        // View mode - with dynamic variable replacement
                                         <>
                                           <div className="flex items-start justify-between gap-4">
                                             <div className="flex-1">
-                                              <p className="font-medium text-base mb-1">{step.title || 'Information Step'}</p>
-                                              <p className="text-sm text-muted-foreground">{step.description || 'No description provided'}</p>
+                                              <p className="font-medium text-base mb-1">{replaceVariables(step.title || 'Information Step')}</p>
+                                              <p className="text-sm text-muted-foreground">{replaceVariables(step.description || 'No description provided')}</p>
                                             </div>
                                             <Button
                                               variant="ghost"
