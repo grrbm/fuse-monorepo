@@ -349,9 +349,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 const clinic = clinicData.data;
                 const variables = {
                   ...getVariablesFromClinic(clinic),
-                  productName: productName || '',
-                  patientName: patientName || '',
-                  patientFirstName: patientFirstName || ''
+                  productName: productName || ''
+                  // Don't include patientName/patientFirstName yet - they'll be set after account creation
                 };
 
                 // Replace variables in all step titles, descriptions, and questions
