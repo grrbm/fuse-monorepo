@@ -971,17 +971,13 @@ export default function ProductDetail() {
                                         })}
                                     </div>
                                 )}
-                            </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
 
-                    {/* PRIORITY 2: Product Performance */}
-                    <Card className="mb-6 border-border shadow-sm">
-                        <CardHeader className="border-b border-border">
-                            <CardTitle className="text-lg font-semibold">Product Performance</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                            <div className="grid grid-cols-2 gap-6">
+                    {/* Product Performance */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
+                        <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Performance</h3>
+                        <div className="grid grid-cols-2 gap-6">
 
                                 {/* Total Orders */}
                                 <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
@@ -1001,17 +997,14 @@ export default function ProductDetail() {
                                     </div>
                                     <div className="text-3xl font-semibold text-foreground">{productStats.activeSubscribers}</div>
                                     <p className="text-xs text-muted-foreground mt-2">Customers with active subscriptions</p>
-                                </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
 
                     {/* Product Details */}
-                    <Card className="border-border shadow-sm">
-                        <CardHeader className="border-b border-border">
-                            <CardTitle className="text-lg font-semibold">Product Details</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6">
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6">
+                        <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Details</h3>
+                        <div>
                             <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
                                 <div>
                                     <span className="text-muted-foreground text-xs uppercase tracking-wide">Pharmacy Product ID</span>
