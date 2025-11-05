@@ -714,20 +714,29 @@ export default function ProductDetail() {
                                         {templates.map(t => {
                                             const existingForm = enabledForms.find((f: any) => f?.questionnaireId === t.id)
                                             const currentVariant: string | null = existingForm?.currentFormVariant ?? null
+                                            
+                                            // Only show variants for standardized templates, not product-specific forms
+                                            const isProductSpecific = t.formTemplateType === 'normal' || !t.isTemplate
+                                            const variantsToShow = isProductSpecific ? [null] : [1, 2]
+                                            
                                             return (
                                                 <div key={t.id} className="p-4 border border-border rounded-lg hover:shadow-sm transition-all bg-card space-y-3">
-                                                    {[1, 2].map((variantNum) => {
+                                                    {variantsToShow.map((variantNum) => {
                                                         const pv = buildPreviewUrl()
-                                                        const previewUrl = pv ? pv.replace('/my-products/', `/my-products/${variantNum}/`) : null
-                                                        const variantKey = String(variantNum)
-                                                        const isVariantEnabled = !!existingForm && currentVariant === variantKey
+                                                        const previewUrl = variantNum ? pv?.replace('/my-products/', `/my-products/${variantNum}/`) : pv
+                                                        const variantKey = variantNum ? String(variantNum) : null
+                                                        const isVariantEnabled = isProductSpecific ? !!existingForm : (!!existingForm && currentVariant === variantKey)
                                                         const hasAnyEnabled = !!existingForm
                                                         return (
-                                                            <div key={`${t.id}-${variantNum}`} className="border border-dashed border-border rounded-md p-3">
+                                                            <div key={`${t.id}-${variantNum || 'main'}`} className="border border-dashed border-border rounded-md p-3">
                                                                 <div className="flex items-center justify-between">
                                                                     <div className="flex-1">
                                                                         <div className="font-medium text-foreground">{t.title}</div>
-                                                                        <div className="text-xs text-muted-foreground mt-0.5">{t.formTemplateType || 'Standard Form'} • Variant {variantNum}</div>
+                                                                        <div className="text-xs text-muted-foreground mt-0.5">
+                                                                            {t.formTemplateType || 'Standard Form'}
+                                                                            {variantNum && ` • Variant ${variantNum}`}
+                                                                            {isProductSpecific && ' • Product-Specific'}
+                                                                        </div>
                                                                     </div>
                                                                     {hasAnyEnabled ? (
                                                                         <div className="flex items-center gap-3">
@@ -783,13 +792,13 @@ export default function ProductDetail() {
                                                                                     </Button>
                                                                                 </>
                                                                             ) : (
-                                                                                <Button size="sm" onClick={() => switchToVariant(t.id, String(variantNum))} disabled={enablingId === t.id}>
+                                                                                <Button size="sm" onClick={() => variantNum ? switchToVariant(t.id, String(variantNum)) : enableTemplateWithVariant(t.id, null)} disabled={enablingId === t.id}>
                                                                                     {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
                                                                                 </Button>
                                                                             )}
                                                                         </div>
                                                                     ) : (
-                                                                        <Button size="sm" onClick={() => enableTemplateWithVariant(t.id, String(variantNum))} disabled={enablingId === t.id}>
+                                                                        <Button size="sm" onClick={() => enableTemplateWithVariant(t.id, variantNum ? String(variantNum) : null)} disabled={enablingId === t.id}>
                                                                             {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
                                                                         </Button>
                                                                     )}
