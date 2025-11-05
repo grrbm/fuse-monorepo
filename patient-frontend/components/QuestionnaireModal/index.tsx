@@ -2541,25 +2541,25 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               };
                               
                               return (
-                                <QuestionRenderer
-                                  key={question.id}
+                              <QuestionRenderer
+                                key={question.id}
                                   question={questionWithReplacedVars}
-                                  answers={answers}
-                                  errors={errors}
-                                  theme={theme}
+                                answers={answers}
+                                errors={errors}
+                                theme={theme}
                                   stepRequired={currentStep.required}
-                                  onAnswerChange={handleAnswerChange}
-                                  onRadioChange={(questionId: string, value: any) => {
-                                    // Clear any existing error on first selection
-                                    setErrors(prev => {
-                                      const next = { ...prev };
-                                      delete next[questionId];
-                                      return next;
-                                    });
-                                    handleRadioChange(questionId, value);
-                                  }}
-                                  onCheckboxChange={handleCheckboxChange}
-                                />
+                                onAnswerChange={handleAnswerChange}
+                                onRadioChange={(questionId: string, value: any) => {
+                                  // Clear any existing error on first selection
+                                  setErrors(prev => {
+                                    const next = { ...prev };
+                                    delete next[questionId];
+                                    return next;
+                                  });
+                                  handleRadioChange(questionId, value);
+                                }}
+                                onCheckboxChange={handleCheckboxChange}
+                              />
                               );
                             })}
                         </div>
