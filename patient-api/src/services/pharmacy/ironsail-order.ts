@@ -251,7 +251,7 @@ class IronSailOrderService {
 
         const msg: any = {
             to: recipientEmail,
-            from: 'noreply@fuse.health',
+            from: 'noreply@fusehealth.com',
             subject: `New Prescription Order ${data.orderNumber} - ${patientFullName}`,
             html: `
         <h2>New Electronic Prescription Order from FUSE HEALTH INC</h2>

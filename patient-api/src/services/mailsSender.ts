@@ -17,7 +17,7 @@ interface EmailOptions {
 }
 
 export class MailsSender {
-  private static readonly FROM_EMAIL = 'noreply@fuse.health'
+  private static readonly FROM_EMAIL = 'noreply@fusehealth.com'
 
   /**
    * Send a verification email to activate user account
@@ -28,15 +28,15 @@ export class MailsSender {
       if (process.env.FRONTEND_URL) {
         return process.env.FRONTEND_URL
       }
-      
+
       // Fallback based on NODE_ENV
       if (process.env.NODE_ENV === 'production') {
         return 'https://app.fuse.health'
       }
-      
+
       return 'http://localhost:3002'
     }
-    
+
     const activationUrl = `${getFrontendUrl()}/verify-email?token=${activationToken}`
     console.log('🔗 Activation URL generated:', activationUrl)
 
@@ -149,16 +149,16 @@ export class MailsSender {
       if (process.env.FRONTEND_URL) {
         return process.env.FRONTEND_URL
       }
-      
+
       if (process.env.NODE_ENV === 'production') {
         return 'https://app.fuse.health'
       }
-      
+
       return 'http://localhost:3002'
     }
-    
+
     const frontendUrl = getFrontendUrl()
-    
+
     const msg: any = {
       to: email,
       from: this.FROM_EMAIL,
