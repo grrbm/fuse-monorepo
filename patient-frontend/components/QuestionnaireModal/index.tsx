@@ -1343,11 +1343,22 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const variables = {
       ...getVariablesFromClinic(domainClinic || {}),
       productName: productName || '',
-      patientName: patientName || '',
-      patientFirstName: patientFirstName || ''
+      patientFirstName: patientFirstName || '', // Put patientFirstName BEFORE patientName to avoid partial matches
+      patientName: patientName || ''
     };
     
-    return replaceVariables(text, variables);
+    const result = replaceVariables(text, variables);
+    
+    // Debug logging
+    if (text.includes('{{patient')) {
+      console.log('🔄 Variable replacement:', {
+        original: text,
+        variables,
+        result
+      });
+    }
+    
+    return result;
   };
 
   // Create user account after "Create Your Account" step
