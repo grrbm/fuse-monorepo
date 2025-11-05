@@ -20,24 +20,27 @@ export function Sidebar() {
   const { user, logout } = useAuth()
   
   return (
-    <div className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
+    <div className="w-72 bg-white border-r border-[#E5E7EB] flex flex-col shadow-sm">
       {/* Logo */}
-      <div className="p-6">
+      <div className="p-8 pb-6">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-            <Building2 className="h-5 w-5 text-primary-foreground" />
+          <div className="w-12 h-12 bg-gradient-to-br from-[#4FA59C] to-[#3d8580] rounded-2xl flex items-center justify-center shadow-sm">
+            <Building2 className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-sidebar-foreground">Tenant Portal</h1>
-            <p className="text-sm text-muted-foreground">Clinic Management</p>
+            <h1 className="text-xl font-semibold text-[#1F2937]">Tenant Portal</h1>
+            <p className="text-sm text-[#9CA3AF]">Clinic Management</p>
           </div>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 space-y-1">
+      <nav className="flex-1 px-5 py-4 space-y-2">
         {/* Main Navigation */}
-        <div className="space-y-1">
+        <div className="space-y-1.5">
+          <p className="px-3 text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider mb-3">
+            Main Menu
+          </p>
           {navigation.map((item) => {
             const isActive = router.pathname === item.href
             return (
@@ -45,13 +48,16 @@ export function Sidebar() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                  "group flex items-center px-4 py-3 text-[15px] font-medium rounded-xl transition-all duration-200",
                   isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    ? "bg-[#4FA59C] text-white shadow-sm"
+                    : "text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#1F2937]",
                 )}
               >
-                <item.icon className="mr-3 h-4 w-4" />
+                <item.icon className={cn(
+                  "mr-3 h-5 w-5 transition-all",
+                  isActive ? "text-white" : "text-[#6B7280] group-hover:text-[#4FA59C]"
+                )} />
                 {item.name}
               </a>
             )
@@ -60,30 +66,32 @@ export function Sidebar() {
       </nav>
 
       {/* User Profile */}
-      <div className="p-4 border-t border-sidebar-border">
-        <div className="flex items-center justify-between space-x-3">
-          <div className="flex items-center space-x-3 flex-1 min-w-0">
-            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-white">
-                {user?.name?.charAt(0).toUpperCase() || 'T'}
-              </span>
+      <div className="p-5 border-t border-[#E5E7EB] bg-[#F9FAFB]">
+        <div className="bg-white rounded-2xl p-4 border border-[#E5E7EB] shadow-sm">
+          <div className="flex items-center justify-between space-x-3">
+            <div className="flex items-center space-x-3 flex-1 min-w-0">
+              <div className="w-10 h-10 bg-gradient-to-br from-[#4FA59C] to-[#3d8580] rounded-xl flex items-center justify-center shadow-sm">
+                <span className="text-sm font-semibold text-white">
+                  {user?.name?.charAt(0).toUpperCase() || 'T'}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#1F2937] truncate">
+                  {user?.name || 'Tenant User'}
+                </p>
+                <p className="text-xs text-[#9CA3AF] truncate">
+                  {user?.organization || 'Organization'}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">
-                {user?.name || 'Tenant User'}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {user?.organization || 'Organization'}
-              </p>
-            </div>
+            <button
+              onClick={logout}
+              className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-xl transition-all"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={logout}
-            className="p-1 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent rounded"
-            title="Logout"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
         </div>
       </div>
     </div>

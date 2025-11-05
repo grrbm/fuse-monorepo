@@ -1812,14 +1812,14 @@ export default function ProductEditor() {
 
   if (loadingProduct) {
     return (
-      <div className="flex h-screen bg-background">
+      <div className="flex h-screen bg-[#F9FAFB]">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header />
-          <main className="flex-1 overflow-y-auto p-6 flex items-center justify-center">
+          <main className="flex-1 overflow-y-auto p-8 flex items-center justify-center">
             <div className="text-center">
-              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">Loading product...</p>
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#4FA59C] mb-4" />
+              <p className="text-[#6B7280]">Loading product...</p>
             </div>
           </main>
         </div>
@@ -1829,23 +1829,26 @@ export default function ProductEditor() {
 
   if (error || !product) {
     return (
-      <div className="flex h-screen bg-background">
+      <div className="flex h-screen bg-[#F9FAFB]">
         <Sidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header />
-          <main className="flex-1 overflow-y-auto p-6">
-            <Card className="border-destructive/40 bg-destructive/10">
-              <CardHeader>
-                <CardTitle>Error Loading Product</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-destructive mb-4">{error || "Product not found"}</p>
-                <Button onClick={handleBack} variant="outline">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
+          <main className="flex-1 overflow-y-auto p-8">
+            <div className="bg-white rounded-2xl shadow-sm border border-red-200 overflow-hidden max-w-2xl">
+              <div className="p-6 pb-4 border-b border-red-200 bg-red-50">
+                <h2 className="text-lg font-semibold text-red-900">Error Loading Product</h2>
+              </div>
+              <div className="p-6">
+                <p className="text-sm text-red-700 mb-4">{error || "Product not found"}</p>
+                <button 
+                  onClick={handleBack}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
+                >
+                  <ArrowLeft className="h-4 w-4" />
                   Back to Products
-                </Button>
-              </CardContent>
-            </Card>
+                </button>
+              </div>
+            </div>
           </main>
         </div>
       </div>
@@ -1853,16 +1856,19 @@ export default function ProductEditor() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-[#F9FAFB]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        <main className="flex-1 overflow-y-auto p-8 space-y-6">
           {/* Back Button */}
-          <Button variant="ghost" size="sm" onClick={handleBack} className="mb-4 -ml-2">
-            <ArrowLeft className="mr-2 h-5 w-5" />
+          <button 
+            onClick={handleBack} 
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1F2937] hover:bg-white rounded-xl transition-all -ml-2"
+          >
+            <ArrowLeft className="h-5 w-5" />
             Back to Products
-          </Button>
+          </button>
 
           {/* Product Details Editor */}
           <ProductDetailsEditor
@@ -1879,28 +1885,30 @@ export default function ProductEditor() {
 
           {/* Inactive Product Banner */}
           {product && !product.isActive && (
-            <Card className="border-blue-500/40 bg-blue-500/10 mb-4">
-              <CardContent className="p-4 flex items-start gap-3">
-                <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="bg-blue-50 rounded-2xl border border-blue-200 overflow-hidden mb-4 shadow-sm">
+              <div className="p-6 flex items-start gap-3">
+                <div className="bg-blue-100 rounded-xl p-2 flex-shrink-0">
+                  <Info className="h-5 w-5 text-blue-600" />
+                </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                  <h3 className="font-semibold text-blue-900 mb-1">
                     Product Not Active
                   </h3>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <p className="text-sm text-blue-700">
                     <strong>{product.name}</strong> is currently inactive. Build your form, then click "Activate Product" to make it available in your catalog.
                   </p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Save Message */}
           {saveMessage && (
-            <div className={`mb-4 p-4 rounded-lg border ${saveMessage.includes('✅')
-              ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200'
-              : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'
+            <div className={`mb-4 p-4 rounded-2xl border shadow-sm ${saveMessage.includes('✅')
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-red-50 border-red-200 text-red-800'
               }`}>
-              {saveMessage}
+              <p className="text-sm font-medium">{saveMessage}</p>
             </div>
           )}
 
@@ -1908,71 +1916,67 @@ export default function ProductEditor() {
           {templateId && template && (
             <>
               {/* Header Section */}
-              <div className="mb-8 pb-8 border-b border-border/40">
+              <div className="mb-8 pb-8 border-b border-[#E5E7EB]">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* Left: Title and Description */}
                   <div className="lg:col-span-3">
                     <div className="flex items-center justify-between mb-4">
-                      <h1 className="text-3xl font-semibold tracking-tight">Intake Form</h1>
+                      <h1 className="text-3xl font-semibold text-[#1F2937]">Intake Form</h1>
                       {!editingFormMetadata && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                        <button
                           onClick={handleEditFormMetadata}
-                          className="ml-2"
+                          className="p-2 text-[#6B7280] hover:text-[#1F2937] hover:bg-white rounded-xl transition-all"
                         >
                           <Edit className="h-4 w-4" />
-                        </Button>
+                        </button>
                       )}
                     </div>
                     {editingFormMetadata ? (
                       <div className="space-y-3">
                         <div>
-                          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Form Name</label>
-                          <Input
+                          <label className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider">Form Name</label>
+                          <input
                             value={formMetadata.title}
                             onChange={(e) => setFormMetadata({ ...formMetadata, title: e.target.value })}
                             placeholder="Enter form name"
-                            className="mt-1"
+                            className="mt-1 w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</label>
-                          <Input
+                          <label className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider">Description</label>
+                          <input
                             value={formMetadata.description}
                             onChange={(e) => setFormMetadata({ ...formMetadata, description: e.target.value })}
                             placeholder="Enter form description"
-                            className="mt-1"
+                            className="mt-1 w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                           />
                         </div>
                         <div className="flex gap-2">
-                          <Button
-                            size="sm"
+                          <button
                             onClick={handleSaveFormMetadata}
                             disabled={savingFormMetadata}
-                            className="bg-teal-600 hover:bg-teal-700"
+                            className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {savingFormMetadata ? (
                               <>
-                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                <Loader2 className="h-3 w-3 animate-spin" />
                                 Saving...
                               </>
                             ) : (
                               "Save"
                             )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
+                          </button>
+                          <button
                             onClick={handleCancelEditFormMetadata}
                             disabled={savingFormMetadata}
+                            className="px-4 py-2 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Cancel
-                          </Button>
+                          </button>
                         </div>
                       </div>
                     ) : (
-                      <p className="text-muted-foreground text-base leading-relaxed">
+                      <p className="text-[#6B7280] text-base leading-relaxed">
                         {template.description || "Generate a voucher to start using this intake form for patient sign up."}
                       </p>
                     )}
@@ -1982,25 +1986,24 @@ export default function ProductEditor() {
                   <div className="lg:col-span-8 space-y-4">
                     {/* Metadata Cards */}
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
-                        <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Form Name</p>
-                        <p className="font-semibold text-foreground text-base">{template.title}</p>
+                      <div className="bg-white rounded-2xl p-5 shadow-sm border border-[#E5E7EB] hover:shadow-md transition-all">
+                        <p className="text-xs font-semibold text-[#9CA3AF] mb-2 uppercase tracking-wider">Form Name</p>
+                        <p className="font-semibold text-[#1F2937] text-base">{template.title}</p>
                       </div>
-                      <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
-                        <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Status</p>
-                        <Badge
-                          variant="secondary"
-                          className={`rounded-full px-3 py-1 ${formStatus === 'in_progress'
-                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800' :
+                      <div className="bg-white rounded-2xl p-5 shadow-sm border border-[#E5E7EB] hover:shadow-md transition-all">
+                        <p className="text-xs font-semibold text-[#9CA3AF] mb-2 uppercase tracking-wider">Status</p>
+                        <span
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${formStatus === 'in_progress'
+                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
                             formStatus === 'ready_for_review'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800' :
-                              'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                              'bg-green-50 text-green-700 border-green-200'
                             }`}
                         >
                           {formStatus === 'in_progress' ? 'In Progress' :
                             formStatus === 'ready_for_review' ? 'Ready for Review' :
                               'Ready'}
-                        </Badge>
+                        </span>
                       </div>
                     </div>
 
@@ -2025,9 +2028,9 @@ export default function ProductEditor() {
                     />
 
                     {/* Action Buttons */}
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 flex-wrap">
                       {formStatus === 'in_progress' && (
-                        <Button
+                        <button
                           onClick={async () => {
                             if (!token || !templateId) return
                             try {
@@ -2055,66 +2058,58 @@ export default function ProductEditor() {
                               setTimeout(() => setSaveMessage(null), 5000)
                             }
                           }}
-                          className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
+                          className="rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm hover:shadow-md transition-all text-sm font-medium"
                         >
                           Submit for Review
-                        </Button>
+                        </button>
                       )}
 
                       {formStatus !== 'in_progress' && (
-                        <Button
+                        <button
                           onClick={handleSave}
                           disabled={saving}
-                          className="rounded-full px-6 bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow"
+                          className="flex items-center gap-2 rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm hover:shadow-md transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {saving ? (
                             <>
-                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                              <Loader2 className="h-5 w-5 animate-spin" />
                               Saving...
                             </>
                           ) : (
                             "Save Changes"
                           )}
-                        </Button>
+                        </button>
                       )}
 
-                      <Button
-                        variant="outline"
-                        className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
+                      <button
                         onClick={() => {
                           if (!templateId) return
                           const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
                           const previewUrl = `${patientFrontendUrl}/preview/questionnaire/${templateId}`
                           window.open(previewUrl, '_blank')
                         }}
+                        className="flex items-center gap-2 rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] shadow-sm hover:shadow-md transition-all text-sm font-medium"
                       >
-                        <Eye className="mr-2 h-4 w-4" />
+                        <Eye className="h-4 w-4" />
                         Preview
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
-                      >
-                        Add Voucher
-                      </Button>
+                      </button>
 
                       {/* Activate Product Button - only show if product is inactive */}
                       {product && !product.isActive && (
-                        <Button
+                        <button
                           onClick={handleActivateProduct}
                           disabled={activatingProduct || !templateId}
-                          className="rounded-full px-6 bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-shadow"
+                          className="flex items-center gap-2 rounded-full px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {activatingProduct ? (
                             <>
-                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                              <Loader2 className="h-5 w-5 animate-spin" />
                               Activating...
                             </>
                           ) : (
                             "Activate Product"
                           )}
-                        </Button>
+                        </button>
                       )}
                     </div>
                   </div>

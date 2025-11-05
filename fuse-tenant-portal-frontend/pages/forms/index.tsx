@@ -3,10 +3,6 @@ import { useRouter } from "next/router"
 import { useTenant } from "@/contexts/TenantContext"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import { Loader2, RefreshCcw, Search, Edit3, ExternalLink, Clock, Edit, Layers } from "lucide-react"
 import { useTemplates } from "@/hooks/useTemplates"
 import { QuestionnaireEditor } from "./QuestionnaireEditor"
@@ -345,103 +341,99 @@ export default function Forms() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-[#F9FAFB]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        <main className="flex-1 overflow-y-auto p-8 space-y-8">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-3xl font-semibold text-foreground mb-2">Form Management</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Form Management</h1>
+              <p className="text-[#6B7280] text-base">
                 Configure product-specific forms and manage standardized question templates.
               </p>
             </div>
-            <Button variant="outline" onClick={refresh} disabled={loading}>
-              <RefreshCcw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-            </Button>
+            <button 
+              onClick={refresh} 
+              disabled={loading}
+              className="rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+            </button>
           </div>
 
           {/* Tabs */}
-          <div className="border-b">
-            <div className="flex gap-6">
-              <button
-                onClick={() => setActiveTab("products")}
-                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "products"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-              >
-                Products
-              </button>
-              <button
-                onClick={() => setActiveTab("templates")}
-                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "templates"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-              >
-                Standardized Questions
-              </button>
-              <button
-                onClick={() => setActiveTab("account")}
-                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "account"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-              >
-                Account Questions
-              </button>
-              {/* <button
-                onClick={() => setActiveTab("tenant")}
-                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === "tenant"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-              >
-                Generate Form for Tenant
-              </button> */}
-            </div>
+          <div className="flex items-center gap-2 bg-white rounded-2xl p-1.5 w-fit shadow-sm border border-[#E5E7EB]">
+            <button
+              onClick={() => setActiveTab("products")}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
+                activeTab === "products"
+                  ? "bg-[#4FA59C] text-white shadow-sm"
+                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
+              }`}
+            >
+              Products
+            </button>
+            <button
+              onClick={() => setActiveTab("templates")}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
+                activeTab === "templates"
+                  ? "bg-[#4FA59C] text-white shadow-sm"
+                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
+              }`}
+            >
+              Standardized Questions
+            </button>
+            <button
+              onClick={() => setActiveTab("account")}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
+                activeTab === "account"
+                  ? "bg-[#4FA59C] text-white shadow-sm"
+                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
+              }`}
+            >
+              Account Questions
+            </button>
           </div>
 
           {error && (
-            <Card className="border-destructive/40 bg-destructive/10">
-              <CardContent className="p-4 text-sm text-destructive">{error}</CardContent>
-            </Card>
+            <div className="rounded-2xl p-4 bg-red-50 border border-red-200 text-red-700 shadow-sm">
+              <p className="text-sm font-medium">{error}</p>
+            </div>
           )}
 
           {/* Products Tab */}
           {activeTab === "products" && (
             <>
               {/* Filters */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Filter & Sort</CardTitle>
-                  <CardDescription>Find the product form you want to configure</CardDescription>
-                </CardHeader>
-                <CardContent>
+              <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+                <div className="p-6 pb-4 border-b border-[#E5E7EB]">
+                  <h2 className="text-lg font-semibold text-[#1F2937]">Filter & Sort</h2>
+                  <p className="text-sm text-[#6B7280] mt-0.5">Find the product form you want to configure</p>
+                </div>
+                <div className="p-6">
                   <div className="grid gap-4 md:grid-cols-4">
                     {/* Search */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Search Products</label>
+                      <label className="text-sm font-medium text-[#4B5563]">Search Products</label>
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
+                        <input
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           placeholder="Search by name..."
-                          className="pl-9"
+                          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                         />
                       </div>
                     </div>
 
                     {/* Category Filter */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Category</label>
+                      <label className="text-sm font-medium text-[#4B5563]">Category</label>
                       <select
                         value={selectedCategory}
                         onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                       >
                         {CATEGORY_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -453,11 +445,11 @@ export default function Forms() {
 
                     {/* Status Filter */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Status</label>
+                      <label className="text-sm font-medium text-[#4B5563]">Status</label>
                       <select
                         value={selectedStatus}
                         onChange={(e) => setSelectedStatus(e.target.value)}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                       >
                         {STATUS_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -469,11 +461,11 @@ export default function Forms() {
 
                     {/* Sort */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Sort By</label>
+                      <label className="text-sm font-medium text-[#4B5563]">Sort By</label>
                       <select
                         value={selectedSort}
                         onChange={(e) => setSelectedSort(e.target.value)}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                       >
                         {SORT_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -483,120 +475,130 @@ export default function Forms() {
                       </select>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {/* Results Summary */}
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <div className="flex items-center justify-between text-sm text-[#6B7280]">
                 <span>
                   Showing {filteredAndSortedAssignments.length} of {assignments.length} product forms
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   {(searchQuery || selectedCategory || selectedStatus !== "all") && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
+                    <button
                       onClick={() => {
                         setSearchQuery("")
                         setSelectedCategory("")
                         setSelectedStatus("all")
                       }}
+                      className="px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1F2937] hover:bg-[#F3F4F6] rounded-xl transition-all"
                     >
                       Clear Filters
-                    </Button>
+                    </button>
                   )}
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage(Math.max(1, page - 1))}>
+                    <button 
+                      disabled={page <= 1 || loading} 
+                      onClick={() => setPage(Math.max(1, page - 1))}
+                      className="px-4 py-2 text-sm font-medium border border-[#E5E7EB] rounded-xl text-[#4B5563] hover:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
                       Prev
-                    </Button>
-                    <span className="text-xs">Page {page} / {totalPages}</span>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage(page + 1)}>
+                    </button>
+                    <span className="text-xs px-3">Page {page} / {totalPages}</span>
+                    <button 
+                      disabled={page >= totalPages || loading} 
+                      onClick={() => setPage(page + 1)}
+                      className="px-4 py-2 text-sm font-medium border border-[#E5E7EB] rounded-xl text-[#4B5563] hover:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
                       Next
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </div>
 
               {/* Product Forms List */}
               {loading ? (
-                <div className="flex h-64 items-center justify-center text-muted-foreground">
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading forms...
+                <div className="flex h-64 items-center justify-center text-[#6B7280]">
+                  <Loader2 className="mr-3 h-6 w-6 animate-spin text-[#4FA59C]" />
+                  <span className="text-base">Loading forms...</span>
                 </div>
               ) : filteredAndSortedAssignments.length === 0 ? (
-                <Card>
-                  <CardContent className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                    <Search className="h-12 w-12 mb-4" />
-                    <p>No product forms found matching your filters.</p>
-                  </CardContent>
-                </Card>
+                <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-16">
+                  <div className="flex flex-col items-center justify-center text-[#6B7280]">
+                    <div className="bg-[#F3F4F6] rounded-full p-6 mb-4">
+                      <Search className="h-12 w-12 text-[#9CA3AF]" />
+                    </div>
+                    <p className="text-lg text-[#4B5563]">No product forms found matching your filters.</p>
+                  </div>
+                </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {filteredAndSortedAssignments.map((assignment) => {
                     const locked = isLocked(assignment)
                     const isLive = assignment.publishedUrl && assignment.lastPublishedAt
                     const categoryLabel = CATEGORY_OPTIONS.find(c => c.value === assignment.treatment?.category)?.label
 
                     return (
-                      <Card key={assignment.id} className="hover:border-primary/50 transition-colors">
-                        <CardHeader>
+                      <div key={assignment.id} className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden hover:shadow-md hover:border-[#4FA59C] transition-all">
+                        <div className="p-6 pb-4 border-b border-[#E5E7EB]">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <CardTitle className="text-lg">{assignment.treatment?.name || "Untitled Product"}</CardTitle>
-                              <div className="mt-1 flex items-center gap-2">
+                              <h3 className="text-lg font-semibold text-[#1F2937]">{assignment.treatment?.name || "Untitled Product"}</h3>
+                              <div className="mt-2 flex items-center gap-2">
                                 {categoryLabel && (
-                                  <Badge variant="secondary" className="text-xs">
+                                  <span className="inline-block px-2.5 py-1 bg-[#F3F4F6] text-[#4B5563] text-xs font-medium rounded-full border border-[#E5E7EB]">
                                     {categoryLabel}
-                                  </Badge>
+                                  </span>
                                 )}
                                 {assignment?.treatmentId && productInfoById[assignment.treatmentId]?.dosage && (
-                                  <div className="text-xs text-muted-foreground">{productInfoById[assignment.treatmentId]?.dosage}</div>
+                                  <div className="text-xs text-[#9CA3AF]">{productInfoById[assignment.treatmentId]?.dosage}</div>
                                 )}
                               </div>
                             </div>
                           </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
+                        </div>
+                        <div className="p-6 space-y-4">
                           {/* Status Badges */}
                           <div className="flex flex-wrap gap-2">
                             {!assignment.hasAssignment ? (
-                              <Badge variant="secondary" className="text-xs uppercase tracking-wide">
+                              <span className="inline-block px-3 py-1 bg-[#F3F4F6] text-[#6B7280] text-xs font-medium rounded-full border border-[#E5E7EB] uppercase tracking-wide">
                                 Not Configured
-                              </Badge>
+                              </span>
                             ) : isLive ? (
-                              <Badge variant="info" className="text-xs uppercase tracking-wide">
+                              <span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-200 uppercase tracking-wide">
                                 Live
-                              </Badge>
+                              </span>
                             ) : (
-                              <Badge variant="warning" className="text-xs uppercase tracking-wide">
+                              <span className="inline-block px-3 py-1 bg-yellow-50 text-[#F59E0B] text-xs font-medium rounded-full border border-yellow-200 uppercase tracking-wide">
                                 Pending
-                              </Badge>
+                              </span>
                             )}
                             {locked && (
-                              <Badge variant="warning" className="text-xs uppercase tracking-wide">
-                                <Clock className="h-3 w-3 mr-1" />
+                              <span className="inline-block px-3 py-1 bg-amber-50 text-amber-700 text-xs font-medium rounded-full border border-amber-200 uppercase tracking-wide flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
                                 Locked
-                              </Badge>
+                              </span>
                             )}
                             {assignment.hasAssignment && (
-                              <Badge variant="outline" className="text-xs uppercase tracking-wide">
+                              <span className="inline-block px-3 py-1 bg-white text-[#4B5563] text-xs font-medium rounded-full border border-[#E5E7EB] uppercase tracking-wide">
                                 {assignment.layoutTemplate}
-                              </Badge>
+                              </span>
                             )}
                           </div>
 
                           {/* Metadata */}
-                          <div className="space-y-2 text-sm text-muted-foreground">
+                          <div className="space-y-2 text-sm">
                             {assignment.lastPublishedAt && (
-                              <div className="flex items-center justify-between">
-                                <span>Last Updated:</span>
-                                <span className="font-medium">
+                              <div className="flex items-center justify-between py-2 border-t border-[#E5E7EB]">
+                                <span className="text-[#6B7280]">Last Updated:</span>
+                                <span className="font-medium text-[#1F2937]">
                                   {new Date(assignment.lastPublishedAt).toLocaleDateString()}
                                 </span>
                               </div>
                             )}
                             {locked && (
-                              <div className="flex items-center justify-between">
-                                <span>Unlocks:</span>
+                              <div className="flex items-center justify-between py-2 border-t border-[#E5E7EB]">
+                                <span className="text-[#6B7280]">Unlocks:</span>
                                 <span className="font-medium text-amber-600">
                                   {new Date(assignment.lockedUntil!).toLocaleDateString()}
                                 </span>
@@ -604,44 +606,42 @@ export default function Forms() {
                             )}
                           </div>
 
-                          {/* Template Summary removed per requirements */}
-
                           {/* Actions */}
                           <div className="flex gap-2 pt-2">
-                            <Button
-                              className="flex-1"
-                              variant={assignment.hasAssignment ? "default" : "secondary"}
-                              size="sm"
+                            <button
+                              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm transition-all ${
+                                assignment.hasAssignment 
+                                  ? 'bg-[#4FA59C] hover:bg-[#478F87] text-white'
+                                  : 'bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#4B5563] border border-[#E5E7EB]'
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
                               onClick={() => handleConfigureProduct(assignment)}
                               disabled={configuringProductId === assignment.treatmentId}
                             >
-                              <Edit3 className="mr-2 h-4 w-4" />
+                              <Edit3 className="h-4 w-4" />
                               {configuringProductId === assignment.treatmentId
                                 ? 'Opening...'
                                 : (!assignment.hasAssignment ? "Configure Form" : locked ? "View Form" : "Edit Form")}
-                            </Button>
+                            </button>
                             {productQStatus[assignment.treatmentId] !== 'exists' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
+                              <button
+                                className="px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 onClick={() => handleCreateProductQuestionnaire(assignment)}
                                 disabled={creatingForProductId === assignment.treatmentId}
                               >
-                                {creatingForProductId === assignment.treatmentId ? 'Creating...' : 'Create Questionnaire'}
-                              </Button>
+                                {creatingForProductId === assignment.treatmentId ? 'Creating...' : 'Create'}
+                              </button>
                             )}
                             {isLive && (
-                              <Button
-                                variant="outline"
-                                size="sm"
+                              <button
+                                className="p-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all"
                                 onClick={() => handleViewLive(assignment)}
                               >
                                 <ExternalLink className="h-4 w-4" />
-                              </Button>
+                              </button>
                             )}
                           </div>
-                        </CardContent>
-                      </Card>
+                        </div>
+                      </div>
                     )
                   })}
                 </div>
@@ -652,14 +652,14 @@ export default function Forms() {
           {/* Standardized Questions Tab */}
           {activeTab === "templates" && (
             <>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Manage Standardized Templates</CardTitle>
-                  <CardDescription>
+              <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+                <div className="p-6 pb-4 border-b border-[#E5E7EB]">
+                  <h2 className="text-lg font-semibold text-[#1F2937]">Manage Standardized Templates</h2>
+                  <p className="text-sm text-[#6B7280] mt-0.5">
                     Edit templates that are used across multiple product forms. Changes here will update all forms using these templates.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+                  </p>
+                </div>
+                <div className="p-6">
                   <div className="space-y-6">
                     {/* Category Selection */}
                     <div className="space-y-2">
@@ -681,15 +681,15 @@ export default function Forms() {
                     {selectedCategory && (
                       <div className="space-y-4">
                         {/* Personalization Questions */}
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">Personalization Questions</CardTitle>
-                            <CardDescription>
+                        <div className="bg-[#F9FAFB] rounded-2xl border border-[#E5E7EB] overflow-hidden">
+                          <div className="p-4 border-b border-[#E5E7EB]">
+                            <h3 className="text-base font-semibold text-[#1F2937]">Personalization Questions</h3>
+                            <p className="text-sm text-[#6B7280] mt-0.5">
                               Category: {CATEGORY_OPTIONS.find(c => c.value === selectedCategory)?.label}
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <p className="text-sm text-muted-foreground mb-4">
+                            </p>
+                          </div>
+                          <div className="p-4">
+                            <p className="text-sm text-[#6B7280] mb-4">
                               These questions are shown in all {CATEGORY_OPTIONS.find(c => c.value === selectedCategory)?.label} product forms.
                             </p>
                             {(() => {
@@ -699,16 +699,15 @@ export default function Forms() {
                               return (
                                 <div className="grid gap-2">
                                   {categoryTemplate && (
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <Button
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <button
                                         onClick={() => router.push(`/forms/editor/${categoryTemplate.id}`)}
-                                        className="w-full"
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
                                       >
-                                        <Edit3 className="mr-2 h-4 w-4" />
-                                        Edit Personalization Questions
-                                      </Button>
-                                      <Button
-                                        variant="outline"
+                                        <Edit3 className="h-4 w-4" />
+                                        Edit Questions
+                                      </button>
+                                      <button
                                         onClick={async () => {
                                           if (!token) return
                                           if (!confirm('Delete this personalization template? This cannot be undone.')) return
@@ -724,67 +723,71 @@ export default function Forms() {
                                             alert(e?.message || 'Failed to delete personalization template')
                                           }
                                         }}
-                                        className="w-full"
+                                        className="w-full px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#EF4444] hover:bg-[#FEF2F2] transition-all text-sm font-medium"
                                       >
                                         Delete
-                                      </Button>
+                                      </button>
                                     </div>
                                   )}
                                   {!categoryTemplate && (
-                                    <Button
+                                    <button
                                       onClick={() => handleCreateTemplate("personalization", selectedCategory)}
-                                      className="w-full"
                                       disabled={creating}
+                                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       {creating ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        <Loader2 className="h-4 w-4 animate-spin" />
                                       ) : (
-                                        <Layers className="mr-2 h-4 w-4" />
+                                        <Layers className="h-4 w-4" />
                                       )}
                                       {creating ? "Creating..." : "Create Personalization Template"}
-                                    </Button>
+                                    </button>
                                   )}
                                 </div>
                               )
                             })()}
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       </div>
                     )}
 
                     {!selectedCategory && (
-                      <div className="text-center py-12 text-muted-foreground">
-                        <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <div className="text-center py-12 text-[#6B7280]">
+                        <div className="bg-[#F3F4F6] rounded-full p-6 mx-auto w-fit mb-4">
+                          <Search className="h-12 w-12 text-[#9CA3AF]" />
+                        </div>
                         <p>Select a category above to manage its standardized question templates.</p>
                       </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </>
           )}
 
           {activeTab === "account" && (
             <>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Manage Account Questions</CardTitle>
-                  <CardDescription>
+              <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+                <div className="p-6 pb-4 border-b border-[#E5E7EB]">
+                  <h2 className="text-lg font-semibold text-[#1F2937]">Manage Account Questions</h2>
+                  <p className="text-sm text-[#6B7280] mt-0.5">
                     Configure the universal account questions shown in every product form across all categories.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+                  </p>
+                </div>
+                <div className="p-6">
                   <p className="text-sm text-muted-foreground mb-4">
                     These questions are used globally. Changes will impact every product form.
                   </p>
                   {accountQuestionnaire ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button onClick={() => router.push(`/forms/editor/${accountQuestionnaire.id}`)}>
-                        <Edit3 className="mr-2 h-4 w-4" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={() => router.push(`/forms/editor/${accountQuestionnaire.id}`)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
+                      >
+                        <Edit3 className="h-4 w-4" />
                         Edit Account Template
-                      </Button>
-                      <Button
-                        variant="outline"
+                      </button>
+                      <button
                         onClick={async () => {
                           if (!token) return
                           if (!confirm('Delete this account questionnaire? This cannot be undone.')) return
@@ -800,27 +803,27 @@ export default function Forms() {
                             alert(e?.message || 'Failed to delete account questionnaire')
                           }
                         }}
+                        className="w-full px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#EF4444] hover:bg-[#FEF2F2] transition-all text-sm font-medium"
                       >
                         Delete
-                      </Button>
+                      </button>
                     </div>
                   ) : (
-                    <Button
+                    <button
                       onClick={() => handleCreateTemplate("account")}
-                      variant="outline"
-                      className="w-full"
                       disabled={creating}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {creating ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Layers className="mr-2 h-4 w-4" />
+                        <Layers className="h-4 w-4" />
                       )}
                       {creating ? "Creating..." : "Create Account Template"}
-                    </Button>
+                    </button>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </>
           )}
 

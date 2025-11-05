@@ -1,7 +1,5 @@
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { 
   Building2, 
   Users, 
@@ -69,142 +67,150 @@ const recentTenants = [
 
 export default function Overview() {
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-[#F9FAFB]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        <main className="flex-1 overflow-y-auto p-8 space-y-8">
           {/* Page Header */}
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-semibold text-foreground mb-2">Tenant Overview</h1>
-              <p className="text-muted-foreground">Manage and monitor all clinic partners</p>
+              <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Tenant Overview</h1>
+              <p className="text-[#6B7280] text-base">Manage and monitor all clinic partners</p>
             </div>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
+            <button className="rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium flex items-center gap-2">
+              <Plus className="h-5 w-5" />
               Onboard New Tenant
-            </Button>
+            </button>
           </div>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {stats.map((stat) => (
-              <Card key={stat.title} className="bg-card border-border">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-medium text-muted-foreground">{stat.title}</h3>
-                    <stat.icon className="h-4 w-4 text-muted-foreground" />
+              <div key={stat.title} className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide">{stat.title}</h3>
+                  <div className="bg-[#F3F4F6] rounded-xl p-2">
+                    <stat.icon className="h-5 w-5 text-[#4FA59C]" />
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground">{stat.description}</p>
-                    <p className="text-xs text-green-600">{stat.change}</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-3xl font-bold text-[#1F2937]">{stat.value}</p>
+                  <p className="text-sm text-[#6B7280]">{stat.description}</p>
+                  <div className="pt-2 border-t border-[#E5E7EB]">
+                    <p className="text-xs text-[#10B981] font-medium">{stat.change}</p>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Recent Tenants */}
             <div className="lg:col-span-2">
-              <Card className="bg-card border-border">
-                <CardHeader className="flex flex-row items-center justify-between">
+              <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+                <div className="p-6 pb-4 flex flex-row items-center justify-between border-b border-[#E5E7EB]">
                   <div>
-                    <CardTitle className="text-lg font-semibold text-foreground">Recent Tenants</CardTitle>
-                    <p className="text-sm text-muted-foreground">Latest clinic onboarding activity</p>
+                    <h2 className="text-lg font-semibold text-[#1F2937]">Recent Tenants</h2>
+                    <p className="text-sm text-[#6B7280] mt-0.5">Latest clinic onboarding activity</p>
                   </div>
-                  <Button variant="outline" size="sm">
+                  <button className="rounded-full px-4 py-2 border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium flex items-center gap-2">
                     View All
-                    <ExternalLink className="ml-2 h-4 w-4" />
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
+                    <ExternalLink className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-3">
                     {recentTenants.map((tenant, index) => (
-                      <div key={index} className="flex items-center justify-between p-4 border border-border rounded-lg">
+                      <div key={index} className="flex items-center justify-between p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl hover:bg-white hover:shadow-sm transition-all">
                         <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                            <Building2 className="h-5 w-5 text-white" />
+                          <div className="w-12 h-12 bg-gradient-to-br from-[#4FA59C] to-[#3d8580] rounded-xl flex items-center justify-center shadow-sm">
+                            <Building2 className="h-6 w-6 text-white" />
                           </div>
                           <div>
-                            <h4 className="font-medium text-foreground">{tenant.name}</h4>
-                            <p className="text-sm text-muted-foreground">{tenant.domain}</p>
+                            <h4 className="font-semibold text-[#1F2937]">{tenant.name}</h4>
+                            <p className="text-sm text-[#9CA3AF]">{tenant.domain}</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="flex items-center space-x-2">
-                            <span className={`px-2 py-1 text-xs rounded-full ${
+                        <div className="text-right flex items-center gap-3">
+                          <div>
+                            <span className={`inline-block px-3 py-1 text-xs font-medium rounded-full ${
                               tenant.status === 'Active' 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-yellow-100 text-yellow-700'
+                                ? 'bg-green-50 text-[#10B981] border border-green-200' 
+                                : 'bg-yellow-50 text-[#F59E0B] border border-yellow-200'
                             }`}>
                               {tenant.status}
                             </span>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
+                            <p className="text-xs text-[#9CA3AF] mt-1">{tenant.patients} patients</p>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">{tenant.patients} patients</p>
+                          <button className="p-2 text-[#6B7280] hover:bg-white hover:text-[#1F2937] rounded-xl transition-all">
+                            <MoreHorizontal className="h-5 w-5" />
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
 
             {/* Quick Actions */}
             <div className="space-y-6">
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle className="text-lg font-semibold text-foreground">Quick Actions</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Button className="w-full justify-start" variant="outline">
-                    <Plus className="mr-2 h-4 w-4" />
+              <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+                <div className="p-6 pb-4 border-b border-[#E5E7EB]">
+                  <h2 className="text-lg font-semibold text-[#1F2937]">Quick Actions</h2>
+                </div>
+                <div className="p-6 space-y-2">
+                  <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#4B5563] bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl hover:bg-white hover:border-[#4FA59C] hover:text-[#4FA59C] transition-all">
+                    <Plus className="h-5 w-5" />
                     Create New Form
-                  </Button>
-                  <Button className="w-full justify-start" variant="outline">
-                    <Building2 className="mr-2 h-4 w-4" />
+                  </button>
+                  <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#4B5563] bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl hover:bg-white hover:border-[#4FA59C] hover:text-[#4FA59C] transition-all">
+                    <Building2 className="h-5 w-5" />
                     Tenant Settings
-                  </Button>
-                  <Button className="w-full justify-start" variant="outline">
-                    <FileText className="mr-2 h-4 w-4" />
+                  </button>
+                  <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#4B5563] bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl hover:bg-white hover:border-[#4FA59C] hover:text-[#4FA59C] transition-all">
+                    <FileText className="h-5 w-5" />
                     View Reports
-                  </Button>
-                  <Button className="w-full justify-start" variant="outline">
-                    <Activity className="mr-2 h-4 w-4" />
+                  </button>
+                  <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-[#4B5563] bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl hover:bg-white hover:border-[#4FA59C] hover:text-[#4FA59C] transition-all">
+                    <Activity className="h-5 w-5" />
                     System Status
-                  </Button>
-                </CardContent>
-              </Card>
+                  </button>
+                </div>
+              </div>
 
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle className="text-lg font-semibold text-foreground">System Info</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Platform Version:</span>
-                      <span className="text-foreground">v2.1.4</span>
+              <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+                <div className="p-6 pb-4 border-b border-[#E5E7EB]">
+                  <h2 className="text-lg font-semibold text-[#1F2937]">System Info</h2>
+                </div>
+                <div className="p-6">
+                  <div className="space-y-4 text-sm">
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-[#6B7280]">Platform Version:</span>
+                      <span className="text-[#1F2937] font-medium">v2.1.4</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Database:</span>
-                      <span className="text-green-600">Healthy</span>
+                    <div className="flex justify-between items-center py-2 border-t border-[#E5E7EB]">
+                      <span className="text-[#6B7280]">Database:</span>
+                      <span className="text-[#10B981] font-medium flex items-center gap-1.5">
+                        <div className="w-2 h-2 bg-[#10B981] rounded-full"></div>
+                        Healthy
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">API Status:</span>
-                      <span className="text-green-600">Online</span>
+                    <div className="flex justify-between items-center py-2 border-t border-[#E5E7EB]">
+                      <span className="text-[#6B7280]">API Status:</span>
+                      <span className="text-[#10B981] font-medium flex items-center gap-1.5">
+                        <div className="w-2 h-2 bg-[#10B981] rounded-full"></div>
+                        Online
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Last Backup:</span>
-                      <span className="text-foreground">2h ago</span>
+                    <div className="flex justify-between items-center py-2 border-t border-[#E5E7EB]">
+                      <span className="text-[#6B7280]">Last Backup:</span>
+                      <span className="text-[#1F2937] font-medium">2h ago</span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
         </main>

@@ -1450,7 +1450,7 @@ app.get("/products/:id", async (req, res) => {
       description: product.description,
       activeIngredients: product.activeIngredients,
       imageUrl: product.imageUrl,
-      active: true, // Default to active since Product model doesn't have active field
+      isActive: product.isActive, // Return actual isActive status from database
       category: (product as any).category || null,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
