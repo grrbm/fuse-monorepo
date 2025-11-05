@@ -14,7 +14,8 @@ import {
     Users,
     FileText,
     Edit,
-    Palette
+    Palette,
+    DollarSign
 } from 'lucide-react'
 
 interface Product {
@@ -437,7 +438,7 @@ export default function ProductDetail() {
         }
     }
 
-    const enableTemplateWithVariant = async (questionnaireId: string, currentFormVariant: string) => {
+    const enableTemplateWithVariant = async (questionnaireId: string, currentFormVariant: string | null) => {
         if (!token || !id) return
         setEnablingId(questionnaireId)
         try {
@@ -1004,29 +1005,27 @@ export default function ProductDetail() {
                     {/* Product Details */}
                     <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6">
                         <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Details</h3>
-                        <div>
-                            <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                                <div>
-                                    <span className="text-muted-foreground text-xs uppercase tracking-wide">Pharmacy Product ID</span>
-                                    <p className="font-medium text-foreground mt-1">{product?.pharmacyProductId || 'Not assigned'}</p>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground text-xs uppercase tracking-wide">Default Dosage</span>
-                                    <p className="font-medium text-foreground mt-1">{product?.placeholderSig || 'N/A'}</p>
-                                </div>
-                                {product?.activeIngredients && product.activeIngredients.length > 0 && (
-                                    <div className="col-span-2">
-                                        <span className="text-muted-foreground text-xs uppercase tracking-wide">Active Ingredients</span>
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                            {product.activeIngredients.map((ing, i) => (
-                                                <Badge key={i} variant="outline" className="text-xs font-normal">{ing}</Badge>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                        <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                            <div>
+                                <span className="text-muted-foreground text-xs uppercase tracking-wide">Pharmacy Product ID</span>
+                                <p className="font-medium text-foreground mt-1">{product?.pharmacyProductId || 'Not assigned'}</p>
                             </div>
-                        </CardContent>
-                    </Card>
+                            <div>
+                                <span className="text-muted-foreground text-xs uppercase tracking-wide">Default Dosage</span>
+                                <p className="font-medium text-foreground mt-1">{product?.placeholderSig || 'N/A'}</p>
+                            </div>
+                            {product?.activeIngredients && product.activeIngredients.length > 0 && (
+                                <div className="col-span-2">
+                                    <span className="text-muted-foreground text-xs uppercase tracking-wide">Active Ingredients</span>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {product.activeIngredients.map((ing, i) => (
+                                            <Badge key={i} variant="outline" className="text-xs font-normal">{ing}</Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </Layout>
