@@ -68,6 +68,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [userId, setUserId] = React.useState<string | null>(null);
   const [accountCreated, setAccountCreated] = React.useState(false);
   const [patientName, setPatientName] = React.useState<string>('');
+  const [patientFirstName, setPatientFirstName] = React.useState<string>('');
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -349,7 +350,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 const variables = {
                   ...getVariablesFromClinic(clinic),
                   productName: productName || '',
-                  patientName: patientName || ''
+                  patientName: patientName || '',
+                  patientFirstName: patientFirstName || ''
                 };
 
                 // Replace variables in all step titles, descriptions, and questions
@@ -1338,7 +1340,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Create user account after "Create Your Account" step
   const createUserAccount = async () => {
     // Immediately set patient name from answers
-    const fullName = `${answers['firstName']} ${answers['lastName']}`;
+    const firstName = answers['firstName'] || '';
+    const lastName = answers['lastName'] || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    
+    setPatientFirstName(firstName);
     setPatientName(fullName);
     
     // Re-process questionnaire with updated variables including patientName
@@ -1346,7 +1352,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       const variables = {
         ...getVariablesFromClinic(domainClinic || {}),
         productName: productName || '',
-        patientName: fullName
+        patientName: fullName,
+        patientFirstName: firstName
       };
 
       const updatedQuestionnaire = {

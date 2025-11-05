@@ -14,6 +14,7 @@ export interface TemplateVariables {
   clinicName?: string
   productName?: string
   patientName?: string
+  patientFirstName?: string
   [key: string]: string | undefined
 }
 
