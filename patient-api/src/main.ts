@@ -5366,6 +5366,125 @@ app.post("/questionnaires/:id/save-as-template", authenticateJWT, async (req, re
   }
 });
 
+// Update an existing template with structure from a product form
+app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id: templateId } = req.params;
+    const { sourceQuestionnaireId } = req.body;
+
+    if (!templateId || !sourceQuestionnaireId) {
+      return res.status(400).json({ success: false, message: "templateId and sourceQuestionnaireId are required" });
+    }
+
+    // Fetch the source questionnaire (product form)
+    const sourceQuestionnaire = await Questionnaire.findByPk(sourceQuestionnaireId, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
+        }]
+      }]
+    });
+
+    if (!sourceQuestionnaire) {
+      return res.status(404).json({ success: false, message: 'Source questionnaire not found' });
+    }
+
+    // Fetch the template to update
+    const template = await Questionnaire.findByPk(templateId, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
+        }]
+      }]
+    });
+
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+
+    // Delete existing steps, questions, and options from the template
+    const existingSteps: any[] = (template as any).steps || [];
+    for (const step of existingSteps) {
+      for (const question of (step.questions || [])) {
+        await QuestionOption.destroy({ where: { questionId: question.id } });
+        await Question.destroy({ where: { id: question.id } });
+      }
+      await QuestionnaireStep.destroy({ where: { id: step.id } });
+    }
+
+    // Clone all steps from source to template
+    const sourceSteps: any[] = (sourceQuestionnaire as any).steps || [];
+    for (const step of sourceSteps) {
+      const clonedStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: step.stepOrder,
+        isDeadEnd: step.isDeadEnd,
+        conditionalLogic: step.conditionalLogic,
+        questionnaireId: template.id,
+      });
+
+      // Clone all questions in this step
+      for (const question of (step.questions || [])) {
+        const clonedQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: question.questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: question.subQuestionOrder,
+          conditionalLevel: question.conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: question.footerNote,
+          conditionalLogic: question.conditionalLogic,
+          stepId: clonedStep.id,
+        });
+
+        // Clone all options for this question
+        if (question.options?.length) {
+          await QuestionOption.bulkCreate(
+            question.options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              riskLevel: opt.riskLevel,
+              questionId: clonedQuestion.id,
+            }))
+          );
+        }
+      }
+    }
+
+    console.log('✅ Updated template from product form:', {
+      templateId: templateId,
+      sourceQuestionnaireId: sourceQuestionnaireId
+    });
+
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Template updated successfully!' 
+    });
+  } catch (error) {
+    console.error('❌ Error updating template from product form:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update template' });
+  }
+});
+
 // Clone a template for a specific product (creates independent copy)
 app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, async (req, res) => {
   try {

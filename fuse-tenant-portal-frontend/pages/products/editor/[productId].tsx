@@ -103,6 +103,14 @@ export default function ProductEditor() {
   const [formMetadata, setFormMetadata] = useState({ title: "", description: "" })
   const [savingFormMetadata, setSavingFormMetadata] = useState(false)
 
+  // Save as Template state
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false)
+  const [saveTemplateMode, setSaveTemplateMode] = useState<'new' | 'update' | null>(null)
+  const [newTemplateName, setNewTemplateName] = useState("")
+  const [newTemplateDescription, setNewTemplateDescription] = useState("")
+  const [selectedTemplateToUpdate, setSelectedTemplateToUpdate] = useState("")
+  const [savingTemplate, setSavingTemplate] = useState(false)
+
   const isAccountTemplate = useMemo(() => template?.formTemplateType === 'user_profile', [template?.formTemplateType])
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
@@ -401,6 +409,86 @@ export default function ProductEditor() {
     })
 
     return replacedText
+  }
+
+  const handleSaveAsNewTemplate = async () => {
+    if (!token || !templateId || !newTemplateName.trim()) return
+
+    try {
+      setSavingTemplate(true)
+      
+      // Clone current form as a new template
+      const response = await fetch(`${baseUrl}/questionnaires/${templateId}/save-as-template`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          templateName: newTemplateName.trim(),
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to save as template")
+
+      const data = await response.json()
+      setSaveMessage("✅ Template saved successfully! You can now use it for other products.")
+      setShowSaveTemplateModal(false)
+      setSaveTemplateMode(null)
+      setNewTemplateName("")
+      setNewTemplateDescription("")
+      setTimeout(() => setSaveMessage(null), 5000)
+    } catch (error: any) {
+      console.error("❌ Error saving template:", error)
+      setSaveMessage(`❌ ${error.message || 'Failed to save template'}`)
+      setTimeout(() => setSaveMessage(null), 5000)
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
+  const handleUpdateExistingTemplate = async () => {
+    if (!token || !templateId || !selectedTemplateToUpdate) return
+
+    try {
+      setSavingTemplate(true)
+
+      // Get the current form's structure
+      const currentFormResponse = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      
+      if (!currentFormResponse.ok) throw new Error("Failed to fetch current form")
+      
+      const currentForm = await currentFormResponse.json()
+
+      // Update the selected template with current form structure
+      const response = await fetch(`${baseUrl}/questionnaires/templates/${selectedTemplateToUpdate}/update-from-product-form`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          sourceQuestionnaireId: templateId,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to update template")
+
+      const data = await response.json()
+      setSaveMessage("✅ Template updated successfully! Changes will apply to new product forms using this template.")
+      setShowSaveTemplateModal(false)
+      setSaveTemplateMode(null)
+      setSelectedTemplateToUpdate("")
+      setTimeout(() => setSaveMessage(null), 5000)
+    } catch (error: any) {
+      console.error("❌ Error updating template:", error)
+      setSaveMessage(`❌ ${error.message || 'Failed to update template'}`)
+      setTimeout(() => setSaveMessage(null), 5000)
+    } finally {
+      setSavingTemplate(false)
+    }
   }
 
   const handleUpdateProduct = async (updates: Partial<Product>) => {
@@ -1945,8 +2033,18 @@ export default function ProductEditor() {
                     </p>
                   </div>
 
-                  {/* Choose Template Dropdown */}
+                  {/* Template Actions */}
                   <div className="flex items-center gap-3">
+                    {/* Save as Template Button */}
+                    <button
+                      onClick={() => setShowSaveTemplateModal(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
+                    >
+                      <Save className="h-4 w-4" />
+                      Save as Template
+                    </button>
+
+                    {/* Choose Template Dropdown */}
                     <div className="relative">
                       <button
                         onClick={() => setShowFormSelector(!showFormSelector)}
@@ -2939,6 +3037,179 @@ export default function ProductEditor() {
           )}
         </main>
       </div>
+
+      {/* Save as Template Modal */}
+      {showSaveTemplateModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-[#E5E7EB] w-full max-w-lg">
+            <div className="p-8 pb-6 border-b border-[#E5E7EB]">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-semibold text-[#1F2937]">Save as Template</h2>
+                <button
+                  onClick={() => {
+                    setShowSaveTemplateModal(false)
+                    setSaveTemplateMode(null)
+                    setNewTemplateName("")
+                    setNewTemplateDescription("")
+                    setSelectedTemplateToUpdate("")
+                  }}
+                  className="p-2 text-[#6B7280] hover:text-[#1F2937] hover:bg-[#F3F4F6] rounded-xl transition-all"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <p className="text-sm text-[#6B7280] mt-2">
+                Save your current form structure as a reusable template for other products
+              </p>
+            </div>
+
+            <div className="p-8">
+              {!saveTemplateMode ? (
+                // Initial choice: New or Update
+                <div className="space-y-4">
+                  <button
+                    onClick={() => setSaveTemplateMode('new')}
+                    className="w-full p-6 rounded-2xl border-2 border-[#E5E7EB] hover:border-[#4FA59C] hover:bg-[#F9FAFB] transition-all text-left group"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="bg-[#4FA59C] rounded-xl p-3 group-hover:scale-110 transition-transform">
+                        <Plus className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-[#1F2937] mb-1">Create New Template</h3>
+                        <p className="text-sm text-[#6B7280]">
+                          Save this form as a brand new template that can be imported into other products
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setSaveTemplateMode('update')}
+                    className="w-full p-6 rounded-2xl border-2 border-[#E5E7EB] hover:border-[#4FA59C] hover:bg-[#F9FAFB] transition-all text-left group"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="bg-blue-500 rounded-xl p-3 group-hover:scale-110 transition-transform">
+                        <RefreshCw className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-[#1F2937] mb-1">Update Existing Template</h3>
+                        <p className="text-sm text-[#6B7280]">
+                          Replace an existing template with this form's current structure
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              ) : saveTemplateMode === 'new' ? (
+                // Create New Template Form
+                <div className="space-y-5">
+                  <div>
+                    <label className="text-sm font-medium text-[#4B5563] mb-2 block">Template Name *</label>
+                    <input
+                      value={newTemplateName}
+                      onChange={(e) => setNewTemplateName(e.target.value)}
+                      placeholder="e.g., Weight Loss Product Template"
+                      className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-[#4B5563] mb-2 block">Description (Optional)</label>
+                    <textarea
+                      value={newTemplateDescription}
+                      onChange={(e) => setNewTemplateDescription(e.target.value)}
+                      placeholder="Describe this template..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] min-h-[100px] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all resize-none"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t border-[#E5E7EB]">
+                    <button
+                      onClick={() => {
+                        setSaveTemplateMode(null)
+                        setNewTemplateName("")
+                        setNewTemplateDescription("")
+                      }}
+                      className="flex-1 px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleSaveAsNewTemplate}
+                      disabled={!newTemplateName.trim() || savingTemplate}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingTemplate ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Create Template'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Update Existing Template Form
+                <div className="space-y-5">
+                  <div>
+                    <label className="text-sm font-medium text-[#4B5563] mb-2 block">Select Template to Update</label>
+                    <select
+                      value={selectedTemplateToUpdate}
+                      onChange={(e) => setSelectedTemplateToUpdate(e.target.value)}
+                      className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                    >
+                      <option value="">Choose a template...</option>
+                      {availableForms.map((form) => (
+                        <option key={form.id} value={form.id}>
+                          {form.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedTemplateToUpdate && (
+                    <div className="p-4 rounded-2xl bg-yellow-50 border border-yellow-200">
+                      <p className="text-sm text-yellow-800">
+                        <strong>⚠️ Warning:</strong> This will replace the selected template's structure with your current form. 
+                        This change will affect all future products that import this template.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-4 border-t border-[#E5E7EB]">
+                    <button
+                      onClick={() => {
+                        setSaveTemplateMode(null)
+                        setSelectedTemplateToUpdate("")
+                      }}
+                      className="flex-1 px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleUpdateExistingTemplate}
+                      disabled={!selectedTemplateToUpdate || savingTemplate}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingTemplate ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        'Update Template'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Conditional Logic Modal */}
       {showConditionalModal && (selectedQuestionForConditional || conditionalModalType === 'step') && (
