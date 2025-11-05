@@ -979,22 +979,42 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
     }
   ]
 
-  const [structures, setStructures] = useState<GlobalStructure[]>([
-    {
-      id: '1',
-      name: 'Default Flow',
-      description: 'Standard questionnaire flow for all products',
-      sections: DEFAULT_SECTIONS,
-      isDefault: true
-    }
-  ])
+  const [structures, setStructures] = useState<GlobalStructure[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editingStructure, setEditingStructure] = useState<GlobalStructure | null>(null)
   const [sections, setSections] = useState<FormSection[]>(DEFAULT_SECTIONS)
   const [structureName, setStructureName] = useState('')
   const [structureDescription, setStructureDescription] = useState('')
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+
+  // Load structures on mount
+  useEffect(() => {
+    loadStructures()
+  }, [token])
+
+  const loadStructures = async () => {
+    if (!token) return
+    setLoading(true)
+
+    try {
+      const response = await fetch(`${baseUrl}/global-form-structures`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && Array.isArray(data.data)) {
+          setStructures(data.data)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load structures:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleAddNew = () => {
     setEditingStructure(null)
@@ -1012,27 +1032,75 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
     setShowModal(true)
   }
 
-  const handleSaveStructure = () => {
-    const newStructure: GlobalStructure = {
-      id: editingStructure?.id || Date.now().toString(),
-      name: structureName || 'Untitled Structure',
-      description: structureDescription,
-      sections: sections.map((s, idx) => ({ ...s, order: idx + 1 })),
-      createdAt: editingStructure?.createdAt || new Date().toISOString()
-    }
+  const handleSaveStructure = async () => {
+    if (!token) return
+    
+    setSaving(true)
+    try {
+      const newStructure: GlobalStructure = {
+        id: editingStructure?.id || Date.now().toString(),
+        name: structureName || 'Untitled Structure',
+        description: structureDescription,
+        sections: sections.map((s, idx) => ({ ...s, order: idx + 1 })),
+        createdAt: editingStructure?.createdAt || new Date().toISOString()
+      }
 
-    if (editingStructure) {
-      setStructures(structures.map(s => s.id === editingStructure.id ? newStructure : s))
-    } else {
-      setStructures([...structures, newStructure])
-    }
+      let updatedStructures
+      if (editingStructure) {
+        updatedStructures = structures.map(s => s.id === editingStructure.id ? newStructure : s)
+      } else {
+        updatedStructures = [...structures, newStructure]
+      }
 
-    setShowModal(false)
+      // Save to backend
+      const response = await fetch(`${baseUrl}/global-form-structures`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ structures: updatedStructures })
+      })
+
+      if (response.ok) {
+        setStructures(updatedStructures)
+        setShowModal(false)
+      } else {
+        alert('Failed to save structure')
+      }
+    } catch (error) {
+      console.error('Failed to save:', error)
+      alert('Failed to save structure')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this structure?')) {
-      setStructures(structures.filter(s => s.id !== id))
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this structure?')) return
+    if (!token) return
+
+    try {
+      const updatedStructures = structures.filter(s => s.id !== id)
+      
+      // Save to backend
+      const response = await fetch(`${baseUrl}/global-form-structures`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ structures: updatedStructures })
+      })
+
+      if (response.ok) {
+        setStructures(updatedStructures)
+      } else {
+        alert('Failed to delete structure')
+      }
+    } catch (error) {
+      console.error('Failed to delete:', error)
+      alert('Failed to delete structure')
     }
   }
 

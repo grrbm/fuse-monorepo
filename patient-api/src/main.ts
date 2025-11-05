@@ -1199,6 +1199,82 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
   }
 });
 
+// Get global form structures for clinic
+app.get("/global-form-structures", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(400).json({ success: false, message: "User clinic not found" });
+    }
+
+    const clinic = await Clinic.findByPk(user.clinicId);
+    if (!clinic) {
+      return res.status(404).json({ success: false, message: "Clinic not found" });
+    }
+
+    // Return saved structures or default
+    const structures = (clinic as any).globalFormStructures || [
+      {
+        id: 'default',
+        name: 'Default Flow',
+        description: 'Standard questionnaire flow for all products',
+        sections: [
+          { id: 'product', type: 'product_questions', label: 'Product Questions', description: 'Questions specific to each individual product', order: 1, enabled: true, icon: '📦' },
+          { id: 'category', type: 'category_questions', label: 'Standardized Category Questions', description: 'Questions shared across all products in a category', order: 2, enabled: true, icon: '📋' },
+          { id: 'account', type: 'account_creation', label: 'Create Account', description: 'Patient information collection', order: 3, enabled: true, icon: '👤' },
+          { id: 'checkout', type: 'checkout', label: 'Payment & Checkout', description: 'Billing and shipping', order: 4, enabled: true, icon: '💳' }
+        ],
+        isDefault: true
+      }
+    ];
+
+    res.status(200).json({ success: true, data: structures });
+  } catch (error) {
+    console.error('Error fetching global form structures:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch structures' });
+  }
+});
+
+// Save global form structures for clinic
+app.post("/global-form-structures", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(400).json({ success: false, message: "User clinic not found" });
+    }
+
+    const clinic = await Clinic.findByPk(user.clinicId);
+    if (!clinic) {
+      return res.status(404).json({ success: false, message: "Clinic not found" });
+    }
+
+    const { structures } = req.body;
+    if (!Array.isArray(structures)) {
+      return res.status(400).json({ success: false, message: "Structures must be an array" });
+    }
+
+    // Save to clinic
+    await clinic.update({ globalFormStructures: structures } as any);
+
+    console.log('✅ Saved global form structures for clinic:', clinic.id);
+
+    res.status(200).json({ success: true, message: 'Structures saved successfully', data: structures });
+  } catch (error) {
+    console.error('Error saving global form structures:', error);
+    res.status(500).json({ success: false, message: 'Failed to save structures' });
+  }
+});
+
 // Products by clinic endpoint
 app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
   try {

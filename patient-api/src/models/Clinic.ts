@@ -69,6 +69,12 @@ export default class Clinic extends Entity {
     })
     declare customDomain?: string;
 
+    @Column({
+        type: DataType.JSONB,
+        allowNull: true,
+    })
+    declare globalFormStructures?: any[];
+
     // Stripe Connect fields
     @Column({
         type: DataType.STRING,
