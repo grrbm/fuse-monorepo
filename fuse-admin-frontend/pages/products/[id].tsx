@@ -847,7 +847,9 @@ export default function ProductDetail() {
                                                         const pv = buildPreviewUrl()
                                                         const previewUrl = variantNum ? pv?.replace('/my-products/', `/my-products/${variantNum}/`) : pv
                                                         const variantKey = variantNum ? String(variantNum) : null
-                                                        const isVariantEnabled = isProductSpecific ? !!existingForm : (!!existingForm && currentVariant === variantKey)
+                                                        // For structures without variants (variantNum === null), enabled if form exists
+                                                        // For structures with variants, enabled if form exists AND variant matches
+                                                        const isVariantEnabled = !hasCategorySection ? !!existingForm : (!!existingForm && currentVariant === variantKey)
                                                         const hasAnyEnabled = !!existingForm
                                                         return (
                                                             <div key={`${t.id}-${variantNum || 'main'}`} className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-4">
