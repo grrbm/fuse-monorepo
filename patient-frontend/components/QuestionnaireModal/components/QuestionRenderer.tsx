@@ -23,8 +23,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     onRadioChange,
     onCheckboxChange,
 }) => {
-    // If step is not required, treat question as not required regardless of isQuestionRequired
-    const isQuestionRequired = stepRequired !== false && isQuestionRequired;
+    // If step is not required, treat question as not required regardless of question.isRequired
+    const isQuestionRequired = stepRequired !== false && question.isRequired;
     const value = answers[question.id] || "";
     const isEmpty = (
         value === undefined ||
