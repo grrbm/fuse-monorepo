@@ -257,52 +257,33 @@ export default function ProductDetail() {
                         standardizedForms = Array.isArray(data?.data) ? data.data : []
                     }
                     
-                    // Display each global structure as a form entry
+                    // Display ONE entry per global structure (consolidate product + category forms)
                     for (const structure of globalStructures) {
                         const enabledSections = structure.sections?.filter((s: any) => s.enabled) || []
                         const hasProductSection = enabledSections.some((s: any) => s.type === 'product_questions')
                         const hasCategorySection = enabledSections.some((s: any) => s.type === 'category_questions')
                         
-                        // Get the first available product form or create a placeholder
-                        const productForm = productForms[0] || {
-                            id: `structure-${structure.id}-product`,
+                        // Use product form if available, otherwise create placeholder
+                        const baseForm = productForms[0] || standardizedForms[0] || {
+                            id: `structure-${structure.id}`,
                             title: structure.name,
-                            formTemplateType: 'normal',
-                            isTemplate: false
+                            formTemplateType: hasCategorySection ? 'standardized_template' : 'normal',
+                            isTemplate: hasCategorySection
                         }
                         
-                        // Add structure as a form entry (product-specific, no variants)
-                        if (hasProductSection) {
-                            displayTemplates.push({
-                                ...productForm,
-                                title: structure.name,
-                                _structureName: structure.name,
-                                _structureId: structure.id,
-                                _structure: structure,
-                                _isProductSpecific: true,
-                                _isStructurePlaceholder: !productForms[0]
-                            })
-                        }
-                        
-                        // If structure has category section, add it with variant support
-                        if (hasCategorySection) {
-                            const categoryForm = standardizedForms[0] || {
-                                id: `structure-${structure.id}-category`,
-                                title: structure.name,
-                                formTemplateType: 'standardized_template',
-                                isTemplate: true
-                            }
-                            
-                            displayTemplates.push({
-                                ...categoryForm,
-                                title: structure.name,
-                                _structureName: structure.name,
-                                _structureId: structure.id,
-                                _structure: structure,
-                                _isStandardized: true,
-                                _isStructurePlaceholder: !standardizedForms[0]
-                            })
-                        }
+                        // Add ONE entry per structure
+                        displayTemplates.push({
+                            ...baseForm,
+                            title: structure.name,
+                            _structureName: structure.name,
+                            _structureId: structure.id,
+                            _structure: structure,
+                            _hasProductSection: hasProductSection,
+                            _hasCategorySection: hasCategorySection,
+                            _productForm: productForms[0] || null,
+                            _categoryForms: standardizedForms,
+                            _isStructurePlaceholder: !productForms[0] && !standardizedForms[0]
+                        })
                     }
                 } else {
                     // Fallback: show all forms if global structures not available
@@ -808,9 +789,9 @@ export default function ProductDetail() {
                                             const existingForm = enabledForms.find((f: any) => f?.questionnaireId === t.id)
                                             const currentVariant: string | null = existingForm?.currentFormVariant ?? null
                                             
-                                            // Only show variants for standardized templates, not product-specific forms
-                                            const isProductSpecific = t.formTemplateType === 'normal' || !t.isTemplate
-                                            const variantsToShow = isProductSpecific ? [null] : [1, 2]
+                                            // Show variants only if structure has category questions enabled
+                                            const hasCategorySection = (t as any)._hasCategorySection
+                                            const variantsToShow = hasCategorySection ? [1, 2] : [null]
                                             
                                             // Get structure object if available
                                             const structure = (t as any)._structure
