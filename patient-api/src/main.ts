@@ -1199,6 +1199,48 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
   }
 });
 
+// Get standardized templates (authenticated version)
+app.get("/questionnaires/standardized", authenticateJWT, async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const where: any = {
+      isTemplate: true,
+      formTemplateType: 'standardized_template'
+    };
+    if (typeof category === 'string' && category.trim().length > 0) {
+      where.category = category.trim();
+    }
+
+    const questionnaires = await Questionnaire.findAll({
+      where,
+      include: [
+        {
+          model: QuestionnaireStep,
+          as: 'steps',
+          include: [
+            {
+              model: Question,
+              as: 'questions',
+              include: [{ model: QuestionOption, as: 'options' }],
+            },
+          ],
+        },
+      ],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+      ] as any,
+    });
+
+    res.status(200).json({ success: true, data: questionnaires });
+  } catch (error) {
+    console.error('Error fetching standardized templates:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch standardized templates' });
+  }
+});
+
 // Get global form structures for clinic
 app.get("/global-form-structures", authenticateJWT, async (req, res) => {
   try {
