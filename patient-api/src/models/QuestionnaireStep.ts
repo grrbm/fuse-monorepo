@@ -45,6 +45,13 @@ export default class QuestionnaireStep extends Entity {
     })
     declare conditionalLogic: string;
 
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+    })
+    declare required: boolean;
+
     @ForeignKey(() => Questionnaire)
     @Column({
         type: DataType.UUID,

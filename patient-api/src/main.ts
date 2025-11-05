@@ -6198,7 +6198,7 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { stepId, title, description, isDeadEnd, conditionalLogic } = validation.data;
+    const { stepId, title, description, isDeadEnd, conditionalLogic, required } = validation.data;
 
     // Create questionnaire step service instance
     const questionnaireStepService = new QuestionnaireStepService();
@@ -6206,7 +6206,7 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
     // Update questionnaire step
     const updatedStep = await questionnaireStepService.updateQuestionnaireStep(
       stepId,
-      { title, description, isDeadEnd, conditionalLogic: conditionalLogic ?? undefined },
+      { title, description, isDeadEnd, conditionalLogic: conditionalLogic ?? undefined, required },
       currentUser.id
     );
 

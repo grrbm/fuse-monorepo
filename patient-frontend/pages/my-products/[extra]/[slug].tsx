@@ -11,6 +11,7 @@ interface PublicProduct {
     slug: string
     questionnaireId: string | null
     category?: string | null
+    categories?: string[]
     currentFormVariant?: string | null
     price?: number | null
     stripeProductId?: string | null

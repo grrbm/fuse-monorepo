@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
-import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle, Link2, Unlink, Package, FileText } from "lucide-react"
+import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle, Link2, Unlink, Package, FileText, Check } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../../forms/QuestionEditor"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
@@ -24,6 +24,7 @@ interface Step {
   stepType: "question" | "info"
   isDeadEnd?: boolean
   conditionalLogic?: string | null
+  required?: boolean
   questions?: Question[]
   conditionalQuestions?: ConditionalQuestion[]
 }
@@ -347,6 +348,7 @@ export default function ProductEditor() {
           stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
           isDeadEnd: Boolean(s.isDeadEnd),
           conditionalLogic: index === 0 ? null : (s.conditionalLogic || null),
+          required: s.required !== undefined ? Boolean(s.required) : true, // Default to required
           questions: (s.questions || []).map((q: any) => ({
             id: String(q.id),
             type: q.answerType || 'single-choice',
@@ -911,6 +913,7 @@ export default function ProductEditor() {
         stepOrder: Number(s.stepOrder || 0),
         category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info',
         stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        required: s.required !== undefined ? Boolean(s.required) : true, // Default to required
         questions: (s.questions || []).map((q: any) => ({
           id: String(q.id),
           type: q.answerType || 'single-choice',
@@ -1013,6 +1016,36 @@ export default function ProductEditor() {
 
   const handleUpdateStep = (stepId: string, updates: Partial<Step>) => {
     setSteps(steps.map(s => s.id === stepId ? { ...s, ...updates } : s))
+  }
+
+  const handleToggleStepRequired = async (stepId: string) => {
+    if (!token) return
+    const step = steps.find(s => s.id === stepId)
+    if (!step) return
+
+    const newRequiredValue = !step.required
+    
+    // Optimistically update UI
+    setSteps(steps.map(s => s.id === stepId ? { ...s, required: newRequiredValue } : s))
+
+    // Persist to backend
+    try {
+      const res = await fetch(`${baseUrl}/questionnaires/step`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ 
+          stepId: stepId, 
+          required: newRequiredValue 
+        }),
+      })
+      if (!res.ok) {
+        // Revert on error
+        setSteps(steps.map(s => s.id === stepId ? { ...s, required: !newRequiredValue } : s))
+        throw new Error('Failed to update step')
+      }
+    } catch (e) {
+      console.error('❌ Failed to toggle step required', e)
+    }
   }
 
   const handleAddOption = (stepId: string, questionId: string) => {
@@ -2897,6 +2930,30 @@ export default function ProductEditor() {
 
                                 {/* Action Icons */}
                                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                  {/* Required Toggle */}
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          onClick={() => handleToggleStepRequired(step.id)}
+                                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-offset-2 ${
+                                            step.required !== false ? 'bg-[#4FA59C]' : 'bg-gray-300'
+                                          }`}
+                                          title={step.required !== false ? "Required (click to make optional)" : "Optional (click to make required)"}
+                                        >
+                                          <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                              step.required !== false ? 'translate-x-6' : 'translate-x-1'
+                                            }`}
+                                          />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{step.required !== false ? 'Step is required' : 'Step is optional'}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+
                                   {/* Only show "Create Rule" button if this is NOT the first step */}
                                   {index > 0 && (
                                     <Button
