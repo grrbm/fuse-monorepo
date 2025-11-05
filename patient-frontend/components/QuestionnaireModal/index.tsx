@@ -65,6 +65,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [paymentIntentId, setPaymentIntentId] = React.useState<string | null>(null);
   const [orderId, setOrderId] = React.useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = React.useState<'idle' | 'processing' | 'succeeded' | 'failed'>('idle');
+  const [userId, setUserId] = React.useState<string | null>(null);
+  const [accountCreated, setAccountCreated] = React.useState(false);
+  const [patientName, setPatientName] = React.useState<string>('');
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -345,7 +348,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 const clinic = clinicData.data;
                 const variables = {
                   ...getVariablesFromClinic(clinic),
-                  productName: productName || ''
+                  productName: productName || '',
+                  patientName: patientName || ''
                 };
 
                 // Replace variables in all step titles, descriptions, and questions
@@ -1331,8 +1335,77 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   };
 
   // Navigate to next step
-  const handleNext = () => {
+  // Create user account after "Create Your Account" step
+  const createUserAccount = async () => {
+    try {
+      console.log('🔐 Creating user account with data:', {
+        firstName: answers['firstName'],
+        lastName: answers['lastName'],
+        email: answers['email'],
+        mobile: answers['mobile']
+      });
+
+      const result = await apiCall('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          firstName: answers['firstName'],
+          lastName: answers['lastName'],
+          email: answers['email'],
+          phoneNumber: answers['mobile'],
+          password: Math.random().toString(36).slice(-12), // Generate temporary password
+          role: 'patient',
+          clinicId: domainClinic?.id || null
+        })
+      });
+
+      if (result.success && result.data) {
+        setUserId(result.data.userId || result.data.id);
+        setAccountCreated(true);
+        const fullName = `${answers['firstName']} ${answers['lastName']}`;
+        setPatientName(fullName);
+        
+        console.log('✅ User account created:', result.data.userId || result.data.id);
+        
+        // Re-process questionnaire with updated variables including patientName
+        if (questionnaire) {
+          const variables = {
+            ...getVariablesFromClinic(domainClinic || {}),
+            productName: productName || '',
+            patientName: fullName
+          };
+
+          const updatedQuestionnaire = {
+            ...questionnaire,
+            steps: questionnaire.steps?.map((step: any) => ({
+              ...step,
+              title: replaceVariables(step.title || '', variables),
+              description: replaceVariables(step.description || '', variables),
+              questions: step.questions?.map((question: any) => ({
+                ...question,
+                questionText: replaceVariables(question.questionText || '', variables),
+                placeholder: replaceVariables(question.placeholder || '', variables),
+              })),
+            }))
+          };
+
+          setQuestionnaire(updatedQuestionnaire);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to create user account:', error);
+      // Don't block progression - account will be created at payment
+    }
+  };
+
+  const handleNext = async () => {
     if (validateCurrentStep() && questionnaire) {
+      const currentStep = getCurrentQuestionnaireStep();
+      
+      // If we just completed "Create Your Account" step and haven't created account yet, do it now
+      if (currentStep?.title === 'Create Your Account' && !accountCreated) {
+        await createUserAccount();
+      }
+      
       const totalSteps = getTotalSteps();
       if (currentStepIndex < totalSteps - 1) {
         setCurrentStepIndex(prev => prev + 1);
