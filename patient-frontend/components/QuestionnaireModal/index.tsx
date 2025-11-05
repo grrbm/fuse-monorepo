@@ -1190,6 +1190,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const currentStep = getCurrentQuestionnaireStep();
     if (!currentStep) return true;
 
+    // If step is marked as not required, skip validation
+    if (currentStep.required === false) {
+      return true;
+    }
+
     // Special validation for Create Your Account step
     if (currentStep.title === 'Create Your Account') {
       const stepErrors: Record<string, string> = {};
@@ -2447,6 +2452,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                 answers={answers}
                                 errors={errors}
                                 theme={theme}
+                                stepRequired={currentStep.required}
                                 onAnswerChange={handleAnswerChange}
                                 onRadioChange={(questionId: string, value: any) => {
                                   // Clear any existing error on first selection

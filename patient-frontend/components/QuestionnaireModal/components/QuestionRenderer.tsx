@@ -7,6 +7,7 @@ interface QuestionRendererProps {
     answers: Record<string, any>;
     errors: Record<string, string>;
     theme: ThemePalette;
+    stepRequired?: boolean;
     onAnswerChange: (questionId: string, value: any) => void;
     onRadioChange: (questionId: string, value: any) => void;
     onCheckboxChange: (questionId: string, optionValue: string, isChecked: boolean) => void;
@@ -17,10 +18,13 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     answers,
     errors,
     theme,
+    stepRequired = true,
     onAnswerChange,
     onRadioChange,
     onCheckboxChange,
 }) => {
+    // If step is not required, treat question as not required regardless of isQuestionRequired
+    const isQuestionRequired = stepRequired !== false && isQuestionRequired;
     const value = answers[question.id] || "";
     const isEmpty = (
         value === undefined ||
@@ -51,7 +55,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
                         {question.questionText}
-                        {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                        {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                     </label>
                     <input
                         type={question.answerType === "email" ? "email" : question.answerType === "phone" ? "tel" : "text"}
@@ -95,7 +100,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                     <div>
                         <h3 className="text-2xl font-medium text-gray-900 mb-3">
                             {question.questionText}
-                            {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                            {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                         </h3>
                         {question.helpText && (
                             <p className="text-gray-600">{question.helpText}</p>
@@ -251,7 +257,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                     <div key={question.id} className="space-y-3">
                         <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
                             {question.questionText}
-                            {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                            {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                         </label>
                         <div className="grid grid-cols-3 gap-3">
                             {/* Month */}
@@ -361,7 +368,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
                         {question.questionText}
-                        {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                        {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                     </label>
                     <input
                         type="date"
@@ -390,7 +398,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
             const isDeadEnd = questionText.includes('unfortunat') || questionText.includes('disqualif') ||
                 questionText.includes('do not qualify') || questionText.includes('cannot be medically')
 
-            const isInfoOnly = !question.isRequired && (
+            const isInfoOnly = !isQuestionRequired && (
                 placeholder?.includes('informational') ||
                 placeholder?.includes('no response needed')
             )
@@ -418,7 +426,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
                         {question.questionText}
-                        {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                        {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                     </label>
                     <textarea
                         placeholder={question.placeholder || "Type your detailed response here..."}
@@ -464,7 +473,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                     <div>
                         <h3 className="text-2xl font-medium text-gray-900 mb-3">
                             {question.questionText}
-                            {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                            {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                         </h3>
                         {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
                     </div>
@@ -517,7 +527,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                         <div>
                             <h3 className="text-2xl font-medium text-gray-900 mb-3">
                                 {question.questionText}
-                                {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                                {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                             </h3>
                             {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
                         </div>
@@ -557,7 +568,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                     <div>
                         <h3 className="text-2xl font-medium text-gray-900 mb-3">
                             {question.questionText}
-                            {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                            {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                         </h3>
                         {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
                     </div>
@@ -622,7 +634,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                         <div>
                             <h3 className="text-2xl font-medium text-gray-900 mb-3">
                                 {question.questionText}
-                                {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                                {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                             </h3>
                             {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
                         </div>
@@ -670,7 +683,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                     <div>
                         <h3 className="text-2xl font-medium text-gray-900 mb-3">
                             {question.questionText}
-                            {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                            {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                         </h3>
                         {question.helpText && <p className="text-gray-600">{question.helpText}</p>}
                     </div>
@@ -717,7 +731,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
                         {question.questionText}
-                        {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                        {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                     </label>
                     <div className="flex gap-3">
                         <div className="flex-1">
@@ -797,7 +812,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
                         {question.questionText}
-                        {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                        {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                     </label>
                     <input
                         type="number"
@@ -841,7 +857,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                 <div key={question.id} className="space-y-3">
                     <label className="block text-sm font-medium" style={{ color: "var(--q-primary-text)" }}>
                         {question.questionText}
-                        {question.isRequired && <span className="text-red-500 ml-1">*</span>}
+                        {isQuestionRequired && <span className="text-red-500 ml-1">*</span>}
+                        {!isQuestionRequired && <span className="text-gray-500 text-xs ml-2">*Not required</span>}
                     </label>
                     <input
                         type="text"

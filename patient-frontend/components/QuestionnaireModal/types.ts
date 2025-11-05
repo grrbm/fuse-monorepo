@@ -27,6 +27,7 @@ export interface QuestionnaireStep {
     stepOrder: number;
     category?: 'normal' | 'user_profile' | 'doctor';
     isDeadEnd?: boolean;
+    required?: boolean;
     questions?: Question[];
 }
 
