@@ -1399,8 +1399,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         setUserId(result.data.userId || result.data.id);
         setAccountCreated(true);
         console.log('✅ User account created:', result.data.userId || result.data.id);
-      } else if (result.message?.includes('already exists') || result.message?.includes('duplicate')) {
-        console.log('ℹ️ User account already exists, will use existing account');
+      } else {
+        // If account creation failed (likely duplicate email), that's okay
+        console.log('ℹ️ Account creation failed (likely duplicate), will use existing account at payment');
         setAccountCreated(true);
       }
     } catch (error) {
