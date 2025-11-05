@@ -236,14 +236,14 @@ export default function ProductDetail() {
                     setTenantProduct(tenantProd || null)
                 }
 
-                // Process global structures and map forms to them
+                // Process global structures - show structures themselves, not underlying forms
                 let displayTemplates = []
                 
                 if (globalStructuresRes.ok) {
                     const structuresData = await globalStructuresRes.json()
                     const globalStructures = Array.isArray(structuresData?.data) ? structuresData.data : []
                     
-                    // Get product and standardized forms
+                    // Get product and standardized forms for reference
                     let productForms: any[] = []
                     let standardizedForms: any[] = []
                     
@@ -257,28 +257,49 @@ export default function ProductDetail() {
                         standardizedForms = Array.isArray(data?.data) ? data.data : []
                     }
                     
-                    // For each global structure, create entries with the appropriate forms
+                    // Display each global structure as a form entry
                     for (const structure of globalStructures) {
                         const enabledSections = structure.sections?.filter((s: any) => s.enabled) || []
+                        const hasProductSection = enabledSections.some((s: any) => s.type === 'product_questions')
+                        const hasCategorySection = enabledSections.some((s: any) => s.type === 'category_questions')
                         
-                        // If structure includes product questions and we have product forms, add them
-                        if (enabledSections.some((s: any) => s.type === 'product_questions') && productForms.length > 0) {
-                            displayTemplates.push(...productForms.map((form: any) => ({
-                                ...form,
-                                _structureName: structure.name,
-                                _structureId: structure.id,
-                                _isProductSpecific: true
-                            })))
+                        // Get the first available product form or create a placeholder
+                        const productForm = productForms[0] || {
+                            id: `structure-${structure.id}-product`,
+                            title: structure.name,
+                            formTemplateType: 'normal',
+                            isTemplate: false
                         }
                         
-                        // If structure includes category questions and we have standardized forms, add them
-                        if (enabledSections.some((s: any) => s.type === 'category_questions') && standardizedForms.length > 0) {
-                            displayTemplates.push(...standardizedForms.map((form: any) => ({
-                                ...form,
+                        // Add structure as a form entry (product-specific, no variants)
+                        if (hasProductSection) {
+                            displayTemplates.push({
+                                ...productForm,
+                                title: structure.name,
                                 _structureName: structure.name,
                                 _structureId: structure.id,
-                                _isStandardized: true
-                            })))
+                                _isProductSpecific: true,
+                                _isStructurePlaceholder: !productForms[0]
+                            })
+                        }
+                        
+                        // If structure has category section, add it with variant support
+                        if (hasCategorySection) {
+                            const categoryForm = standardizedForms[0] || {
+                                id: `structure-${structure.id}-category`,
+                                title: structure.name,
+                                formTemplateType: 'standardized_template',
+                                isTemplate: true
+                            }
+                            
+                            displayTemplates.push({
+                                ...categoryForm,
+                                title: structure.name,
+                                _structureName: structure.name,
+                                _structureId: structure.id,
+                                _isStandardized: true,
+                                _isStructurePlaceholder: !standardizedForms[0]
+                            })
                         }
                     }
                 } else {
