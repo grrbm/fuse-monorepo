@@ -5520,64 +5520,83 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
     // Create the cloned questionnaire for this specific product
     const clonedQuestionnaire = await Questionnaire.create({
       title: template.title,
-      description: template.description,
-      checkoutStepPosition: template.checkoutStepPosition,
-      treatmentId: template.treatmentId,
+      description: template.description || '',
+      checkoutStepPosition: template.checkoutStepPosition || null,
+      treatmentId: template.treatmentId || null,
       productId: productId, // Link to specific product
-      category: template.category,
+      category: template.category || null,
       formTemplateType: 'normal', // Clones are not templates themselves
       isTemplate: false, // This is a product-specific instance, not a template
       userId: currentUser.id,
-      personalizationQuestionsSetup: template.personalizationQuestionsSetup,
-      createAccountQuestionsSetup: template.createAccountQuestionsSetup,
-      doctorQuestionsSetup: template.doctorQuestionsSetup,
-      color: template.color,
+      personalizationQuestionsSetup: template.personalizationQuestionsSetup || null,
+      createAccountQuestionsSetup: template.createAccountQuestionsSetup || null,
+      doctorQuestionsSetup: template.doctorQuestionsSetup || null,
+      color: template.color || null,
+    }).catch((err) => {
+      console.error('❌ Error creating cloned questionnaire:', err);
+      throw new Error(`Failed to create questionnaire: ${err.message}`);
     });
 
     // Clone all steps with their questions and options
     const steps: any[] = (template as any).steps || [];
     for (const step of steps) {
       const clonedStep = await QuestionnaireStep.create({
-        title: step.title,
-        description: step.description,
-        category: step.category,
-        stepOrder: step.stepOrder,
-        isDeadEnd: step.isDeadEnd,
-        conditionalLogic: step.conditionalLogic,
+        title: step.title || '',
+        description: step.description || '',
+        category: step.category || 'normal',
+        stepOrder: step.stepOrder || 0,
+        isDeadEnd: step.isDeadEnd || false,
+        conditionalLogic: step.conditionalLogic || null,
         questionnaireId: clonedQuestionnaire.id,
+      }).catch((err) => {
+        console.error('❌ Error creating cloned step:', err);
+        throw new Error(`Failed to create step: ${err.message}`);
       });
 
       // Clone all questions in this step
       for (const question of (step.questions || [])) {
         const clonedQuestion = await Question.create({
-          questionText: question.questionText,
-          answerType: question.answerType,
-          questionSubtype: question.questionSubtype,
-          isRequired: question.isRequired,
-          questionOrder: question.questionOrder,
-          subQuestionOrder: question.subQuestionOrder,
-          conditionalLevel: question.conditionalLevel,
-          placeholder: question.placeholder,
-          helpText: question.helpText,
-          footerNote: question.footerNote,
-          conditionalLogic: question.conditionalLogic,
+          questionText: question.questionText || '',
+          answerType: question.answerType || 'radio',
+          questionSubtype: question.questionSubtype || null,
+          isRequired: question.isRequired !== undefined ? question.isRequired : true,
+          questionOrder: question.questionOrder || 0,
+          subQuestionOrder: question.subQuestionOrder || null,
+          conditionalLevel: question.conditionalLevel || null,
+          placeholder: question.placeholder || null,
+          helpText: question.helpText || null,
+          footerNote: question.footerNote || null,
+          conditionalLogic: question.conditionalLogic || null,
           stepId: clonedStep.id,
+        }).catch((err) => {
+          console.error('❌ Error creating cloned question:', err);
+          throw new Error(`Failed to create question: ${err.message}`);
         });
 
         // Clone all options for this question
         if (question.options?.length) {
           await QuestionOption.bulkCreate(
             question.options.map((opt: any) => ({
-              optionText: opt.optionText,
-              optionValue: opt.optionValue,
-              optionOrder: opt.optionOrder,
-              riskLevel: opt.riskLevel,
+              optionText: opt.optionText || '',
+              optionValue: opt.optionValue || opt.optionText || '',
+              optionOrder: opt.optionOrder || 0,
+              riskLevel: opt.riskLevel || null,
               questionId: clonedQuestion.id,
             }))
-          );
+          ).catch((err) => {
+            console.error('❌ Error creating cloned options:', err);
+            throw new Error(`Failed to create options: ${err.message}`);
+          });
         }
       }
     }
+
+    console.log('✅ Successfully cloned template for product:', {
+      templateId,
+      productId,
+      clonedQuestionnaireId: clonedQuestionnaire.id,
+      stepsCloned: steps.length
+    });
 
     // Return the full cloned questionnaire
     const fullClone = await Questionnaire.findByPk(clonedQuestionnaire.id, {
@@ -5599,9 +5618,14 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
     });
 
     return res.status(201).json({ success: true, data: fullClone });
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error cloning template for product:', error);
-    return res.status(500).json({ success: false, message: 'Failed to clone template for product' });
+    const errorMessage = error?.message || 'Failed to clone template for product';
+    return res.status(500).json({ 
+      success: false, 
+      message: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
