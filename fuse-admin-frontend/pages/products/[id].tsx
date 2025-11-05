@@ -800,16 +800,14 @@ export default function ProductDetail() {
                                                             <div key={`${t.id}-${variantNum || 'main'}`} className="border border-dashed border-border rounded-md p-3">
                                                                 <div className="flex items-center justify-between">
                                                                     <div className="flex-1">
-                                                                        <div className="font-medium text-foreground">{t.title}</div>
+                                                                        <div className="font-medium text-foreground">
+                                                                            {(t as any)._structureName || t.title}
+                                                                            {variantNum && ` - Variant ${variantNum}`}
+                                                                        </div>
                                                                         <div className="text-xs text-muted-foreground mt-0.5">
-                                                                            {(t as any)._structureName && (
-                                                                                <span className="inline-flex items-center px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-700 rounded text-xs font-medium mr-2">
-                                                                                    {(t as any)._structureName}
-                                                                                </span>
-                                                                            )}
-                                                                            {t.formTemplateType || 'Standard Form'}
-                                                                            {variantNum && ` • Variant ${variantNum}`}
-                                                                            {isProductSpecific && ' • Product-Specific'}
+                                                                            {t.formTemplateType === 'normal' ? 'Product-Specific Form' : 
+                                                                             t.formTemplateType === 'standardized_template' ? 'Standardized Category Template' :
+                                                                             'Standard Form'}
                                                                         </div>
                                                                     </div>
                                                                     {hasAnyEnabled ? (
