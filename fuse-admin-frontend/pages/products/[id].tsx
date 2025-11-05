@@ -694,9 +694,10 @@ export default function ProductDetail() {
                             </div>
                         </div>
 
-                                    {/* Retail Price */}
-                                    {tenantProduct ? (
-                                        <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
+                        {/* Retail Price */}
+                        <div className="col-span-6">
+                            {tenantProduct ? (
+                                <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all h-full">
                                             <div className="flex items-center justify-between mb-1">
                                                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Your Retail Price</div>
                                                 {!editingPrice && (
@@ -769,19 +770,20 @@ export default function ProductDetail() {
                                                     </div>
                                                 </div>
                                             )}
-                                        </div>
-                                    ) : (
-                                        <div className="p-5 border border-dashed border-border rounded-lg bg-muted/30 flex items-center justify-center">
-                                            <p className="text-sm text-muted-foreground text-center">
-                                                Enable this product to set custom pricing
-                                            </p>
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="bg-white rounded-2xl shadow-sm border-2 border-dashed border-[#E5E7EB] p-6 flex items-center justify-center h-full">
+                                    <p className="text-sm text-[#6B7280] text-center">
+                                        Enable this product to set custom pricing
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
-                            {/* Forms Section */}
-                            <div>
+                    {/* Forms Section */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
+                        <div>
                                 <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Forms</h3>
                                 {templates.length === 0 ? (
                                     <div className="p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl text-center bg-[#F9FAFB]/50">
