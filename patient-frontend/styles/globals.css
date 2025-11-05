@@ -62,3 +62,17 @@ input[type="number"] {
 .animate-slide-in-right {
   animation: slide-in-right 0.3s ease-out;
 }
+
+/* BMI Calculator animation */
+@keyframes bmi-expand {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.animate-bmi-expand {
+  animation: bmi-expand 1s ease-out forwards;
+}

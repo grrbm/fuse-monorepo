@@ -61,6 +61,7 @@ class QuestionService {
     async createQuestion(stepId: string, questionData: {
         questionText: string;
         answerType: string;
+        questionSubtype?: string | null;
         isRequired?: boolean;
         placeholder?: string;
         helpText?: string;
@@ -100,6 +101,7 @@ class QuestionService {
         const question = await Question.create({
             questionText: questionData.questionText,
             answerType: questionData.answerType,
+            questionSubtype: questionData.questionSubtype || null,
             isRequired: questionData.isRequired || false,
             questionOrder: nextQuestionOrder,
             stepId: stepId,
@@ -141,6 +143,7 @@ class QuestionService {
     async updateQuestion(questionId: string, updateData: {
         questionText?: string;
         answerType?: string;
+        questionSubtype?: string | null;
         isRequired?: boolean;
         placeholder?: string;
         helpText?: string;
@@ -171,6 +174,7 @@ class QuestionService {
             await question.update({
                 ...(updateData.questionText !== undefined && { questionText: updateData.questionText }),
                 ...(updateData.answerType !== undefined && { answerType: updateData.answerType }),
+                ...(updateData.questionSubtype !== undefined && { questionSubtype: updateData.questionSubtype }),
                 ...(updateData.isRequired !== undefined && { isRequired: updateData.isRequired }),
                 ...(updateData.placeholder !== undefined && { placeholder: updateData.placeholder }),
                 ...(updateData.helpText !== undefined && { helpText: updateData.helpText }),

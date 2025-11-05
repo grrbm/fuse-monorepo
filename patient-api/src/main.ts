@@ -6317,7 +6317,7 @@ app.post("/questions", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { stepId, questionText, answerType, isRequired, placeholder, helpText, footerNote, conditionalLogic, conditionalLevel, subQuestionOrder, parentQuestionId, options } = validation.data;
+    const { stepId, questionText, answerType, questionSubtype, isRequired, placeholder, helpText, footerNote, conditionalLogic, conditionalLevel, subQuestionOrder, parentQuestionId, options } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -6325,7 +6325,7 @@ app.post("/questions", authenticateJWT, async (req, res) => {
     // Create question
     const newQuestion = await questionService.createQuestion(
       stepId,
-      { questionText, answerType, isRequired, placeholder, helpText, footerNote, conditionalLogic, conditionalLevel, subQuestionOrder, parentQuestionId, options },
+      { questionText, answerType, questionSubtype, isRequired, placeholder, helpText, footerNote, conditionalLogic, conditionalLevel, subQuestionOrder, parentQuestionId, options },
       currentUser.id
     );
 
@@ -6427,7 +6427,7 @@ app.put("/questions", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { questionId, questionText, answerType, isRequired, placeholder, helpText, footerNote, options } = validation.data;
+    const { questionId, questionText, answerType, questionSubtype, isRequired, placeholder, helpText, footerNote, options } = validation.data;
 
     // Create question service instance
     const questionService = new QuestionService();
@@ -6435,7 +6435,7 @@ app.put("/questions", authenticateJWT, async (req, res) => {
     // Update question
     const updatedQuestion = await questionService.updateQuestion(
       questionId,
-      { questionText, answerType, isRequired, placeholder, helpText, footerNote, options },
+      { questionText, answerType, questionSubtype, isRequired, placeholder, helpText, footerNote, options },
       currentUser.id
     );
 
