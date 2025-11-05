@@ -2103,7 +2103,6 @@ export default function ProductEditor() {
                           )}
                         </button>
                       )}
-                    </div>
                   </div>
                 </div>
               </div>
