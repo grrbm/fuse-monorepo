@@ -3,7 +3,7 @@ import { useRouter } from "next/router"
 import { useTenant } from "@/contexts/TenantContext"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
-import { Loader2, RefreshCcw, Search, Edit3, ExternalLink, Clock, Edit, Layers, Info, GripVertical, Save } from "lucide-react"
+import { Loader2, RefreshCcw, Search, Edit3, ExternalLink, Clock, Edit, Layers, Info, GripVertical, Save, Plus, X, Trash2 } from "lucide-react"
 import { useTemplates } from "@/hooks/useTemplates"
 import { QuestionnaireEditor } from "./QuestionnaireEditor"
 import { useQuestionnaires } from "@/hooks/useQuestionnaires"
@@ -931,6 +931,15 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
     icon: string
   }
 
+  interface GlobalStructure {
+    id: string
+    name: string
+    description?: string
+    sections: FormSection[]
+    createdAt?: string
+    isDefault?: boolean
+  }
+
   const DEFAULT_SECTIONS: FormSection[] = [
     {
       id: 'product',
@@ -970,9 +979,62 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
     }
   ]
 
+  const [structures, setStructures] = useState<GlobalStructure[]>([
+    {
+      id: '1',
+      name: 'Default Flow',
+      description: 'Standard questionnaire flow for all products',
+      sections: DEFAULT_SECTIONS,
+      isDefault: true
+    }
+  ])
+  const [showModal, setShowModal] = useState(false)
+  const [editingStructure, setEditingStructure] = useState<GlobalStructure | null>(null)
   const [sections, setSections] = useState<FormSection[]>(DEFAULT_SECTIONS)
+  const [structureName, setStructureName] = useState('')
+  const [structureDescription, setStructureDescription] = useState('')
   const [saving, setSaving] = useState(false)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+
+  const handleAddNew = () => {
+    setEditingStructure(null)
+    setSections(DEFAULT_SECTIONS)
+    setStructureName('')
+    setStructureDescription('')
+    setShowModal(true)
+  }
+
+  const handleEdit = (structure: GlobalStructure) => {
+    setEditingStructure(structure)
+    setSections(structure.sections)
+    setStructureName(structure.name)
+    setStructureDescription(structure.description || '')
+    setShowModal(true)
+  }
+
+  const handleSaveStructure = () => {
+    const newStructure: GlobalStructure = {
+      id: editingStructure?.id || Date.now().toString(),
+      name: structureName || 'Untitled Structure',
+      description: structureDescription,
+      sections: sections.map((s, idx) => ({ ...s, order: idx + 1 })),
+      createdAt: editingStructure?.createdAt || new Date().toISOString()
+    }
+
+    if (editingStructure) {
+      setStructures(structures.map(s => s.id === editingStructure.id ? newStructure : s))
+    } else {
+      setStructures([...structures, newStructure])
+    }
+
+    setShowModal(false)
+  }
+
+  const handleDelete = (id: string) => {
+    if (confirm('Are you sure you want to delete this structure?')) {
+      setStructures(structures.filter(s => s.id !== id))
+    }
+  }
 
   const handleDragStart = (index: number) => {
     setDraggedIndex(index)
@@ -1001,50 +1063,153 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
   }
 
   return (
-    <div className="space-y-6">
-      {/* Info Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
-        <div className="flex gap-3">
-          <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+    <>
+      <div className="space-y-6">
+        {/* Header with Add New Button */}
+        <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-blue-900 mb-2">How Form Structure Works</h3>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• <strong>Product Questions</strong>: Specific to each individual product you create</li>
-              <li>• <strong>Category Questions</strong>: Shared across all products in a category (can have multiple variants)</li>
-              <li>• <strong>Create Account</strong>: Global patient information collection (auto-injected)</li>
-              <li>• <strong>Checkout</strong>: Payment and shipping (auto-injected by system)</li>
-            </ul>
-            <p className="mt-3 text-sm text-blue-700">
-              Drag sections to reorder them. This structure applies globally to all products.
-            </p>
+            <h2 className="text-2xl font-semibold text-[#1F2937]">Global Form Structures</h2>
+            <p className="text-sm text-[#6B7280] mt-1">Create and manage reusable form flows</p>
           </div>
+          <button
+            onClick={handleAddNew}
+            className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#10B981] hover:bg-[#059669] text-white font-medium shadow-sm transition-all"
+          >
+            <Plus className="h-5 w-5" />
+            Add New Structure
+          </button>
+        </div>
+
+        {/* Structures List */}
+        <div className="space-y-4">
+          {structures.map((structure) => (
+            <div key={structure.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-xl font-semibold text-[#1F2937]">{structure.name}</h3>
+                      {structure.isDefault && (
+                        <span className="px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-full text-xs font-medium">
+                          Default
+                        </span>
+                      )}
+                    </div>
+                    {structure.description && (
+                      <p className="text-sm text-[#6B7280]">{structure.description}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleEdit(structure)}
+                      className="px-4 py-2 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] text-sm font-medium transition-all"
+                    >
+                      <Edit className="h-4 w-4 inline mr-1.5" />
+                      Edit
+                    </button>
+                    {!structure.isDefault && (
+                      <button
+                        onClick={() => handleDelete(structure.id)}
+                        className="px-4 py-2 rounded-full border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium transition-all"
+                      >
+                        <Trash2 className="h-4 w-4 inline mr-1.5" />
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Form Flow Preview */}
+                <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
+                  <p className="text-xs font-medium text-[#6B7280] mb-3 uppercase tracking-wide">Form Flow</p>
+                  <div className="flex items-center gap-3 overflow-x-auto">
+                    {structure.sections
+                      .filter(s => s.enabled)
+                      .sort((a, b) => a.order - b.order)
+                      .map((section, index, array) => (
+                        <div key={section.id} className="flex items-center gap-3 flex-shrink-0">
+                          <div className="flex flex-col items-center">
+                            <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center text-2xl border border-[#E5E7EB] shadow-sm">
+                              {section.icon}
+                            </div>
+                            <p className="text-xs font-medium text-[#4B5563] mt-2 text-center max-w-[100px]">
+                              {section.label}
+                            </p>
+                          </div>
+                          {index < array.length - 1 && (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-[#9CA3AF] flex-shrink-0">
+                              <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Form Sections */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
-        <div className="p-6 border-b border-[#E5E7EB]">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-[#1F2937]">Form Sections</h2>
-            <button
-              onClick={() => alert('Save functionality coming soon')}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? (
-                <>
-                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Save Structure
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+      {/* Modal for Creating/Editing Structure */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
+            <div className="sticky top-0 bg-white border-b border-[#E5E7EB] p-6 z-10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold text-[#1F2937]">
+                    {editingStructure ? 'Edit' : 'Create'} Form Structure
+                  </h2>
+                  <p className="text-sm text-[#6B7280] mt-1">Define the order and flow of your form sections</p>
+                </div>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="p-2 rounded-full hover:bg-[#F3F4F6] transition-colors"
+                >
+                  <X className="h-5 w-5 text-[#6B7280]" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Structure Name and Description */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#4B5563] mb-2">Structure Name *</label>
+                  <input
+                    type="text"
+                    value={structureName}
+                    onChange={(e) => setStructureName(e.target.value)}
+                    placeholder="e.g., Weight Loss Flow, Standard Flow"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:border-[#4FA59C] transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#4B5563] mb-2">Description</label>
+                  <textarea
+                    value={structureDescription}
+                    onChange={(e) => setStructureDescription(e.target.value)}
+                    placeholder="Describe when to use this structure..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:border-[#4FA59C] transition-all resize-none"
+                    rows={2}
+                  />
+                </div>
+              </div>
+
+              {/* Info Banner */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex gap-2">
+                  <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-blue-700">
+                    Drag sections to reorder them. Toggle switches to enable/disable. Account and Checkout sections cannot be disabled.
+                  </p>
+                </div>
+              </div>
+
+              {/* Form Sections */}
+              <div>
+                <h3 className="text-lg font-semibold text-[#1F2937] mb-3">Form Sections</h3>
 
         <div className="p-6 space-y-3">
           {sections.map((section, index) => (
@@ -1113,65 +1278,29 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Preview Flow */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
-        <div className="p-6 border-b border-[#E5E7EB]">
-          <h2 className="text-xl font-semibold text-[#1F2937]">Form Flow Preview</h2>
-          <p className="text-sm text-[#6B7280] mt-1">How patients will experience your forms</p>
-        </div>
-        <div className="p-6">
-          <div className="flex items-center gap-4">
-            {sections
-              .filter(s => s.enabled)
-              .map((section, index) => (
-                <div key={section.id} className="flex items-center gap-4">
-                  <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 bg-[#F3F4F6] rounded-xl flex items-center justify-center text-3xl border-2 border-[#E5E7EB]">
-                      {section.icon}
-                    </div>
-                    <p className="text-xs font-medium text-[#4B5563] mt-2 text-center max-w-[80px]">
-                      {section.label}
-                    </p>
-                  </div>
-                  {index < sections.filter(s => s.enabled).length - 1 && (
-                    <div className="flex-shrink-0">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-[#9CA3AF]">
-                        <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                  )}
                 </div>
-              ))}
-          </div>
-        </div>
-      </div>
+              </div>
 
-      {/* Help Section */}
-      <div className="bg-gradient-to-br from-[#E0F2F1] to-[#F0F9FF] rounded-2xl p-6 border border-[#B2DFDB]">
-        <h3 className="font-semibold text-[#1F2937] mb-3">💡 Understanding Form Sections</h3>
-        <div className="space-y-3 text-sm text-[#4B5563]">
-          <div>
-            <span className="font-semibold text-[#1F2937]">📦 Product Questions:</span> These are unique to each product. 
-            When you create a product, you build its specific questions (e.g., "What dosage of NAD+ are you interested in?").
-          </div>
-          <div>
-            <span className="font-semibold text-[#1F2937]">📋 Standardized Category Questions:</span> These apply to ALL products in a category. 
-            For example, all "weight_loss" products can share questions like "What is your current weight?". 
-            <strong> Can have multiple variants (Variant 1, Variant 2) for different question flows.</strong>
-          </div>
-          <div>
-            <span className="font-semibold text-[#1F2937]">👤 Create Account:</span> Global section that collects patient information. 
-            Same for all products. Cannot be disabled.
-          </div>
-          <div>
-            <span className="font-semibold text-[#1F2937]">💳 Payment & Checkout:</span> System-generated checkout flow. 
-            Cannot be disabled or modified.
+              {/* Save/Cancel Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] font-medium transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveStructure}
+                  disabled={!structureName.trim()}
+                  className="px-6 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {editingStructure ? 'Update' : 'Create'} Structure
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   )
 }
