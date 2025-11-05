@@ -798,10 +798,11 @@ export default function ProductDetail() {
                                             
                                             return (
                                                 <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
-                                                    {/* Structure Header */}
+                                                    {/* Structure Header with Inline Form Flow */}
                                                     <div className="p-5 border-b border-[#E5E7EB] bg-gradient-to-r from-[#F9FAFB] to-white">
-                                                        <div className="flex items-start justify-between">
-                                                            <div className="flex-1">
+                                                        <div className="flex items-center justify-between gap-6">
+                                                            {/* Left: Name and Type */}
+                                                            <div className="flex-shrink-0">
                                                                 <h4 className="text-lg font-semibold text-[#1F2937] mb-1">
                                                                     {(t as any)._structureName || t.title}
                                                                 </h4>
@@ -811,37 +812,34 @@ export default function ProductDetail() {
                                                                      'Standard Form'}
                                                                 </p>
                                                             </div>
+
+                                                            {/* Right: Form Flow Preview (Inline) */}
+                                                            {structure?.sections && (
+                                                                <div className="flex items-center gap-2 overflow-x-auto">
+                                                                    {structure.sections
+                                                                        .filter((s: any) => s.enabled)
+                                                                        .sort((a: any, b: any) => a.order - b.order)
+                                                                        .map((section: any, idx: number, arr: any[]) => (
+                                                                            <div key={section.id} className="flex items-center gap-2 flex-shrink-0">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-lg border border-[#E5E7EB]">
+                                                                                        {section.icon}
+                                                                                    </div>
+                                                                                    <span className="text-[10px] font-medium text-[#6B7280] max-w-[60px] leading-tight">
+                                                                                        {section.label}
+                                                                                    </span>
+                                                                                </div>
+                                                                                {idx < arr.length - 1 && (
+                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-[#D1D5DB] flex-shrink-0">
+                                                                                        <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                                                    </svg>
+                                                                                )}
+                                                                            </div>
+                                                                        ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
-
-                                                    {/* Form Flow Preview */}
-                                                    {structure?.sections && (
-                                                        <div className="px-5 py-4 bg-[#FAFBFC] border-b border-[#E5E7EB]">
-                                                            <p className="text-xs font-medium text-[#9CA3AF] mb-3 uppercase tracking-wide">Form Flow</p>
-                                                            <div className="flex items-center gap-3 overflow-x-auto pb-2">
-                                                                {structure.sections
-                                                                    .filter((s: any) => s.enabled)
-                                                                    .sort((a: any, b: any) => a.order - b.order)
-                                                                    .map((section: any, idx: number, arr: any[]) => (
-                                                                        <div key={section.id} className="flex items-center gap-3 flex-shrink-0">
-                                                                            <div className="flex flex-col items-center">
-                                                                                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl border-2 border-[#E5E7EB] shadow-sm">
-                                                                                    {section.icon}
-                                                                                </div>
-                                                                                <p className="text-[10px] font-medium text-[#6B7280] mt-2 text-center max-w-[80px] leading-tight">
-                                                                                    {section.label}
-                                                                                </p>
-                                                                            </div>
-                                                                            {idx < arr.length - 1 && (
-                                                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#D1D5DB] flex-shrink-0 mb-6">
-                                                                                    <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                                                                </svg>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
 
                                                     {/* Variants */}
                                                     <div className="p-5 space-y-3">
