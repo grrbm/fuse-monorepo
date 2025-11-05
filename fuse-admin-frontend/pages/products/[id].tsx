@@ -204,9 +204,13 @@ export default function ProductDetail() {
                 const productData = await productRes.json()
                 const productCategory = productData?.data?.category || productData?.data?.categories?.[0] || null
 
-                // Fetch tenant products, templates, and forms in parallel
-                const [tpRes, productFormsRes, standardizedFormsRes, tpfRes, ordersRes] = await Promise.all([
+                // Fetch global structures, product forms, standardized forms, and tenant data
+                const [tpRes, globalStructuresRes, productFormsRes, standardizedFormsRes, tpfRes, ordersRes] = await Promise.all([
                     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    // Get global form structures
+                    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/global-form-structures`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
                     // Get product-specific questionnaires
@@ -232,24 +236,64 @@ export default function ProductDetail() {
                     setTenantProduct(tenantProd || null)
                 }
 
-                // Combine product forms and standardized forms
-                const allTemplates = []
+                // Process global structures and map forms to them
+                let displayTemplates = []
                 
-                // Add product-specific forms
-                if (productFormsRes.ok) {
-                    const data = await productFormsRes.json()
-                    const productForms = Array.isArray(data?.data) ? data.data : []
-                    allTemplates.push(...productForms)
+                if (globalStructuresRes.ok) {
+                    const structuresData = await globalStructuresRes.json()
+                    const globalStructures = Array.isArray(structuresData?.data) ? structuresData.data : []
+                    
+                    // Get product and standardized forms
+                    let productForms: any[] = []
+                    let standardizedForms: any[] = []
+                    
+                    if (productFormsRes.ok) {
+                        const data = await productFormsRes.json()
+                        productForms = Array.isArray(data?.data) ? data.data : []
+                    }
+                    
+                    if (standardizedFormsRes && standardizedFormsRes.ok) {
+                        const data = await standardizedFormsRes.json()
+                        standardizedForms = Array.isArray(data?.data) ? data.data : []
+                    }
+                    
+                    // For each global structure, create entries with the appropriate forms
+                    for (const structure of globalStructures) {
+                        const enabledSections = structure.sections?.filter((s: any) => s.enabled) || []
+                        
+                        // If structure includes product questions and we have product forms, add them
+                        if (enabledSections.some((s: any) => s.type === 'product_questions') && productForms.length > 0) {
+                            displayTemplates.push(...productForms.map((form: any) => ({
+                                ...form,
+                                _structureName: structure.name,
+                                _structureId: structure.id,
+                                _isProductSpecific: true
+                            })))
+                        }
+                        
+                        // If structure includes category questions and we have standardized forms, add them
+                        if (enabledSections.some((s: any) => s.type === 'category_questions') && standardizedForms.length > 0) {
+                            displayTemplates.push(...standardizedForms.map((form: any) => ({
+                                ...form,
+                                _structureName: structure.name,
+                                _structureId: structure.id,
+                                _isStandardized: true
+                            })))
+                        }
+                    }
+                } else {
+                    // Fallback: show all forms if global structures not available
+                    if (productFormsRes.ok) {
+                        const data = await productFormsRes.json()
+                        displayTemplates.push(...(Array.isArray(data?.data) ? data.data : []))
+                    }
+                    if (standardizedFormsRes && standardizedFormsRes.ok) {
+                        const data = await standardizedFormsRes.json()
+                        displayTemplates.push(...(Array.isArray(data?.data) ? data.data : []))
+                    }
                 }
                 
-                // Add standardized category forms
-                if (standardizedFormsRes && standardizedFormsRes.ok) {
-                    const data = await standardizedFormsRes.json()
-                    const standardizedForms = Array.isArray(data?.data) ? data.data : []
-                    allTemplates.push(...standardizedForms)
-                }
-                
-                setTemplates(allTemplates)
+                setTemplates(displayTemplates)
 
                 // Process enabled forms
                 if (tpfRes.ok) {
@@ -758,6 +802,11 @@ export default function ProductDetail() {
                                                                     <div className="flex-1">
                                                                         <div className="font-medium text-foreground">{t.title}</div>
                                                                         <div className="text-xs text-muted-foreground mt-0.5">
+                                                                            {(t as any)._structureName && (
+                                                                                <span className="inline-flex items-center px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-700 rounded text-xs font-medium mr-2">
+                                                                                    {(t as any)._structureName}
+                                                                                </span>
+                                                                            )}
                                                                             {t.formTemplateType || 'Standard Form'}
                                                                             {variantNum && ` • Variant ${variantNum}`}
                                                                             {isProductSpecific && ' • Product-Specific'}
