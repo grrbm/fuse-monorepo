@@ -26,13 +26,30 @@ export const BMICalculator: React.FC<BMICalculatorProps> = ({
     // State for animated width (starts at 0, animates to target)
     const [animatedWidth, setAnimatedWidth] = React.useState(0);
 
+    // Track if we've done the initial animation
+    const hasAnimatedRef = React.useRef(false);
+
     // Calculate BMI width for animation (0-100%)
     const bmiWidth = React.useMemo(() => {
-        const weight = parseFloat(answers[weightKey] || '0');
-        const feet = parseFloat(answers[feetKey] || '0');
-        const inches = parseFloat(answers[inchesKey] || '0');
-        if (weight && feet >= 0 && inches >= 0) {
+        const weightValue = answers[weightKey];
+        const feetValue = answers[feetKey];
+        const inchesValue = answers[inchesKey];
+
+        // Only proceed if all values exist and are not empty strings
+        if (!weightValue || !feetValue || !inchesValue ||
+            weightValue === '' || feetValue === '' || inchesValue === '') {
+            return 0;
+        }
+
+        const weight = parseFloat(weightValue as string);
+        const feet = parseFloat(feetValue as string);
+        const inches = parseFloat(inchesValue as string);
+
+        // Only calculate if all values are present, valid, and height is meaningful
+        if (weight > 0 && !isNaN(feet) && !isNaN(inches) && feet >= 0 && inches >= 0) {
             const totalInches = feet * 12 + inches;
+            if (totalInches === 0) return 0; // No height = no BMI
+
             const heightInMeters = totalInches * 0.0254;
             const weightInKg = weight * 0.453592;
             const bmi = weightInKg / (heightInMeters * heightInMeters);
@@ -41,15 +58,28 @@ export const BMICalculator: React.FC<BMICalculatorProps> = ({
         return 0;
     }, [answers[weightKey], answers[feetKey], answers[inchesKey], weightKey, feetKey, inchesKey]);
 
-    // Animate from 0 to target width when bmiWidth changes
+    // Animate from 0 to target width on first render with values, then smoothly transition
     React.useEffect(() => {
-        // Reset to 0 first
-        setAnimatedWidth(0);
-        // Then animate to target after a brief delay
-        const timer = setTimeout(() => {
-            setAnimatedWidth(bmiWidth);
-        }, 50);
-        return () => clearTimeout(timer);
+        if (bmiWidth > 0) {
+            if (!hasAnimatedRef.current) {
+                // First time: animate from 0
+                hasAnimatedRef.current = true;
+                setAnimatedWidth(0);
+                // Use requestAnimationFrame to ensure browser paints 0% first
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        setAnimatedWidth(bmiWidth);
+                    });
+                });
+            } else {
+                // Subsequent times: just update directly (CSS transition will handle it)
+                setAnimatedWidth(bmiWidth);
+            }
+        } else {
+            // Reset if BMI goes back to 0
+            hasAnimatedRef.current = false;
+            setAnimatedWidth(0);
+        }
     }, [bmiWidth]);
 
     console.log('🔍 BMI Calculator Debug:', {
@@ -61,6 +91,12 @@ export const BMICalculator: React.FC<BMICalculatorProps> = ({
         feetKey,
         inchesKey,
         answers,
+        weightValue: answers[weightKey],
+        feetValue: answers[feetKey],
+        inchesValue: answers[inchesKey],
+        weightEmpty: answers[weightKey] === '',
+        feetEmpty: answers[feetKey] === '',
+        inchesEmpty: answers[inchesKey] === '',
         bmiWidth,
         animatedWidth,
     });
@@ -116,13 +152,28 @@ export const BMICalculator: React.FC<BMICalculatorProps> = ({
                 </div>
 
                 {/* BMI Result */}
-                {answers[weightKey] && answers[feetKey] && answers[inchesKey] && (() => {
-                    const weight = parseFloat(answers[weightKey] as string);
-                    const feet = parseFloat(answers[feetKey] as string);
-                    const inches = parseFloat(answers[inchesKey] as string);
+                {(() => {
+                    // Check if all fields have actual values (not empty strings or undefined)
+                    const weightValue = answers[weightKey];
+                    const feetValue = answers[feetKey];
+                    const inchesValue = answers[inchesKey];
 
-                    if (weight && feet >= 0 && inches >= 0) {
+                    // Only proceed if all values exist and are not empty strings
+                    if (!weightValue || !feetValue || !inchesValue ||
+                        weightValue === '' || feetValue === '' || inchesValue === '') {
+                        return null;
+                    }
+
+                    const weight = parseFloat(weightValue as string);
+                    const feet = parseFloat(feetValue as string);
+                    const inches = parseFloat(inchesValue as string);
+
+                    // Only calculate if all values are valid numbers and height is meaningful
+                    if (weight > 0 && !isNaN(feet) && !isNaN(inches) && feet >= 0 && inches >= 0) {
                         const totalInches = feet * 12 + inches;
+                        // Require at least some height (total inches > 0)
+                        if (totalInches === 0) return null;
+
                         const heightInMeters = totalInches * 0.0254;
                         const weightInKg = weight * 0.453592;
                         const bmi = weightInKg / (heightInMeters * heightInMeters);
@@ -153,7 +204,6 @@ export const BMICalculator: React.FC<BMICalculatorProps> = ({
 
                                     {/* Animated colored overlay */}
                                     <div
-                                        key={`${weight}-${feet}-${inches}`}
                                         className={`absolute top-0 left-0 h-full rounded-full ${colorClass} transition-all duration-1000 ease-out`}
                                         style={{
                                             width: `${animatedWidth}%`
