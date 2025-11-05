@@ -1336,9 +1336,23 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   };
 
   // Navigate to next step
+  // Helper function to replace variables dynamically based on current state
+  const replaceCurrentVariables = (text: string): string => {
+    if (!text) return text;
+    
+    const variables = {
+      ...getVariablesFromClinic(domainClinic || {}),
+      productName: productName || '',
+      patientName: patientName || '',
+      patientFirstName: patientFirstName || ''
+    };
+    
+    return replaceVariables(text, variables);
+  };
+
   // Create user account after "Create Your Account" step
   const createUserAccount = async () => {
-    // Immediately set patient name from answers
+    // Immediately set patient name from answers (don't modify questionnaire to avoid re-render)
     const firstName = answers['firstName'] || '';
     const lastName = answers['lastName'] || '';
     const fullName = `${firstName} ${lastName}`.trim();
@@ -1346,31 +1360,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     setPatientFirstName(firstName);
     setPatientName(fullName);
     
-    // Re-process questionnaire with updated variables including patientName
-    if (questionnaire) {
-      const variables = {
-        ...getVariablesFromClinic(domainClinic || {}),
-        productName: productName || '',
-        patientName: fullName,
-        patientFirstName: firstName
-      };
-
-      const updatedQuestionnaire = {
-        ...questionnaire,
-        steps: questionnaire.steps?.map((step: any) => ({
-          ...step,
-          title: replaceVariables(step.title || '', variables),
-          description: replaceVariables(step.description || '', variables),
-          questions: step.questions?.map((question: any) => ({
-            ...question,
-            questionText: replaceVariables(question.questionText || '', variables),
-            placeholder: replaceVariables(question.placeholder || '', variables),
-          })),
-        }))
-      };
-
-      setQuestionnaire(updatedQuestionnaire);
-    }
+    console.log('👤 Set patient variables:', { firstName, fullName });
     
     // Try to create user account in background (don't block if it fails)
     try {
@@ -1649,8 +1639,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     stepTitle = 'Complete Your Order';
     stepDescription = 'Secure checkout for your weight management treatment';
   } else if (currentStep) {
-    stepTitle = currentStep.title;
-    stepDescription = currentStep.description || '';
+    // Apply dynamic variable replacement for patient variables
+    stepTitle = replaceCurrentVariables(currentStep.title);
+    stepDescription = replaceCurrentVariables(currentStep.description || '');
   }
 
   if (!currentStep && !isProductSelectionStep() && !isCheckoutStep()) {
@@ -2529,27 +2520,36 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
                               return a.questionOrder - b.questionOrder;
                             })
-                            .map((question) => (
-                              <QuestionRenderer
-                                key={question.id}
-                                question={question}
-                                answers={answers}
-                                errors={errors}
-                                theme={theme}
-                                stepRequired={currentStep.required}
-                                onAnswerChange={handleAnswerChange}
-                                onRadioChange={(questionId: string, value: any) => {
-                                  // Clear any existing error on first selection
-                                  setErrors(prev => {
-                                    const next = { ...prev };
-                                    delete next[questionId];
-                                    return next;
-                                  });
-                                  handleRadioChange(questionId, value);
-                                }}
-                                onCheckboxChange={handleCheckboxChange}
-                              />
-                            ))}
+                            .map((question) => {
+                              // Apply dynamic variable replacement to question text
+                              const questionWithReplacedVars = {
+                                ...question,
+                                questionText: replaceCurrentVariables(question.questionText || ''),
+                                placeholder: replaceCurrentVariables(question.placeholder || '')
+                              };
+                              
+                              return (
+                                <QuestionRenderer
+                                  key={question.id}
+                                  question={questionWithReplacedVars}
+                                  answers={answers}
+                                  errors={errors}
+                                  theme={theme}
+                                  stepRequired={currentStep.required}
+                                  onAnswerChange={handleAnswerChange}
+                                  onRadioChange={(questionId: string, value: any) => {
+                                    // Clear any existing error on first selection
+                                    setErrors(prev => {
+                                      const next = { ...prev };
+                                      delete next[questionId];
+                                      return next;
+                                    });
+                                    handleRadioChange(questionId, value);
+                                  }}
+                                  onCheckboxChange={handleCheckboxChange}
+                                />
+                              );
+                            })}
                         </div>
                       ) : (
                         // Informational steps (like Welcome)
