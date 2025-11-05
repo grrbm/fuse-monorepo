@@ -145,7 +145,9 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
                             treatment: {
                                 id: product.id,
                                 name: product.name,
-                                category: product.category || null,
+                                category: Array.isArray(product.categories) && product.categories.length > 0
+                                    ? product.categories[0]
+                                    : product.category || null,
                                 treatmentLogo: product.imageUrl,
                                 active: product.isActive,
                             },
@@ -159,7 +161,9 @@ export function useTemplates(baseUrl: string): UseTemplatesResult {
                             treatment: {
                                 id: product.id,
                                 name: product.name,
-                                category: product.category || null,
+                                category: Array.isArray(product.categories) && product.categories.length > 0
+                                    ? product.categories[0]
+                                    : product.category || null,
                                 treatmentLogo: product.imageUrl,
                                 active: product.isActive,
                             },

@@ -22,7 +22,7 @@ interface Product {
     price: number
     description?: string
     pharmacyProductId?: string
-    dosage?: string
+    placeholderSig?: string
     imageUrl?: string | null
     activeIngredients?: string[]
     active: boolean
@@ -323,8 +323,8 @@ export default function ProductDetail() {
                         <div>
                             <h1 className="text-2xl font-semibold text-gray-900 mb-1">{product?.name}</h1>
                             <p className="text-sm text-gray-500">{product?.description}</p>
-                            {product?.dosage && (
-                                <p className="text-sm text-gray-600 mt-1">Dosage: {product.dosage}</p>
+                            {product?.placeholderSig && (
+                                <p className="text-sm text-gray-600 mt-1">Placeholder Sig: {product.placeholderSig}</p>
                             )}
                         </div>
                         {product && getStatusBadge(product.active)}
@@ -527,7 +527,7 @@ export default function ProductDetail() {
                                 </div>
                                 <div>
                                     <span className="text-gray-500">Default Dosage:</span>
-                                    <p className="font-medium text-gray-900">{product?.dosage || 'N/A'}</p>
+                                    <p className="font-medium text-gray-900">{product?.placeholderSig || 'N/A'}</p>
                                 </div>
                                 {product?.activeIngredients && product.activeIngredients.length > 0 && (
                                     <div className="col-span-2">

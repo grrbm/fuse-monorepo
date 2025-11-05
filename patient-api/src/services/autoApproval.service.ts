@@ -7,7 +7,7 @@ import { Op } from 'sequelize';
 
 interface AutoApprovalCriteria {
     isStandardTreatment: boolean;
-    withinDosageLimits: boolean;
+    withinPlaceholderSigLimits: boolean;
     noContraindications: boolean;
     treatmentApproved: boolean;
     patientAgeValid: boolean;
@@ -157,14 +157,14 @@ class AutoApprovalService {
         // Check questionnaire for contraindications
         const noContraindications = this.checkNoContraindications(order.questionnaireAnswers);
 
-        // For now, we'll assume treatments are within dosage limits and approved
+        // For now, we'll assume treatments are within Placeholder Sig limits and approved
         // In production, you'd check against a database of approved treatments
-        const withinDosageLimits = true;
+        const withinPlaceholderSigLimits = true;
         const treatmentApproved = isStandardTreatment;
 
         return {
             isStandardTreatment,
-            withinDosageLimits,
+            withinPlaceholderSigLimits,
             noContraindications,
             treatmentApproved,
             patientAgeValid,
@@ -175,7 +175,7 @@ class AutoApprovalService {
     private isEligibleForAutoApproval(criteria: AutoApprovalCriteria): boolean {
         return (
             criteria.isStandardTreatment &&
-            criteria.withinDosageLimits &&
+            criteria.withinPlaceholderSigLimits &&
             criteria.noContraindications &&
             criteria.treatmentApproved &&
             criteria.patientAgeValid &&
@@ -234,7 +234,7 @@ class AutoApprovalService {
     private generateApprovalReason(criteria: AutoApprovalCriteria): string {
         const reasons = [
             'Standard treatment protocol',
-            'Within approved dosage limits',
+            'Within approved Placeholder Sig limits',
             'No contraindications detected',
             'Patient age within safe range',
             'All required fields validated',
@@ -247,7 +247,7 @@ class AutoApprovalService {
         const reasons: string[] = [];
 
         if (!criteria.isStandardTreatment) reasons.push('Non-standard treatment');
-        if (!criteria.withinDosageLimits) reasons.push('Dosage exceeds limits');
+        if (!criteria.withinPlaceholderSigLimits) reasons.push('Placeholder Sig exceeds limits');
         if (!criteria.noContraindications) reasons.push('Contraindications detected');
         if (!criteria.treatmentApproved) reasons.push('Treatment not pre-approved');
         if (!criteria.patientAgeValid) reasons.push('Patient age out of range');

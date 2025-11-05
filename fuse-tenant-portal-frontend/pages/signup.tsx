@@ -3,8 +3,6 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Eye, EyeOff, Building2 } from 'lucide-react'
 
 export default function SignUp() {
@@ -51,34 +49,35 @@ export default function SignUp() {
         <meta name="description" content="Create a tenant management account" />
       </Head>
       
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-6">
+      <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-8">
           {/* Logo/Header */}
           <div className="text-center">
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-                <Building2 className="h-6 w-6 text-primary-foreground" />
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#4FA59C] to-[#3d8580] rounded-2xl flex items-center justify-center shadow-lg">
+                <Building2 className="h-8 w-8 text-white" />
               </div>
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Tenant Portal</h1>
-            <p className="text-muted-foreground">Create your tenant management account</p>
+            <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Tenant Portal</h1>
+            <p className="text-[#6B7280]">Create your tenant management account</p>
           </div>
 
           {/* Sign Up Form */}
-          <Card className="bg-card border-border">
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-center">Sign Up</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+            <div className="p-8 pb-6 border-b border-[#E5E7EB]">
+              <h2 className="text-xl font-semibold text-[#1F2937] text-center">Get Started</h2>
+              <p className="text-sm text-[#6B7280] text-center mt-1">Fill in your information to create an account</p>
+            </div>
+            <div className="p-8">
+              <form onSubmit={handleSubmit} className="space-y-5">
                 {error && (
-                  <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                  <div className="p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-2xl shadow-sm">
                     {error}
                   </div>
                 )}
                 
                 <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium text-foreground">
+                  <label htmlFor="name" className="text-sm font-medium text-[#4B5563] block">
                     Full Name
                   </label>
                   <input
@@ -86,29 +85,29 @@ export default function SignUp() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full px-4 py-3 border border-[#E5E7EB] rounded-xl bg-[#F9FAFB] text-[#1F2937] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                     placeholder="John Doe"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium text-foreground">
-                    Email
+                  <label htmlFor="email" className="text-sm font-medium text-[#4B5563] block">
+                    Email Address
                   </label>
                   <input
                     id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full px-4 py-3 border border-[#E5E7EB] rounded-xl bg-[#F9FAFB] text-[#1F2937] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                     placeholder="tenant@example.com"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="organization" className="text-sm font-medium text-foreground">
+                  <label htmlFor="organization" className="text-sm font-medium text-[#4B5563] block">
                     Organization Name
                   </label>
                   <input
@@ -116,14 +115,14 @@ export default function SignUp() {
                     type="text"
                     value={organization}
                     onChange={(e) => setOrganization(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full px-4 py-3 border border-[#E5E7EB] rounded-xl bg-[#F9FAFB] text-[#1F2937] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                     placeholder="Healthcare Management Corp"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="password" className="text-sm font-medium text-foreground">
+                  <label htmlFor="password" className="text-sm font-medium text-[#4B5563] block">
                     Password
                   </label>
                   <div className="relative">
@@ -132,26 +131,26 @@ export default function SignUp() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-3 py-2 pr-10 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="w-full px-4 py-3 pr-12 border border-[#E5E7EB] rounded-xl bg-[#F9FAFB] text-[#1F2937] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                       placeholder="Enter your password"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground"
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#6B7280] hover:text-[#1F2937] transition-colors"
                     >
                       {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
+                        <EyeOff className="h-5 w-5" />
                       ) : (
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-5 w-5" />
                       )}
                     </button>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">
+                  <label htmlFor="confirmPassword" className="text-sm font-medium text-[#4B5563] block">
                     Confirm Password
                   </label>
                   <div className="relative">
@@ -160,8 +159,10 @@ export default function SignUp() {
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`w-full px-3 py-2 pr-10 border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring ${
-                        passwordsMatch ? 'border-input' : 'border-red-500'
+                      className={`w-full px-4 py-3 pr-12 border rounded-xl bg-[#F9FAFB] text-[#1F2937] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-all ${
+                        passwordsMatch 
+                          ? 'border-[#E5E7EB] focus:ring-[#4FA59C] focus:border-[#4FA59C]' 
+                          : 'border-red-300 focus:ring-red-500 focus:border-red-500'
                       }`}
                       placeholder="Confirm your password"
                       required
@@ -169,12 +170,12 @@ export default function SignUp() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground"
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#6B7280] hover:text-[#1F2937] transition-colors"
                     >
                       {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4" />
+                        <EyeOff className="h-5 w-5" />
                       ) : (
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-5 w-5" />
                       )}
                     </button>
                   </div>
@@ -183,25 +184,25 @@ export default function SignUp() {
                   )}
                 </div>
 
-                <Button
+                <button
                   type="submit"
-                  className="w-full"
                   disabled={isLoading || !name || !email || !organization || !password || !confirmPassword || !passwordsMatch}
+                  className="w-full px-6 py-3 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm hover:shadow-md transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? 'Creating account...' : 'Sign Up'}
-                </Button>
+                </button>
               </form>
 
               <div className="mt-6 text-center">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-[#6B7280]">
                   Already have an account?{' '}
-                  <Link href="/signin" className="text-primary hover:underline">
+                  <Link href="/signin" className="text-[#4FA59C] hover:text-[#478F87] font-medium transition-colors">
                     Sign in
                   </Link>
                 </p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </>

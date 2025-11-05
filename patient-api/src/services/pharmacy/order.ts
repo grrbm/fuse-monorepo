@@ -214,7 +214,7 @@ class OrderService {
       productPharmacyProductId: item.product?.pharmacyProductId,
       productId: item.productId,
       productName: item.product?.name,
-      dosage: item.dosage || item.product?.dosage
+      placeholderSig: item.placeholderSig || item.product?.placeholderSig
     })));
 
     // Get pharmacyProductId from OrderItem first, fallback to Product
@@ -236,7 +236,7 @@ class OrderService {
       quantity: item.quantity,
       refills: 2, // Default refills - could be made configurable
       days_supply: 30, // Default days supply - could be made configurable
-      sig: item.dosage || item.product?.dosage || "Use as directed",
+      sig: item.placeholderSig || item.product?.placeholderSig || "Use as directed",
       medical_necessity: item.notes || "Prescribed treatment as part of patient care plan."
     }));
 

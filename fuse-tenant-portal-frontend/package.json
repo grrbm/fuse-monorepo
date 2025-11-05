@@ -70,12 +70,13 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "tailwindcss": "^3.3.0",
     "@types/node": "catalog:",
     "@types/react": "catalog:react18",
     "@types/react-dom": "catalog:react18",
     "dotenv-cli": "catalog:",
+    "eslint-config-next": "16.0.1",
     "postcss": "catalog:",
+    "tailwindcss": "^3.3.0",
     "typescript": "catalog:"
   }
 }

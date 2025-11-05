@@ -3,8 +3,6 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Eye, EyeOff, Building2 } from 'lucide-react'
 
 export default function SignIn() {
@@ -41,49 +39,50 @@ export default function SignIn() {
         <meta name="description" content="Sign in to tenant management portal" />
       </Head>
       
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-6">
+      <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-8">
           {/* Logo/Header */}
           <div className="text-center">
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-                <Building2 className="h-6 w-6 text-primary-foreground" />
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#4FA59C] to-[#3d8580] rounded-2xl flex items-center justify-center shadow-lg">
+                <Building2 className="h-8 w-8 text-white" />
               </div>
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Tenant Portal</h1>
-            <p className="text-muted-foreground">Sign in to manage your clinics</p>
+            <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Tenant Portal</h1>
+            <p className="text-[#6B7280]">Sign in to manage your clinics</p>
           </div>
 
           {/* Sign In Form */}
-          <Card className="bg-card border-border">
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-center">Sign In</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+            <div className="p-8 pb-6 border-b border-[#E5E7EB]">
+              <h2 className="text-xl font-semibold text-[#1F2937] text-center">Welcome Back</h2>
+              <p className="text-sm text-[#6B7280] text-center mt-1">Enter your credentials to continue</p>
+            </div>
+            <div className="p-8">
+              <form onSubmit={handleSubmit} className="space-y-5">
                 {error && (
-                  <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                  <div className="p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-2xl shadow-sm">
                     {error}
                   </div>
                 )}
                 
                 <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium text-foreground">
-                    Email
+                  <label htmlFor="email" className="text-sm font-medium text-[#4B5563] block">
+                    Email Address
                   </label>
                   <input
                     id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full px-4 py-3 border border-[#E5E7EB] rounded-xl bg-[#F9FAFB] text-[#1F2937] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                     placeholder="tenant@example.com"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="password" className="text-sm font-medium text-foreground">
+                  <label htmlFor="password" className="text-sm font-medium text-[#4B5563] block">
                     Password
                   </label>
                   <div className="relative">
@@ -92,56 +91,43 @@ export default function SignIn() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-3 py-2 pr-10 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="w-full px-4 py-3 pr-12 border border-[#E5E7EB] rounded-xl bg-[#F9FAFB] text-[#1F2937] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                       placeholder="Enter your password"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground"
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#6B7280] hover:text-[#1F2937] transition-colors"
                     >
                       {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
+                        <EyeOff className="h-5 w-5" />
                       ) : (
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-5 w-5" />
                       )}
                     </button>
                   </div>
                 </div>
 
-                <Button
+                <button
                   type="submit"
-                  className="w-full"
                   disabled={isLoading || !email || !password}
+                  className="w-full px-6 py-3 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm hover:shadow-md transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? 'Signing in...' : 'Sign In'}
-                </Button>
+                </button>
               </form>
 
               <div className="mt-6 text-center">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-[#6B7280]">
                   Don't have an account?{' '}
-                  <Link href="/signup" className="text-primary hover:underline">
+                  <Link href="/signup" className="text-[#4FA59C] hover:text-[#478F87] font-medium transition-colors">
                     Sign up
                   </Link>
                 </p>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Demo Credentials */}
-          <Card className="bg-muted/50 border-border">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <h3 className="text-sm font-medium text-foreground mb-2">Demo Credentials</h3>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>Email: tenant@demo.com</p>
-                  <p>Password: demo123</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </>

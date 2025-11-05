@@ -27,14 +27,14 @@ interface OrderItem {
     quantity: number
     unitPrice: number
     totalPrice: number
-    dosage?: string
+    placeholderSig?: string
     notes?: string
     pharmacyProductId?: string
     product: {
         id: string
         name: string
         pharmacyProductId?: string
-        dosage?: string
+        placeholderSig?: string
     }
 }
 
@@ -359,8 +359,8 @@ export default function OrderDetail() {
                                                 <div key={item.id} className="flex justify-between items-start p-4 border rounded-lg">
                                                     <div className="flex-1">
                                                         <h4 className="font-semibold">{item.product?.name || 'N/A'}</h4>
-                                                        {item.dosage && (
-                                                            <p className="text-sm text-muted-foreground">Dosage: {item.dosage}</p>
+                                                        {item.placeholderSig && (
+                                                            <p className="text-sm text-muted-foreground">Placeholder Sig: {item.placeholderSig}</p>
                                                         )}
                                                         {item.notes && (
                                                             <p className="text-sm text-muted-foreground mt-1">{item.notes}</p>

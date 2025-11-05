@@ -515,11 +515,23 @@ export default function Orders() {
                                                                                                     <div className="text-xs text-muted-foreground mt-1">
                                                                                                         Pharmacy: {formatCurrency(item.pharmacyPrice)} | Brand: {formatCurrency(item.brandPrice)} | Markup: {formatCurrency(itemMarkup)}
                                                                                                     </div>
-                                                                                                    {item.product.category && (
-                                                                                                        <Badge variant="outline" className="text-xs font-normal mt-1">
-                                                                                                            {item.product.category.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                                                                                                        </Badge>
-                                                                                                    )}
+                                                                                                    {(() => {
+                                                                                                        const categories = Array.isArray((item.product as any)?.categories) && (item.product as any).categories.length > 0
+                                                                                                            ? (item.product as any).categories as string[]
+                                                                                                            : item.product.category
+                                                                                                                ? [item.product.category]
+                                                                                                                : []
+                                                                                                        if (categories.length === 0) return null
+                                                                                                        return (
+                                                                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                                                                {categories.map((category) => (
+                                                                                                                    <Badge key={category} variant="outline" className="text-xs font-normal">
+                                                                                                                        {category.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                                                                                                    </Badge>
+                                                                                                                ))}
+                                                                                                            </div>
+                                                                                                        )
+                                                                                                    })()}
                                                                                                 </div>
                                                                                                 <div className="text-right">
                                                                                                     <div className="font-semibold text-foreground">

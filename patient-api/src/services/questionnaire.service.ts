@@ -6,7 +6,7 @@ import Treatment from '../models/Treatment';
 import User from '../models/User';
 import Clinic from '../models/Clinic';
 import Product from '../models/Product';
-import { Transaction } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import { CreateQuestionnaireInput, UpdateQuestionnaireInput } from '@fuse/validators';
 
 class QuestionnaireService {
@@ -80,7 +80,13 @@ class QuestionnaireService {
 
     async listTemplatesByProduct(productId: string) {
         return Questionnaire.findAll({
-            where: { isTemplate: true, productId },
+            where: {
+                productId,
+                [Op.or]: [
+                    { isTemplate: false },
+                    { isTemplate: true, formTemplateType: 'normal' },
+                ],
+            },
             include: [
                 {
                     model: QuestionnaireStep,

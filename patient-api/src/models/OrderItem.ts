@@ -53,7 +53,7 @@ export default class OrderItem extends Entity {
     type: DataType.STRING,
     allowNull: true,
   })
-  declare dosage?: string;
+  declare placeholderSig?: string;
 
   @Column({
     type: DataType.TEXT,

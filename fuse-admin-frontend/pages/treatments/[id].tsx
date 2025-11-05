@@ -28,12 +28,12 @@ interface Product {
     name: string
     price: number
     pharmacyProductId?: string
-    dosage?: string
+    placeholderSig?: string
 }
 
 interface TreatmentProduct {
     id: string
-    dosage: string
+    placeholderSig: string
     product: Product
 }
 
@@ -440,9 +440,9 @@ export default function TreatmentDetail() {
                                                                 Pharmacy ID: {product.pharmacyProductId}
                                                             </p>
                                                         )}
-                                                        {product.dosage && (
+                                                        {product.placeholderSig && (
                                                             <p className="text-sm text-muted-foreground">
-                                                                Default Dosage: {product.dosage}
+                                                                Default Placeholder Sig: {product.placeholderSig}
                                                             </p>
                                                         )}
                                                     </div>

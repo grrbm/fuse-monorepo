@@ -46,7 +46,7 @@ export const ProductSelection: React.FC<ProductSelectionProps> = ({
                                         <h3 className="font-semibold text-lg">{product.name}</h3>
                                         <p className="text-gray-600 text-sm mb-2">{product.description}</p>
                                         <p className="text-sm text-gray-500">
-                                            <span className="font-medium">Dosage:</span> {product.dosage}
+                                            <span className="font-medium">Sig:</span> {product.placeholderSig}
                                         </p>
                                         <p className="text-lg font-bold text-primary">${product.price}</p>
                                     </div>

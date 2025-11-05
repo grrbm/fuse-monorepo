@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Loader2, Plus, Edit2, Trash2, Package, DollarSign, Building2, FileText } from "lucide-react"
+import { Loader2, Plus, Package, FileText } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
 import { toast } from "sonner"
@@ -16,9 +16,10 @@ interface Product {
   name: string
   description: string
   price: number
-  dosage: string
+  placeholderSig: string
   activeIngredients: string[]
   category?: string
+  categories?: string[]
   medicationSize?: string
   pharmacyProvider?: string
   pharmacyWholesaleCost?: number
@@ -60,9 +61,9 @@ export default function Products() {
     name: "",
     description: "",
     price: 0,
-    dosage: "",
+    placeholderSig: "",
     activeIngredients: [] as string[],
-    category: "",
+    categories: [] as string[],
     medicationSize: "",
     pharmacyProvider: "",
     pharmacyProductId: "",
@@ -166,7 +167,7 @@ export default function Products() {
       name: "New Product",
       description: "Edit product details below",
       price: 1, // Minimum positive price
-      dosage: "TBD",
+      placeholderSig: "TBD",
       activeIngredients: ["TBD"], // At least one required
       isActive: false, // Start as inactive
     }
@@ -225,9 +226,13 @@ export default function Products() {
       name: product.name,
       description: product.description,
       price: product.price,
-      dosage: product.dosage,
+      placeholderSig: product.placeholderSig,
       activeIngredients: product.activeIngredients || [],
-      category: product.category || "",
+      categories: Array.isArray(product.categories) && product.categories.length > 0
+        ? product.categories
+        : product.category
+          ? [product.category]
+          : [],
       medicationSize: product.medicationSize || "",
       pharmacyProvider: product.pharmacyProvider || "",
       pharmacyProductId: product.pharmacyProductId || "",
@@ -254,7 +259,8 @@ export default function Products() {
         pharmacyProvider: formData.pharmacyProvider || undefined,
         pharmacyProductId: formData.pharmacyProductId || undefined,
         medicationSize: formData.medicationSize || undefined,
-        category: formData.category || undefined,
+        categories: formData.categories,
+        category: formData.categories[0] || undefined,
       }
 
       console.log('📤 Sending product data:', cleanedData)
@@ -337,15 +343,29 @@ export default function Products() {
     }
   }
 
-  const handleUpdateCategory = async (productId: string, newCategory: string, prevCategory?: string) => {
-    if (!token) return
-    // If "No Category" is selected, do nothing and revert UI
-    if (newCategory === "") {
-      setProducts(prev => prev.map(p => p.id === productId ? { ...p, category: prevCategory } : p))
-      return
+  const getProductCategories = (product: Product): string[] => {
+    if (Array.isArray(product.categories) && product.categories.length > 0) {
+      return product.categories
     }
+    return product.category ? [product.category] : []
+  }
+
+  const handleUpdateCategories = async (productId: string, nextCategories: string[]) => {
+    if (!token) return
+
+    const normalized = Array.from(new Set(nextCategories.filter(Boolean)))
+
     // Optimistic update
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, category: newCategory || undefined } : p))
+    setProducts(prev => prev.map(p =>
+      p.id === productId
+        ? {
+            ...p,
+            categories: normalized,
+            category: normalized[0] ?? undefined,
+          }
+        : p
+    ))
+
     try {
       const response = await fetch(`${baseUrl}/products-management/${productId}`, {
         method: "PUT",
@@ -353,18 +373,32 @@ export default function Products() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ category: newCategory === "" ? null : newCategory }),
+        body: JSON.stringify({
+          categories: normalized,
+          category: normalized[0] ?? null,
+        }),
       })
+
       if (!response.ok) {
-        throw new Error('Failed to update category')
+        throw new Error('Failed to update categories')
       }
-      toast.success('Category saved')
+
+      toast.success('Categories saved')
     } catch (error: any) {
-      console.error("❌ Error updating category:", error)
-      toast.error(error.message || 'Failed to update category')
-      // Revert by refetching
+      console.error("❌ Error updating categories:", error)
+      toast.error(error.message || 'Failed to update categories')
       fetchProducts()
     }
+  }
+
+  const toggleProductCategory = async (product: Product, categoryValue: string) => {
+    const current = new Set(getProductCategories(product))
+    if (current.has(categoryValue)) {
+      current.delete(categoryValue)
+    } else {
+      current.add(categoryValue)
+    }
+    await handleUpdateCategories(product.id, Array.from(current))
   }
 
   const handleDeactivateAll = async () => {
@@ -406,52 +440,62 @@ export default function Products() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-[#F9FAFB]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        <main className="flex-1 overflow-y-auto p-8 space-y-8">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-3xl font-semibold text-foreground mb-2">Product Management</h1>
-              <p className="text-muted-foreground">
-                Manage your product catalog, pharmacy pricing, and medication details.
+              <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Product Management</h1>
+              <p className="text-[#6B7280] text-base">
+                Manage your product catalog with our Pharmacy & State Coverage system.
               </p>
             </div>
-            <div className="flex gap-2">
-              <Button variant="destructive" onClick={handleDeactivateAll}>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={handleDeactivateAll}
+                className="rounded-full px-6 border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all"
+              >
                 Deactivate All
               </Button>
-              <Button onClick={handleCreateProduct}>
-                <Plus className="mr-2 h-4 w-4" /> Add Product
+              <Button 
+                onClick={handleCreateProduct}
+                className="rounded-full px-6 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all"
+              >
+                <Plus className="mr-2 h-5 w-5" /> Add Product
               </Button>
             </div>
           </div>
 
           {saveMessage && (
-            <Card className={saveMessage.startsWith('Error:')
-              ? "border-red-500/40 bg-red-500/10"
-              : "border-green-500/40 bg-green-500/10"
-            }>
-              <CardContent className={`p-4 text-sm ${saveMessage.startsWith('Error:')
-                ? 'text-red-700 dark:text-red-400'
-                : 'text-green-700 dark:text-green-400'
-                }`}>
-                {saveMessage}
-              </CardContent>
-            </Card>
+            <div className={`rounded-2xl p-4 ${saveMessage.startsWith('Error:')
+              ? 'bg-red-50 border border-red-200 text-red-700'
+              : 'bg-green-50 border border-green-200 text-green-700'
+            } shadow-sm`}>
+              <p className="text-sm font-medium">{saveMessage}</p>
+            </div>
           )}
 
-          <div className="flex items-center gap-4 border-b border-border">
+          <div className="flex items-center gap-2 bg-white rounded-2xl p-1.5 w-fit shadow-sm border border-[#E5E7EB]">
             <button
               onClick={() => setActiveTab('selected')}
-              className={`px-3 py-2 text-sm border-b-2 transition-colors ${activeTab === 'selected' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
+                activeTab === 'selected' 
+                  ? 'bg-[#4FA59C] text-white shadow-sm' 
+                  : 'text-[#6B7280] hover:bg-[#F3F4F6]'
+              }`}
             >
               Selected Products
             </button>
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-3 py-2 text-sm border-b-2 transition-colors ${activeTab === 'all' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
+                activeTab === 'all' 
+                  ? 'bg-[#4FA59C] text-white shadow-sm' 
+                  : 'text-[#6B7280] hover:bg-[#F3F4F6]'
+              }`}
             >
               All Products
             </button>
@@ -459,11 +503,11 @@ export default function Products() {
 
           <div className="flex gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Filter by Category</label>
+              <label className="text-sm font-medium text-[#4B5563]">Filter by Category</label>
               <select
                 value={selectedCategory || ""}
                 onChange={(e) => setSelectedCategory(e.target.value || null)}
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm text-[#1F2937] shadow-sm hover:border-[#4FA59C] transition-all focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50"
               >
                 <option value="">All Categories</option>
                 {CATEGORY_OPTIONS.map((cat: { value: string; label: string }) => (
@@ -474,11 +518,11 @@ export default function Products() {
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Filter by Pharmacy</label>
+              <label className="text-sm font-medium text-[#4B5563]">Filter by Pharmacy</label>
               <select
                 value={selectedPharmacy || ""}
                 onChange={(e) => setSelectedPharmacy(e.target.value || null)}
-                className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm text-[#1F2937] shadow-sm hover:border-[#4FA59C] transition-all focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50"
               >
                 <option value="">All Pharmacies</option>
                 {pharmacyProviders.map((vendor) => (
@@ -491,122 +535,101 @@ export default function Products() {
           </div>
 
           {loading ? (
-            <div className="flex h-64 items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading products...
+            <div className="flex h-64 items-center justify-center text-[#6B7280]">
+              <Loader2 className="mr-3 h-6 w-6 animate-spin text-[#4FA59C]" /> 
+              <span className="text-base">Loading products...</span>
             </div>
           ) : products.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                <Package className="h-12 w-12 mb-4" />
-                <p>No products found. Create your first product to get started.</p>
-              </CardContent>
-            </Card>
+            <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-16">
+              <div className="flex flex-col items-center justify-center text-[#6B7280]">
+                <div className="bg-[#F3F4F6] rounded-full p-6 mb-4">
+                  <Package className="h-12 w-12 text-[#9CA3AF]" />
+                </div>
+                <p className="text-lg text-[#4B5563]">No products found. Create your first product to get started.</p>
+              </div>
+            </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {products.map((product) => (
-                <Card key={product.id} className={!product.isActive ? "opacity-60" : ""}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg">{product.name}</CardTitle>
-                        <CardDescription className="line-clamp-2 mt-1">{product.description}</CardDescription>
+                <div 
+                  key={product.id} 
+                  className={`bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden transition-all hover:shadow-md hover:border-[#4FA59C] ${!product.isActive ? "opacity-60" : ""}`}
+                >
+                  <div className="p-6 space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-[#1F2937] mb-1 truncate">{product.name}</h3>
+                        <p className="text-sm text-[#6B7280] line-clamp-2">{product.description}</p>
                       </div>
-                      <div className="flex gap-2 ml-2">
-                        {product.isActive ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => router.push(`/products/editor/${product.id}`)}
-                            >
-                              <FileText className="mr-2 h-4 w-4" />
-                              View
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleToggleActive(product)}
-                            >
-                              Deactivate
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => handleToggleActive(product)}
+                      {!product.isActive && (
+                        <span className="px-3 py-1 bg-[#FEF3C7] text-[#92400E] text-xs font-medium rounded-full border border-[#FDE68A] whitespace-nowrap">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Category</label>
+                        <div className="flex flex-wrap gap-2">
+                          {CATEGORY_OPTIONS.filter((c) => c.value).map((cat) => {
+                            const isSelected = getProductCategories(product).includes(cat.value)
+                            return (
+                              <button
+                                key={cat.value}
+                                onClick={() => toggleProductCategory(product, cat.value)}
+                                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                                  isSelected
+                                    ? 'bg-[#E0F2F1] text-[#196459] border-[#99E2D0]'
+                                    : 'bg-[#F9FAFB] text-[#4B5563] border-[#E5E7EB] hover:bg-[#F3F4F6]'
+                                }`}
+                              >
+                                {cat.label}
+                              </button>
+                            )
+                          })}
+                          {getProductCategories(product).length === 0 && (
+                            <span className="text-xs text-[#9CA3AF]">No categories</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-[#F9FAFB] rounded-xl p-3 border border-[#E5E7EB]">
+                          <p className="text-xs font-medium text-[#9CA3AF] mb-1">Medication Size</p>
+                          <p className="text-sm font-semibold text-[#1F2937]">{product.medicationSize || '—'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      {product.isActive ? (
+                        <>
+                          <button
+                            onClick={() => router.push(`/products/editor/${product.id}`)}
+                            className="flex-1 rounded-full px-4 py-2.5 bg-[#4FA59C] text-white text-sm font-medium shadow-sm hover:bg-[#478F87] transition-all flex items-center justify-center gap-2"
                           >
-                            Configure
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteProduct(product.id)}
-                          disabled={!product.isActive}
+                            <FileText className="h-4 w-4" />
+                            Manage
+                          </button>
+                          <button
+                            onClick={() => handleToggleActive(product)}
+                            className="rounded-full px-4 py-2.5 border border-[#E5E7EB] text-[#EF4444] text-sm font-medium hover:bg-[#FEF2F2] transition-all"
+                          >
+                            Deactivate
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleToggleActive(product)}
+                          className="flex-1 rounded-full px-4 py-2.5 bg-[#4FA59C] text-white text-sm font-medium shadow-sm hover:bg-[#478F87] transition-all"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Category</label>
-                      <select
-                        value={product.category || ""}
-                        onChange={(e) => handleUpdateCategory(product.id, e.target.value, product.category)}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="">No Category</option>
-                        {CATEGORY_OPTIONS.filter((c: { value: string }) => c.value !== "").map((cat: { value: string; label: string }) => (
-                          <option key={cat.value} value={cat.value}>{cat.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Dosage:</span>
-                        <span className="font-medium">{product.dosage}</span>
-                      </div>
-
-                      {product.medicationSize && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Size:</span>
-                          <span className="font-medium">{product.medicationSize}</span>
-                        </div>
+                          Configure
+                        </button>
                       )}
-
-                      {product.pharmacyProvider && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Pharmacy:</span>
-                          <span className="font-medium">
-                            {pharmacyProviders.find(v => v.id === product.pharmacyProvider)?.name || product.pharmacyProvider}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Wholesale Cost:</span>
-                        <span className="font-medium text-foreground">${product.price.toFixed(2)}</span>
-                      </div>
                     </div>
-
-                    {product.activeIngredients && product.activeIngredients.length > 0 && (
-                      <div className="text-xs text-muted-foreground">
-                        <strong>Active Ingredients:</strong> {product.activeIngredients.join(", ")}
-                      </div>
-                    )}
-
-                    {!product.isActive && (
-                      <Badge variant="warning" className="w-full justify-center">Inactive</Badge>
-                    )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -614,85 +637,112 @@ export default function Products() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-background rounded-lg shadow-lg">
-            <div className="p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-semibold">{editingProduct ? "Edit Product" : "Create Product"}</h2>
-                <Button variant="outline" onClick={() => setShowModal(false)}>Close</Button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-[#E5E7EB]">
+            <div className="p-8 space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-[#E5E7EB]">
+                <h2 className="text-2xl font-semibold text-[#1F2937]">{editingProduct ? "Edit Product" : "Create Product"}</h2>
+                <button 
+                  onClick={() => setShowModal(false)}
+                  className="rounded-full px-4 py-2 border border-[#E5E7EB] text-[#6B7280] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
+                >
+                  Close
+                </button>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-5 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Product Name *</label>
-                  <Input
+                  <label className="text-sm font-medium text-[#4B5563]">Product Name *</label>
+                  <input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="e.g., Semaglutide 2.5mg"
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Category *</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="">Select category...</option>
-                    {CATEGORY_OPTIONS.map((cat: { value: string; label: string }) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="text-sm font-medium text-[#4B5563]">Categories</label>
+                  <div className="space-y-2 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                    {CATEGORY_OPTIONS.filter((cat) => cat.value).map((cat) => {
+                      const checked = formData.categories.includes(cat.value)
+                      return (
+                        <label key={cat.value} className="flex items-center gap-3 text-sm text-[#1F2937]">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const next = new Set(formData.categories)
+                              if (e.target.checked) {
+                                next.add(cat.value)
+                              } else {
+                                next.delete(cat.value)
+                              }
+                              setFormData({
+                                ...formData,
+                                categories: Array.from(next),
+                              })
+                            }}
+                            className="h-4 w-4 rounded border-[#D1D5DB] text-[#4FA59C] focus:ring-[#4FA59C]"
+                          />
+                          <span>{cat.label}</span>
+                        </label>
+                      )
+                    })}
+                    {formData.categories.length === 0 && (
+                      <p className="text-xs text-[#9CA3AF]">Select one or more categories if applicable.</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium">Description *</label>
+                  <label className="text-sm font-medium text-[#4B5563]">Description *</label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="Detailed product description..."
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm min-h-[80px]"
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] min-h-[100px] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all resize-none"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Dosage *</label>
-                  <Input
-                    value={formData.dosage}
-                    onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
+                  <label className="text-sm font-medium text-[#4B5563]">Placeholder Sig *</label>
+                  <input
+                    value={formData.placeholderSig}
+                    onChange={(e) => setFormData({ ...formData, placeholderSig: e.target.value })}
                     placeholder="e.g., 2.5mg/0.5ml"
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Medication Size</label>
-                  <Input
+                  <label className="text-sm font-medium text-[#4B5563]">Medication Size</label>
+                  <input
                     value={formData.medicationSize}
                     onChange={(e) => setFormData({ ...formData, medicationSize: e.target.value })}
                     placeholder="e.g., 10ml vial, 30 tablets"
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Active Ingredients *</label>
-                  <Input
+                  <label className="text-sm font-medium text-[#4B5563]">Active Ingredients *</label>
+                  <input
                     value={formData.activeIngredients.join(", ")}
                     onChange={(e) =>
                       setFormData({ ...formData, activeIngredients: e.target.value.split(",").map((s) => s.trim()) })
                     }
                     placeholder="Comma separated: Ingredient1, Ingredient2"
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Pharmacy Vendor</label>
+                  <label className="text-sm font-medium text-[#4B5563]">Pharmacy Vendor</label>
                   <select
                     value={formData.pharmacyProvider}
                     onChange={(e) => setFormData({ ...formData, pharmacyProvider: e.target.value })}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                   >
                     <option value="">Select vendor...</option>
                     {pharmacyProviders.map((vendor) => (
@@ -704,47 +754,55 @@ export default function Products() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Pharmacy Product ID</label>
-                  <Input
+                  <label className="text-sm font-medium text-[#4B5563]">Pharmacy Product ID</label>
+                  <input
                     value={formData.pharmacyProductId}
                     onChange={(e) => setFormData({ ...formData, pharmacyProductId: e.target.value })}
                     placeholder="SKU or ID from pharmacy system"
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Pharmacy Wholesale Price *</label>
-                  <Input
+                  <label className="text-sm font-medium text-[#4B5563]">Pharmacy Wholesale Price *</label>
+                  <input
                     type="number"
                     step="0.01"
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
                     placeholder="0.00"
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                   />
-                  <p className="text-xs text-muted-foreground">The wholesale price from the pharmacy</p>
+                  <p className="text-xs text-[#9CA3AF]">The wholesale price from the pharmacy</p>
                 </div>
 
-                <div className="flex items-center space-x-2 md:col-span-2">
+                <div className="flex items-center space-x-3 md:col-span-2 bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
                   <input
                     type="checkbox"
                     id="isActive"
                     checked={formData.isActive}
                     onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                    className="rounded"
+                    className="w-5 h-5 rounded border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C] focus:ring-2 focus:ring-opacity-50"
                   />
-                  <label htmlFor="isActive" className="text-sm font-medium">
+                  <label htmlFor="isActive" className="text-sm font-medium text-[#1F2937] cursor-pointer">
                     Product is active
                   </label>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => setShowModal(false)}>
+              <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
+                <button 
+                  onClick={() => setShowModal(false)}
+                  className="rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#6B7280] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
+                >
                   Cancel
-                </Button>
-                <Button onClick={handleSaveProduct}>
+                </button>
+                <button 
+                  onClick={handleSaveProduct}
+                  className="rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
+                >
                   {editingProduct ? "Update Product" : "Create Product"}
-                </Button>
+                </button>
               </div>
             </div>
           </div>

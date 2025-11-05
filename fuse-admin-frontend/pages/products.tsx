@@ -24,11 +24,12 @@ interface Product {
     name: string
     price: number
     pharmacyProductId?: string
-    dosage?: string
+    placeholderSig?: string
     imageUrl?: string | null
     clinicId?: string
     active: boolean
     category?: string
+    categories?: string[]
     createdAt: string
     updatedAt: string
     treatments?: Array<{
@@ -710,6 +711,17 @@ export default function Products() {
                             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden product-card">
                                 {displayedProducts.map((product, index) => {
                                     const isEnabled = enabledProductIds.has(product.id)
+                                    const categoryValues = Array.isArray(product.categories) && product.categories.length > 0
+                                        ? product.categories
+                                        : product.category
+                                            ? [product.category]
+                                            : []
+                                    const primaryCategory = categoryValues[0]
+                                    const primaryLabel = primaryCategory
+                                        ? PRODUCT_CATEGORIES.find(c => c.value === primaryCategory)?.label || primaryCategory
+                                        : 'General'
+                                    const additionalCount = Math.max(categoryValues.length - 1, 0)
+                                    const badgeLabel = additionalCount > 0 ? `${primaryLabel} +${additionalCount}` : primaryLabel
                                     return (
                                         <div
                                             key={product.id}
@@ -749,14 +761,14 @@ export default function Products() {
                                                         <h3 className="text-sm font-medium text-gray-900 truncate">{product.name}</h3>
                                                     </div>
                                                     <p className="text-sm text-gray-500 truncate">
-                                                        {product.dosage || 'No dosage specified'}
+                                                        {product.placeholderSig || 'No Placeholder Sig specified'}
                                                     </p>
                                                 </div>
 
                                                 {/* Category Badge */}
                                                 <div className="flex-shrink-0 w-32">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getCategoryBadgeColors(product.category)}`}>
-                                                        {product.category ? PRODUCT_CATEGORIES.find(c => c.value === product.category)?.label || product.category : 'General'}
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getCategoryBadgeColors(primaryCategory)}`}>
+                                                        {badgeLabel}
                                                     </span>
                                                 </div>
 

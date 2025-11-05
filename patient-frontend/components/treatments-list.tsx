@@ -9,7 +9,7 @@ interface Treatment {
   id: string;
   name: string;
   subtitle: string;
-  dosage: string;
+  placeholderSig: string;
   refills: number;
   status: "paused" | "active" | "cancelled";
   expiryDate: string;
@@ -168,7 +168,7 @@ export const TreatmentsList: React.FC = () => {
                     </div>
                     
                     <div className="mt-2 text-sm text-foreground-500">
-                      <p>{treatment.dosage}</p>
+                      <p>{treatment.placeholderSig}</p>
                       <p>{treatment.refills} refills left</p>
                     </div>
                     

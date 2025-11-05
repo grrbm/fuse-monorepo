@@ -1,14 +1,16 @@
 import { Package } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { CATEGORY_OPTIONS } from "@fuse/enums"
 
 interface Product {
     id: string
     name: string
     description: string
     price: number
-    dosage: string
+    placeholderSig: string
     activeIngredients: string[]
     category?: string
+    categories?: string[]
     isActive: boolean
 }
 
@@ -17,6 +19,12 @@ interface ProductHeaderProps {
 }
 
 export function ProductHeader({ product }: ProductHeaderProps) {
+    const categories = Array.isArray(product.categories) && product.categories.length > 0
+        ? product.categories
+        : product.category
+            ? [product.category]
+            : []
+
     return (
         <div className="mb-6 pb-6 border-b border-border/40">
             <div className="flex items-start justify-between">
@@ -32,16 +40,25 @@ export function ProductHeader({ product }: ProductHeaderProps) {
                         <p className="text-muted-foreground text-base leading-relaxed mb-4">{product.description}</p>
                     )}
                     <div className="flex flex-wrap gap-4">
-                        {product.category && (
-                            <div className="flex items-center gap-2 text-sm">
-                                <span className="font-medium text-muted-foreground">Category:</span>
-                                <span className="text-foreground">{product.category}</span>
+                        {categories.length > 0 && (
+                            <div className="flex items-center gap-2 text-sm flex-wrap">
+                                <span className="font-medium text-muted-foreground">Categories:</span>
+                                <div className="inline-flex flex-wrap gap-2">
+                                    {categories.map((category) => {
+                                        const label = CATEGORY_OPTIONS.find((option) => option.value === category)?.label || category
+                                        return (
+                                            <span key={category} className="inline-flex items-center rounded-full bg-[#E0F2F1] text-[#196459] px-2.5 py-0.5 text-xs font-semibold">
+                                                {label}
+                                        </span>
+                                        )
+                                    })}
+                                </div>
                             </div>
                         )}
-                        {product.dosage && (
+                        {product.placeholderSig && (
                             <div className="flex items-center gap-2 text-sm">
-                                <span className="font-medium text-muted-foreground">Dosage:</span>
-                                <span className="text-foreground">{product.dosage}</span>
+                                <span className="font-medium text-muted-foreground">Placeholder Sig:</span>
+                                <span className="text-foreground">{product.placeholderSig}</span>
                             </div>
                         )}
                         <div className="flex items-center gap-2 text-sm">

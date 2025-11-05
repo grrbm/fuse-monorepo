@@ -68,7 +68,7 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                     {
                         model: Product,
                         as: 'product',
-                        attributes: ['id', 'name', 'description', 'dosage', 'category'],
+                        attributes: ['id', 'name', 'description', 'placeholderSig', 'categories'],
                     }
                 ],
                 order: [['createdAt', 'DESC']],
@@ -80,8 +80,9 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                     id: tp.id,
                     name: tp.product?.name || 'Product',
                     description: tp.product?.description,
-                    dosage: tp.product?.dosage,
-                    category: tp.product?.category,
+                    placeholderSig: tp.product?.placeholderSig,
+                    category: Array.isArray((tp.product as any)?.categories) ? (tp.product as any).categories[0] ?? null : null,
+                    categories: Array.isArray((tp.product as any)?.categories) ? (tp.product as any).categories : [],
                     isActive: tp.isActive,
                 }))
             });
@@ -195,7 +196,7 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                             {
                                 model: Product,
                                 as: 'product',
-                                attributes: ['id', 'name', 'description', 'dosage', 'category'],
+                                attributes: ['id', 'name', 'description', 'placeholderSig', 'categories'],
                             }
                         ]
                     },
@@ -245,8 +246,13 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         id: order.tenantProduct.id,
                         name: order.tenantProduct.product?.name || 'Product',
                         description: order.tenantProduct.product?.description,
-                        dosage: order.tenantProduct.product?.dosage,
-                        category: order.tenantProduct.product?.category,
+                        placeholderSig: order.tenantProduct.product?.placeholderSig,
+                        category: Array.isArray((order.tenantProduct.product as any)?.categories)
+                            ? (order.tenantProduct.product as any).categories[0] ?? null
+                            : null,
+                        categories: Array.isArray((order.tenantProduct.product as any)?.categories)
+                            ? (order.tenantProduct.product as any).categories
+                            : [],
                     } : null,
                     clinic: order.clinic ? {
                         id: order.clinic.id,

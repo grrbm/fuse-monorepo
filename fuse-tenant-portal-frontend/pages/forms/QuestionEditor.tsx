@@ -213,6 +213,62 @@ export function QuestionEditor({
                             Click to copy variable
                         </div>
 
+                        {/* Product Name */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                handleCopyVariable('{{productName}}')
+                                setShowVariables(false)
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm flex items-center justify-between group transition-colors"
+                        >
+                            <div className="flex-1">
+                                <div className="font-mono font-medium text-sm">{'{{productName}}'}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">Product name (e.g., NAD+)</div>
+                            </div>
+                            {copiedVariable === '{{productName}}' && (
+                                <span className="text-green-600 text-xs font-medium">Copied!</span>
+                            )}
+                        </button>
+
+                        {/* Placeholder Sig */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                handleCopyVariable('{{placeholderSig}}')
+                                setShowVariables(false)
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm flex items-center justify-between group transition-colors"
+                        >
+                            <div className="flex-1">
+                                <div className="font-mono font-medium text-sm">{'{{placeholderSig}}'}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">Product Placeholder Sig (e.g., 50mg)</div>
+                            </div>
+                            {copiedVariable === '{{placeholderSig}}' && (
+                                <span className="text-green-600 text-xs font-medium">Copied!</span>
+                            )}
+                        </button>
+
+                        {/* Active Ingredients */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                handleCopyVariable('{{activeIngredients}}')
+                                setShowVariables(false)
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm flex items-center justify-between group transition-colors"
+                        >
+                            <div className="flex-1">
+                                <div className="font-mono font-medium text-sm">{'{{activeIngredients}}'}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">Active ingredients list</div>
+                            </div>
+                            {copiedVariable === '{{activeIngredients}}' && (
+                                <span className="text-green-600 text-xs font-medium">Copied!</span>
+                            )}
+                        </button>
+
+                        <div className="my-2 border-t border-gray-200 dark:border-gray-700" />
+
                         {/* Company Name */}
                         <button
                             type="button"

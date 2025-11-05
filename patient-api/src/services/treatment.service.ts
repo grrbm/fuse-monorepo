@@ -7,7 +7,7 @@ import Treatment from '../models/Treatment'
 
 interface TreatmentProductData {
     productId: string;
-    dosage: string;
+    placeholderSig: string;
 }
 
 interface TreatmentProductAssociationResult {
@@ -97,11 +97,11 @@ class TreatmentService {
 
             // Validate each product object has required fields
             for (const product of products) {
-                if (!product.productId || !product.dosage) {
+                if (!product.productId || !product.placeholderSig) {
                     return {
                         success: false,
                         message: "Invalid product data",
-                        error: "Each product must have productId and dosage"
+                        error: "Each product must have productId and Placeholder Sig"
                     };
                 }
             }
@@ -131,14 +131,14 @@ class TreatmentService {
                 force: true,
             });
 
-            // Add new associations with dosage
+            // Add new associations with placeholder signature
             if (products.length > 0) {
-                // Create TreatmentProducts records with dosage individually to ensure proper associations
+                // Create TreatmentProducts records with placeholder signature individually to ensure proper associations
                 for (const product of products) {
                     await TreatmentProducts.upsert({
                         treatmentId: treatmentId,
                         productId: product.productId,
-                        dosage: product.dosage
+                        placeholderSig: product.placeholderSig
                     });
                 }
 
