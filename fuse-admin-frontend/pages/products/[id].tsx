@@ -278,6 +278,7 @@ export default function ProductDetail() {
                                 title: structure.name,
                                 _structureName: structure.name,
                                 _structureId: structure.id,
+                                _structure: structure,
                                 _isProductSpecific: true,
                                 _isStructurePlaceholder: !productForms[0]
                             })
@@ -297,6 +298,7 @@ export default function ProductDetail() {
                                 title: structure.name,
                                 _structureName: structure.name,
                                 _structureId: structure.id,
+                                _structure: structure,
                                 _isStandardized: true,
                                 _isStructurePlaceholder: !standardizedForms[0]
                             })
@@ -793,14 +795,15 @@ export default function ProductDetail() {
 
                             {/* Forms Section */}
                             <div>
-                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Product Forms</h3>
+                                <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Forms</h3>
                                 {templates.length === 0 ? (
-                                    <div className="p-6 border border-dashed border-border rounded-lg text-center bg-muted/20">
-                                        <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                                        <p className="text-sm text-muted-foreground">No forms available for this product</p>
+                                    <div className="p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl text-center bg-[#F9FAFB]/50">
+                                        <FileText className="h-10 w-10 text-[#9CA3AF] mx-auto mb-3" />
+                                        <p className="text-sm text-[#6B7280] font-medium">No forms available for this product</p>
+                                        <p className="text-xs text-[#9CA3AF] mt-1">Create a global structure in the tenant portal to get started</p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-3">
+                                    <div className="space-y-4">
                                         {templates.map(t => {
                                             const existingForm = enabledForms.find((f: any) => f?.questionnaireId === t.id)
                                             const currentVariant: string | null = existingForm?.currentFormVariant ?? null
@@ -809,8 +812,58 @@ export default function ProductDetail() {
                                             const isProductSpecific = t.formTemplateType === 'normal' || !t.isTemplate
                                             const variantsToShow = isProductSpecific ? [null] : [1, 2]
                                             
+                                            // Get structure object if available
+                                            const structure = (t as any)._structure
+                                            
                                             return (
-                                                <div key={t.id} className="p-4 border border-border rounded-lg hover:shadow-sm transition-all bg-card space-y-3">
+                                                <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                                    {/* Structure Header */}
+                                                    <div className="p-5 border-b border-[#E5E7EB] bg-gradient-to-r from-[#F9FAFB] to-white">
+                                                        <div className="flex items-start justify-between">
+                                                            <div className="flex-1">
+                                                                <h4 className="text-lg font-semibold text-[#1F2937] mb-1">
+                                                                    {(t as any)._structureName || t.title}
+                                                                </h4>
+                                                                <p className="text-xs text-[#6B7280]">
+                                                                    {t.formTemplateType === 'normal' ? '📦 Product-Specific Form' : 
+                                                                     t.formTemplateType === 'standardized_template' ? '📋 Standardized Category Template' :
+                                                                     'Standard Form'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Form Flow Preview */}
+                                                    {structure?.sections && (
+                                                        <div className="px-5 py-4 bg-[#FAFBFC] border-b border-[#E5E7EB]">
+                                                            <p className="text-xs font-medium text-[#9CA3AF] mb-3 uppercase tracking-wide">Form Flow</p>
+                                                            <div className="flex items-center gap-3 overflow-x-auto pb-2">
+                                                                {structure.sections
+                                                                    .filter((s: any) => s.enabled)
+                                                                    .sort((a: any, b: any) => a.order - b.order)
+                                                                    .map((section: any, idx: number, arr: any[]) => (
+                                                                        <div key={section.id} className="flex items-center gap-3 flex-shrink-0">
+                                                                            <div className="flex flex-col items-center">
+                                                                                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl border-2 border-[#E5E7EB] shadow-sm">
+                                                                                    {section.icon}
+                                                                                </div>
+                                                                                <p className="text-[10px] font-medium text-[#6B7280] mt-2 text-center max-w-[80px] leading-tight">
+                                                                                    {section.label}
+                                                                                </p>
+                                                                            </div>
+                                                                            {idx < arr.length - 1 && (
+                                                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-[#D1D5DB] flex-shrink-0 mb-6">
+                                                                                    <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                                                </svg>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Variants */}
+                                                    <div className="p-5 space-y-3">
                                                     {variantsToShow.map((variantNum) => {
                                                         const pv = buildPreviewUrl()
                                                         const previewUrl = variantNum ? pv?.replace('/my-products/', `/my-products/${variantNum}/`) : pv
@@ -818,17 +871,14 @@ export default function ProductDetail() {
                                                         const isVariantEnabled = isProductSpecific ? !!existingForm : (!!existingForm && currentVariant === variantKey)
                                                         const hasAnyEnabled = !!existingForm
                                                         return (
-                                                            <div key={`${t.id}-${variantNum || 'main'}`} className="border border-dashed border-border rounded-md p-3">
+                                                            <div key={`${t.id}-${variantNum || 'main'}`} className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-4">
                                                                 <div className="flex items-center justify-between">
                                                                     <div className="flex-1">
-                                                                        <div className="font-medium text-foreground">
-                                                                            {(t as any)._structureName || t.title}
-                                                                            {variantNum && ` - Variant ${variantNum}`}
+                                                                        <div className="font-medium text-[#1F2937] text-sm">
+                                                                            {variantNum ? `Variant ${variantNum}` : 'Main Form'}
                                                                         </div>
-                                                                        <div className="text-xs text-muted-foreground mt-0.5">
-                                                                            {t.formTemplateType === 'normal' ? 'Product-Specific Form' : 
-                                                                             t.formTemplateType === 'standardized_template' ? 'Standardized Category Template' :
-                                                                             'Standard Form'}
+                                                                        <div className="text-xs text-[#9CA3AF] mt-1">
+                                                                            {isVariantEnabled ? '✓ Enabled for your clinic' : 'Not enabled'}
                                                                         </div>
                                                                     </div>
                                                                     {hasAnyEnabled ? (
