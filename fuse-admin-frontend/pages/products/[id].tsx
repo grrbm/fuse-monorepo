@@ -637,27 +637,34 @@ export default function ProductDetail() {
                 <title>{product?.name || 'Product'} - Fuse Admin</title>
             </Head>
 
-            <div className="w-full bg-background p-8" style={{ fontFamily: 'Inter, sans-serif' }}>
-                <div className="max-w-6xl mx-auto">
-                    {/* Header */}
-                    <Button
-                        variant="outline"
+            <div className="min-h-screen bg-[#F9FAFB] p-8" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                <div className="max-w-7xl mx-auto">
+                    {/* Back Button */}
+                    <button
                         onClick={() => router.push('/products')}
-                        className="mb-6 text-sm font-medium"
+                        className="mb-6 flex items-center gap-2 px-4 py-2 rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] text-[#4B5563] text-sm font-medium transition-all shadow-sm"
                     >
-                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        <ArrowLeft className="h-4 w-4" />
                         Back to Products
-                    </Button>
+                    </button>
 
-                    <div className="flex items-start justify-between mb-8">
-                        <div>
-                            <h1 className="text-3xl font-semibold text-foreground mb-2">{product?.name}</h1>
-                            <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">{product?.description}</p>
-                            {product?.placeholderSig && (
-                                <p className="text-sm text-muted-foreground mt-1">Placeholder Sig: <span className="font-medium">{product.placeholderSig}</span></p>
-                            )}
+                    {/* Product Header Card */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
+                        <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <h1 className="text-3xl font-semibold text-[#1F2937]">{product?.name}</h1>
+                                    {product && getStatusBadge(product.active)}
+                                </div>
+                                <p className="text-[#6B7280] text-base leading-relaxed max-w-3xl">{product?.description}</p>
+                                {product?.placeholderSig && (
+                                    <div className="mt-4 pt-4 border-t border-[#E5E7EB] inline-block">
+                                        <span className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Placeholder Sig</span>
+                                        <p className="text-sm text-[#1F2937] mt-1 font-medium">{product.placeholderSig}</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        {product && getStatusBadge(product.active)}
                     </div>
 
                     {/* Success/Error Messages */}
@@ -667,26 +674,25 @@ export default function ProductDetail() {
                         </div>
                     )}
 
-                    {/* PRIORITY 1: Pricing & Configuration */}
-                    <Card className="mb-6 border-border shadow-sm">
-                        <CardHeader className="border-b border-border">
-                            <CardTitle className="text-lg font-semibold">Pricing & Configuration</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-8">
-
-                            {/* Pricing Section */}
-                            <div>
-                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Pricing</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                                    {/* Pharmacy Cost */}
-                                    <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
-                                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Pharmacy Wholesale Cost</div>
-                                        <div className="text-xs text-muted-foreground mb-3">What you pay</div>
-                                        <div className="text-3xl font-semibold text-foreground">
-                                            {product ? formatPrice(product.price) : '$0.00'}
-                                        </div>
+                    {/* Pricing Section */}
+                    <div className="grid grid-cols-12 gap-6 mb-6">
+                        {/* Pharmacy Wholesale Cost */}
+                        <div className="col-span-6">
+                            <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-10 h-10 bg-[#F3F4F6] rounded-xl flex items-center justify-center">
+                                        <DollarSign className="h-5 w-5 text-[#4FA59C]" />
                                     </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Pharmacy Wholesale Cost</p>
+                                        <p className="text-[10px] text-[#9CA3AF]">What you pay</p>
+                                    </div>
+                                </div>
+                                <p className="text-3xl font-semibold text-[#1F2937]">
+                                    {product ? formatPrice(product.price) : '$0.00'}
+                                </p>
+                            </div>
+                        </div>
 
                                     {/* Retail Price */}
                                     {tenantProduct ? (
