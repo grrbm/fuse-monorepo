@@ -9,6 +9,15 @@ export interface IronSailProduct {
     dispense?: string;
     category?: string;
     price?: number;
+    wholesalePrice?: number;
+    suppliesPrice?: number;
+    pharmacy?: string;
+    serviceProvider?: string;
+    states?: string[];
+    sig?: string;
+    form?: string;
+    displayName?: string;
+    medicationName?: string;
     [key: string]: any; // Allow additional fields from the spreadsheet
 }
 
@@ -71,37 +80,67 @@ export class IronSailService {
                     }
                 });
 
-                // Skip empty rows
+                // Skip empty rows or rows without medication name
                 if (Object.keys(product).length === 0) continue;
-
-                // Get the product name from the first column (regardless of header name)
-                const productName = row[0] || 'Unknown Product';
-
-                // Get the SKU from "Product ID" column
-                const productId = product.product_id || product.formula_id || product.id || product.sku;
-
-                // Get strength from "Strength" column
-                const strength = product.strength || product.dosage || product.dose;
-
-                // Get price from "Price" column
-                const priceValue = product.price ? parseFloat(String(product.price).replace(/[^0-9.]/g, '')) : undefined;
-
-                // Get type/category
-                const category = product.type || product.category;
-
-                // Get dosage form
-                const dosageForm = product['dosage_form_/_volume'] || product.dosage_form || product.form || product.dispense;
+                
+                // New format columns:
+                // Display Name, Medication (Pharmacy Name), Form, Pricing, Supplies, Wholesale Price, Pharmacy, Service Provider, States, SIG
+                
+                // Get display name (first column)
+                const displayName = product.display_name || row[0] || 'Unknown Product';
+                
+                // Get medication name (pharmacy product name)
+                const medicationName = product['medication_(pharmacy_name)'] || product.medication || product.medication_name;
+                
+                // Skip if no medication name
+                if (!medicationName) continue;
+                
+                // Get form
+                const form = product.form || 'Injectable';
+                
+                // Get pricing
+                const pricingValue = product.pricing ? parseFloat(String(product.pricing).replace(/[^0-9.]/g, '')) : undefined;
+                
+                // Get supplies price
+                const suppliesValue = product['supplies_(10_syringes_+_wipes)'] || product.supplies;
+                const suppliesPrice = suppliesValue ? parseFloat(String(suppliesValue).replace(/[^0-9.]/g, '')) : undefined;
+                
+                // Get wholesale price
+                const wholesalePriceValue = product.wholesale_price;
+                const wholesalePrice = wholesalePriceValue ? parseFloat(String(wholesalePriceValue).replace(/[^0-9.]/g, '')) : undefined;
+                
+                // Get pharmacy
+                const pharmacy = product.pharmacy || 'Kaduceus';
+                
+                // Get service provider
+                const serviceProvider = product.service_provider || 'Ironsail';
+                
+                // Get states (comma-separated, parse into array)
+                const statesValue = product.states || '';
+                const states = statesValue ? statesValue.split(',').map((s: string) => s.trim()) : [];
+                
+                // Get SIG
+                const sig = product.sig || 'Take as directed by your healthcare provider';
 
                 // Normalize to expected format
                 const normalizedProduct: IronSailProduct = {
-                    id: productId || `ironsail-${i}`,
-                    sku: productId || `SKU-${i}`,
-                    name: productName,
-                    strength: strength,
-                    nameWithStrength: strength ? `${productName} (${strength})` : productName,
-                    dispense: dosageForm,
-                    category: category,
-                    price: priceValue,
+                    id: `ironsail-${medicationName.replace(/[^a-zA-Z0-9]/g, '-')}-${i}`,
+                    sku: medicationName,
+                    name: medicationName,
+                    displayName: displayName,
+                    medicationName: medicationName,
+                    strength: undefined, // Not in new format as separate field
+                    nameWithStrength: medicationName,
+                    dispense: form,
+                    form: form,
+                    category: undefined, // Not in new format
+                    price: pricingValue,
+                    suppliesPrice: suppliesPrice,
+                    wholesalePrice: wholesalePrice,
+                    pharmacy: pharmacy,
+                    serviceProvider: serviceProvider,
+                    states: states,
+                    sig: sig,
                     // Keep all original fields for reference
                     _raw: product
                 };
@@ -123,23 +162,29 @@ export class IronSailService {
     }
 
     /**
-     * Get products by state (IronSail doesn't have state-specific products, so returns all)
-     * @param state US State code (not used for IronSail)
-     * @returns List of all products
+     * Get products by state
+     * @param state US State code
+     * @returns List of products available in that state
      */
     async getProductsByState(state: string): Promise<IronSailProduct[]> {
-        // IronSail products are not state-specific, return all products
-        return await this.getProducts();
+        const allProducts = await this.getProducts();
+        // Filter products that are available in the specified state
+        return allProducts.filter(product => 
+            product.states && product.states.includes(state)
+        );
     }
 
     /**
      * Get all products available across all supported states
-     * @param states Array of US State codes (not used for IronSail)
-     * @returns List of all products
+     * @param states Array of US State codes
+     * @returns List of products available in any of those states
      */
     async getProductsByStates(states: string[]): Promise<IronSailProduct[]> {
-        // IronSail products are not state-specific, return all products once
-        return await this.getProducts();
+        const allProducts = await this.getProducts();
+        // Filter products that are available in at least one of the specified states
+        return allProducts.filter(product => 
+            product.states && product.states.some(s => states.includes(s))
+        );
     }
 }
 

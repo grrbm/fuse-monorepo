@@ -461,7 +461,8 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         state: patientState,
                         pharmacyProductId: coverage.pharmacyProductId,
                         pharmacyProductName: coverage.pharmacyProductName,
-                        pharmacyWholesaleCost: coverage.pharmacyWholesaleCost
+                        pharmacyWholesaleCost: coverage.pharmacyWholesaleCost,
+                        sig: coverage.sig
                     },
                     product: {
                         id: productId,
