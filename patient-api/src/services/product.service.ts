@@ -26,7 +26,10 @@ class ProductService {
         const where: any = {}
 
         if (category) {
-            where.category = category
+            // Filter products that have this category in their categories array
+            where.categories = {
+                [Op.contains]: [category]
+            }
         }
 
         if (typeof isActive === 'boolean') {
@@ -105,11 +108,13 @@ class ProductService {
 
             // If there are requiredDoctorQuestions, create a FormSectionTemplate
             if (input.requiredDoctorQuestions && input.requiredDoctorQuestions.length > 0) {
+                // Use the first category if multiple categories are provided
+                const primaryCategory = input.categories && input.categories.length > 0 ? input.categories[0] : undefined
                 await FormSectionTemplate.create({
                     name: `${input.name} - Doctor Questions`,
                     description: `Mandatory medical questions for ${input.name}`,
                     sectionType: 'doctor',
-                    category: input.category,
+                    category: primaryCategory,
                     treatmentId: null, // Will be linked when product is associated with treatment
                     schema: {
                         questions: input.requiredDoctorQuestions,
@@ -188,10 +193,17 @@ class ProductService {
 
             // If requiredDoctorQuestions were updated, update or create FormSectionTemplate
             if (input.requiredDoctorQuestions) {
+                // Use the first category from either the updated or existing product
+                const primaryCategory = (input.categories && input.categories.length > 0) 
+                    ? input.categories[0] 
+                    : (product.categories && product.categories.length > 0) 
+                        ? product.categories[0] 
+                        : undefined
+
                 const existingTemplate = await FormSectionTemplate.findOne({
                     where: {
                         sectionType: 'doctor',
-                        category: product.category || input.category,
+                        category: primaryCategory,
                     },
                     order: [['version', 'DESC']],
                 })
@@ -202,7 +214,7 @@ class ProductService {
                         name: existingTemplate.name,
                         description: existingTemplate.description,
                         sectionType: 'doctor',
-                        category: product.category || input.category,
+                        category: primaryCategory,
                         treatmentId: null,
                         schema: {
                             questions: input.requiredDoctorQuestions,
@@ -216,7 +228,7 @@ class ProductService {
                         name: `${product.name} - Doctor Questions`,
                         description: `Mandatory medical questions for ${product.name}`,
                         sectionType: 'doctor',
-                        category: product.category || input.category,
+                        category: primaryCategory,
                         treatmentId: null,
                         schema: {
                             questions: input.requiredDoctorQuestions,
@@ -289,19 +301,24 @@ class ProductService {
     }
 
     async listCategories(userId: string) {
-        const categories = await Product.findAll({
-            attributes: [[Product.sequelize!.fn('DISTINCT', Product.sequelize!.col('category')), 'category']],
+        // Get all unique categories from the categories arrays
+        const products = await Product.findAll({
+            attributes: ['categories'],
             where: {
-                category: {
+                categories: {
                     [Op.ne]: null,
                 },
             },
             raw: true,
         })
 
+        // Flatten and deduplicate categories
+        const allCategories = products.flatMap((p: any) => p.categories || [])
+        const uniqueCategories = [...new Set(allCategories)]
+
         return {
             success: true,
-            data: categories.map((c: any) => c.category).filter(Boolean),
+            data: uniqueCategories.filter(Boolean),
         }
     }
 

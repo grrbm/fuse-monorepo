@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -294,29 +293,32 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="p-12 flex items-center justify-center">
+      <div className="bg-gradient-to-r from-muted/50 to-transparent rounded-xl p-5 border border-border/30 mb-6">
+        <div className="p-12 flex items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
+    <div className="bg-gradient-to-r from-muted/50 to-transparent rounded-xl p-5 border border-border/30 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight mb-2 flex items-center gap-2">
+            <MapPin className="h-6 w-6" />
             Pharmacy & State Coverage
-          </CardTitle>
-          <Button size="sm" onClick={() => setShowAddForm(!showAddForm)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Coverage
-          </Button>
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Assign pharmacy providers for state-specific fulfillment
+          </p>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        <Button size="sm" onClick={() => setShowAddForm(!showAddForm)} className="rounded-full shadow-md hover:shadow-lg transition-shadow">
+          <Plus className="mr-2 h-4 w-4" />
+          Add Coverage
+        </Button>
+      </div>
+      <div className="space-y-4 bg-card rounded-xl p-6 shadow-sm border border-border/40">
         {error && (
           <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
             {error}
@@ -594,8 +596,8 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
             })
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
 

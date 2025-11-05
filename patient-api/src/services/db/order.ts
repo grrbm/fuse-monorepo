@@ -65,7 +65,7 @@ export const listOrdersByClinic = async (
                     {
                         model: Product,
                         as: 'product',
-                        attributes: ['id', 'name', 'price', 'category']
+                        attributes: ['id', 'name', 'price', 'categories']
                     }
                 ]
             },

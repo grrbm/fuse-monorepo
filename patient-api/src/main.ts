@@ -4182,7 +4182,7 @@ app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
             include: [{
               model: Product,
               as: 'product',
-              attributes: ['id', 'category']
+              attributes: ['id', 'categories']
             }]
           }]
         });
@@ -4194,8 +4194,8 @@ app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
         const categories = new Set<string>();
         customerOrders.forEach(order => {
           order.orderItems?.forEach(item => {
-            if (item.product?.category) {
-              categories.add(item.product.category);
+            if (item.product?.categories && item.product.categories.length > 0) {
+              item.product.categories.forEach(cat => categories.add(cat));
             }
           });
         });
@@ -5085,6 +5085,8 @@ app.get("/questionnaires/templates/product-forms", authenticateJWT, async (req, 
 
     const forms = await questionnaireService.listAllProductForms();
 
+    console.log(`📝 Fetched ${forms.length} product form templates`);
+
     res.status(200).json({ success: true, data: forms });
   } catch (error) {
     console.error('❌ Error fetching product forms:', error);
@@ -5375,10 +5377,16 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
     }
 
     const { id: templateId } = req.params;
-    const { productId } = req.body;
+    const { productId, mode = 'replace', existingQuestionnaireId } = req.body;
+
+    console.log('📋 Clone template for product request:', { templateId, productId, mode, existingQuestionnaireId });
 
     if (!templateId || !productId) {
       return res.status(400).json({ success: false, message: "templateId and productId are required" });
+    }
+
+    if (mode === 'append' && !existingQuestionnaireId) {
+      return res.status(400).json({ success: false, message: "existingQuestionnaireId is required for append mode" });
     }
 
     // Fetch the template to clone
@@ -5395,19 +5403,221 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
     });
 
     if (!template) {
+      console.log('❌ Template not found:', templateId);
       return res.status(404).json({ success: false, message: 'Template not found' });
     }
 
-    // Create the cloned questionnaire for this specific product
+    console.log('✅ Template found, cloning for product:', template.title, 'mode:', mode);
+
+    let targetQuestionnaire;
+    let startingStepOrder = 0;
+
+    if (mode === 'append') {
+      // Append mode: use existing questionnaire and find max step order
+      targetQuestionnaire = await Questionnaire.findByPk(existingQuestionnaireId);
+      if (!targetQuestionnaire) {
+        return res.status(404).json({ success: false, message: 'Existing questionnaire not found' });
+      }
+      
+      // Find the max step order in existing questionnaire
+      const existingSteps = await QuestionnaireStep.findAll({
+        where: { questionnaireId: existingQuestionnaireId },
+        attributes: ['stepOrder'],
+      });
+      
+      if (existingSteps.length > 0) {
+        startingStepOrder = Math.max(...existingSteps.map(s => s.stepOrder)) + 1;
+      }
+      
+      console.log('✅ Appending to existing questionnaire, starting step order:', startingStepOrder);
+    } else {
+      // Replace mode: Check if questionnaire already exists for this product
+      const existingQuestionnaire = await Questionnaire.findOne({
+        where: { 
+          productId: productId,
+          userId: currentUser.id,
+          isTemplate: false
+        }
+      });
+
+      if (existingQuestionnaire) {
+        // Delete all existing steps
+        console.log('✅ Found existing questionnaire, deleting old steps');
+        await QuestionnaireStep.destroy({
+          where: { questionnaireId: existingQuestionnaire.id }
+        });
+        
+        // Update the existing questionnaire with new template data
+        await existingQuestionnaire.update({
+          title: template.title,
+          description: template.description,
+          checkoutStepPosition: template.checkoutStepPosition,
+          treatmentId: template.treatmentId,
+          category: template.category,
+          personalizationQuestionsSetup: template.personalizationQuestionsSetup,
+          createAccountQuestionsSetup: template.createAccountQuestionsSetup,
+          doctorQuestionsSetup: template.doctorQuestionsSetup,
+          color: template.color,
+          status: template.status || 'in_progress',
+        });
+        
+        targetQuestionnaire = existingQuestionnaire;
+        console.log('✅ Updated existing questionnaire for product:', existingQuestionnaire.id);
+      } else {
+        // Create new questionnaire for this specific product
+        targetQuestionnaire = await Questionnaire.create({
+          title: template.title,
+          description: template.description,
+          checkoutStepPosition: template.checkoutStepPosition,
+          treatmentId: template.treatmentId,
+          productId: productId,
+          category: template.category,
+          formTemplateType: 'normal',
+          isTemplate: false,
+          userId: currentUser.id,
+          personalizationQuestionsSetup: template.personalizationQuestionsSetup,
+          createAccountQuestionsSetup: template.createAccountQuestionsSetup,
+          doctorQuestionsSetup: template.doctorQuestionsSetup,
+          color: template.color,
+          status: template.status || 'in_progress',
+        });
+        console.log('✅ Created new questionnaire for product:', targetQuestionnaire.id);
+      }
+    }
+
+    // Clone all steps with their questions and options
+    const steps: any[] = (template as any).steps || [];
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const clonedStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: startingStepOrder + i,
+        isDeadEnd: step.isDeadEnd,
+        conditionalLogic: step.conditionalLogic,
+        questionnaireId: targetQuestionnaire.id,
+      });
+
+      // Clone all questions in this step
+      for (const question of (step.questions || [])) {
+        const clonedQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: question.questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: question.subQuestionOrder,
+          conditionalLevel: question.conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: question.footerNote,
+          conditionalLogic: question.conditionalLogic,
+          stepId: clonedStep.id,
+        });
+
+        // Clone all options for this question
+        if (question.options?.length) {
+          await QuestionOption.bulkCreate(
+            question.options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              riskLevel: opt.riskLevel,
+              questionId: clonedQuestion.id,
+            }))
+          );
+        }
+      }
+    }
+
+    // Return the full questionnaire
+    const fullQuestionnaire = await Questionnaire.findByPk(targetQuestionnaire.id, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
+        }]
+      }]
+    });
+
+    console.log('✅ Template cloned for product:', {
+      originalTemplateId: templateId,
+      questionnaireId: targetQuestionnaire.id,
+      productId: productId,
+      mode: mode,
+      stepsAdded: steps.length
+    });
+
+    return res.status(201).json({ success: true, data: fullQuestionnaire });
+  } catch (error: any) {
+    console.error('❌ Error cloning template for product:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      sql: error.sql,
+      original: error.original
+    });
+    return res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to clone template for product',
+      error: error.toString(),
+      details: error.original?.message || error.sql || undefined
+    });
+  }
+});
+
+// Clone a template as a new reusable template
+app.post("/questionnaires/templates/:id/clone", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id: templateId } = req.params;
+    const { title, description, formTemplateType, productId } = req.body;
+
+    console.log('📋 Clone template request:', { templateId, title, description, formTemplateType, productId });
+
+    if (!templateId || !title) {
+      return res.status(400).json({ success: false, message: "templateId and title are required" });
+    }
+
+    // Fetch the template to clone
+    const template = await Questionnaire.findByPk(templateId, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
+        }]
+      }]
+    });
+
+    if (!template) {
+      console.log('❌ Template not found:', templateId);
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+
+    console.log('✅ Template found, cloning:', template.title);
+
+    // Create the cloned questionnaire as a new template
     const clonedQuestionnaire = await Questionnaire.create({
-      title: template.title,
-      description: template.description,
+      title: title,
+      description: description || template.description,
       checkoutStepPosition: template.checkoutStepPosition,
       treatmentId: template.treatmentId,
-      productId: productId, // Link to specific product
+      productId: productId || null,
       category: template.category,
-      formTemplateType: 'normal', // Clones are not templates themselves
-      isTemplate: false, // This is a product-specific instance, not a template
+      formTemplateType: formTemplateType || 'normal',
+      isTemplate: productId ? false : true, // If no productId, it's a template
       userId: currentUser.id,
       personalizationQuestionsSetup: template.personalizationQuestionsSetup,
       createAccountQuestionsSetup: template.createAccountQuestionsSetup,
@@ -5473,16 +5683,15 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
       }]
     });
 
-    console.log('✅ Cloned template for product:', {
-      originalTemplateId: templateId,
-      clonedQuestionnaireId: clonedQuestionnaire.id,
-      productId: productId
+    console.log('✅ Template cloned successfully:', clonedQuestionnaire.id);
+    return res.status(201).json({ success: true, data: fullClone, message: 'Template cloned successfully' });
+  } catch (error: any) {
+    console.error('❌ Error cloning template:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to clone template',
+      error: error.toString()
     });
-
-    return res.status(201).json({ success: true, data: fullClone });
-  } catch (error) {
-    console.error('❌ Error cloning template for product:', error);
-    return res.status(500).json({ success: false, message: 'Failed to clone template for product' });
   }
 });
 
@@ -8240,7 +8449,8 @@ async function startServer() {
               name: tenantProduct.product?.name || 'Product',
               description: tenantProduct.product?.description || null,
               dosage: tenantProduct.product?.dosage || null,
-              category: tenantProduct.product?.category || null,
+              categories: tenantProduct.product?.categories || [],
+              category: tenantProduct.product?.categories?.[0] || null,
               stripePriceId: tenantProduct.stripePriceId || null,
               isActive: tenantProduct.isActive ?? true
             };

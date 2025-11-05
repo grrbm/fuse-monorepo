@@ -167,6 +167,11 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                                             {order.patient.address}<br />
                                             {order.patient.city}, {order.patient.state} {order.patient.zipCode}
                                         </>
+                                    ) : order.shippingAddress?.address && order.shippingAddress?.city && order.shippingAddress?.state && order.shippingAddress?.zipCode ? (
+                                        <>
+                                            {order.shippingAddress.address}<br />
+                                            {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
+                                        </>
                                     ) : (
                                         <span className="text-red-600 text-xs">
                                             Missing - need to provide this for Pharmacy request to work

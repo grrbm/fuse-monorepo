@@ -100,10 +100,11 @@ export default class Product extends Entity {
     declare medicationSize?: string;
 
     @Column({
-        type: DataType.ENUM(...Object.values(ProductCategory)),
+        type: DataType.ARRAY(DataType.STRING),
         allowNull: true,
+        defaultValue: [],
     })
-    declare category?: ProductCategory;
+    declare categories?: string[];
 
     @Column({
         type: DataType.JSONB,

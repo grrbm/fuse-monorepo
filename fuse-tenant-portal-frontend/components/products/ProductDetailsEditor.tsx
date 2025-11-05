@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Save, Package } from "lucide-react"
+import { Loader2, Save, Package, Edit, X } from "lucide-react"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
 
 interface Product {
@@ -13,7 +12,7 @@ interface Product {
     price: number
     dosage: string
     activeIngredients: string[]
-    category?: string
+    categories?: string[]
     medicationSize?: string
     pharmacyProvider?: string
     pharmacyProductId?: string
@@ -34,7 +33,7 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
         name: product.name,
         description: product.description,
         dosage: product.dosage,
-        category: product.category || "",
+        categories: product.categories || [],
         medicationSize: product.medicationSize || "",
         activeIngredients: product.activeIngredients?.join(", ") || "",
         slug: product.slug || "",
@@ -46,7 +45,7 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             name: product.name,
             description: product.description,
             dosage: product.dosage,
-            category: product.category || "",
+            categories: product.categories || [],
             medicationSize: product.medicationSize || "",
             activeIngredients: product.activeIngredients?.join(", ") || "",
             slug: product.slug || "",
@@ -91,7 +90,7 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                 name: formData.name,
                 description: formData.description,
                 dosage: formData.dosage,
-                category: formData.category || undefined,
+                categories: formData.categories && formData.categories.length > 0 ? formData.categories : undefined,
                 medicationSize: formData.medicationSize || undefined,
                 activeIngredients: activeIngredientsArray,
                 slug: formData.slug.trim() || undefined,
@@ -111,7 +110,7 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             name: product.name,
             description: product.description,
             dosage: product.dosage,
-            category: product.category || "",
+            categories: product.categories || [],
             medicationSize: product.medicationSize || "",
             activeIngredients: product.activeIngredients?.join(", ") || "",
             slug: product.slug || "",
@@ -120,46 +119,61 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
         setEditing(false)
     }
 
+    const handleCategoryToggle = (categoryValue: string) => {
+        setFormData(prev => {
+            const currentCategories = prev.categories || []
+            const newCategories = currentCategories.includes(categoryValue)
+                ? currentCategories.filter(c => c !== categoryValue)
+                : [...currentCategories, categoryValue]
+            return { ...prev, categories: newCategories }
+        })
+    }
+
     return (
-        <Card className="mb-6">
-            <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                    <CardTitle className="text-xl flex items-center gap-2">
-                        <Package className="h-5 w-5" />
+        <div className="bg-gradient-to-r from-muted/50 to-transparent rounded-xl p-5 border border-border/30 mb-6">
+            <div className="flex items-center justify-between mb-4">
+                <div>
+                    <h2 className="text-2xl font-semibold tracking-tight mb-2 flex items-center gap-2">
+                        <Package className="h-6 w-6" />
                         Product Details
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                        <Badge variant={product.isActive ? "default" : "secondary"}>
-                            {product.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
-                        {!editing ? (
-                            <Button size="sm" onClick={() => setEditing(true)}>
-                                Edit Details
-                            </Button>
-                        ) : (
-                            <>
-                                <Button size="sm" variant="outline" onClick={handleCancel} disabled={saving}>
-                                    Cancel
-                                </Button>
-                                <Button size="sm" onClick={handleSave} disabled={saving}>
-                                    {saving ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Save className="mr-2 h-4 w-4" />
-                                            Save Changes
-                                        </>
-                                    )}
-                                </Button>
-                            </>
-                        )}
-                    </div>
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                        Configure the product information and specifications
+                    </p>
                 </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+                <div className="flex items-center gap-3">
+                    <Badge variant={product.isActive ? "default" : "secondary"} className="rounded-full px-3 py-1">
+                        {product.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                    {!editing ? (
+                        <Button size="sm" onClick={() => setEditing(true)} className="rounded-full shadow-md hover:shadow-lg transition-shadow">
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Details
+                        </Button>
+                    ) : (
+                        <>
+                            <Button size="sm" variant="outline" onClick={handleCancel} disabled={saving} className="rounded-full shadow-md hover:shadow-lg transition-shadow">
+                                <X className="mr-2 h-4 w-4" />
+                                Cancel
+                            </Button>
+                            <Button size="sm" onClick={handleSave} disabled={saving} className="rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-md hover:shadow-lg transition-shadow">
+                                {saving ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="mr-2 h-4 w-4" />
+                                        Save Changes
+                                    </>
+                                )}
+                            </Button>
+                        </>
+                    )}
+                </div>
+            </div>
+            <div className="space-y-4 bg-card rounded-xl p-6 shadow-sm border border-border/40">
                 {/* Error Message */}
                 {error && (
                     <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm flex items-start gap-2">
@@ -216,24 +230,38 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                         )}
                     </div>
 
-                    {/* Category */}
-                    <div>
-                        <label className="text-sm font-medium mb-1 block">Category</label>
+                    {/* Categories */}
+                    <div className="md:col-span-2">
+                        <label className="text-sm font-medium mb-1 block">Categories</label>
                         {editing ? (
-                            <select
-                                value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                            >
-                                <option value="">Select category...</option>
-                                {CATEGORY_OPTIONS.map((cat) => (
-                                    <option key={cat.value} value={cat.value}>
-                                        {cat.label}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="max-h-48 overflow-y-auto border border-border rounded-md p-3 bg-background">
+                                <div className="grid grid-cols-2 gap-2">
+                                    {CATEGORY_OPTIONS.filter((c: { value: string }) => c.value !== "").map((cat) => (
+                                        <label key={cat.value} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.categories?.includes(cat.value) || false}
+                                                onChange={() => handleCategoryToggle(cat.value)}
+                                                className="rounded border-gray-300"
+                                            />
+                                            <span>{cat.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                         ) : (
-                            <p className="text-foreground">{product.category || "No Category"}</p>
+                            <div className="flex flex-wrap gap-2">
+                                {product.categories && product.categories.length > 0 ? (
+                                    product.categories.map(cat => {
+                                        const catOption = CATEGORY_OPTIONS.find((c: { value: string }) => c.value === cat)
+                                        return catOption && catOption.value !== "" ? (
+                                            <Badge key={cat} variant="secondary">{catOption.label}</Badge>
+                                        ) : null
+                                    })
+                                ) : (
+                                    <p className="text-muted-foreground">No categories selected</p>
+                                )}
+                            </div>
                         )}
                     </div>
 
@@ -279,8 +307,8 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                         )}
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     )
 }
 

@@ -20,7 +20,8 @@ import {
   Divider
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { apiCall } from "../../lib/api";
+import { useRouter } from "next/router";
+import { apiCall, authApi } from "../../lib/api";
 import { Elements } from "@stripe/react-stripe-js";
 import { stripePromise } from "../../lib/stripe";
 import { StripePaymentForm } from "../StripePaymentForm";
@@ -53,6 +54,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   productStripeProductId,
   tenantProductId
 }) => {
+  const router = useRouter();
   const { clinic: domainClinic, isLoading: isLoadingClinic } = useClinicFromDomain();
   const [questionnaire, setQuestionnaire] = React.useState<QuestionnaireData | null>(null);
   const [customColor, setCustomColor] = React.useState<string | null>(null);
@@ -69,6 +71,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [mdCaseError, setMdCaseError] = React.useState<string | null>(null);
   const [patientDob, setPatientDob] = React.useState('');
   const [patientDobError, setPatientDobError] = React.useState<string | null>(null);
+
+  // Account creation state
+  const [password, setPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [accountCreationStatus, setAccountCreationStatus] = React.useState<'idle' | 'creating' | 'success' | 'error'>('idle');
+  const [accountCreationError, setAccountCreationError] = React.useState<string | null>(null);
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -1438,10 +1446,59 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       console.log('💳 Payment authorized successfully:', paymentIntentId);
       console.log('💳 Subscription will be created after manual payment capture');
 
-      // Don't close modal, allow user to continue with questionnaire steps
+      // Auto-submit MD case after successful payment
+      await autoSubmitMdCase();
+
+      // Don't close modal, allow user to continue to account creation
     } catch (error) {
       setPaymentStatus('failed');
       alert('Payment authorization failed. Please contact support.');
+    }
+  };
+
+  // Auto-submit MD case after payment (streamlined UX)
+  const autoSubmitMdCase = async () => {
+    if (!orderId) {
+      console.warn('⚠️ No orderId available for auto-submit');
+      return;
+    }
+
+    // Get DOB from answers or use a default if not provided
+    const dob = answers['dateOfBirth'] || patientDob;
+    
+    if (!dob || !isRealisticDob(dob)) {
+      console.warn('⚠️ Invalid DOB for auto-submit, will need manual entry');
+      return;
+    }
+
+    try {
+      setMdCaseStatus('submitting');
+      setMdCaseError(null);
+      
+      const overrides: any = { dob };
+      if (answers['firstName']) overrides.firstName = answers['firstName'];
+      if (answers['lastName']) overrides.lastName = answers['lastName'];
+      if (answers['email']) overrides.email = answers['email'];
+      if (answers['mobile']) overrides.phoneNumber = answers['mobile'];
+
+      const resp = await apiCall('/md/cases', {
+        method: 'POST',
+        body: JSON.stringify({ orderId, patientOverrides: overrides })
+      });
+      
+      if (!resp.success) {
+        setMdCaseStatus('error');
+        setMdCaseError((resp as any)?.error || 'Failed to submit case');
+        console.error('❌ Auto-submit MD case failed:', resp);
+        return;
+      }
+      
+      setMdCaseStatus('success');
+      console.log('✅ Medical case auto-submitted successfully');
+    } catch (e) {
+      setMdCaseStatus('error');
+      setMdCaseError('Network error. Please try again.');
+      console.error('❌ Auto-submit MD case error:', e);
     }
   };
 
@@ -1494,6 +1551,77 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     } catch (e) {
       setMdCaseStatus('error');
       setMdCaseError('Network error. Please try again.');
+    }
+  };
+
+  // Handle account creation with password
+  const handleCreateAccount = async () => {
+    // Validate passwords
+    if (!password || password.length < 8) {
+      setAccountCreationError('Password must be at least 8 characters long');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setAccountCreationError('Passwords do not match');
+      return;
+    }
+
+    // Validate required data from intake form
+    if (!answers['email'] || !answers['firstName'] || !answers['lastName']) {
+      setAccountCreationError('Missing required information from intake form');
+      return;
+    }
+
+    try {
+      setAccountCreationStatus('creating');
+      setAccountCreationError(null);
+
+      const dob = answers['dateOfBirth'] || patientDob;
+
+      // Create account with pre-populated data from intake form
+      const result = await authApi.signUp({
+        firstName: answers['firstName'],
+        lastName: answers['lastName'],
+        email: answers['email'],
+        password: password,
+        role: 'patient',
+        dateOfBirth: dob,
+        phoneNumber: answers['mobile'],
+        ...(domainClinic && { clinicId: domainClinic.id }),
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to create account');
+      }
+
+      setAccountCreationStatus('success');
+      console.log('✅ Account created successfully');
+
+      // Auto-sign in the user
+      const signInResult = await authApi.signIn(answers['email'], password);
+      
+      if (signInResult.success && signInResult.data?.token) {
+        localStorage.setItem('auth_token', signInResult.data.token);
+        console.log('✅ User auto-signed in');
+
+        // Close modal and redirect to patient portal
+        setTimeout(() => {
+          onClose();
+          router.push('/');
+        }, 1500);
+      } else {
+        // If auto-signin fails, redirect to signin page
+        setTimeout(() => {
+          onClose();
+          router.push('/signin?message=Account created successfully. Please sign in.');
+        }, 1500);
+      }
+
+    } catch (error) {
+      console.error('❌ Account creation error:', error);
+      setAccountCreationStatus('error');
+      setAccountCreationError(error instanceof Error ? error.message : 'Failed to create account. Please try again.');
     }
   };
 
@@ -1719,93 +1847,97 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                       </div>
                     </>
                   ) : isMdCaseStep() ? (
-                    // MD Case submission step
+                    // Create Password / Finish Account Creation step
                     <>
-                      <ProgressBar progressPercent={progressPercent} color={theme.primary} />
+                      <ProgressBar progressPercent={100} color={theme.primary} />
 
                       <StepHeader
                         onPrevious={handlePrevious}
-                        canGoBack={currentStepIndex > 0}
+                        canGoBack={false}
                         clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
                         isLoadingClinic={isLoadingClinic}
                       />
 
                       <div className="bg-white rounded-2xl p-6 space-y-6 max-w-2xl mx-auto w-full">
                         <div className="space-y-2 text-center">
-                          <h3 className="text-2xl font-semibold text-gray-900">Submit for Medical Review</h3>
-                          <p className="text-gray-600">We'll send your answers to our medical team to review your case.</p>
+                          <h3 className="text-2xl font-semibold text-gray-900">Finish Creating Your Account</h3>
+                          <p className="text-gray-600">We've submitted your information to our medical team. Create a password to access your patient portal.</p>
                         </div>
 
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
-                            <div>
-                              <div className="text-gray-500">First Name</div>
-                              <div className="font-medium">{answers['firstName'] || '-'}</div>
-                            </div>
-                            <div>
-                              <div className="text-gray-500">Last Name</div>
-                              <div className="font-medium">{answers['lastName'] || '-'}</div>
-                            </div>
-                            <div className="col-span-2">
-                              <div className="text-gray-500">Email</div>
-                              <div className="font-medium">{answers['email'] || '-'}</div>
-                            </div>
-                            <div className="col-span-2">
-                              <div className="text-gray-500">Phone</div>
-                              <div className="font-medium">{answers['mobile'] || '-'}</div>
+                        <div className="space-y-4">
+                          {/* Display collected information */}
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm">
+                            <div className="flex items-center gap-2 text-emerald-700 mb-2">
+                              <Icon icon="lucide:check-circle" className="w-4 h-4" />
+                              <span className="font-medium">Medical review submitted successfully!</span>
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
+                          <div className="space-y-3">
                             <div>
-                              <div className="text-gray-500">Date of Birth</div>
-                              <div className="font-medium">{patientDob || '-'}</div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                              <input
+                                type="email"
+                                value={answers['email'] || ''}
+                                disabled
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 cursor-not-allowed"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">Your email from the intake form</p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Create Password</label>
+                              <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Enter password (min. 8 characters)"
+                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                              <input
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="Confirm your password"
+                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                              />
                             </div>
                           </div>
-                          {patientDobError && (
-                            <div className="text-red-600 text-sm">{patientDobError}</div>
-                          )}
                         </div>
 
-                        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700">
-                          <div className="flex items-center gap-2">
-                            <Icon icon="lucide:shield-check" className="w-4 h-4 text-emerald-600" />
-                            <span>Payment authorized. Your card will only be charged if prescribed.</span>
-                          </div>
-                        </div>
-
-                        {mdCaseStatus === 'error' && (
+                        {accountCreationError && (
                           <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
-                            {mdCaseError || 'There was a problem submitting your case.'}
+                            {accountCreationError}
                           </div>
                         )}
 
-                        {mdCaseStatus === 'success' ? (
+                        {accountCreationStatus === 'success' ? (
                           <div className="space-y-4 text-center">
                             <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-emerald-50 text-emerald-700">
                               <Icon icon="lucide:check" className="w-4 h-4" />
-                              <span>Case submitted</span>
+                              <span>Account created! Redirecting to your portal...</span>
                             </div>
-                            <Button
-                              color="primary"
-                              className="w-full"
-                              onPress={onClose}
-                            >
-                              Done
-                            </Button>
                           </div>
                         ) : (
                           <Button
                             color="primary"
                             size="lg"
                             className="w-full"
-                            isDisabled={mdCaseStatus === 'submitting' || !patientDob}
-                            onPress={handleSubmitMdCase}
-                            startContent={<Icon icon={mdCaseStatus === 'submitting' ? 'lucide:loader-2' : 'lucide:send'} className={mdCaseStatus === 'submitting' ? 'animate-spin' : ''} />}
+                            isDisabled={accountCreationStatus === 'creating' || !password || !confirmPassword}
+                            onPress={handleCreateAccount}
+                            startContent={<Icon icon={accountCreationStatus === 'creating' ? 'lucide:loader-2' : 'lucide:user-plus'} className={accountCreationStatus === 'creating' ? 'animate-spin' : ''} />}
                           >
-                            {mdCaseStatus === 'submitting' ? 'Submitting...' : 'Submit Case'}
+                            {accountCreationStatus === 'creating' ? 'Creating Account...' : 'Create Account & Access Portal'}
                           </Button>
                         )}
+
+                        <div className="text-center text-sm text-gray-500">
+                          <p>By creating an account, you agree to our terms of service and privacy policy.</p>
+                        </div>
                       </div>
                     </>
                   ) : isProductSelectionStep() ? (

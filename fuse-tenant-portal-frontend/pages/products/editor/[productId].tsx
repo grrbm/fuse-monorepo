@@ -60,7 +60,7 @@ interface Product {
   price: number
   dosage: string
   activeIngredients: string[]
-  category?: string
+  categories?: string[]
   medicationSize?: string
   pharmacyProvider?: string
   isActive: boolean
@@ -103,6 +103,12 @@ export default function ProductEditor() {
   const [editingFormMetadata, setEditingFormMetadata] = useState(false)
   const [formMetadata, setFormMetadata] = useState({ title: "", description: "" })
   const [savingFormMetadata, setSavingFormMetadata] = useState(false)
+
+  // Save as template state
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false)
+  const [newTemplateName, setNewTemplateName] = useState("")
+  const [newTemplateDescription, setNewTemplateDescription] = useState("")
+  const [savingAsTemplate, setSavingAsTemplate] = useState(false)
 
   const isAccountTemplate = useMemo(() => template?.formTemplateType === 'user_profile', [template?.formTemplateType])
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
@@ -273,11 +279,14 @@ export default function ProductEditor() {
         if (res.ok) {
           const data = await res.json()
           const forms = Array.isArray(data?.data) ? data.data : []
+          console.log(`📚 Loaded ${forms.length} available templates:`, forms.map((f: any) => f.title))
           setAvailableForms(forms.map((f: any) => ({
             id: f.id,
             title: f.title || 'Untitled Form',
             description: f.description || ''
           })))
+        } else {
+          console.error('Failed to fetch available forms - response not ok:', res.status)
         }
       } catch (error) {
         console.error('Failed to fetch available forms:', error)
@@ -449,11 +458,14 @@ export default function ProductEditor() {
     }
   }
 
-  const handleAttachExistingForm = async () => {
+  const handleAttachExistingForm = async (mode: 'replace' | 'append' = 'replace') => {
     if (!token || !productId || !selectedFormIdForAttach || typeof productId !== 'string') return
 
     try {
       setAttachingForm(true)
+      setError(null)
+      
+      console.log('📥 Importing template:', selectedFormIdForAttach, 'for product:', productId, 'mode:', mode)
       
       // Clone the template to create an independent copy for this product
       const response = await fetch(`${baseUrl}/questionnaires/templates/${selectedFormIdForAttach}/clone-for-product`, {
@@ -462,71 +474,94 @@ export default function ProductEditor() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ productId: productId }),
+        body: JSON.stringify({ productId: productId, mode: mode }),
       })
 
-      if (!response.ok) throw new Error("Failed to clone template for product")
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData?.message || `Failed to import template (${response.status})`)
+      }
 
       const data = await response.json()
       const clonedQuestionnaireId = data.data?.id
       
+      console.log('✅ Template imported, cloned ID:', clonedQuestionnaireId)
+      
       if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
       
-      setSaveMessage("Form template cloned and attached successfully! You can now customize it for this product.")
+      const message = mode === 'append' 
+        ? "Template steps added to your form successfully!"
+        : "Form template imported successfully! You can now customize it for this product."
+      setSaveMessage(message)
       setTemplateId(clonedQuestionnaireId) // Use the clone's ID, not the template's
       setShowFormSelector(false)
       
-      // Reload the page to show the cloned form
+      // Reload the page to show the updated form
       window.location.reload()
     } catch (error: any) {
-      console.error("❌ Error attaching form:", error)
-      setSaveMessage(error.message)
+      console.error("❌ Error importing form template:", error)
+      setError(error.message)
+      setSaveMessage(null)
     } finally {
       setAttachingForm(false)
     }
   }
 
-  const handleSwitchForm = async (newFormId: string) => {
+  const handleSwitchForm = async (newFormId: string, mode: 'replace' | 'append' = 'replace') => {
     if (!token || !productId || !templateId || typeof productId !== 'string') return
 
     try {
       setAttachingForm(true)
+      setError(null)
+      
+      console.log('🔄 Switching form:', templateId, 'with template:', newFormId, 'mode:', mode)
 
-      // Delete current form (it's a clone specific to this product)
-      await fetch(`${baseUrl}/questionnaires/${templateId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }).catch(() => console.log('Old form deletion failed or already deleted'))
-
-      // Clone the new template for this product
+      // Backend now handles finding/updating/replacing the questionnaire
+      // No need to delete on frontend side
+      console.log('📥 Cloning new template:', newFormId)
       const response = await fetch(`${baseUrl}/questionnaires/templates/${newFormId}/clone-for-product`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ productId: productId }),
+        body: JSON.stringify({ 
+          productId: productId,
+          mode: mode,
+          existingQuestionnaireId: mode === 'append' ? templateId : undefined
+        }),
       })
 
-      if (!response.ok) throw new Error("Failed to clone new template")
+      console.log('📊 Clone response status:', response.status)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('❌ Clone failed:', errorData)
+        const errorMessage = errorData?.details || errorData?.message || `Failed to import template (${response.status})`
+        throw new Error(errorMessage)
+      }
 
       const data = await response.json()
-      const clonedQuestionnaireId = data.data?.id
+      const questionnaireId = data.data?.id
       
-      if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
+      console.log('✅ Form updated, questionnaire ID:', questionnaireId)
       
-      setSaveMessage("Form template switched! Cloned and attached successfully.")
-      setTemplateId(clonedQuestionnaireId)
+      if (!questionnaireId) throw new Error("Failed to get questionnaire ID")
+      
+      const message = mode === 'append'
+        ? "Template steps added to your form successfully!"
+        : "Form template replaced successfully! You can now customize it for this product."
+      setSaveMessage(message)
+      setTemplateId(questionnaireId)
       setShowFormSelector(false)
       
-      // Reload to show the new cloned form
+      // Reload to show the updated form
+      console.log('🔄 Reloading page...')
       window.location.reload()
     } catch (error: any) {
-      console.error("❌ Error switching form:", error)
-      setSaveMessage(error.message)
+      console.error("❌ Error updating form template:", error)
+      setError(error.message)
+      setSaveMessage(null)
     } finally {
       setAttachingForm(false)
     }
@@ -632,18 +667,67 @@ export default function ProductEditor() {
         body: JSON.stringify({ productId: null }),
       })
 
-      if (!response.ok) throw new Error("Failed to detach form")
+      if (!response.ok) throw new Error("Failed to remove form")
 
       const data = await response.json()
-      setSaveMessage(data.message || "Form detached successfully")
+      setSaveMessage(data.message || "Form removed successfully")
       setTemplateId(null)
       setTemplate(null)
       setSteps([])
     } catch (error: any) {
-      console.error("❌ Error detaching form:", error)
+      console.error("❌ Error removing form:", error)
       setSaveMessage(error.message)
     } finally {
       setDetachingForm(false)
+    }
+  }
+
+  const handleSaveAsTemplate = async () => {
+    if (!token || !templateId || !newTemplateName.trim()) return
+
+    try {
+      setSavingAsTemplate(true)
+      
+      // Clone the current form as a new template
+      const response = await fetch(`${baseUrl}/questionnaires/templates/${templateId}/clone`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: newTemplateName,
+          description: newTemplateDescription || undefined,
+          formTemplateType: 'normal', // Save as a normal template (not tied to a product)
+          productId: null, // No product association - it's a reusable template
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData?.message || `Failed to save as template (${response.status})`)
+      }
+
+      const data = await response.json()
+      setSaveMessage(`Template "${newTemplateName}" saved successfully! You can now use it for other products.`)
+      setShowSaveTemplateModal(false)
+      setNewTemplateName("")
+      setNewTemplateDescription("")
+      
+      // Refresh available forms list
+      const res = await fetch(`${baseUrl}/questionnaires/templates/product-forms`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const formsData = await res.json()
+        setAvailableForms(formsData?.data || [])
+      }
+    } catch (error: any) {
+      console.error("❌ Error saving as template:", error)
+      setError(error.message || "Failed to save as template")
+      setSaveMessage(null)
+    } finally {
+      setSavingAsTemplate(false)
     }
   }
 
@@ -1973,7 +2057,7 @@ export default function ProductEditor() {
                       </div>
                     ) : (
                       <p className="text-muted-foreground text-base leading-relaxed">
-                        {template.description || "Generate a voucher to start using this intake form for patient sign up."}
+                        {template.description || "Patient intake form for this product."}
                       </p>
                     )}
                   </div>
@@ -2004,7 +2088,7 @@ export default function ProductEditor() {
                       </div>
                     </div>
 
-                    {/* Product Form Attachment */}
+                    {/* Product Form Template */}
                     <FormAttachmentCard
                       templateId={templateId}
                       template={template}
@@ -2018,6 +2102,7 @@ export default function ProductEditor() {
                       attachingForm={attachingForm}
                       detachingForm={detachingForm}
                       creatingForm={creatingForm}
+                      hasSteps={steps.length > 0}
                       onCreateNewForm={handleCreateNewForm}
                       onAttachExistingForm={handleAttachExistingForm}
                       onSwitchForm={handleSwitchForm}
@@ -2094,28 +2179,15 @@ export default function ProductEditor() {
 
                       <Button
                         variant="outline"
+                        onClick={() => {
+                          setError(null)
+                          setShowSaveTemplateModal(true)
+                        }}
+                        disabled={!templateId}
                         className="rounded-full px-6 border-border/60 shadow-md hover:shadow-lg hover:bg-muted/50 transition-all"
                       >
-                        Add Voucher
+                        Save New Template
                       </Button>
-
-                      {/* Activate Product Button - only show if product is inactive */}
-                      {product && !product.isActive && (
-                        <Button
-                          onClick={handleActivateProduct}
-                          disabled={activatingProduct || !templateId}
-                          className="rounded-full px-6 bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-shadow"
-                        >
-                          {activatingProduct ? (
-                            <>
-                              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                              Activating...
-                            </>
-                          ) : (
-                            "Activate Product"
-                          )}
-                        </Button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -2935,7 +3007,7 @@ export default function ProductEditor() {
             </>
           )}
 
-          {/* No Form Attached Message */}
+          {/* No Form Yet Message */}
           {!templateId && (
             <NoFormAttached
               availableForms={availableForms}
@@ -3693,6 +3765,75 @@ export default function ProductEditor() {
           </div>
         )
       })()}
+
+      {/* Save as Template Modal */}
+      {showSaveTemplateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg">
+            <CardHeader>
+              <CardTitle>Save as New Template</CardTitle>
+              <p className="text-sm text-muted-foreground mt-2">
+                Save this form as a reusable template that you can import into other products.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error && (
+                <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Template Name *</label>
+                <Input
+                  value={newTemplateName}
+                  onChange={(e) => setNewTemplateName(e.target.value)}
+                  placeholder="e.g., Weight Loss Intake Form"
+                  autoFocus
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Description (Optional)</label>
+                <textarea
+                  value={newTemplateDescription}
+                  onChange={(e) => setNewTemplateDescription(e.target.value)}
+                  placeholder="Brief description of this template..."
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm min-h-[80px]"
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSaveTemplateModal(false)
+                    setNewTemplateName("")
+                    setNewTemplateDescription("")
+                    setError(null)
+                  }}
+                  disabled={savingAsTemplate}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveAsTemplate}
+                  disabled={!newTemplateName.trim() || savingAsTemplate}
+                >
+                  {savingAsTemplate ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Template"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

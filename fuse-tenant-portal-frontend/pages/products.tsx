@@ -18,7 +18,7 @@ interface Product {
   price: number
   dosage: string
   activeIngredients: string[]
-  category?: string
+  categories?: string[]
   medicationSize?: string
   pharmacyProvider?: string
   pharmacyWholesaleCost?: number
@@ -62,7 +62,7 @@ export default function Products() {
     price: 0,
     dosage: "",
     activeIngredients: [] as string[],
-    category: "",
+    categories: [] as string[],
     medicationSize: "",
     pharmacyProvider: "",
     pharmacyProductId: "",
@@ -227,7 +227,7 @@ export default function Products() {
       price: product.price,
       dosage: product.dosage,
       activeIngredients: product.activeIngredients || [],
-      category: product.category || "",
+      categories: product.categories || [],
       medicationSize: product.medicationSize || "",
       pharmacyProvider: product.pharmacyProvider || "",
       pharmacyProductId: product.pharmacyProductId || "",
@@ -254,7 +254,7 @@ export default function Products() {
         pharmacyProvider: formData.pharmacyProvider || undefined,
         pharmacyProductId: formData.pharmacyProductId || undefined,
         medicationSize: formData.medicationSize || undefined,
-        category: formData.category || undefined,
+        categories: formData.categories && formData.categories.length > 0 ? formData.categories : undefined,
       }
 
       console.log('📤 Sending product data:', cleanedData)
@@ -337,15 +337,29 @@ export default function Products() {
     }
   }
 
-  const handleUpdateCategory = async (productId: string, newCategory: string, prevCategory?: string) => {
+  const handleUpdateCategories = async (productId: string, categoryValue: string, isChecked: boolean) => {
     if (!token) return
-    // If "No Category" is selected, do nothing and revert UI
-    if (newCategory === "") {
-      setProducts(prev => prev.map(p => p.id === productId ? { ...p, category: prevCategory } : p))
-      return
+    
+    // Get current product
+    const product = products.find(p => p.id === productId)
+    if (!product) return
+    
+    const currentCategories = product.categories || []
+    let newCategories: string[]
+    
+    if (isChecked) {
+      // Add category if not already present
+      newCategories = currentCategories.includes(categoryValue) 
+        ? currentCategories 
+        : [...currentCategories, categoryValue]
+    } else {
+      // Remove category
+      newCategories = currentCategories.filter(c => c !== categoryValue)
     }
+    
     // Optimistic update
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, category: newCategory || undefined } : p))
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, categories: newCategories } : p))
+    
     try {
       const response = await fetch(`${baseUrl}/products-management/${productId}`, {
         method: "PUT",
@@ -353,15 +367,15 @@ export default function Products() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ category: newCategory === "" ? null : newCategory }),
+        body: JSON.stringify({ categories: newCategories }),
       })
       if (!response.ok) {
-        throw new Error('Failed to update category')
+        throw new Error('Failed to update categories')
       }
-      toast.success('Category saved')
+      toast.success('Categories saved')
     } catch (error: any) {
-      console.error("❌ Error updating category:", error)
-      toast.error(error.message || 'Failed to update category')
+      console.error("❌ Error updating categories:", error)
+      toast.error(error.message || 'Failed to update categories')
       // Revert by refetching
       fetchProducts()
     }
@@ -539,9 +553,6 @@ export default function Products() {
                             Configure
                           </Button>
                         )}
-                        <Button size="sm" variant="outline" onClick={() => handleEditProduct(product)}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -554,18 +565,31 @@ export default function Products() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Category</label>
-                      <select
-                        value={product.category || ""}
-                        onChange={(e) => handleUpdateCategory(product.id, e.target.value, product.category)}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="">No Category</option>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground">Categories</label>
+                      <div className="max-h-32 overflow-y-auto border border-border rounded-md p-2 bg-background/50">
                         {CATEGORY_OPTIONS.filter((c: { value: string }) => c.value !== "").map((cat: { value: string; label: string }) => (
-                          <option key={cat.value} value={cat.value}>{cat.label}</option>
+                          <label key={cat.value} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1.5 rounded transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={product.categories?.includes(cat.value) || false}
+                              onChange={(e) => handleUpdateCategories(product.id, cat.value, e.target.checked)}
+                              className="rounded border-gray-300"
+                            />
+                            <span>{cat.label}</span>
+                          </label>
                         ))}
-                      </select>
+                      </div>
+                      {product.categories && product.categories.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {product.categories.map(cat => {
+                            const catOption = CATEGORY_OPTIONS.find((c: { value: string }) => c.value === cat)
+                            return catOption && catOption.value !== "" ? (
+                              <Badge key={cat} variant="secondary" className="text-xs">{catOption.label}</Badge>
+                            ) : null
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2 text-sm">
@@ -612,144 +636,6 @@ export default function Products() {
           )}
         </main>
       </div>
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-background rounded-lg shadow-lg">
-            <div className="p-6 space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-semibold">{editingProduct ? "Edit Product" : "Create Product"}</h2>
-                <Button variant="outline" onClick={() => setShowModal(false)}>Close</Button>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Product Name *</label>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Semaglutide 2.5mg"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Category *</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="">Select category...</option>
-                    {CATEGORY_OPTIONS.map((cat: { value: string; label: string }) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium">Description *</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Detailed product description..."
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm min-h-[80px]"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Dosage *</label>
-                  <Input
-                    value={formData.dosage}
-                    onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
-                    placeholder="e.g., 2.5mg/0.5ml"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Medication Size</label>
-                  <Input
-                    value={formData.medicationSize}
-                    onChange={(e) => setFormData({ ...formData, medicationSize: e.target.value })}
-                    placeholder="e.g., 10ml vial, 30 tablets"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Active Ingredients *</label>
-                  <Input
-                    value={formData.activeIngredients.join(", ")}
-                    onChange={(e) =>
-                      setFormData({ ...formData, activeIngredients: e.target.value.split(",").map((s) => s.trim()) })
-                    }
-                    placeholder="Comma separated: Ingredient1, Ingredient2"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Pharmacy Vendor</label>
-                  <select
-                    value={formData.pharmacyProvider}
-                    onChange={(e) => setFormData({ ...formData, pharmacyProvider: e.target.value })}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="">Select vendor...</option>
-                    {pharmacyProviders.map((vendor) => (
-                      <option key={vendor.id} value={vendor.id}>
-                        {vendor.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Pharmacy Product ID</label>
-                  <Input
-                    value={formData.pharmacyProductId}
-                    onChange={(e) => setFormData({ ...formData, pharmacyProductId: e.target.value })}
-                    placeholder="SKU or ID from pharmacy system"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Pharmacy Wholesale Price *</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                    placeholder="0.00"
-                  />
-                  <p className="text-xs text-muted-foreground">The wholesale price from the pharmacy</p>
-                </div>
-
-                <div className="flex items-center space-x-2 md:col-span-2">
-                  <input
-                    type="checkbox"
-                    id="isActive"
-                    checked={formData.isActive}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                    className="rounded"
-                  />
-                  <label htmlFor="isActive" className="text-sm font-medium">
-                    Product is active
-                  </label>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => setShowModal(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSaveProduct}>
-                  {editingProduct ? "Update Product" : "Create Product"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

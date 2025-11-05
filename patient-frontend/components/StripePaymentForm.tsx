@@ -53,18 +53,23 @@ export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-white p-6 rounded-lg border">
+    <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+      <div className="bg-white p-4 md:p-6 rounded-lg border">
         <PaymentElement 
           options={{
-            layout: 'tabs',
+            layout: {
+              type: 'accordion',
+              defaultCollapsed: false,
+              radios: true,
+              spacedAccordionItems: true
+            },
             paymentMethodOrder: ['card', 'link']
           }}
         />
       </div>
       
-      <div className="flex justify-between items-center">
-        <div className="text-lg font-semibold">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
+        <div className="text-base sm:text-lg font-semibold text-gray-900 order-2 sm:order-1">
           Total: ${amount.toFixed(2)}
         </div>
         
@@ -77,6 +82,7 @@ export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
           startContent={
             isProcessing ? null : <Icon icon="lucide:credit-card" />
           }
+          className="w-full sm:w-auto order-1 sm:order-2 h-12 md:h-auto text-base"
         >
           {isProcessing ? 'Processing...' : `Pay $${amount.toFixed(2)}`}
         </Button>
