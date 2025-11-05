@@ -353,13 +353,22 @@ export default function Forms() {
                 Configure product-specific forms and manage standardized question templates.
               </p>
             </div>
-            <button 
-              onClick={refresh} 
-              disabled={loading}
-              className="rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50"
-            >
-              <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/forms/structure')}
+                className="rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white text-sm font-medium transition-all flex items-center gap-2"
+              >
+                <Layers className="h-4 w-4" />
+                Global Structure
+              </button>
+              <button 
+                onClick={refresh} 
+                disabled={loading}
+                className="rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+              </button>
+            </div>
           </div>
 
           {/* Tabs */}
