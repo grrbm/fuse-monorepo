@@ -1337,6 +1337,36 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Navigate to next step
   // Create user account after "Create Your Account" step
   const createUserAccount = async () => {
+    // Immediately set patient name from answers
+    const fullName = `${answers['firstName']} ${answers['lastName']}`;
+    setPatientName(fullName);
+    
+    // Re-process questionnaire with updated variables including patientName
+    if (questionnaire) {
+      const variables = {
+        ...getVariablesFromClinic(domainClinic || {}),
+        productName: productName || '',
+        patientName: fullName
+      };
+
+      const updatedQuestionnaire = {
+        ...questionnaire,
+        steps: questionnaire.steps?.map((step: any) => ({
+          ...step,
+          title: replaceVariables(step.title || '', variables),
+          description: replaceVariables(step.description || '', variables),
+          questions: step.questions?.map((question: any) => ({
+            ...question,
+            questionText: replaceVariables(question.questionText || '', variables),
+            placeholder: replaceVariables(question.placeholder || '', variables),
+          })),
+        }))
+      };
+
+      setQuestionnaire(updatedQuestionnaire);
+    }
+    
+    // Try to create user account in background (don't block if it fails)
     try {
       console.log('🔐 Creating user account with data:', {
         firstName: answers['firstName'],
@@ -1352,7 +1382,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           lastName: answers['lastName'],
           email: answers['email'],
           phoneNumber: answers['mobile'],
-          password: Math.random().toString(36).slice(-12), // Generate temporary password
+          password: Math.random().toString(36).slice(-12) + 'Aa1!', // Generate stronger password
           role: 'patient',
           clinicId: domainClinic?.id || null
         })
@@ -1361,39 +1391,14 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       if (result.success && result.data) {
         setUserId(result.data.userId || result.data.id);
         setAccountCreated(true);
-        const fullName = `${answers['firstName']} ${answers['lastName']}`;
-        setPatientName(fullName);
-        
         console.log('✅ User account created:', result.data.userId || result.data.id);
-        
-        // Re-process questionnaire with updated variables including patientName
-        if (questionnaire) {
-          const variables = {
-            ...getVariablesFromClinic(domainClinic || {}),
-            productName: productName || '',
-            patientName: fullName
-          };
-
-          const updatedQuestionnaire = {
-            ...questionnaire,
-            steps: questionnaire.steps?.map((step: any) => ({
-              ...step,
-              title: replaceVariables(step.title || '', variables),
-              description: replaceVariables(step.description || '', variables),
-              questions: step.questions?.map((question: any) => ({
-                ...question,
-                questionText: replaceVariables(question.questionText || '', variables),
-                placeholder: replaceVariables(question.placeholder || '', variables),
-              })),
-            }))
-          };
-
-          setQuestionnaire(updatedQuestionnaire);
-        }
+      } else if (result.message?.includes('already exists') || result.message?.includes('duplicate')) {
+        console.log('ℹ️ User account already exists, will use existing account');
+        setAccountCreated(true);
       }
     } catch (error) {
       console.error('❌ Failed to create user account:', error);
-      // Don't block progression - account will be created at payment
+      // Don't block progression - account will be created/linked at payment time
     }
   };
 
