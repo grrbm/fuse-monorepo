@@ -9,6 +9,7 @@ export interface Question {
     id: string;
     questionText: string;
     answerType: string;
+    questionSubtype?: string | null;
     isRequired: boolean;
     questionOrder: number;
     placeholder?: string;

@@ -36,6 +36,7 @@ import { StepHeader } from "./components/StepHeader";
 import { QuestionRenderer } from "./components/QuestionRenderer";
 import { CheckoutView } from "./components/CheckoutView";
 import { ProductSelection } from "./components/ProductSelection";
+import { BMICalculator } from "./components/BMICalculator";
 import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVariables";
 import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
 
@@ -251,6 +252,25 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           }
 
           const questionnaireData = qData.data
+
+          // Debug: Log questionnaire data structure
+          console.log('📋 Questionnaire data loaded:', {
+            id: questionnaireData.id,
+            title: questionnaireData.title,
+            stepsCount: questionnaireData.steps?.length,
+            steps: questionnaireData.steps?.map((s: any) => ({
+              id: s.id,
+              title: s.title,
+              category: s.category,
+              questionsCount: s.questions?.length,
+              questions: s.questions?.map((q: any) => ({
+                id: q.id,
+                questionText: q.questionText,
+                answerType: q.answerType,
+                questionSubtype: q.questionSubtype,
+              }))
+            }))
+          });
 
           // Ensure steps
           if (!Array.isArray(questionnaireData.steps)) {
@@ -751,6 +771,23 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         if (i !== actualStepIndex) {
           setCurrentStepIndex(currentStepIndex + (i - actualStepIndex));
         }
+
+        // Debug: Log current step details
+        console.log('📍 Current step:', {
+          index: i,
+          id: step.id,
+          title: step.title,
+          category: step.category,
+          questionsCount: step.questions?.length,
+          hasBMIQuestions: step.questions?.some(q => q.questionSubtype === 'bmi'),
+          questions: step.questions?.map(q => ({
+            id: q.id,
+            questionText: q.questionText,
+            answerType: q.answerType,
+            questionSubtype: q.questionSubtype,
+          }))
+        });
+
         return step;
       }
     }
@@ -1948,135 +1985,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             </>
                           );
                         })()
-                      ) : currentStep?.title === 'Body Measurements' ? (
+                      ) : (currentStep?.title === 'Body Measurements' || currentStep?.questions?.some(q => q.questionSubtype === 'bmi')) ? (
                         // Custom BMI calculator
-                        <div className="space-y-4">
-                          <div>
-                            <h3 className="text-xl font-medium text-gray-900 mb-3">
-                              What is your current height and weight?
-                            </h3>
-                            <p className="text-gray-600 text-sm">We'll calculate your BMI to check your eligibility</p>
-                          </div>
-
-                          <div className="space-y-6">
-                            <div>
-                              <label className="block text-gray-900 font-medium mb-2">Weight (pounds)</label>
-                              <input
-                                type="number"
-                                value={answers['weight'] || ''}
-                                onChange={(e) => handleAnswerChange('weight', e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                placeholder="200"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-gray-900 font-medium mb-2">Height</label>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <input
-                                    type="number"
-                                    value={answers['heightFeet'] || ''}
-                                    onChange={(e) => handleAnswerChange('heightFeet', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                    placeholder="6"
-                                  />
-                                  <p className="text-gray-600 text-sm mt-1">Feet</p>
-                                </div>
-                                <div>
-                                  <input
-                                    type="number"
-                                    value={answers['heightInches'] || ''}
-                                    onChange={(e) => handleAnswerChange('heightInches', e.target.value)}
-                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-2xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                    placeholder="2"
-                                  />
-                                  <p className="text-gray-600 text-sm mt-1">Inches</p>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* BMI Result */}
-                            {answers['weight'] && answers['heightFeet'] && answers['heightInches'] && (
-                              (() => {
-                                const weight = parseFloat(answers['weight'] as string);
-                                const feet = parseFloat(answers['heightFeet'] as string);
-                                const inches = parseFloat(answers['heightInches'] as string);
-
-                                if (weight && feet >= 0 && inches >= 0) {
-                                  const totalInches = feet * 12 + inches;
-                                  const heightInMeters = totalInches * 0.0254;
-                                  const weightInKg = weight * 0.453592;
-                                  const bmi = weightInKg / (heightInMeters * heightInMeters);
-
-                                  let category = '';
-                                  let colorClass = '';
-
-                                  if (bmi < 18.5) {
-                                    category = 'Underweight';
-                                    colorClass = 'bg-blue-500';
-                                  } else if (bmi < 25) {
-                                    category = 'Normal';
-                                    colorClass = 'bg-green-500';
-                                  } else if (bmi < 30) {
-                                    category = 'Overweight';
-                                    colorClass = 'bg-yellow-500';
-                                  } else {
-                                    category = 'Obese';
-                                    colorClass = 'bg-red-500';
-                                  }
-
-                                  return (
-                                    <div>
-                                      <h3 className="text-gray-900 font-medium mb-4">Your BMI Result</h3>
-                                      <div className="relative mb-4 h-[46px]">
-                                        {/* Grey underlay - background */}
-                                        <div className="w-full px-6 rounded-full bg-gray-200 h-[46px] flex items-center"></div>
-
-                                        {/* Animated colored overlay */}
-                                        <div
-                                          key={`${weight}-${feet}-${inches}`}
-                                          className={`absolute top-0 left-0 h-full rounded-full ${colorClass}`}
-                                          style={{
-                                            width: '0%',
-                                            animation: `bmi-expand 1s ease-out forwards`,
-                                            animationFillMode: 'forwards'
-                                          }}
-                                        />
-
-                                        {/* Text on top */}
-                                        <div className="absolute top-0 left-0 w-full px-6 py-3 text-gray-900 font-medium text-center z-20">
-                                          {bmi.toFixed(1)} - {category}
-                                        </div>
-                                      </div>
-
-
-                                      <div className="grid grid-cols-4 gap-2 text-sm">
-                                        <div className="text-center">
-                                          <p className="font-medium text-gray-900">Underweight</p>
-                                          <p className="text-gray-600">{"<18.5"}</p>
-                                        </div>
-                                        <div className="text-center">
-                                          <p className="font-medium text-gray-900">Normal</p>
-                                          <p className="text-gray-600">18.5-24.9</p>
-                                        </div>
-                                        <div className="text-center">
-                                          <p className="font-medium text-gray-900">Overweight</p>
-                                          <p className="text-gray-600">25-29.9</p>
-                                        </div>
-                                        <div className="text-center">
-                                          <p className="font-medium text-gray-900">Obese</p>
-                                          <p className="text-gray-600">≥30</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })()
-                            )}
-                          </div>
-                        </div>
+                        <BMICalculator
+                          currentStep={currentStep}
+                          answers={answers}
+                          onAnswerChange={handleAnswerChange}
+                        />
                       ) : currentStep?.title === 'Success Stories' ? (
                         // Custom success stories page
                         <div className="space-y-4">

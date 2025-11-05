@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
-import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle, Link2, Unlink, Package, FileText } from "lucide-react"
+import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle, Link2, Unlink, Package, FileText, Calculator } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../../forms/QuestionEditor"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
@@ -647,7 +647,7 @@ export default function ProductEditor() {
     }
   }
 
-  const handleAddStep = async (stepType: "question" | "info" | "yesno" | "multi" | "textarea" | "deadend") => {
+  const handleAddStep = async (stepType: "question" | "info" | "yesno" | "multi" | "textarea" | "deadend" | "bmi") => {
     if (isAccountTemplate) return
     if (!token || !templateId) return
     try {
@@ -765,6 +765,66 @@ export default function ProductEditor() {
             description: 'Important information for you to review.'
           }),
         })
+      } else if (stepType === 'bmi' && newStepId) {
+        // BMI Calculator - Creates three fixed questions for weight and height
+        // Set step title and description
+        await fetch(`${baseUrl}/questionnaires/step`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            title: 'BMI Calculator',
+            description: 'What is your current height and weight? We\'ll calculate your BMI to check your eligibility.'
+          }),
+        })
+
+        // Create Weight question
+        const weightRes = await fetch(`${baseUrl}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            questionText: 'Weight (pounds)',
+            answerType: 'number',
+            questionSubtype: 'bmi',
+            isRequired: true,
+            placeholder: '200',
+            questionOrder: 1
+          }),
+        })
+        if (!weightRes.ok) throw new Error((await weightRes.json().catch(() => ({}))).message || 'Failed to create weight question')
+
+        // Create Height Feet question
+        const feetRes = await fetch(`${baseUrl}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            questionText: 'Height (feet)',
+            answerType: 'number',
+            questionSubtype: 'bmi',
+            isRequired: true,
+            placeholder: '6',
+            questionOrder: 2
+          }),
+        })
+        if (!feetRes.ok) throw new Error((await feetRes.json().catch(() => ({}))).message || 'Failed to create height feet question')
+
+        // Create Height Inches question
+        const inchesRes = await fetch(`${baseUrl}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            stepId: newStepId,
+            questionText: 'Height (inches)',
+            answerType: 'number',
+            questionSubtype: 'bmi',
+            isRequired: true,
+            placeholder: '2',
+            questionOrder: 3
+          }),
+        })
+        if (!inchesRes.ok) throw new Error((await inchesRes.json().catch(() => ({}))).message || 'Failed to create height inches question')
       }
 
       const ref = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
@@ -2256,6 +2316,31 @@ export default function ProductEditor() {
                           <TooltipContent side="right" className="max-w-xs">
                             <p className="font-medium">Information Step</p>
                             <p className="text-xs text-muted-foreground">Display information only</p>
+                          </TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => handleAddStep("bmi")}
+                              className="w-full justify-start text-left h-auto py-4 px-5 rounded-xl border-border/60 hover:border-border hover:bg-muted/50 transition-all"
+                              variant="outline"
+                              disabled={isAccountTemplate}
+                            >
+                              <div className="flex items-center gap-4 w-full min-w-0">
+                                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
+                                  <Calculator className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                                </div>
+                                <div className="flex-1 text-left min-w-0 overflow-hidden">
+                                  <div className="font-medium text-base mb-0.5 truncate">BMI Calculator</div>
+                                  <div className="text-xs text-muted-foreground truncate">Calculate Body Mass Index</div>
+                                </div>
+                              </div>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-xs">
+                            <p className="font-medium">BMI Calculator</p>
+                            <p className="text-xs text-muted-foreground">Calculates BMI from weight and height inputs</p>
                           </TooltipContent>
                         </Tooltip>
 

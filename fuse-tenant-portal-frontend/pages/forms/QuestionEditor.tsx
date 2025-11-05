@@ -75,8 +75,10 @@ export function QuestionEditor({
 
     // Computed values that update with state
     const isYesNoType = question.questionSubtype === 'yesno'
+    const isBMIType = question.questionSubtype === 'bmi'
     const isTextArea = answerType === 'textarea' || question.answerType === 'textarea'
-    const restrictOptionEdits = restrictStructuralEdits || isYesNoType
+    const isNumberInput = answerType === 'number' || question.answerType === 'number'
+    const restrictOptionEdits = restrictStructuralEdits || isYesNoType || isBMIType
 
     useEffect(() => {
         if (autoEdit) {
@@ -364,10 +366,12 @@ export function QuestionEditor({
     // Get question type label for display
     const getQuestionTypeLabel = () => {
         if (question.questionSubtype === 'yesno') return 'Yes/No Question'
+        if (question.questionSubtype === 'bmi') return 'BMI Calculator Question'
         if (answerType === 'textarea' || question.answerType === 'textarea') return 'Multi-Line Text'
         if (answerType === 'checkbox') return 'Multi-Choice Question'
         if (answerType === 'radio') return 'Single-Choice Question'
         if (answerType === 'text') return 'Short Text'
+        if (answerType === 'number') return 'Number Input'
         if (answerType === 'select') return 'Select Dropdown'
         return 'Question'
     }
@@ -455,8 +459,8 @@ export function QuestionEditor({
                 )}
             </div>
 
-            {/* Placeholder (for textarea types) */}
-            {isTextArea && (
+            {/* Placeholder (for textarea and number types) */}
+            {(isTextArea || isNumberInput) && (
                 <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-muted-foreground">
                         Placeholder <span className="text-xs">(optional)</span>
@@ -465,7 +469,7 @@ export function QuestionEditor({
                         <Input
                             value={placeholder}
                             onChange={(e) => setPlaceholder(e.target.value)}
-                            placeholder="e.g., Enter your response..."
+                            placeholder={isNumberInput ? "e.g., 200" : "e.g., Enter your response..."}
                             className="text-xs h-8"
                         />
                     ) : (
