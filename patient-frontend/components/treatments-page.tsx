@@ -29,7 +29,7 @@ interface Treatment {
   name: string;
   treatmentLogo?: string;
   subtitle?: string;
-  dosage?: string;
+  placeholderSig?: string;
   refills?: number;
   status?: "paused" | "active" | "cancelled";
   expiryDate?: string;
@@ -565,7 +565,7 @@ export const TreatmentsPage: React.FC = () => {
                               <div className="space-y-1 text-sm">
                                 <p className="flex items-center gap-2">
                                   <Icon icon="lucide:pill" className="text-foreground-500" />
-                                  <span className="text-foreground-600">Dosage:</span> {treatment.dosage || "As prescribed"}
+                                  <span className="text-foreground-600">Sig:</span> {treatment.placeholderSig || "As prescribed"}
                                 </p>
                                 <p className="flex items-center gap-2">
                                   <Icon icon="lucide:repeat" className="text-foreground-500" />

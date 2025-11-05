@@ -1,4 +1,5 @@
 import { Sequelize } from 'sequelize-typescript';
+import { DataTypes } from 'sequelize';
 import dotenv from 'dotenv';
 import User from '../models/User';
 import Entity from '../models/Entity';
@@ -90,6 +91,82 @@ export const sequelize = new Sequelize(databaseUrl, {
   ],
 });
 
+async function ensureProductCategoriesColumn() {
+  const queryInterface = sequelize.getQueryInterface();
+
+  try {
+    const tableDefinition = await queryInterface.describeTable('Product');
+    const hasCategoriesColumn = Object.prototype.hasOwnProperty.call(tableDefinition, 'categories');
+    const hasTempColumn = Object.prototype.hasOwnProperty.call(tableDefinition, 'categories_temp');
+    const hasLegacyCategoryColumn = Object.prototype.hasOwnProperty.call(tableDefinition, 'category');
+
+    if (!hasCategoriesColumn) {
+      console.log('⚙️  Updating Product table to support multiple categories (auto-migration)...');
+
+      if (!hasTempColumn) {
+        await queryInterface.addColumn('Product', 'categories_temp', {
+          type: DataTypes.ARRAY(DataTypes.STRING),
+          allowNull: true,
+          comment: 'Product categories as array',
+        });
+      }
+
+      if (hasLegacyCategoryColumn) {
+        await sequelize.query(`
+          UPDATE "Product"
+          SET "categories_temp" = CASE
+            WHEN "category" IS NOT NULL THEN ARRAY["category"::text]
+            ELSE ARRAY[]::text[]
+          END;
+        `);
+        try {
+          await queryInterface.removeColumn('Product', 'category');
+          await sequelize.query('DROP TYPE IF EXISTS "enum_Product_category";');
+        } catch (removeError) {
+          console.warn('⚠️  Skipped removing legacy category column (already removed?):', removeError instanceof Error ? removeError.message : removeError);
+        }
+      }
+
+      try {
+        await queryInterface.renameColumn('Product', 'categories_temp', 'categories');
+      } catch (renameError) {
+        if (renameError instanceof Error && renameError.message.includes('already exists')) {
+          console.warn('⚠️  Categories column already present, skipping rename.');
+        } else {
+          throw renameError;
+        }
+      }
+
+      await sequelize.query(`
+        ALTER TABLE "Product"
+        ALTER COLUMN "categories" SET DEFAULT ARRAY[]::text[];
+      `);
+
+      await sequelize.query(`
+        UPDATE "Product"
+        SET "categories" = ARRAY[]::text[]
+        WHERE "categories" IS NULL;
+      `);
+
+      console.log('✅ Product categories auto-migration completed');
+    } else {
+      // Ensure column defaults and null handling are correct even if migration already ran
+      await sequelize.query(`
+        ALTER TABLE "Product"
+        ALTER COLUMN "categories" SET DEFAULT ARRAY[]::text[];
+      `);
+
+      await sequelize.query(`
+        UPDATE "Product"
+        SET "categories" = ARRAY[]::text[]
+        WHERE "categories" IS NULL;
+      `);
+    }
+  } catch (error) {
+    console.error('❌ Failed to ensure Product categories column:', error);
+  }
+}
+
 export async function initializeDatabase() {
   try {
     await sequelize.authenticate();
@@ -101,6 +178,8 @@ export async function initializeDatabase() {
     await sequelize.sync({ alter: { drop: false } });
     // await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
+
+    await ensureProductCategoriesColumn();
 
     // Run active to isActive migration
     try {

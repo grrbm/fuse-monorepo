@@ -25,7 +25,7 @@ type OfferingItem = {
         id: string;
         name: string;
         description?: string;
-        dosage?: string;
+        placeholderSig?: string;
         category?: string;
         stripePriceId?: string;
         isActive: boolean;
@@ -137,9 +137,9 @@ export const OfferingsSection: React.FC = () => {
                                                 <div className="flex-1">
                                                     <div className="font-medium text-foreground">{item.title}</div>
                                                     <div className="mt-1 text-sm text-foreground-500">Order {item.orderNumber}</div>
-                                                    {item.tenantProduct && item.tenantProduct.dosage && (
+                                                    {item.tenantProduct && item.tenantProduct.placeholderSig && (
                                                         <div className="text-xs text-foreground-400 mt-1">
-                                                            {item.tenantProduct.dosage}
+                                                            {item.tenantProduct.placeholderSig}
                                                         </div>
                                                     )}
                                                 </div>
@@ -218,9 +218,9 @@ export const OfferingsSection: React.FC = () => {
                                                 <div className="flex-1">
                                                     <div className="font-medium text-foreground">{item.title}</div>
                                                     <div className="mt-1 text-sm text-foreground-500">Order {item.orderNumber}</div>
-                                                    {item.tenantProduct && item.tenantProduct.dosage && (
+                                                    {item.tenantProduct && item.tenantProduct.placeholderSig && (
                                                         <div className="text-xs text-foreground-400 mt-1">
-                                                            {item.tenantProduct.dosage}
+                                                            {item.tenantProduct.placeholderSig}
                                                         </div>
                                                     )}
                                                 </div>
@@ -242,9 +242,9 @@ export const OfferingsSection: React.FC = () => {
                                             <div className="flex-1">
                                                 <div className="font-medium text-foreground">{item.title}</div>
                                                 <div className="mt-1 text-sm text-foreground-500">Order {item.orderNumber}</div>
-                                                {item.tenantProduct && item.tenantProduct.dosage && (
+                                                {item.tenantProduct && item.tenantProduct.placeholderSig && (
                                                     <div className="text-xs text-foreground-400 mt-1">
-                                                        {item.tenantProduct.dosage}
+                                                        {item.tenantProduct.placeholderSig}
                                                     </div>
                                                 )}
                                             </div>
@@ -294,7 +294,7 @@ export const OfferingDetailsModal: React.FC<{ item: OfferingItem | null, isOpen:
                                             <div className="space-y-1">
                                                 <div><span className="text-foreground-500">Name:</span> {item.tenantProduct.name}</div>
                                                 {item.tenantProduct.description && <div><span className="text-foreground-500">Description:</span> {item.tenantProduct.description}</div>}
-                                                {item.tenantProduct.dosage && <div><span className="text-foreground-500">Dosage:</span> {item.tenantProduct.dosage}</div>}
+                                                {item.tenantProduct.placeholderSig && <div><span className="text-foreground-500">Dosage:</span> {item.tenantProduct.placeholderSig}</div>}
                                                 {item.tenantProduct.category && <div><span className="text-foreground-500">Category:</span> {item.tenantProduct.category}</div>}
                                                 <div><span className="text-foreground-500">Active:</span> {item.tenantProduct.isActive ? 'Yes' : 'No'}</div>
                                             </div>

@@ -16,9 +16,10 @@ interface Product {
   name: string
   description: string
   price: number
-  dosage: string
+  placeholderSig: string
   activeIngredients: string[]
   category?: string
+  categories?: string[]
   medicationSize?: string
   pharmacyProvider?: string
   pharmacyWholesaleCost?: number
@@ -60,9 +61,9 @@ export default function Products() {
     name: "",
     description: "",
     price: 0,
-    dosage: "",
+    placeholderSig: "",
     activeIngredients: [] as string[],
-    category: "",
+    categories: [] as string[],
     medicationSize: "",
     pharmacyProvider: "",
     pharmacyProductId: "",
@@ -166,7 +167,7 @@ export default function Products() {
       name: "New Product",
       description: "Edit product details below",
       price: 1, // Minimum positive price
-      dosage: "TBD",
+      placeholderSig: "TBD",
       activeIngredients: ["TBD"], // At least one required
       isActive: false, // Start as inactive
     }
@@ -225,9 +226,13 @@ export default function Products() {
       name: product.name,
       description: product.description,
       price: product.price,
-      dosage: product.dosage,
+      placeholderSig: product.placeholderSig,
       activeIngredients: product.activeIngredients || [],
-      category: product.category || "",
+      categories: Array.isArray(product.categories) && product.categories.length > 0
+        ? product.categories
+        : product.category
+          ? [product.category]
+          : [],
       medicationSize: product.medicationSize || "",
       pharmacyProvider: product.pharmacyProvider || "",
       pharmacyProductId: product.pharmacyProductId || "",
@@ -254,7 +259,8 @@ export default function Products() {
         pharmacyProvider: formData.pharmacyProvider || undefined,
         pharmacyProductId: formData.pharmacyProductId || undefined,
         medicationSize: formData.medicationSize || undefined,
-        category: formData.category || undefined,
+        categories: formData.categories,
+        category: formData.categories[0] || undefined,
       }
 
       console.log('📤 Sending product data:', cleanedData)
@@ -337,15 +343,29 @@ export default function Products() {
     }
   }
 
-  const handleUpdateCategory = async (productId: string, newCategory: string, prevCategory?: string) => {
-    if (!token) return
-    // If "No Category" is selected, do nothing and revert UI
-    if (newCategory === "") {
-      setProducts(prev => prev.map(p => p.id === productId ? { ...p, category: prevCategory } : p))
-      return
+  const getProductCategories = (product: Product): string[] => {
+    if (Array.isArray(product.categories) && product.categories.length > 0) {
+      return product.categories
     }
+    return product.category ? [product.category] : []
+  }
+
+  const handleUpdateCategories = async (productId: string, nextCategories: string[]) => {
+    if (!token) return
+
+    const normalized = Array.from(new Set(nextCategories.filter(Boolean)))
+
     // Optimistic update
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, category: newCategory || undefined } : p))
+    setProducts(prev => prev.map(p =>
+      p.id === productId
+        ? {
+            ...p,
+            categories: normalized,
+            category: normalized[0] ?? undefined,
+          }
+        : p
+    ))
+
     try {
       const response = await fetch(`${baseUrl}/products-management/${productId}`, {
         method: "PUT",
@@ -353,18 +373,32 @@ export default function Products() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ category: newCategory === "" ? null : newCategory }),
+        body: JSON.stringify({
+          categories: normalized,
+          category: normalized[0] ?? null,
+        }),
       })
+
       if (!response.ok) {
-        throw new Error('Failed to update category')
+        throw new Error('Failed to update categories')
       }
-      toast.success('Category saved')
+
+      toast.success('Categories saved')
     } catch (error: any) {
-      console.error("❌ Error updating category:", error)
-      toast.error(error.message || 'Failed to update category')
-      // Revert by refetching
+      console.error("❌ Error updating categories:", error)
+      toast.error(error.message || 'Failed to update categories')
       fetchProducts()
     }
+  }
+
+  const toggleProductCategory = async (product: Product, categoryValue: string) => {
+    const current = new Set(getProductCategories(product))
+    if (current.has(categoryValue)) {
+      current.delete(categoryValue)
+    } else {
+      current.add(categoryValue)
+    }
+    await handleUpdateCategories(product.id, Array.from(current))
   }
 
   const handleDeactivateAll = async () => {
@@ -537,30 +571,34 @@ export default function Products() {
                     <div className="space-y-3">
                       <div className="space-y-1.5">
                         <label className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Category</label>
-                        <select
-                          value={product.category || ""}
-                          onChange={(e) => handleUpdateCategory(product.id, e.target.value, product.category)}
-                          className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                        >
-                          <option value="">No Category</option>
-                          {CATEGORY_OPTIONS.filter((c: { value: string }) => c.value !== "").map((cat: { value: string; label: string }) => (
-                            <option key={cat.value} value={cat.value}>{cat.label}</option>
-                          ))}
-                        </select>
+                        <div className="flex flex-wrap gap-2">
+                          {CATEGORY_OPTIONS.filter((c) => c.value).map((cat) => {
+                            const isSelected = getProductCategories(product).includes(cat.value)
+                            return (
+                              <button
+                                key={cat.value}
+                                onClick={() => toggleProductCategory(product, cat.value)}
+                                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                                  isSelected
+                                    ? 'bg-[#E0F2F1] text-[#196459] border-[#99E2D0]'
+                                    : 'bg-[#F9FAFB] text-[#4B5563] border-[#E5E7EB] hover:bg-[#F3F4F6]'
+                                }`}
+                              >
+                                {cat.label}
+                              </button>
+                            )
+                          })}
+                          {getProductCategories(product).length === 0 && (
+                            <span className="text-xs text-[#9CA3AF]">No categories</span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div className="bg-[#F9FAFB] rounded-xl p-3 border border-[#E5E7EB]">
-                          <p className="text-xs font-medium text-[#9CA3AF] mb-1">Dosage</p>
-                          <p className="text-sm font-semibold text-[#1F2937]">{product.dosage}</p>
+                          <p className="text-xs font-medium text-[#9CA3AF] mb-1">Medication Size</p>
+                          <p className="text-sm font-semibold text-[#1F2937]">{product.medicationSize || '—'}</p>
                         </div>
-
-                        {product.medicationSize && (
-                          <div className="bg-[#F9FAFB] rounded-xl p-3 border border-[#E5E7EB]">
-                            <p className="text-xs font-medium text-[#9CA3AF] mb-1">Size</p>
-                            <p className="text-sm font-semibold text-[#1F2937]">{product.medicationSize}</p>
-                          </div>
-                        )}
                       </div>
                     </div>
 
@@ -624,19 +662,37 @@ export default function Products() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-[#4B5563]">Category *</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                  >
-                    <option value="">Select category...</option>
-                    {CATEGORY_OPTIONS.map((cat: { value: string; label: string }) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="text-sm font-medium text-[#4B5563]">Categories</label>
+                  <div className="space-y-2 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                    {CATEGORY_OPTIONS.filter((cat) => cat.value).map((cat) => {
+                      const checked = formData.categories.includes(cat.value)
+                      return (
+                        <label key={cat.value} className="flex items-center gap-3 text-sm text-[#1F2937]">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const next = new Set(formData.categories)
+                              if (e.target.checked) {
+                                next.add(cat.value)
+                              } else {
+                                next.delete(cat.value)
+                              }
+                              setFormData({
+                                ...formData,
+                                categories: Array.from(next),
+                              })
+                            }}
+                            className="h-4 w-4 rounded border-[#D1D5DB] text-[#4FA59C] focus:ring-[#4FA59C]"
+                          />
+                          <span>{cat.label}</span>
+                        </label>
+                      )
+                    })}
+                    {formData.categories.length === 0 && (
+                      <p className="text-xs text-[#9CA3AF]">Select one or more categories if applicable.</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
@@ -650,10 +706,10 @@ export default function Products() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-[#4B5563]">Dosage *</label>
+                  <label className="text-sm font-medium text-[#4B5563]">Placeholder Sig *</label>
                   <input
-                    value={formData.dosage}
-                    onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
+                    value={formData.placeholderSig}
+                    onChange={(e) => setFormData({ ...formData, placeholderSig: e.target.value })}
                     placeholder="e.g., 2.5mg/0.5ml"
                     className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                   />

@@ -8,10 +8,23 @@ import type { ProductCreateInput, ProductUpdateInput } from '@fuse/validators'
 /**
  * Helper function to serialize product data, converting DECIMAL fields from strings to numbers
  */
-function serializeProduct(product: Product): Product {
+type SerializedProduct = ReturnType<Product['toJSON']> & {
+    categories: string[]
+    category: string | null
+    pharmacyWholesaleCost?: number
+    suggestedRetailPrice?: number
+    price: number
+}
+
+function serializeProduct(product: Product): SerializedProduct {
     const plain = product.toJSON()
+    const categories = Array.isArray((plain as any).categories)
+        ? ((plain as any).categories as string[]).filter(Boolean)
+        : []
     return {
         ...plain,
+        categories,
+        category: categories[0] ?? null,
         pharmacyWholesaleCost: plain.pharmacyWholesaleCost ? parseFloat(plain.pharmacyWholesaleCost as any) : undefined,
         suggestedRetailPrice: plain.suggestedRetailPrice ? parseFloat(plain.suggestedRetailPrice as any) : undefined,
         price: plain.price ? parseFloat(plain.price as any) : plain.price,
@@ -19,14 +32,22 @@ function serializeProduct(product: Product): Product {
 }
 
 class ProductService {
-    async listProducts(userId: string, options: { page?: number; limit?: number; category?: string; isActive?: boolean; pharmacyProvider?: string } = {}) {
+    async listProducts(
+        userId: string,
+        options: { page?: number; limit?: number; category?: string | string[]; isActive?: boolean; pharmacyProvider?: string } = {}
+    ) {
         const { page = 1, limit = 50, category, isActive, pharmacyProvider } = options
         const offset = (page - 1) * limit
 
         const where: any = {}
 
         if (category) {
-            where.category = category
+            const categoriesFilter = Array.isArray(category) ? category : String(category).split(',').map((c) => c.trim()).filter(Boolean)
+            if (categoriesFilter.length > 0) {
+                where.categories = {
+                    [Op.contains]: categoriesFilter,
+                }
+            }
         }
 
         if (typeof isActive === 'boolean') {
@@ -98,8 +119,17 @@ class ProductService {
             }
 
             // Create the product (validation is handled by Zod schema at endpoint layer)
+            const { category: legacyCategory, categories: incomingCategories, ...restInput } = input as any
+
+            const categories = Array.isArray(incomingCategories)
+                ? incomingCategories.filter(Boolean)
+                : legacyCategory
+                    ? [legacyCategory].filter(Boolean)
+                    : []
+
             const product = await Product.create({
-                ...input,
+                ...restInput,
+                categories,
                 isActive: input.isActive ?? true,
             })
 
@@ -109,7 +139,7 @@ class ProductService {
                     name: `${input.name} - Doctor Questions`,
                     description: `Mandatory medical questions for ${input.name}`,
                     sectionType: 'doctor',
-                    category: input.category,
+                    category: categories[0] ?? null,
                     treatmentId: null, // Will be linked when product is associated with treatment
                     schema: {
                         questions: input.requiredDoctorQuestions,
@@ -184,14 +214,35 @@ class ProductService {
             }
 
             // Update the product
-            await product.update(input as any)
+            const { category: legacyCategory, categories: incomingCategories, ...restInput } = input as any
+
+            const categories = Array.isArray(incomingCategories)
+                ? incomingCategories.filter(Boolean)
+                : legacyCategory
+                    ? [legacyCategory].filter(Boolean)
+                    : undefined
+
+            const updatePayload: any = {
+                ...restInput,
+            }
+
+            if (categories !== undefined) {
+                updatePayload.categories = categories
+            }
+
+            await product.update(updatePayload)
 
             // If requiredDoctorQuestions were updated, update or create FormSectionTemplate
             if (input.requiredDoctorQuestions) {
+                const primaryCategory = Array.isArray(product.categories)
+                    ? product.categories[0]
+                    : categories && categories.length > 0
+                        ? categories[0]
+                        : null
                 const existingTemplate = await FormSectionTemplate.findOne({
                     where: {
                         sectionType: 'doctor',
-                        category: product.category || input.category,
+                        category: primaryCategory,
                     },
                     order: [['version', 'DESC']],
                 })
@@ -202,7 +253,7 @@ class ProductService {
                         name: existingTemplate.name,
                         description: existingTemplate.description,
                         sectionType: 'doctor',
-                        category: product.category || input.category,
+                        category: primaryCategory,
                         treatmentId: null,
                         schema: {
                             questions: input.requiredDoctorQuestions,
@@ -216,7 +267,7 @@ class ProductService {
                         name: `${product.name} - Doctor Questions`,
                         description: `Mandatory medical questions for ${product.name}`,
                         sectionType: 'doctor',
-                        category: product.category || input.category,
+                        category: primaryCategory,
                         treatmentId: null,
                         schema: {
                             questions: input.requiredDoctorQuestions,
@@ -289,19 +340,20 @@ class ProductService {
     }
 
     async listCategories(userId: string) {
-        const categories = await Product.findAll({
-            attributes: [[Product.sequelize!.fn('DISTINCT', Product.sequelize!.col('category')), 'category']],
-            where: {
-                category: {
-                    [Op.ne]: null,
-                },
-            },
-            raw: true,
-        })
+        const [results] = await Product.sequelize!.query(
+            'SELECT DISTINCT unnest("categories") AS category FROM "Product" WHERE "categories" IS NOT NULL'
+        )
+
+        const categories = Array.isArray(results)
+            ? (results as Array<{ category: string | null }>)
+                .map((row) => row.category)
+                .filter((category): category is string => Boolean(category))
+                .sort((a, b) => a.localeCompare(b))
+            : []
 
         return {
             success: true,
-            data: categories.map((c: any) => c.category).filter(Boolean),
+            data: categories,
         }
     }
 

@@ -230,7 +230,7 @@ class PaymentService {
                         unitPrice: product.price || 0,
                         totalPrice: product.price || 0,
                         pharmacyProductId: product.pharmacyProductId,
-                        dosage: treatmentProduct.dosage || product.dosage || "Use as directed"
+                        placeholderSig: treatmentProduct.placeholderSig || product.placeholderSig || "Use as directed"
                     });
                     orderItems.push(orderItem);
                 }

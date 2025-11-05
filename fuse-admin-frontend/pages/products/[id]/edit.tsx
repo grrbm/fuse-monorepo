@@ -48,7 +48,7 @@ interface Product {
     price: number
     description?: string
     pharmacyProductId?: string
-    dosage?: string
+    placeholderSig?: string
     category?: string
     imageUrl?: string | null
     activeIngredients?: string[]
@@ -99,7 +99,7 @@ export default function ProductEdit() {
         useTenantPrice: false,
         description: '',
         pharmacyProductId: '',
-        dosage: '',
+        placeholderSig: '',
         category: 'other',
         activeIngredients: [] as string[],
         active: true
@@ -134,7 +134,7 @@ export default function ProductEdit() {
                             useTenantPrice: !!productData.tenantPrice,
                             description: productData.description || '',
                             pharmacyProductId: productData.pharmacyProductId || '',
-                            dosage: productData.dosage || '',
+                            placeholderSig: productData.placeholderSig || '',
                             category: productData.category || 'other',
                             activeIngredients: productData.activeIngredients || [],
                             active: productData.active
@@ -214,7 +214,7 @@ export default function ProductEdit() {
                     price: formData.price,
                     description: formData.description,
                     pharmacyProductId: formData.pharmacyProductId,
-                    dosage: formData.dosage,
+                    placeholderSig: formData.placeholderSig,
                     category: formData.category,
                     activeIngredients: formData.activeIngredients,
                     active: formData.active
@@ -676,17 +676,17 @@ export default function ProductEdit() {
 
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
-                                                    <label htmlFor="dosage" className="block text-sm font-semibold text-foreground mb-2">
-                                                        Default Dosage
+                                                <label htmlFor="placeholderSig" className="block text-sm font-semibold text-foreground mb-2">
+                                                    Default Placeholder Sig
                                                     </label>
                                                     <input
                                                         type="text"
-                                                        id="dosage"
-                                                        name="dosage"
-                                                        value={formData.dosage}
+                                                    id="placeholderSig"
+                                                    name="placeholderSig"
+                                                    value={formData.placeholderSig}
                                                         onChange={handleInputChange}
                                                         className="w-full px-4 py-3 border border-input bg-background text-foreground rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                                                        placeholder="e.g., 500mg"
+                                                    placeholder="e.g., 500mg"
                                                     />
                                                 </div>
 

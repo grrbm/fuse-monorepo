@@ -56,7 +56,7 @@ export default function CreateProduct() {
         price: 0,
         description: '',
         pharmacyProductId: '',
-        dosage: '',
+        placeholderSig: '',
         category: 'other',
         activeIngredients: [] as string[],
         active: true
@@ -363,14 +363,14 @@ export default function CreateProduct() {
                                             </div>
 
                                             <div>
-                                                <label htmlFor="dosage" className="block text-sm font-medium text-foreground mb-2">
-                                                    Default Dosage
+                                                <label htmlFor="placeholderSig" className="block text-sm font-medium text-foreground mb-2">
+                                                    Default Placeholder Sig
                                                 </label>
                                                 <input
                                                     type="text"
-                                                    id="dosage"
-                                                    name="dosage"
-                                                    value={formData.dosage}
+                                                    id="placeholderSig"
+                                                    name="placeholderSig"
+                                                    value={formData.placeholderSig}
                                                     onChange={handleInputChange}
                                                     className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                                                     placeholder="e.g., 500mg, 2 tablets daily"

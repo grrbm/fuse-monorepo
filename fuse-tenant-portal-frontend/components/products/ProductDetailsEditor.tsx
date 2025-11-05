@@ -7,9 +7,10 @@ interface Product {
     name: string
     description: string
     price: number
-    dosage: string
+    placeholderSig: string
     activeIngredients: string[]
     category?: string
+    categories?: string[]
     medicationSize?: string
     pharmacyProvider?: string
     pharmacyProductId?: string
@@ -29,8 +30,12 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
     const [formData, setFormData] = useState({
         name: product.name,
         description: product.description,
-        dosage: product.dosage,
-        category: product.category || "",
+        placeholderSig: product.placeholderSig,
+        categories: Array.isArray(product.categories) && product.categories.length > 0
+            ? product.categories
+            : product.category
+                ? [product.category]
+                : [],
         medicationSize: product.medicationSize || "",
         activeIngredients: product.activeIngredients?.join(", ") || "",
         slug: product.slug || "",
@@ -41,8 +46,12 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
         setFormData({
             name: product.name,
             description: product.description,
-            dosage: product.dosage,
-            category: product.category || "",
+            placeholderSig: product.placeholderSig,
+            categories: Array.isArray(product.categories) && product.categories.length > 0
+                ? product.categories
+                : product.category
+                    ? [product.category]
+                    : [],
             medicationSize: product.medicationSize || "",
             activeIngredients: product.activeIngredients?.join(", ") || "",
             slug: product.slug || "",
@@ -61,8 +70,8 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             setError("Product description is required")
             return
         }
-        if (!formData.dosage || formData.dosage.trim() === "") {
-            setError("Dosage is required")
+        if (!formData.placeholderSig || formData.placeholderSig.trim() === "") {
+            setError("Placeholder Sig is required")
             return
         }
 
@@ -86,8 +95,9 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             await onUpdate({
                 name: formData.name,
                 description: formData.description,
-                dosage: formData.dosage,
-                category: formData.category || undefined,
+                placeholderSig: formData.placeholderSig,
+                categories: formData.categories,
+                category: formData.categories[0] || undefined,
                 medicationSize: formData.medicationSize || undefined,
                 activeIngredients: activeIngredientsArray,
                 slug: formData.slug.trim() || undefined,
@@ -106,8 +116,12 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
         setFormData({
             name: product.name,
             description: product.description,
-            dosage: product.dosage,
-            category: product.category || "",
+            placeholderSig: product.placeholderSig,
+            categories: Array.isArray(product.categories) && product.categories.length > 0
+                ? product.categories
+                : product.category
+                    ? [product.category]
+                    : [],
             medicationSize: product.medicationSize || "",
             activeIngredients: product.activeIngredients?.join(", ") || "",
             slug: product.slug || "",
@@ -230,39 +244,79 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                         )}
                     </div>
 
-                    {/* Category */}
+                    {/* Categories */}
                     <div>
-                        <label className="text-sm font-medium text-[#4B5563] mb-2 block">Category</label>
+                        <label className="text-sm font-medium text-[#4B5563] mb-2 block">Categories</label>
                         {editing ? (
-                            <select
-                                value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                            >
-                                <option value="">Select category...</option>
-                                {CATEGORY_OPTIONS.map((cat) => (
-                                    <option key={cat.value} value={cat.value}>
-                                        {cat.label}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="space-y-2 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                                {CATEGORY_OPTIONS.filter((cat) => cat.value).map((cat) => {
+                                    const isChecked = formData.categories.includes(cat.value)
+                                    return (
+                                        <label key={cat.value} className="flex items-center gap-3 text-sm text-[#1F2937]">
+                                            <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={(e) => {
+                                                    const next = new Set(formData.categories)
+                                                    if (e.target.checked) {
+                                                        next.add(cat.value)
+                                                    } else {
+                                                        next.delete(cat.value)
+                                                    }
+                                                    setFormData({
+                                                        ...formData,
+                                                        categories: Array.from(next),
+                                                    })
+                                                }}
+                                                className="h-4 w-4 rounded border-[#D1D5DB] text-[#4FA59C] focus:ring-[#4FA59C]"
+                                            />
+                                            <span>{cat.label}</span>
+                                        </label>
+                                    )
+                                })}
+                                {formData.categories.length === 0 && (
+                                    <p className="text-xs text-[#9CA3AF]">Select at least one category if applicable.</p>
+                                )}
+                            </div>
                         ) : (
-                            <p className="text-[#1F2937]">{product.category || "No Category"}</p>
+                            <div className="flex flex-wrap gap-2">
+                                {(() => {
+                                    const categories = Array.isArray(product.categories) && product.categories.length > 0
+                                        ? product.categories
+                                        : product.category
+                                            ? [product.category]
+                                            : []
+                                    if (categories.length === 0) {
+                                        return <span className="text-[#6B7280]">No Categories</span>
+                                    }
+                                    return categories.map((value) => {
+                                        const option = CATEGORY_OPTIONS.find((opt) => opt.value === value)
+                                        return (
+                                            <span
+                                                key={value}
+                                                className="inline-flex items-center rounded-full bg-[#E0F2F1] text-[#196459] px-3 py-1 text-xs font-medium"
+                                            >
+                                                {option?.label || value}
+                                            </span>
+                                        )
+                                    })
+                                })()}
+                            </div>
                         )}
                     </div>
 
-                    {/* Dosage */}
+                    {/* Placeholder Sig */}
                     <div>
-                        <label className="text-sm font-medium text-[#4B5563] mb-2 block">Dosage *</label>
+                        <label className="text-sm font-medium text-[#4B5563] mb-2 block">Placeholder Sig *</label>
                         {editing ? (
                             <input
-                                value={formData.dosage}
-                                onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
+                                value={formData.placeholderSig}
+                                onChange={(e) => setFormData({ ...formData, placeholderSig: e.target.value })}
                                 placeholder="e.g., 2.5mg/0.5ml"
                                 className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                             />
                         ) : (
-                            <p className="text-[#1F2937]">{product.dosage || "——"}</p>
+                            <p className="text-[#1F2937]">{product.placeholderSig || "——"}</p>
                         )}
                     </div>
 

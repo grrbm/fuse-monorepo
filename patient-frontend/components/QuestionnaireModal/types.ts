@@ -35,7 +35,7 @@ export interface Product {
     name: string;
     description: string;
     price: number;
-    dosage: string;
+    placeholderSig: string;
     imageUrl: string;
 }
 

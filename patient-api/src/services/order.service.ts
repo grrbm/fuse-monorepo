@@ -200,7 +200,7 @@ class OrderService {
                             {
                                 model: Product,
                                 as: 'product',
-                                attributes: ['id', 'name', 'pharmacyProductId', 'dosage']
+                                attributes: ['id', 'name', 'pharmacyProductId', 'placeholderSig']
                             }
                         ]
                     },

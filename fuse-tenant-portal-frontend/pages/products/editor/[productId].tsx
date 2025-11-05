@@ -57,9 +57,10 @@ interface Product {
   name: string
   description: string
   price: number
-  dosage: string
+  placeholderSig: string
   activeIngredients: string[]
   category?: string
+  categories?: string[]
   medicationSize?: string
   pharmacyProvider?: string
   isActive: boolean
@@ -157,6 +158,16 @@ export default function ProductEditor() {
     rules: []
   })
 
+  const productCategories = useMemo(() => {
+    if (!product) return [] as string[]
+    if (Array.isArray(product.categories) && product.categories.length > 0) {
+      return product.categories
+    }
+    return product.category ? [product.category] : []
+  }, [product])
+
+  const primaryProductCategory = productCategories[0] ?? null
+
   // Fetch product details and check for attached forms
   useEffect(() => {
     if (!token || !productId || typeof productId !== 'string') return
@@ -215,6 +226,9 @@ export default function ProductEditor() {
             } else {
               // Truly no form exists - create one automatically
               console.log('📝 Creating new form for product...')
+              const primaryCategoryForTemplate = Array.isArray(data.data?.categories) && data.data.categories.length > 0
+                ? data.data.categories[0]
+                : data.data?.category || null
               const createRes = await fetch(`${baseUrl}/questionnaires/templates`, {
                 method: "POST",
                 headers: {
@@ -224,7 +238,7 @@ export default function ProductEditor() {
                 body: JSON.stringify({
                   title: `${data.data.name} Form`,
                   description: `Questionnaire for ${data.data.name}`,
-                  category: data.data.category || null,
+                  category: primaryCategoryForTemplate,
                   formTemplateType: 'normal',
                   productId: productId,
                 }),
@@ -244,7 +258,7 @@ export default function ProductEditor() {
                 console.error('Request payload:', {
                   title: `${data.data.name} Form`,
                   description: `Questionnaire for ${data.data.name}`,
-                  category: data.data.category || 'General',
+                  category: primaryCategoryForTemplate || 'General',
                   formTemplateType: 'normal',
                   productId: productId,
                 })
@@ -396,10 +410,10 @@ export default function ProductEditor() {
 
     const variables: Record<string, string> = {
       '{{productName}}': product.name || '',
-      '{{dosage}}': product.dosage || '',
+      '{{placeholderSig}}': product.placeholderSig || '',
       '{{medicationSize}}': product.medicationSize || '',
       '{{activeIngredients}}': product.activeIngredients?.join(', ') || '',
-      '{{category}}': product.category || '',
+      '{{category}}': productCategories.join(', '),
       '{{description}}': product.description || '',
     }
 
@@ -573,7 +587,12 @@ export default function ProductEditor() {
         body: JSON.stringify({ productId: productId }),
       })
 
-      if (!response.ok) throw new Error("Failed to clone template for product")
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null)
+        console.error("❌ Attach template error response:", errorPayload)
+        const message = errorPayload?.message || errorPayload?.error || `Failed to clone template (${response.status})`
+        throw new Error(message)
+      }
 
       const data = await response.json()
       const clonedQuestionnaireId = data.data?.id
@@ -619,7 +638,12 @@ export default function ProductEditor() {
         body: JSON.stringify({ productId: productId }),
       })
 
-      if (!response.ok) throw new Error("Failed to clone new template")
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null)
+        console.error("❌ Clone template error response:", errorPayload)
+        const message = errorPayload?.message || errorPayload?.error || `Failed to clone template (${response.status})`
+        throw new Error(message)
+      }
 
       const data = await response.json()
       const clonedQuestionnaireId = data.data?.id

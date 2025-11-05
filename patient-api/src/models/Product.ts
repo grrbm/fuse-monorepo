@@ -66,7 +66,7 @@ export default class Product extends Entity {
         type: DataType.STRING,
         allowNull: false,
     })
-    declare dosage: string;
+    declare placeholderSig: string;
 
     @Column({
         type: DataType.TEXT,
@@ -100,10 +100,29 @@ export default class Product extends Entity {
     declare medicationSize?: string;
 
     @Column({
-        type: DataType.ENUM(...Object.values(ProductCategory)),
+        type: DataType.ARRAY(DataType.STRING),
         allowNull: true,
+        defaultValue: [],
     })
-    declare category?: ProductCategory;
+    declare categories?: string[];
+
+    get primaryCategory(): string | null {
+        return Array.isArray(this.categories) && this.categories.length > 0 ? this.categories[0] ?? null : null;
+    }
+
+    set primaryCategory(value: string | null) {
+        if (!value) {
+            this.categories = [];
+            return;
+        }
+
+        if (Array.isArray(this.categories) && this.categories.length > 0) {
+            const [, ...rest] = this.categories;
+            this.categories = [value, ...rest];
+        } else {
+            this.categories = [value];
+        }
+    }
 
     @Column({
         type: DataType.JSONB,

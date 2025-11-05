@@ -132,7 +132,7 @@ export function RequestFilters({ onFilterChange, onReset }: RequestFiltersProps)
                         <option value="">All Products</option>
                         {tenantProducts.map((product) => (
                             <option key={product.id} value={product.id}>
-                                {product.name} {product.dosage && `(${product.dosage})`}
+                                {product.name} {product.placeholderSig && `(${product.placeholderSig})`}
                             </option>
                         ))}
                     </select>

@@ -32,7 +32,7 @@ export default function Forms() {
   const [creatingForProductId, setCreatingForProductId] = useState<string | null>(null)
   const [deletingForProductId, setDeletingForProductId] = useState<string | null>(null)
   const [productQStatus, setProductQStatus] = useState<Record<string, 'unknown' | 'exists' | 'none'>>({})
-  const [productInfoById, setProductInfoById] = useState<Record<string, { dosage?: string }>>({})
+  const [productInfoById, setProductInfoById] = useState<Record<string, { placeholderSig?: string }>>({})
 
   useEffect(() => {
     refresh()
@@ -65,7 +65,7 @@ export default function Forms() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignments, token])
 
-  // Fetch product info (e.g., dosage) for each assignment's productId
+  // Fetch product info (e.g., Placeholder Sig) for each assignment's productId
   useEffect(() => {
     if (!token) return
     const toCheck = (assignments || []).map((a: any) => a.treatmentId).filter(Boolean)
@@ -78,7 +78,7 @@ export default function Forms() {
         })
         const data = await res.json().catch(() => null)
         if (res.ok && data?.success && data?.data) {
-          setProductInfoById(prev => ({ ...prev, [productId]: { dosage: data.data.dosage || undefined } }))
+          setProductInfoById(prev => ({ ...prev, [productId]: { placeholderSig: data.data.placeholderSig || undefined } }))
         }
       } catch {
         // ignore
@@ -550,8 +550,8 @@ export default function Forms() {
                                     {categoryLabel}
                                   </span>
                                 )}
-                                {assignment?.treatmentId && productInfoById[assignment.treatmentId]?.dosage && (
-                                  <div className="text-xs text-[#9CA3AF]">{productInfoById[assignment.treatmentId]?.dosage}</div>
+                                {assignment?.treatmentId && productInfoById[assignment.treatmentId]?.placeholderSig && (
+                                  <div className="text-xs text-[#9CA3AF]">{productInfoById[assignment.treatmentId]?.placeholderSig}</div>
                                 )}
                               </div>
                             </div>

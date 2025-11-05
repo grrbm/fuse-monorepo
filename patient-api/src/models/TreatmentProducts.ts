@@ -11,7 +11,7 @@ export default class TreatmentProducts extends Entity {
         type: DataType.STRING,
         allowNull: false,
     })
-    declare dosage: string;
+    declare placeholderSig: string;
 
     // @Column({
     //     type: DataType.INTEGER,

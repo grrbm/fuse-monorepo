@@ -160,12 +160,13 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                                 </p>
                             </div>
                             <div className="col-span-2">
-                                <p className="text-sm text-gray-600">Patient Address</p>
+                                <p className="text-sm text-gray-600">Patient Shipping Address</p>
                                 <p className="font-medium">
-                                    {order.patient?.address && order.patient?.city && order.patient?.state && order.patient?.zipCode ? (
+                                    {order.shippingAddress?.address && order.shippingAddress?.city && order.shippingAddress?.state && order.shippingAddress?.zipCode ? (
                                         <>
-                                            {order.patient.address}<br />
-                                            {order.patient.city}, {order.patient.state} {order.patient.zipCode}
+                                            {order.shippingAddress.address}
+                                            {order.shippingAddress.apartment && `, ${order.shippingAddress.apartment}`}<br />
+                                            {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
                                         </>
                                     ) : (
                                         <span className="text-red-600 text-xs">

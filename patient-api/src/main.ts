@@ -1291,7 +1291,7 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
       name: product.name,
       price: typeof product.price === 'string' ? parseFloat(product.price as any) : product.price,
       pharmacyProductId: product.pharmacyProductId,
-      dosage: product.dosage,
+      placeholderSig: product.placeholderSig,
       imageUrl: product.imageUrl,
       active: (product as any).isActive ?? true,
       createdAt: product.createdAt,
@@ -1438,6 +1438,10 @@ app.get("/products/:id", async (req, res) => {
     }
 
     // Transform data to match frontend expectations
+    const categories = Array.isArray((product as any).categories)
+      ? ((product as any).categories as string[]).filter(Boolean)
+      : [];
+
     const transformedProduct = {
       id: product.id,
       name: product.name,
@@ -1446,12 +1450,14 @@ app.get("/products/:id", async (req, res) => {
       pharmacyProductId: product.pharmacyProductId,
       pharmacyWholesaleCost: (product as any).pharmacyWholesaleCost || null,
       suggestedRetailPrice: (product as any).suggestedRetailPrice || null,
-      dosage: product.dosage,
+      placeholderSig: product.placeholderSig,
+      medicationSize: (product as any).medicationSize || null,
       description: product.description,
       activeIngredients: product.activeIngredients,
       imageUrl: product.imageUrl,
       isActive: product.isActive, // Return actual isActive status from database
-      category: (product as any).category || null,
+      category: categories[0] ?? null,
+      categories,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
       treatments: product.treatments || []
@@ -1494,7 +1500,7 @@ app.post("/products", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { name, price, description, pharmacyProductId, dosage, activeIngredients, isActive } = validation.data;
+    const { name, price, description, pharmacyProductId, placeholderSig, activeIngredients, isActive } = validation.data;
 
     // Fetch full user data from database to get role and clinicId
     const user = await User.findByPk(currentUser.id);
@@ -1521,7 +1527,7 @@ app.post("/products", authenticateJWT, async (req, res) => {
       price: price,
       description,
       pharmacyProductId,
-      dosage,
+      placeholderSig,
       activeIngredients: activeIngredients || [],
       active: isActive !== undefined ? isActive : true,
       isActive: isActive !== undefined ? isActive : true,
@@ -1647,7 +1653,7 @@ app.put("/products/:id", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { name, price, description, pharmacyProductId, dosage, activeIngredients, isActive } = validation.data;
+    const { name, price, description, pharmacyProductId, placeholderSig, activeIngredients, isActive } = validation.data;
 
     // Fetch full user data from database to get role
     const user = await User.findByPk(currentUser.id);
@@ -1683,7 +1689,7 @@ app.put("/products/:id", authenticateJWT, async (req, res) => {
       price: price,
       description,
       pharmacyProductId,
-      dosage,
+      placeholderSig,
       activeIngredients: activeIngredients || [],
       active: isActive !== undefined ? isActive : true,
       isActive: isActive !== undefined ? isActive : true,
@@ -1863,6 +1869,7 @@ app.get("/products-management", authenticateJWT, async (req, res) => {
       page: req.query.page,
       limit: req.query.limit,
       category: req.query.category,
+      categories: req.query.categories,
       isActive: req.query.isActive === undefined ? undefined : req.query.isActive === 'true',
       pharmacyProvider: req.query.pharmacyProvider,
     });
@@ -1877,9 +1884,13 @@ app.get("/products-management", authenticateJWT, async (req, res) => {
 
     const { page, limit, category, isActive, pharmacyProvider } = validation.data;
 
-
-
-    const result = await productService.listProducts(currentUser.id, { page, limit, category, isActive, pharmacyProvider });
+    const result = await productService.listProducts(currentUser.id, {
+      page,
+      limit,
+      category,
+      isActive,
+      pharmacyProvider,
+    });
     res.status(200).json(result);
   } catch (error: any) {
     console.error('❌ Error listing products:', error);
@@ -2594,7 +2605,7 @@ app.get("/getTreatments", authenticateJWT, async (req, res) => {
             {
               model: Product,
               as: 'products',
-              through: { attributes: ['dosage'] }
+              through: { attributes: ['placeholderSig'] }
             },
             {
               model: Clinic,
@@ -2752,7 +2763,7 @@ app.get("/getProductsByTreatment", authenticateJWT, async (req, res) => {
               model: Product,
               as: 'products',
               through: {
-                attributes: ['dosage']
+                attributes: ['placeholderSig']
               }
             }
           ]
@@ -2791,9 +2802,9 @@ app.get("/getProductsByTreatment", authenticateJWT, async (req, res) => {
         if (processedProducts.has(productKey)) continue;
         processedProducts.add(productKey);
         console.log("has product and treatment");
-        // Get dosage from TreatmentProducts junction table
-        const dosage = (product as any).TreatmentProducts?.dosage || product.dosage || "As prescribed";
-        console.log("dosage:", dosage);
+        // Get placeholder signature value from TreatmentProducts junction table
+        const placeholderSig = (product as any).TreatmentProducts?.placeholderSig || product.placeholderSig || "As prescribed";
+        console.log("placeholderSig:", placeholderSig);
         // Determine status from subscription or order
         let status = "active";
         if (order.subscription) {
@@ -2821,7 +2832,7 @@ app.get("/getProductsByTreatment", authenticateJWT, async (req, res) => {
           id: product.id,
           name: order.treatment.name, // Treatment name
           subtitle: product.name, // Product name as subtitle
-          dosage: dosage,
+          placeholderSig,
           refills: 0, // TODO: Add refills logic if available
           status: status,
           expiryDate: "N/A", // TODO: Add expiry date logic if available
@@ -3128,7 +3139,7 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
           model: Product,
           as: 'products',
           through: {
-            attributes: ['dosage', 'numberOfDoses', 'nextDose']
+            attributes: ['placeholderSig', 'numberOfDoses', 'nextDose']
           }
         }
       ]
@@ -3170,7 +3181,7 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
             quantity: Number(quantity),
             unitPrice: product.price,
             totalPrice: product.price * Number(quantity),
-            dosage: product.dosage
+            placeholderSig: product.placeholderSig
           });
           orderItems.push(orderItem);
         }
@@ -3461,7 +3472,7 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       quantity: 1,
       unitPrice: unitPrice,
       totalPrice: totalAmount,
-      dosage: tenantProduct.product.dosage
+      placeholderSig: tenantProduct.product.placeholderSig
     });
 
     // Create shipping address if provided
@@ -3634,7 +3645,7 @@ app.post("/payments/product/sub", async (req, res) => {
       quantity: 1,
       unitPrice: unitPrice,
       totalPrice: totalAmount,
-      dosage: (tenantProduct as any).product.dosage
+      placeholderSig: (tenantProduct as any).product.placeholderSig
     });
 
     // Shipping address
@@ -4182,7 +4193,7 @@ app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
             include: [{
               model: Product,
               as: 'product',
-              attributes: ['id', 'category']
+              attributes: ['id', 'categories']
             }]
           }]
         });
@@ -4194,8 +4205,12 @@ app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
         const categories = new Set<string>();
         customerOrders.forEach(order => {
           order.orderItems?.forEach(item => {
-            if (item.product?.category) {
-              categories.add(item.product.category);
+            if (Array.isArray((item.product as any)?.categories)) {
+              (item.product as any).categories.forEach((category: string | null | undefined) => {
+                if (category) {
+                  categories.add(category);
+                }
+              });
             }
           });
         });
@@ -5521,19 +5536,21 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
     const clonedQuestionnaire = await Questionnaire.create({
       title: template.title,
       description: template.description || '',
-      checkoutStepPosition: template.checkoutStepPosition || null,
+      checkoutStepPosition: template.checkoutStepPosition ?? -1,
       treatmentId: template.treatmentId || null,
       productId: productId, // Link to specific product
       category: template.category || null,
       formTemplateType: 'normal', // Clones are not templates themselves
       isTemplate: false, // This is a product-specific instance, not a template
-      userId: currentUser.id,
-      personalizationQuestionsSetup: template.personalizationQuestionsSetup || null,
-      createAccountQuestionsSetup: template.createAccountQuestionsSetup || null,
-      doctorQuestionsSetup: template.doctorQuestionsSetup || null,
+      // Product clones should not be tied to the creator's userId to avoid unique title conflicts
+      userId: null,
+      personalizationQuestionsSetup: template.personalizationQuestionsSetup ?? false,
+      createAccountQuestionsSetup: template.createAccountQuestionsSetup ?? false,
+      doctorQuestionsSetup: template.doctorQuestionsSetup ?? false,
       color: template.color || null,
     }).catch((err) => {
       console.error('❌ Error creating cloned questionnaire:', err);
+      console.error('Template data:', JSON.stringify(template, null, 2));
       throw new Error(`Failed to create questionnaire: ${err.message}`);
     });
 
@@ -8378,12 +8395,17 @@ async function startServer() {
 
             if (!tenantProduct) return null;
 
+            const categories = Array.isArray((tenantProduct.product as any)?.categories)
+              ? (tenantProduct.product as any).categories.filter(Boolean)
+              : [];
+
             return {
               id: tenantProduct.id,
               name: tenantProduct.product?.name || 'Product',
               description: tenantProduct.product?.description || null,
-              dosage: tenantProduct.product?.dosage || null,
-              category: tenantProduct.product?.category || null,
+              placeholderSig: tenantProduct.product?.placeholderSig || null,
+              category: categories[0] ?? null,
+              categories,
               stripePriceId: tenantProduct.stripePriceId || null,
               isActive: tenantProduct.isActive ?? true
             };
@@ -9745,6 +9767,10 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
         console.error('Error finding product questionnaire:', e);
       }
 
+      const categories = Array.isArray(product.categories)
+        ? (product.categories as string[]).filter(Boolean)
+        : [];
+
       return res.status(200).json({
         success: true,
         data: {
@@ -9753,7 +9779,8 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
           slug: product.slug,
           questionnaireId,
           clinicSlug: clinic.slug,
-          category: product.category || null,
+          category: categories[0] ?? null,
+          categories,
           currentFormVariant,
           // Expose tenant product pricing + stripe identifiers for checkout
           price: (tenantProduct as any).price ?? null,
@@ -9778,6 +9805,9 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
 
     if (tenantProductForm && (tenantProductForm as any).product) {
       const product = (tenantProductForm as any).product;
+      const categories = Array.isArray(product.categories)
+        ? (product.categories as string[]).filter(Boolean)
+        : [];
       
       // Always check for the most recently attached form via Questionnaire.productId
       // This takes precedence over TenantProductForm.questionnaireId to ensure form switching works
@@ -9808,7 +9838,8 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
           slug: product.slug,
           questionnaireId,
           clinicSlug: clinic.slug,
-          category: product.category || null,
+          category: categories[0] ?? null,
+          categories,
           currentFormVariant: (tenantProductForm as any).currentFormVariant ?? null,
         },
       });

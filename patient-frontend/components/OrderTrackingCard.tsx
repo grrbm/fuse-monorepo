@@ -13,7 +13,7 @@ interface OrderTrackingCardProps {
     orderItems: Array<{
       product: {
         name: string;
-        dosage?: string;
+        placeholderSig?: string;
       };
       quantity: number;
     }>;
@@ -206,8 +206,8 @@ export const OrderTrackingCard: React.FC<OrderTrackingCardProps> = ({ order }) =
                 <div key={index} className="flex justify-between items-center text-sm">
                   <div>
                     <p className="font-medium">{item.product.name}</p>
-                    {item.product.dosage && (
-                      <p className="text-xs text-default-500">{item.product.dosage}</p>
+                    {item.product.placeholderSig && (
+                      <p className="text-xs text-default-500">{item.product.placeholderSig}</p>
                     )}
                   </div>
                   <p className="text-default-500">Qty: {item.quantity}</p>

@@ -274,9 +274,9 @@ export default function Requests() {
                                                         </td>
                                                         <td className="px-4 py-3 text-sm">
                                                             {(order as any).tenantProduct?.name || order.treatment?.name || 'N/A'}
-                                                            {(order as any).tenantProduct?.dosage && (
+                                                            {(order as any).tenantProduct?.placeholderSig && (
                                                                 <span className="ml-2 text-xs text-gray-500">
-                                                                    {(order as any).tenantProduct.dosage}
+                                                                    {(order as any).tenantProduct.placeholderSig}
                                                                 </span>
                                                             )}
                                                         </td>
