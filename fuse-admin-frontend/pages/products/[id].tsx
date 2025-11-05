@@ -440,7 +440,8 @@ export default function ProductDetail() {
 
     const enableTemplateWithVariant = async (questionnaireId: string, currentFormVariant: string | null) => {
         if (!token || !id) return
-        setEnablingId(questionnaireId)
+        const enablingKey = `${questionnaireId}:${currentFormVariant ?? 'main'}`
+        setEnablingId(enablingKey)
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
                 method: 'POST',
@@ -460,60 +461,35 @@ export default function ProductDetail() {
 
             const data = await res.json().catch(() => ({} as any))
             if (data?.success && data?.data) {
-                setEnabledForms(prev => [...prev.filter((f: any) => f?.questionnaireId !== questionnaireId), data.data])
-                window.location.reload()
+                setEnabledForms(prev => {
+                    const withoutDuplicate = prev.filter((f: any) => f?.id !== data.data.id)
+                    return [...withoutDuplicate, data.data]
+                })
+                await fetchCustomizations()
             } else {
                 throw new Error(data?.message || 'Failed to enable form')
             }
         } catch (e: any) {
             setError(e?.message || 'Failed to enable form')
         } finally {
-            setEnablingId(null)
+            setEnablingId(prev => (prev === enablingKey ? null : prev))
         }
     }
 
-    const switchToVariant = async (questionnaireId: string, currentFormVariant: string) => {
-        if (!token || !id) return
-        setEnablingId(questionnaireId)
-        try {
-            // Disable current mapping first
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId: String(id), questionnaireId })
-            })
-            // Re-enable with new variant
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId: String(id), questionnaireId, currentFormVariant })
-            })
-            if (!res.ok) {
-                const text = await res.text().catch(() => '')
-                try { const json = JSON.parse(text); throw new Error(json?.message || `Failed to switch variant (${res.status})`) } catch { throw new Error(text || `Failed to switch variant (${res.status})`) }
-            }
-            window.location.reload()
-        } catch (e: any) {
-            setError(e?.message || 'Failed to switch variant')
-        } finally {
-            setEnablingId(null)
-        }
-    }
-
-    const disableTemplate = async (questionnaireId: string) => {
+    const disableTemplate = async (formId: string, questionnaireId: string) => {
         if (!token || !id) return
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId: id, questionnaireId })
+                body: JSON.stringify({ tenantProductFormId: formId, questionnaireId, productId: id })
             })
 
             if (!res.ok) {
                 throw new Error('Failed to disable form')
             }
 
-            setEnabledForms(prev => prev.filter((f: any) => f?.questionnaireId !== questionnaireId))
+            setEnabledForms(prev => prev.filter((f: any) => f?.id !== formId))
         } catch (e: any) {
             setError(e?.message || 'Failed to disable form')
         }
@@ -587,6 +563,46 @@ export default function ProductDetail() {
             : `https://${clinicSlug}.fuse.health`
         
         return `${baseUrl}/my-products/${product.slug}`
+    }
+
+    const buildFormPreviewUrlFor = (form: any, variantKey: string | null) => {
+        const base = buildPreviewUrl()
+        if (!base) return null
+        
+        // Generate URL slug: category + product-name + medication-size + variant
+        const slugParts: string[] = []
+        
+        // Add product category (first one if multiple)
+        const categories = Array.isArray((product as any)?.categories) ? (product as any).categories : []
+        if (categories.length > 0 && categories[0]) {
+            slugParts.push(categories[0].toLowerCase().replace(/[^a-z0-9]+/g, '-'))
+        }
+        
+        // Add product name
+        if (product?.name) {
+            slugParts.push(product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
+        }
+        
+        // Add medication size (skip if not present)
+        if ((product as any)?.medicationSize) {
+            slugParts.push((product as any).medicationSize.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
+        }
+        
+        // Add standardized variant (default is 1, skip if no variant or variant is null)
+        const variantIdentifier = variantKey || (form?.currentFormVariant ?? null)
+        if (variantIdentifier) {
+            slugParts.push(variantIdentifier.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
+        } else {
+            slugParts.push('1') // Default variant
+        }
+        
+        const uniqueSlug = slugParts.filter(Boolean).join('-')
+        
+        if (base.includes('/my-products/')) {
+            return base.replace('/my-products/', `/my-products/${uniqueSlug}/`)
+        }
+        
+        return `${base.replace(/\/$/, '')}/${uniqueSlug}`
     }
 
     const handleCopyPreview = async () => {
@@ -795,16 +811,12 @@ export default function ProductDetail() {
                                 ) : (
                                     <div className="space-y-4">
                                         {templates.map(t => {
-                                            const existingForm = enabledForms.find((f: any) => f?.questionnaireId === t.id)
-                                            const currentVariant: string | null = existingForm?.currentFormVariant ?? null
-                                            
                                             // Show variants only if structure has category questions enabled
                                             const hasCategorySection = (t as any)._hasCategorySection
                                             const variantsToShow = hasCategorySection ? [1, 2] : [null]
-                                            
-                                            // Get structure object if available
                                             const structure = (t as any)._structure
-                                            
+                                            const formsForStructure = enabledForms.filter((f: any) => f?.questionnaireId === t.id)
+
                                             return (
                                                 <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
                                                     {/* Structure Header with Inline Form Flow */}
@@ -853,114 +865,105 @@ export default function ProductDetail() {
                                                     {/* Variants */}
                                                     <div className="p-5 space-y-3">
                                                     {variantsToShow.map((variantNum) => {
-                                                        const pv = buildPreviewUrl()
-                                                        const previewUrl = variantNum ? pv?.replace('/my-products/', `/my-products/${variantNum}/`) : pv
                                                         const variantKey = variantNum ? String(variantNum) : null
-                                                        // For structures without variants (variantNum === null), enabled if form exists
-                                                        // For structures with variants, enabled if form exists AND variant matches
-                                                        const isVariantEnabled = !hasCategorySection ? !!existingForm : (!!existingForm && currentVariant === variantKey)
-                                                        const hasAnyEnabled = !!existingForm
+                                                        const variantForms = formsForStructure.filter((f: any) => (f?.currentFormVariant ?? null) === variantKey)
+                                                        const enablingKey = `${t.id}:${variantKey ?? 'main'}`
+                                                        const variantLabel = variantNum ? `Variant ${variantNum}` : 'Main Form'
+
                                                         return (
                                                             <div key={`${t.id}-${variantNum || 'main'}`} className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-4">
-                                                                <div className="flex items-center justify-between">
+                                                                <div className="flex items-center justify-between gap-3">
                                                                     <div className="flex-1">
                                                                         <div className="font-medium text-[#1F2937] text-sm">
-                                                                            {variantNum ? `Variant ${variantNum}` : 'Main Form'}
+                                                                            {variantLabel}
                                                                         </div>
                                                                         <div className="text-xs text-[#9CA3AF] mt-1">
-                                                                            {isVariantEnabled ? '✓ Enabled for your clinic' : 'Not enabled'}
+                                                                            {variantForms.length > 0 ? `✓ ${variantForms.length} form${variantForms.length > 1 ? 's' : ''} active` : 'Not enabled'}
                                                                         </div>
                                                                     </div>
-                                                                    {hasAnyEnabled ? (
-                                                                        <div className="flex items-center gap-3">
-                                                                            {isVariantEnabled ? (
-                                                                                <>
-                                                                                    {/* Color Picker */}
-                                                                                    <div className="relative color-picker-container">
-                                                                                        <button
-                                                                                            onClick={() => setColorPickerOpen(colorPickerOpen === t.id ? null : t.id)}
-                                                                                            className="w-8 h-8 rounded border-2 border-border hover:border-muted-foreground transition-colors flex items-center justify-center"
-                                                                                            style={{ 
-                                                                                                backgroundColor: customizations[t.id]?.customColor || 'transparent',
-                                                                                                backgroundImage: !customizations[t.id]?.customColor 
-                                                                                                    ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb)'
-                                                                                                    : 'none',
-                                                                                                backgroundSize: '8px 8px',
-                                                                                                backgroundPosition: '0 0, 4px 4px'
-                                                                                            }}
-                                                                                            title={customizations[t.id]?.customColor ? 'Change form color' : 'Set custom color (currently using clinic default)'}
-                                                                                        >
-                                                                                            <Palette className="h-4 w-4 text-muted-foreground" />
-                                                                                        </button>
-                                                                                        
-                                                                                        {/* Color Palette Dropdown */}
-                                                                                        {colorPickerOpen === t.id && (
-                                                                                            <div className="absolute right-0 mt-2 p-3 bg-card border border-border rounded-lg shadow-lg z-10 w-48">
-                                                                                                <p className="text-xs font-medium text-foreground mb-2">Select Color</p>
-                                                                                                <div className="grid grid-cols-4 gap-2 mb-3">
-                                                                                                    {presetColors.map((preset) => (
-                                                                                                        <button
-                                                                                                            key={preset.color}
-                                                                                                            onClick={() => updateFormColor(t.id, preset.color)}
-                                                                                                            className="w-10 h-10 rounded border-2 border-border hover:border-muted-foreground transition-colors"
-                                                                                                            style={{ backgroundColor: preset.color }}
-                                                                                                            title={preset.name}
-                                                                                                        />
-                                                                                                    ))}
-                                                                                                </div>
-                                                                                                {customizations[t.id]?.customColor && (
-                                                                                                    <button
-                                                                                                        onClick={() => updateFormColor(t.id, '')}
-                                                                                                        className="w-full text-xs py-1.5 px-2 text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground rounded transition-colors"
-                                                                                                    >
-                                                                                                        Clear (use clinic default)
-                                                                                                    </button>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    
-                                                                                    <Button size="sm" variant="outline" onClick={() => disableTemplate(t.id)}>
-                                                                                        Disable
-                                                                                    </Button>
-                                                                                </>
-                                                                            ) : (
-                                                                                <Button size="sm" onClick={() => variantNum ? switchToVariant(t.id, String(variantNum)) : enableTemplateWithVariant(t.id, null)} disabled={enablingId === t.id}>
-                                                                                    {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
-                                                                                </Button>
-                                                                            )}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <Button size="sm" onClick={() => enableTemplateWithVariant(t.id, variantNum ? String(variantNum) : null)} disabled={enablingId === t.id}>
-                                                                            {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
-                                                                        </Button>
-                                                                    )}
-                                                                </div>
-                                                                {previewUrl && (
-                                                                    <div className="mt-3 flex items-center justify-between">
-                                                                        <div className="text-xs text-muted-foreground truncate">
-                                                                            Preview URL: <span className="text-foreground">{previewUrl}</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <div className="relative group inline-block">
-                                                                                <Button 
-                                                                                    size="sm" 
-                                                                                    variant="outline" 
-                                                                                    onClick={() => window.open(previewUrl, '_blank')}
-                                                                                    disabled={!isVariantEnabled}
+                                                                    <div className="flex items-center gap-3">
+                                                                        {variantForms.length > 0 && (
+                                                                            <div className="relative color-picker-container">
+                                                                                <button
+                                                                                    onClick={() => setColorPickerOpen(colorPickerOpen === t.id ? null : t.id)}
+                                                                                    className="w-8 h-8 rounded border-2 border-border hover:border-muted-foreground transition-colors flex items-center justify-center"
+                                                                                    style={{ 
+                                                                                        backgroundColor: customizations[t.id]?.customColor || 'transparent',
+                                                                                        backgroundImage: !customizations[t.id]?.customColor 
+                                                                                            ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb)'
+                                                                                            : 'none',
+                                                                                        backgroundSize: '8px 8px',
+                                                                                        backgroundPosition: '0 0, 4px 4px'
+                                                                                    }}
+                                                                                    title={customizations[t.id]?.customColor ? 'Change form color' : 'Set custom color (currently using clinic default)'}
                                                                                 >
-                                                                                    Preview
-                                                                                </Button>
-                                                                                {!isVariantEnabled && (
-                                                                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                                                                        Enable form to preview
+                                                                                    <Palette className="h-4 w-4 text-muted-foreground" />
+                                                                                </button>
+
+                                                                                {colorPickerOpen === t.id && (
+                                                                                    <div className="absolute right-0 mt-2 p-3 bg-card border border-border rounded-lg shadow-lg z-10 w-48">
+                                                                                        <p className="text-xs font-medium text-foreground mb-2">Select Color</p>
+                                                                                        <div className="grid grid-cols-4 gap-2 mb-3">
+                                                                                            {presetColors.map((preset) => (
+                                                                                                <button
+                                                                                                    key={preset.color}
+                                                                                                    onClick={() => updateFormColor(t.id, preset.color)}
+                                                                                                    className="w-10 h-10 rounded border-2 border-border hover:border-muted-foreground transition-colors"
+                                                                                                    style={{ backgroundColor: preset.color }}
+                                                                                                    title={preset.name}
+                                                                                                />
+                                                                                            ))}
+                                                                                        </div>
+                                                                                        {customizations[t.id]?.customColor && (
+                                                                                            <button
+                                                                                                onClick={() => updateFormColor(t.id, '')}
+                                                                                                className="w-full text-xs py-1.5 px-2 text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground rounded transition-colors"
+                                                                                            >
+                                                                                                Clear (use clinic default)
+                                                                                            </button>
+                                                                                        )}
                                                                                     </div>
                                                                                 )}
                                                                             </div>
-                                                                            <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
-                                                                                Copy
-                                                                            </Button>
-                                                                        </div>
+                                                                        )}
+                                                                        <Button size="sm" onClick={() => enableTemplateWithVariant(t.id, variantKey)} disabled={enablingId === enablingKey}>
+                                                                            {enablingId === enablingKey ? 'Enabling...' : variantForms.length > 0 ? 'Add Another Form' : 'Enable for Clinic'}
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+
+                                                                {variantForms.length > 0 && (
+                                                                    <div className="mt-4 space-y-2">
+                                                                        {variantForms.map((form: any, index: number) => {
+                                                                            const previewUrl = buildFormPreviewUrlFor(form, variantKey)
+                                                                            return (
+                                                                                <div key={form.id} className="bg-white border border-[#E5E7EB] rounded-lg p-3">
+                                                                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                                                                        <div className="min-w-0">
+                                                                                            <div className="text-sm font-medium text-[#1F2937]">Form #{index + 1}</div>
+                                                                                            <div className="text-xs text-[#9CA3AF] mt-1 truncate">
+                                                                                                {previewUrl ? `Preview URL: ${previewUrl}` : 'Preview URL will generate after publishing'}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                                                                            {previewUrl && (
+                                                                                                <>
+                                                                                                    <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, '_blank')}>
+                                                                                                        Preview
+                                                                                                    </Button>
+                                                                                                    <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
+                                                                                                        Copy
+                                                                                                    </Button>
+                                                                                                </>
+                                                                                            )}
+                                                                                            <Button size="sm" variant="outline" onClick={() => disableTemplate(form.id, t.id)}>
+                                                                                                Disable
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )
+                                                                        })}
                                                                     </div>
                                                                 )}
                                                             </div>

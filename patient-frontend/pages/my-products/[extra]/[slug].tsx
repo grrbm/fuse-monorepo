@@ -17,6 +17,7 @@ interface PublicProduct {
     stripeProductId?: string | null
     stripePriceId?: string | null
     tenantProductId?: string | null
+    tenantProductFormId?: string | null
 }
 
 export default function PublicProductPage() {
@@ -42,7 +43,8 @@ export default function PublicProductPage() {
         setError(null)
 
         try {
-            const apiUrl = `/api/public/brand-products/${encodeURIComponent(productSlug)}`
+            const variantQuery = expectedVariant ? `?variant=${encodeURIComponent(expectedVariant)}` : ''
+            const apiUrl = `/api/public/brand-products/${encodeURIComponent(productSlug)}${variantQuery}`
             console.log('[PublicProduct] fetching', { apiUrl })
             const res = await fetch(apiUrl)
             const raw = await res.text()
@@ -59,13 +61,30 @@ export default function PublicProductPage() {
 
             // Optional: API may include currentFormVariant
             const currentFormVariant: string | null = data.data.currentFormVariant ?? null
+            const tenantProductFormId: string | null = data.data.tenantProductFormId ?? null
 
-            // If a specific variant is requested, ensure it matches the enabled one
-            if (expectedVariant && currentFormVariant && currentFormVariant !== expectedVariant) {
-                console.warn('[PublicProduct] variant mismatch', { expectedVariant, currentFormVariant })
-                setError('Form variant not enabled')
-                setStatus('idle')
-                return
+            // If a specific variant/form is requested, ensure it matches the enabled one
+            if (expectedVariant) {
+                if (tenantProductFormId) {
+                    if (tenantProductFormId !== expectedVariant) {
+                        console.warn('[PublicProduct] form id mismatch', { expectedVariant, tenantProductFormId })
+                        setError('Form variant not enabled')
+                        setStatus('idle')
+                        return
+                    }
+                } else if (currentFormVariant) {
+                    if (currentFormVariant !== expectedVariant) {
+                        console.warn('[PublicProduct] variant mismatch', { expectedVariant, currentFormVariant })
+                        setError('Form variant not enabled')
+                        setStatus('idle')
+                        return
+                    }
+                } else {
+                    console.warn('[PublicProduct] expected variant but none provided by API', { expectedVariant })
+                    setError('Form variant not enabled')
+                    setStatus('idle')
+                    return
+                }
             }
 
             setProduct({
@@ -79,6 +98,7 @@ export default function PublicProductPage() {
                 stripeProductId: data.data.stripeProductId ?? null,
                 stripePriceId: data.data.stripePriceId ?? null,
                 tenantProductId: data.data.tenantProductId ?? null,
+                tenantProductFormId,
             })
             setIsModalOpen(true)
         } catch (err) {

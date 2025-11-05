@@ -5899,44 +5899,25 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       currentFormVariant: currentFormVariant ?? null,
     });
 
-    // Handle QuestionnaireCustomization
+    // Handle QuestionnaireCustomization (activate current questionnaire without disabling others)
     try {
-      // STEP 1: Deactivate ALL active records for this user (except the one we're activating)
-      const deactivatedCount = await QuestionnaireCustomization.update(
-        { isActive: false },
-        {
-          where: {
-            userId: currentUser.id,
-            questionnaireId: { [Op.ne]: questionnaireId }, // All except current
-            isActive: true // Only active ones
-          }
-        }
-      );
-
-      if (deactivatedCount[0] > 0) {
-        console.log(`🔄 Deactivated ${deactivatedCount[0]} previous QuestionnaireCustomization(s) for user ${currentUser.id}`);
-      }
-
-      // STEP 2: Check if customization already exists for this questionnaire
       let customization = await QuestionnaireCustomization.findOne({
         where: { userId: currentUser.id, questionnaireId }
       });
 
       if (customization) {
-        // STEP 3A: Already exists, just activate it (keep existing color, even if null)
-        await customization.update({
-          isActive: true
-        });
-        console.log(`✅ Reactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: ${customization.customColor || 'none (will use defaults)'}`);
+        if (!customization.isActive) {
+          await customization.update({ isActive: true } as any);
+          console.log(`✅ Reactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}`);
+        }
       } else {
-        // STEP 3B: Doesn't exist, create it with no color (null) - admin can set it later
         customization = await QuestionnaireCustomization.create({
           userId: currentUser.id,
           questionnaireId,
-          customColor: null, // Start with no custom color
+          customColor: null,
           isActive: true,
         });
-        console.log(`✅ Created NEW QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: none (will use clinic default)`);
+        console.log(`✅ Created QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}`);
       }
     } catch (customizationError) {
       console.error('⚠️ Error managing QuestionnaireCustomization:', customizationError);
@@ -5991,34 +5972,58 @@ app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "User clinic not found" });
     }
 
-    const { productId, questionnaireId } = req.body || {};
-    if (!productId || !questionnaireId) {
-      return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
+    const { productId, questionnaireId, tenantProductFormId } = req.body || {};
+    if (!tenantProductFormId && (!productId || !questionnaireId)) {
+      return res.status(400).json({ success: false, message: "tenantProductFormId or (productId + questionnaireId) is required" });
     }
 
-    const record = await TenantProductForm.findOne({
-      where: { tenantId: currentUser.id, clinicId: user.clinicId, productId, questionnaireId },
-    });
+    let record: TenantProductForm | null = null;
+
+    if (tenantProductFormId) {
+      record = await TenantProductForm.findOne({
+        where: { id: tenantProductFormId, tenantId: currentUser.id, clinicId: user.clinicId },
+      });
+    }
+
+    if (!record && productId && questionnaireId) {
+      record = await TenantProductForm.findOne({
+        where: { tenantId: currentUser.id, clinicId: user.clinicId, productId, questionnaireId },
+      });
+    }
 
     if (!record) {
       return res.status(404).json({ success: false, message: 'Enabled form not found' });
     }
 
+    const recordProductId = record.productId;
+    const recordQuestionnaireId = record.questionnaireId;
+
     await record.destroy({ force: true } as any);
 
-    // Deactivate the corresponding QuestionnaireCustomization
+    // Only deactivate customization if no other forms for this questionnaire remain active
     try {
-      const updated = await QuestionnaireCustomization.update(
-        { isActive: false },
-        {
-          where: {
-            userId: currentUser.id,
-            questionnaireId
-          }
+      const remaining = await TenantProductForm.count({
+        where: {
+          tenantId: currentUser.id,
+          clinicId: user.clinicId,
+          productId: recordProductId,
+          questionnaireId: recordQuestionnaireId,
         }
-      );
-      if (updated[0] > 0) {
-        console.log(`✅ Deactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}`);
+      });
+
+      if (remaining === 0) {
+        const updated = await QuestionnaireCustomization.update(
+          { isActive: false },
+          {
+            where: {
+              userId: currentUser.id,
+              questionnaireId: recordQuestionnaireId
+            }
+          }
+        );
+        if (updated[0] > 0) {
+          console.log(`✅ Deactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${recordQuestionnaireId}`);
+        }
       }
     } catch (customizationError) {
       console.error('⚠️ Error deactivating QuestionnaireCustomization:', customizationError);
@@ -9830,140 +9835,88 @@ app.get("/brand-treatments/published", authenticateJWT, async (req, res) => {
 app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
   try {
     const { clinicSlug, slug } = req.params;
+    const variantParam = typeof req.query.variant === 'string' ? req.query.variant : undefined;
+    const normalizedVariant = variantParam === 'main' ? undefined : variantParam;
 
     const clinic = await Clinic.findOne({ where: { slug: clinicSlug } });
     if (!clinic) {
       return res.status(404).json({ success: false, message: "Clinic not found" });
     }
 
-    console.log('Public: get product form by clinic slug + product slug Edu', clinicSlug, slug);
-    // First try legacy enablement via TenantProduct (selected products)
-    // First try legacy enablement via TenantProduct (selected products)
+    const product = await Product.findOne({ where: { slug } });
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    // Ensure the product is enabled either via TenantProduct or TenantProductForm
     const tenantProduct = await TenantProduct.findOne({
-      where: { clinicId: clinic.id },
-      include: [
-        {
-          model: Product,
-          required: true,
-          where: { slug },
-        },
-        {
-          model: Questionnaire,
-          required: false,
-        },
-      ],
-    });
-    console.log('Public: tenantProduct Edu', tenantProduct);
-
-    if (tenantProduct && tenantProduct.product) {
-      const product = tenantProduct.product as any;
-      // Try to resolve currentFormVariant from TenantProductForm for the same clinic/product
-      let currentFormVariant: string | null = null;
-      try {
-        const tpf = await TenantProductForm.findOne({ where: { clinicId: clinic.id, productId: product.id } as any });
-        currentFormVariant = (tpf as any)?.currentFormVariant ?? null;
-      } catch { }
-
-      // Always check for the most recently attached form via Questionnaire.productId
-      // This takes precedence over TenantProduct.questionnaireId to ensure form switching works
-      let questionnaireId = tenantProduct.questionnaireId || null;
-      try {
-        const productQuestionnaire = await Questionnaire.findOne({
-          where: {
-            productId: product.id,
-            formTemplateType: 'normal'
-          },
-          order: [['updatedAt', 'DESC']]
-        });
-        if (productQuestionnaire) {
-          questionnaireId = productQuestionnaire.id;
-          console.log('✅ Using questionnaire from Questionnaire.productId:', questionnaireId);
-        } else if (questionnaireId) {
-          console.log('⚠️ No Questionnaire.productId found, falling back to TenantProduct.questionnaireId:', questionnaireId);
-        }
-      } catch (e) {
-        console.error('Error finding product questionnaire:', e);
-      }
-
-      const categories = Array.isArray(product.categories)
-        ? (product.categories as string[]).filter(Boolean)
-        : [];
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          id: product.id,
-          name: product.name,
-          slug: product.slug,
-          questionnaireId,
-          clinicSlug: clinic.slug,
-          category: categories[0] ?? null,
-          categories,
-          currentFormVariant,
-          // Expose tenant product pricing + stripe identifiers for checkout
-          price: (tenantProduct as any).price ?? null,
-          stripeProductId: (tenantProduct as any).stripeProductId ?? null,
-          stripePriceId: (tenantProduct as any).stripePriceId ?? null,
-          tenantProductId: (tenantProduct as any).id ?? null,
-        },
-      });
-    }
-
-    // Fallback: consider enablement via TenantProductForm (form assignment)
-    const tenantProductForm = await TenantProductForm.findOne({
-      where: { clinicId: clinic.id },
-      include: [
-        {
-          model: Product,
-          required: true,
-          where: { slug },
-        },
-      ],
+      where: { clinicId: clinic.id, productId: product.id },
     });
 
-    if (tenantProductForm && (tenantProductForm as any).product) {
-      const product = (tenantProductForm as any).product;
-      const categories = Array.isArray(product.categories)
-        ? (product.categories as string[]).filter(Boolean)
-        : [];
-      
-      // Always check for the most recently attached form via Questionnaire.productId
-      // This takes precedence over TenantProductForm.questionnaireId to ensure form switching works
-      let questionnaireId = tenantProductForm.questionnaireId || null;
-      try {
-        const productQuestionnaire = await Questionnaire.findOne({
-          where: {
-            productId: product.id,
-            formTemplateType: 'normal'
-          },
-          order: [['updatedAt', 'DESC']]
-        });
-        if (productQuestionnaire) {
-          questionnaireId = productQuestionnaire.id;
-          console.log('✅ Using questionnaire from Questionnaire.productId:', questionnaireId);
-        } else if (questionnaireId) {
-          console.log('⚠️ No Questionnaire.productId found, falling back to TenantProductForm.questionnaireId:', questionnaireId);
-        }
-      } catch (e) {
-        console.error('Error finding product questionnaire:', e);
-      }
+    const tenantProductForms = await TenantProductForm.findAll({
+      where: { clinicId: clinic.id, productId: product.id },
+      order: [['createdAt', 'DESC']] as any,
+    });
 
-      return res.status(200).json({
-        success: true,
-        data: {
-          id: product.id,
-          name: product.name,
-          slug: product.slug,
-          questionnaireId,
-          clinicSlug: clinic.slug,
-          category: categories[0] ?? null,
-          categories,
-          currentFormVariant: (tenantProductForm as any).currentFormVariant ?? null,
-        },
-      });
+    if (!tenantProduct && tenantProductForms.length === 0) {
+      return res.status(404).json({ success: false, message: "Product not enabled for this brand" });
     }
 
-    return res.status(404).json({ success: false, message: "Product not enabled for this brand" });
+    // Locate the specific form requested (if any)
+    let selectedForm: TenantProductForm | null = null;
+    if (normalizedVariant) {
+      selectedForm = tenantProductForms.find((form) => form.id === normalizedVariant) ||
+        tenantProductForms.find((form) => (form.currentFormVariant ?? null) === normalizedVariant) ||
+        null;
+
+      if (!selectedForm) {
+        return res.status(404).json({ success: false, message: 'Requested form variant not enabled' });
+      }
+    } else if (tenantProductForms.length > 0) {
+      selectedForm = tenantProductForms[0];
+    }
+
+    // Determine questionnaire
+    let questionnaireId = selectedForm?.questionnaireId || tenantProduct?.questionnaireId || null;
+    try {
+      const productQuestionnaire = await Questionnaire.findOne({
+        where: {
+          productId: product.id,
+          formTemplateType: 'normal'
+        },
+        order: [['updatedAt', 'DESC']]
+      });
+      if (productQuestionnaire) {
+        questionnaireId = productQuestionnaire.id;
+        console.log('✅ Using questionnaire from Questionnaire.productId:', questionnaireId);
+      }
+    } catch (e) {
+      console.error('Error finding product questionnaire:', e);
+    }
+
+    const categories = Array.isArray((product as any).categories)
+      ? ((product as any).categories as string[]).filter(Boolean)
+      : [];
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        questionnaireId,
+        clinicSlug: clinic.slug,
+        category: categories[0] ?? null,
+        categories,
+        currentFormVariant: selectedForm?.currentFormVariant ?? null,
+        tenantProductFormId: selectedForm?.id ?? null,
+        // Expose tenant product pricing + stripe identifiers for checkout when available
+        price: tenantProduct ? (tenantProduct as any).price ?? null : null,
+        stripeProductId: tenantProduct ? (tenantProduct as any).stripeProductId ?? null : null,
+        stripePriceId: tenantProduct ? (tenantProduct as any).stripePriceId ?? null : null,
+        tenantProductId: tenantProduct ? (tenantProduct as any).id ?? null : null,
+      },
+    });
   } catch (error) {
     console.error('❌ Error fetching published brand products:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch published products' });
