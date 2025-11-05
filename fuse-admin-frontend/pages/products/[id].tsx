@@ -197,14 +197,26 @@ export default function ProductDetail() {
                 const userWithClinic: any = user
                 const clinicId = userWithClinic?.clinicId
 
+                // Fetch product to get its category
+                const productRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products/${id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                const productData = await productRes.json()
+                const productCategory = productData?.data?.category || productData?.data?.categories?.[0] || null
+
                 // Fetch tenant products, templates, and forms in parallel
-                const [tpRes, templatesRes, tpfRes, ordersRes] = await Promise.all([
+                const [tpRes, productFormsRes, standardizedFormsRes, tpfRes, ordersRes] = await Promise.all([
                     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
+                    // Get product-specific questionnaires
                     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/product/${id}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
+                    // Get standardized templates for this product's category
+                    productCategory ? fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/standardized?category=${productCategory}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }) : Promise.resolve(null),
                     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms?productId=${id}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
@@ -220,11 +232,24 @@ export default function ProductDetail() {
                     setTenantProduct(tenantProd || null)
                 }
 
-                // Process templates
-                if (templatesRes.ok) {
-                    const data = await templatesRes.json()
-                    setTemplates(Array.isArray(data?.data) ? data.data : [])
+                // Combine product forms and standardized forms
+                const allTemplates = []
+                
+                // Add product-specific forms
+                if (productFormsRes.ok) {
+                    const data = await productFormsRes.json()
+                    const productForms = Array.isArray(data?.data) ? data.data : []
+                    allTemplates.push(...productForms)
                 }
+                
+                // Add standardized category forms
+                if (standardizedFormsRes && standardizedFormsRes.ok) {
+                    const data = await standardizedFormsRes.json()
+                    const standardizedForms = Array.isArray(data?.data) ? data.data : []
+                    allTemplates.push(...standardizedForms)
+                }
+                
+                setTemplates(allTemplates)
 
                 // Process enabled forms
                 if (tpfRes.ok) {
