@@ -12,7 +12,6 @@ import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../../forms/QuestionEditor"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
 import { ProductDetailsEditor } from "@/components/products/ProductDetailsEditor"
-import { FormAttachmentCard } from "@/components/products/FormAttachmentCard"
 import { NoFormAttached } from "@/components/products/NoFormAttached"
 import { PharmacyStateManager } from "@/components/products/PharmacyStateManager"
 
@@ -1936,122 +1935,94 @@ export default function ProductEditor() {
           {/* Form Editor - Only show when form is attached */}
           {templateId && template && (
             <>
-              {/* Header Section */}
-              <div className="mb-8 pb-8 border-b border-[#E5E7EB]">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* Left: Title and Description */}
-                  <div className="lg:col-span-3">
-                    <div className="flex items-center justify-between mb-4">
-                      <h1 className="text-3xl font-semibold text-[#1F2937]">Intake Form</h1>
-                      {!editingFormMetadata && (
-                        <button
-                          onClick={handleEditFormMetadata}
-                          className="p-2 text-[#6B7280] hover:text-[#1F2937] hover:bg-white rounded-xl transition-all"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                    {editingFormMetadata ? (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider">Form Name</label>
-                          <input
-                            value={formMetadata.title}
-                            onChange={(e) => setFormMetadata({ ...formMetadata, title: e.target.value })}
-                            placeholder="Enter form name"
-                            className="mt-1 w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider">Description</label>
-                          <input
-                            value={formMetadata.description}
-                            onChange={(e) => setFormMetadata({ ...formMetadata, description: e.target.value })}
-                            placeholder="Enter form description"
-                            className="mt-1 w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleSaveFormMetadata}
-                            disabled={savingFormMetadata}
-                            className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {savingFormMetadata ? (
-                              <>
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              "Save"
-                            )}
-                          </button>
-                          <button
-                            onClick={handleCancelEditFormMetadata}
-                            disabled={savingFormMetadata}
-                            className="px-4 py-2 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-[#6B7280] text-base leading-relaxed">
-                        {template.description || "Generate a voucher to start using this intake form for patient sign up."}
-                      </p>
-                    )}
+              {/* Header Section - Consolidated */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Intake Form</h1>
+                    <p className="text-[#6B7280] text-base">
+                      {template.title || "Build your product intake form"}
+                    </p>
                   </div>
 
-                  {/* Middle/Right: Metadata and Actions */}
-                  <div className="lg:col-span-8 space-y-4">
-                    {/* Metadata Cards */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-white rounded-2xl p-5 shadow-sm border border-[#E5E7EB] hover:shadow-md transition-all">
-                        <p className="text-xs font-semibold text-[#9CA3AF] mb-2 uppercase tracking-wider">Form Name</p>
-                        <p className="font-semibold text-[#1F2937] text-base">{template.title}</p>
-                      </div>
-                      <div className="bg-white rounded-2xl p-5 shadow-sm border border-[#E5E7EB] hover:shadow-md transition-all">
-                        <p className="text-xs font-semibold text-[#9CA3AF] mb-2 uppercase tracking-wider">Status</p>
-                        <span
-                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${formStatus === 'in_progress'
-                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                            formStatus === 'ready_for_review'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                              'bg-green-50 text-green-700 border-green-200'
-                            }`}
-                        >
-                          {formStatus === 'in_progress' ? 'In Progress' :
-                            formStatus === 'ready_for_review' ? 'Ready for Review' :
-                              'Ready'}
-                        </span>
-                      </div>
+                  {/* Choose Template Dropdown */}
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowFormSelector(!showFormSelector)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-[#E5E7EB] bg-white text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Choose Template
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+
+                      {showFormSelector && (
+                        <>
+                          {/* Backdrop */}
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setShowFormSelector(false)}
+                          />
+
+                          {/* Dropdown Menu */}
+                          <div className="absolute right-0 z-50 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-[#E5E7EB] overflow-hidden">
+                            <div className="p-4 border-b border-[#E5E7EB]">
+                              <input
+                                type="text"
+                                placeholder="Search templates..."
+                                value={formSearchQuery}
+                                onChange={(e) => setFormSearchQuery(e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50"
+                              />
+                            </div>
+                            <div className="max-h-64 overflow-y-auto">
+                              {availableForms
+                                .filter(form =>
+                                  form.title.toLowerCase().includes(formSearchQuery.toLowerCase()) ||
+                                  form.description?.toLowerCase().includes(formSearchQuery.toLowerCase())
+                                )
+                                .map((form) => (
+                                  <button
+                                    key={form.id}
+                                    onClick={() => {
+                                      handleSwitchForm(form.id)
+                                      setShowFormSelector(false)
+                                    }}
+                                    className="w-full text-left px-4 py-3 hover:bg-[#F9FAFB] border-b border-[#E5E7EB] last:border-b-0 transition-colors"
+                                  >
+                                    <div className="font-medium text-sm text-[#1F2937]">{form.title}</div>
+                                    {form.description && (
+                                      <div className="text-xs text-[#9CA3AF] mt-1">{form.description}</div>
+                                    )}
+                                  </button>
+                                ))}
+                              <div className="p-2 border-t-2 border-[#E5E7EB] bg-[#F9FAFB]">
+                                <button
+                                  onClick={() => {
+                                    handleCreateNewForm()
+                                    setShowFormSelector(false)
+                                  }}
+                                  disabled={creatingForm}
+                                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#4FA59C] hover:bg-[#478F87] text-white text-sm font-medium transition-all disabled:opacity-50"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                  {creatingForm ? 'Creating...' : 'Create New Template'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
+                  </div>
+                </div>
 
-                    {/* Product Form Attachment */}
-                    <FormAttachmentCard
-                      templateId={templateId}
-                      template={template}
-                      availableForms={availableForms}
-                      formSearchQuery={formSearchQuery}
-                      setFormSearchQuery={setFormSearchQuery}
-                      selectedFormId={selectedFormIdForAttach}
-                      setSelectedFormId={setSelectedFormIdForAttach}
-                      showFormSelector={showFormSelector}
-                      setShowFormSelector={setShowFormSelector}
-                      attachingForm={attachingForm}
-                      detachingForm={detachingForm}
-                      creatingForm={creatingForm}
-                      onCreateNewForm={handleCreateNewForm}
-                      onAttachExistingForm={handleAttachExistingForm}
-                      onSwitchForm={handleSwitchForm}
-                      onDetachForm={handleDetachForm}
-                    />
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-3 flex-wrap">
-                      {formStatus === 'in_progress' && (
-                        <button
+                {/* Action Buttons */}
+                <div className="mt-6 pb-6 border-b border-[#E5E7EB]">
+                  <div className="flex gap-3 flex-wrap">
+                    {formStatus === 'in_progress' && (
+                      <button
                           onClick={async () => {
                             if (!token || !templateId) return
                             try {
