@@ -9,6 +9,9 @@ export interface PharmacyProduct {
     nameWithStrength?: string;
     dispense?: string;
     label?: string;
+    sig?: string;
+    price?: number;
+    wholesalePrice?: number;
     [key: string]: any; // Allow additional fields from different pharmacies
 }
 
@@ -116,6 +119,9 @@ export class PharmacyIntegrationService {
             nameWithStrength: product.nameWithStrength,
             dispense: product.dispense,
             label: product.name, // IronSail doesn't have separate label
+            sig: product.sig,
+            price: product.price,
+            wholesalePrice: product.wholesalePrice,
             // Keep original data for reference
             _raw: product,
         }));

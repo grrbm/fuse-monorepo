@@ -60,6 +60,12 @@ export default class PharmacyProduct extends Model {
     })
     declare pharmacyWholesaleCost?: number;
 
+    @Column({
+        type: DataType.TEXT,
+        allowNull: true,
+    })
+    declare sig?: string; // Medication instructions (Sig) from pharmacy
+
     @BelongsTo(() => Product)
     declare product: Product;
 

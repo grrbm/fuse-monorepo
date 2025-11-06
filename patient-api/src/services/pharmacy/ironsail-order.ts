@@ -98,10 +98,11 @@ class IronSailOrderService {
         // Format DOB
         const dob = patient?.dob ? new Date(patient.dob).toISOString().split('T')[0] : '';
 
-        // Generate Sig (medication instructions)
-        const productName = coverage?.pharmacyProductName || product?.name || 'medication';
-        const sig = order.notes || order.doctorNotes ||
-            `Take as directed by your healthcare provider`;
+        // Use SIG from pharmacy coverage if available, otherwise fallback to order notes or default
+        const sig = coverage?.sig || 
+                   order.doctorNotes || 
+                   order.notes ||
+                   `Take as directed by your healthcare provider`;
 
         // Dispense format
         const dispense = `${quantity} ${product?.medicationSize || 'Unit'}`;

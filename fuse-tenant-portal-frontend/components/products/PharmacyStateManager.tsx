@@ -37,6 +37,9 @@ interface PharmacyProduct {
   nameWithStrength?: string
   dispense?: string
   label?: string
+  sig?: string
+  price?: number
+  wholesalePrice?: number
 }
 
 interface PharmacyAssignment {
@@ -46,6 +49,7 @@ interface PharmacyAssignment {
   pharmacyProductId?: string
   pharmacyProductName?: string
   pharmacyWholesaleCost?: number
+  sig?: string
   pharmacy: Pharmacy
 }
 
@@ -177,6 +181,8 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
       if (selectedPharmacyProduct) {
         payload.pharmacyProductId = selectedPharmacyProduct.sku.toString()
         payload.pharmacyProductName = selectedPharmacyProduct.nameWithStrength || selectedPharmacyProduct.name
+        payload.sig = selectedPharmacyProduct.sig
+        payload.pharmacyWholesaleCost = selectedPharmacyProduct.wholesalePrice || selectedPharmacyProduct.price
       }
 
       const response = await fetch(`${baseUrl}/products/${productId}/pharmacy-assignments`, {
@@ -446,7 +452,13 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                                 <div className="text-xs text-[#9CA3AF] mt-1">
                                   SKU: {product.sku}
                                   {product.dispense && ` • ${product.dispense}`}
+                                  {product.wholesalePrice && ` • $${product.wholesalePrice}`}
                                 </div>
+                                {product.sig && (
+                                  <div className="text-xs text-[#6B7280] mt-1 italic">
+                                    SIG: {product.sig}
+                                  </div>
+                                )}
                                 {product.label && (
                                   <div className="text-xs text-[#9CA3AF] mt-1">
                                     {product.label}
@@ -520,48 +532,48 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                       <div className="mt-3 space-y-2">
                         {/* Show pharmacy product info if selected */}
                         {firstAssignment?.pharmacyProductName && (
-                          <div className="text-sm">
-                            <span className="text-[#9CA3AF]">Pharmacy Product: </span>
-                            <span className="font-medium text-[#1F2937]">{firstAssignment.pharmacyProductName}</span>
-                            {firstAssignment.pharmacyProductId && (
-                              <span className="text-[#9CA3AF] ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
+                          <div className="space-y-1">
+                            <div className="text-sm">
+                              <span className="text-[#9CA3AF]">Pharmacy Product: </span>
+                              <span className="font-medium text-[#1F2937]">{firstAssignment.pharmacyProductName}</span>
+                              {firstAssignment.pharmacyProductId && (
+                                <span className="text-[#9CA3AF] ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
+                              )}
+                            </div>
+                            {firstAssignment.sig && (
+                              <div className="text-sm">
+                                <span className="text-[#9CA3AF]">SIG: </span>
+                                <span className="text-[#1F2937] italic">{firstAssignment.sig}</span>
+                              </div>
                             )}
                           </div>
                         )}
                         
-                        {/* Pricing section - always show */}
+                        {/* Pricing section - always show, always editable */}
                         {firstAssignment && (
-                          firstAssignment.pharmacyWholesaleCost ? (
-                            <div className="text-sm">
-                              <span className="text-[#9CA3AF]">Wholesale Cost: </span>
-                              <span className="font-semibold text-green-600">
-                                ${Number(firstAssignment.pharmacyWholesaleCost).toFixed(2)}
-                              </span>
-                              <span className="ml-2 inline-block px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs">From Pharmacy API</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[#9CA3AF] text-sm">Wholesale Price:</span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-sm text-[#4B5563]">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                className="w-24 h-8 text-sm px-3 py-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                                defaultValue={firstAssignment.pharmacyWholesaleCost || ""}
+                                onBlur={(e) => {
+                                  const customPrice = parseFloat(e.target.value)
+                                  if (!isNaN(customPrice) && customPrice > 0) {
+                                    handleUpdateCustomPrice(firstAssignment.id, customPrice)
+                                  }
+                                }}
+                              />
                             </div>
-                          ) : (
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="text-[#6B7280] text-sm">Custom Wholesale Price:</span>
-                              <div className="flex items-center gap-1">
-                                <span className="text-sm text-[#4B5563]">$</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="0.00"
-                                  className="w-24 h-8 text-sm px-3 py-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                                  defaultValue={firstAssignment.pharmacyWholesaleCost || ""}
-                                  onBlur={(e) => {
-                                    const customPrice = parseFloat(e.target.value)
-                                    if (!isNaN(customPrice) && customPrice > 0) {
-                                      handleUpdateCustomPrice(firstAssignment.id, customPrice)
-                                    }
-                                  }}
-                                />
-                              </div>
-                              <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 border border-gray-200 rounded-full text-xs">Manual Entry</span>
-                            </div>
-                          )
+                            {firstAssignment.pharmacyWholesaleCost && (
+                              <span className="inline-block px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs">From Spreadsheet</span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
