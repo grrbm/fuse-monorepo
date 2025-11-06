@@ -11,7 +11,7 @@ export enum PaymentStatus {
     PAID = 'paid',
     PAYMENT_DUE = 'payment_due',
     CANCELLED = 'cancelled',
-  }
+}
 
 @Table({
     freezeTableName: true,
@@ -53,8 +53,8 @@ export default class Clinic extends Entity {
         type: DataType.ENUM(...Object.values(PaymentStatus)),
         allowNull: false,
         defaultValue: PaymentStatus.PENDING,
-      })
-      declare status: PaymentStatus;
+    })
+    declare status: PaymentStatus;
 
     @Column({
         type: DataType.BOOLEAN,
@@ -68,12 +68,6 @@ export default class Clinic extends Entity {
         allowNull: true,
     })
     declare customDomain?: string;
-
-    @Column({
-        type: DataType.JSONB,
-        allowNull: true,
-    })
-    declare globalFormStructures?: any[];
 
     // Stripe Connect fields
     @Column({
