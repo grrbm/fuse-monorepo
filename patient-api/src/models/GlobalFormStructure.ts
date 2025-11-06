@@ -1,6 +1,5 @@
-import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript'
+import { Table, Column, DataType } from 'sequelize-typescript'
 import Entity from './Entity'
-import Clinic from './Clinic'
 
 @Table({
   freezeTableName: true,
@@ -8,19 +7,10 @@ import Clinic from './Clinic'
   paranoid: true, // Enables soft deletes
 })
 export default class GlobalFormStructure extends Entity {
-  @ForeignKey(() => Clinic)
-  @Column({
-    type: DataType.UUID,
-    allowNull: false,
-  })
-  declare clinicId: string
-
-  @BelongsTo(() => Clinic)
-  declare clinic: Clinic
-
   @Column({
     type: DataType.STRING,
     allowNull: false,
+    unique: true,
   })
   declare structureId: string // e.g., "default", "payment-first"
 

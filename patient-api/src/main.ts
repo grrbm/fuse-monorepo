@@ -524,67 +524,8 @@ app.post("/auth/signup", async (req, res) => {
         logo: '', // Default empty logo, can be updated later
         businessType: businessType || null,
       });
-
-      // Create default global form structures for new clinic
-      const defaultStructures = [
-        {
-          structureId: 'default',
-          name: 'Default - Short form',
-          description: 'Standard questionnaire flow for all products',
-          sections: [
-            { id: 'product', type: 'product_questions', label: 'Product Questions', description: 'Questions specific to each individual product', order: 1, enabled: true, icon: '📦' },
-            { id: 'account', type: 'account_creation', label: 'Create Account', description: 'Patient information collection', order: 2, enabled: true, icon: '👤' },
-            { id: 'checkout', type: 'checkout', label: 'Payment & Checkout', description: 'Billing and shipping', order: 3, enabled: true, icon: '💳' },
-            { id: 'category', type: 'category_questions', label: 'Standardized Category Questions', description: 'Questions shared across all products in a category', order: 4, enabled: false, icon: '📋' }
-          ],
-          isDefault: true
-        },
-        {
-          structureId: '1762381752300',
-          name: 'Personalized Long',
-          description: 'Category questions first for comprehensive intake',
-          sections: [
-            { id: 'category', type: 'category_questions', label: 'Standardized Category Questions', description: 'Questions shared across all products in a category', order: 1, enabled: true, icon: '📋' },
-            { id: 'product', type: 'product_questions', label: 'Product Questions', description: 'Questions specific to each individual product', order: 2, enabled: true, icon: '📦' },
-            { id: 'account', type: 'account_creation', label: 'Create Account', description: 'Patient information collection', order: 3, enabled: true, icon: '👤' },
-            { id: 'checkout', type: 'checkout', label: 'Payment & Checkout', description: 'Billing and shipping', order: 4, enabled: true, icon: '💳' }
-          ],
-          isDefault: false
-        },
-        {
-          structureId: '1762382187889',
-          name: 'Personalized and Payment First',
-          description: 'Payment after category questions',
-          sections: [
-            { id: 'category', type: 'category_questions', label: 'Standardized Category Questions', description: 'Questions shared across all products in a category', order: 1, enabled: true, icon: '📋' },
-            { id: 'account', type: 'account_creation', label: 'Create Account', description: 'Patient information collection', order: 2, enabled: true, icon: '👤' },
-            { id: 'checkout', type: 'checkout', label: 'Payment & Checkout', description: 'Billing and shipping', order: 3, enabled: true, icon: '💳' },
-            { id: 'product', type: 'product_questions', label: 'Product Questions', description: 'Questions specific to each individual product', order: 4, enabled: true, icon: '📦' }
-          ],
-          isDefault: false
-        },
-        {
-          structureId: '1762382604408',
-          name: 'Payment First',
-          description: 'Collect payment before medical questions',
-          sections: [
-            { id: 'checkout', type: 'checkout', label: 'Payment & Checkout', description: 'Billing and shipping', order: 1, enabled: true, icon: '💳' },
-            { id: 'account', type: 'account_creation', label: 'Create Account', description: 'Patient information collection', order: 2, enabled: true, icon: '👤' },
-            { id: 'product', type: 'product_questions', label: 'Product Questions', description: 'Questions specific to each individual product', order: 3, enabled: true, icon: '📦' },
-            { id: 'category', type: 'category_questions', label: 'Standardized Category Questions', description: 'Questions shared across all products in a category', order: 4, enabled: false, icon: '📋' }
-          ],
-          isDefault: false
-        }
-      ];
-
-      for (const structureData of defaultStructures) {
-        await GlobalFormStructure.create({
-          clinicId: clinic.id,
-          ...structureData
-        });
-      }
       
-      console.log('✅ Created 4 default global form structures for new clinic');
+      // Note: Global form structures are created at database initialization (ensureDefaultFormStructures)
 
       finalClinicId = clinic.id;
       console.log('✅ Clinic created successfully with ID:', clinic.id);
@@ -1303,7 +1244,7 @@ app.get("/questionnaires/standardized", authenticateJWT, async (req, res) => {
   }
 });
 
-// Get global form structures for clinic
+// Get global form structures
 app.get("/global-form-structures", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
@@ -1311,15 +1252,9 @@ app.get("/global-form-structures", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const user = await User.findByPk(currentUser.id);
-    if (!user || !user.clinicId) {
-      return res.status(400).json({ success: false, message: "User clinic not found" });
-    }
-
     // Query from GlobalFormStructures table
     const structures = await GlobalFormStructure.findAll({
       where: {
-        clinicId: user.clinicId,
         isActive: true
       },
       order: [
@@ -1353,20 +1288,13 @@ app.post("/global-form-structures", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const user = await User.findByPk(currentUser.id);
-    if (!user || !user.clinicId) {
-      return res.status(400).json({ success: false, message: "User clinic not found" });
-    }
-
     const { structures } = req.body;
     if (!Array.isArray(structures)) {
       return res.status(400).json({ success: false, message: "Structures must be an array" });
     }
 
     // Get existing structures to track what needs to be created/updated/deleted
-    const existingStructures = await GlobalFormStructure.findAll({
-      where: { clinicId: user.clinicId }
-    });
+    const existingStructures = await GlobalFormStructure.findAll();
 
     const existingIds = new Set(existingStructures.map(s => s.structureId));
     const incomingIds = new Set(structures.map((s: any) => s.id));
@@ -1388,14 +1316,12 @@ app.post("/global-form-structures", authenticateJWT, async (req, res) => {
           isDefault: structureData.isDefault || false
         }, {
           where: {
-            clinicId: user.clinicId,
             structureId: structureData.id
           }
         });
       } else {
         // Create new
         await GlobalFormStructure.create({
-          clinicId: user.clinicId,
           structureId: structureData.id,
           name: structureData.name,
           description: structureData.description || '',
@@ -1406,7 +1332,7 @@ app.post("/global-form-structures", authenticateJWT, async (req, res) => {
       }
     }
 
-    console.log('✅ Saved global form structures for clinic:', user.clinicId);
+    console.log('✅ Saved global form structures');
 
     res.status(200).json({ success: true, message: 'Structures saved successfully', data: structures });
   } catch (error) {
@@ -10134,7 +10060,6 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
     if (selectedForm?.globalFormStructureId) {
       const structure = await GlobalFormStructure.findOne({
         where: {
-          clinicId: clinic.id,
           structureId: selectedForm.globalFormStructureId,
           isActive: true
         }
