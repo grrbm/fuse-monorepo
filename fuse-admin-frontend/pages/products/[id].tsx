@@ -311,38 +311,31 @@ export default function ProductDetail() {
                 }
 
                 // Auto-enable exactly 1 form per Global Form Structure
+                // Forms are built from global structure blueprint - no questionnaire needed
                 const enabledTracker = new Set<string>()
                 
                 for (const template of displayTemplates) {
                     const structureId = (template as any)._structureId || 'default'
-                    const questionnaireId = (template as any)._underlyingQuestionnaireId || template.id
-                    const trackingKey = `${structureId}:${questionnaireId}`
+                    const trackingKey = `${structureId}:${String(id)}` // Product ID is the key
                     
                     // Skip if we've already enabled this structure
                     if (enabledTracker.has(trackingKey)) continue
                     
-                    // Skip if no valid questionnaire ID
-                    if (!questionnaireId || questionnaireId.startsWith('structure-')) {
-                        console.log(`Skipping structure ${structureId} - no valid questionnaire ID`)
-                        continue
-                    }
-                    
-                    // Check if a form exists for this structure
+                    // Check if a form exists for this structure + product
                     const existingFormsForStructure = enabledForms.filter((f: any) => 
-                        f?.questionnaireId === questionnaireId && 
                         (f?.globalFormStructureId ?? 'default') === structureId
                     )
                     
                     // Only auto-enable if ZERO forms exist for this structure
                     if (existingFormsForStructure.length === 0) {
                         try {
-                            console.log(`Auto-enabling form for structure ${structureId} with questionnaire ${questionnaireId}`)
+                            console.log(`Auto-enabling form for structure ${structureId} for product ${id}`)
                             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
                                 method: 'POST',
                                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ 
                                     productId: String(id), 
-                                    questionnaireId: questionnaireId, 
+                                    questionnaireId: null, // No questionnaire needed - built from global structure
                                     currentFormVariant: null,
                                     globalFormStructureId: structureId
                                 })
@@ -858,12 +851,15 @@ export default function ProductDetail() {
                                         {templates.map((t, structureIndex) => {
                                             const structure = (t as any)._structure
                                             const structureId = (t as any)._structureId || 'default'
+                                            
                                             // Filter forms for THIS specific structure
-                                            const questionnaireId = (t as any)._underlyingQuestionnaireId || (t as any)._productForm?.id || t.id
-                                            const formsForStructure = enabledForms.filter((f: any) => 
-                                                f?.questionnaireId === questionnaireId &&
-                                                (f?.globalFormStructureId ?? 'default') === structureId
-                                            )
+                                            // New global form structure system: match by globalFormStructureId and productId
+                                            // Forms created from global structures have questionnaireId: null
+                                            const formsForStructure = enabledForms.filter((f: any) => {
+                                                const matchesStructure = (f?.globalFormStructureId ?? 'default') === structureId
+                                                const matchesProduct = f?.productId === id
+                                                return matchesStructure && matchesProduct
+                                            })
                                             const form = formsForStructure[0] // Just get the single form for this structure
 
                                             return (
