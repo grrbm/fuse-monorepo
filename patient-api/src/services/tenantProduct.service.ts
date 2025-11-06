@@ -230,10 +230,9 @@ class TenantProductService {
             const Product = require('../models/Product').default;
             const Clinic = require('../models/Clinic').default;
 
-            // Get all global form structures for this clinic
+            // Get all global form structures (now global to all clinics)
             const globalStructures = await GlobalFormStructure.findAll({
                 where: {
-                    clinicId,
                     isActive: true
                 }
             });
@@ -258,7 +257,9 @@ class TenantProductService {
 
                     if (!existingForm) {
                         // Create new form - questionnaire will be built from global structure sections
-                        const publishedUrl = `${clinic.slug}${clinic.isCustomDomain && clinic.customDomain ? `.${clinic.customDomain}` : '.localhost:3000'}/my-products/${require('crypto').randomUUID()}/${product.slug}`;
+                        const protocol = clinic.isCustomDomain && clinic.customDomain ? 'https' : 'http';
+                        const domain = clinic.isCustomDomain && clinic.customDomain ? clinic.customDomain : 'localhost:3000';
+                        const publishedUrl = `${protocol}://${clinic.slug}.${domain}/my-products/${require('crypto').randomUUID()}/${product.slug}`;
 
                         await TenantProductForm.create({
                             productId: tp.productId,
