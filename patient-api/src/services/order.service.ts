@@ -190,7 +190,8 @@ class OrderService {
                         as: 'user',
                         attributes: ['id', 'firstName',
                             'lastName', 'email', 'pharmacyPatientId',
-                            'clinicId', 'address', 'city', 'state', 'zipCode'
+                            'clinicId', 'address', 'city', 'state', 'zipCode',
+                            'phoneNumber', 'dob', 'gender'
                         ]
                     },
                     {

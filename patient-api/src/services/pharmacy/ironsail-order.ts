@@ -20,6 +20,8 @@ interface IronSailOrderData {
     patientCountry: string;
     productName: string;
     productSKU: string;
+    rxId: string;
+    medicationForm: string;
     sig: string;
     dispense: string;
     daysSupply: string;
@@ -122,6 +124,8 @@ class IronSailOrderService {
             patientCountry: 'USA',
             productName: coverage?.pharmacyProductName || product?.name || 'Unknown Product',
             productSKU: coverage?.pharmacyProductId || product?.pharmacyProductId || '',
+            rxId: coverage?.rxId || '',
+            medicationForm: coverage?.form || '',
             sig: sig,
             dispense: dispense,
             daysSupply: '30',
@@ -226,9 +230,11 @@ class IronSailOrderService {
 
             // === THIRD GRID (Labels left, values span middle + right) ===
             startY = doc.y;
-            const labelWidth = 80;
+            const labelWidth = 110;
 
             doc.fontSize(10).text('Name:', col1, startY, { width: labelWidth });
+            doc.text('RX ID:', col1, doc.y, { width: labelWidth });
+            doc.text('Medication Form:', col1, doc.y, { width: labelWidth });
             doc.text('Sig:', col1, doc.y, { width: labelWidth });
             doc.text('Dispense:', col1, doc.y, { width: labelWidth });
             doc.text('Days Supply:', col1, doc.y, { width: labelWidth });
@@ -237,6 +243,8 @@ class IronSailOrderService {
             // Values (spanning middle + right columns) - wider for 30% increase
             const valueCol = col1 + labelWidth + 10;
             doc.text(data.productName + ' (' + data.productSKU + ')', valueCol, startY, { width: 500 });
+            doc.text(data.rxId || 'N/A', valueCol, doc.y, { width: 500 });
+            doc.text(data.medicationForm || 'N/A', valueCol, doc.y, { width: 500 });
             doc.text(data.sig, valueCol, doc.y, { width: 500 });
             doc.text(data.dispense, valueCol, doc.y, { width: 500 });
             doc.text(data.daysSupply, valueCol, doc.y, { width: 500 });
@@ -299,7 +307,7 @@ class IronSailOrderService {
             try {
                 const headerResponse = await sheets.spreadsheets.values.get({
                     spreadsheetId: this.spreadsheetId,
-                    range: `${sheetName}!A1:Y1`,
+                    range: `${sheetName}!A1:AA1`,
                 });
 
                 const existingHeaders = headerResponse.data.values?.[0];
@@ -326,6 +334,8 @@ class IronSailOrderService {
                         'Patient Country',
                         'Medication Name',
                         'Product SKU',
+                        'RX ID',
+                        'Medication Form',
                         'Sig',
                         'Dispense',
                         'Days Supply',
@@ -337,7 +347,7 @@ class IronSailOrderService {
 
                     await sheets.spreadsheets.values.update({
                         spreadsheetId: this.spreadsheetId,
-                        range: `${sheetName}!A1:Y1`,
+                        range: `${sheetName}!A1:AA1`,
                         valueInputOption: 'USER_ENTERED',
                         requestBody: {
                             values: [headers],
@@ -370,6 +380,8 @@ class IronSailOrderService {
                 data.patientCountry,
                 data.productName,
                 data.productSKU,
+                data.rxId,
+                data.medicationForm,
                 data.sig,
                 data.dispense,
                 data.daysSupply,
@@ -379,7 +391,7 @@ class IronSailOrderService {
                 'Pending' // Status
             ];
 
-            const appendRange = `${sheetName}!A:Y`;
+            const appendRange = `${sheetName}!A:AA`;
             console.log(`📝 [IronSail] Appending order data to ${appendRange}`);
 
             // Append to spreadsheet

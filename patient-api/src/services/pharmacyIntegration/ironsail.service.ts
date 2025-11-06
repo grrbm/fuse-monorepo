@@ -18,6 +18,7 @@ export interface IronSailProduct {
     form?: string;
     displayName?: string;
     medicationName?: string;
+    rxId?: string;
     [key: string]: any; // Allow additional fields from the spreadsheet
 }
 
@@ -121,6 +122,9 @@ export class IronSailService {
                 
                 // Get SIG
                 const sig = product.sig || 'Take as directed by your healthcare provider';
+                
+                // Get RX_ID
+                const rxId = product.rx_id || product.rxid;
 
                 // Normalize to expected format
                 const normalizedProduct: IronSailProduct = {
@@ -141,6 +145,7 @@ export class IronSailService {
                     serviceProvider: serviceProvider,
                     states: states,
                     sig: sig,
+                    rxId: rxId,
                     // Keep all original fields for reference
                     _raw: product
                 };

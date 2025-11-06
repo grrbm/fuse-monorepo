@@ -40,6 +40,8 @@ interface PharmacyProduct {
   sig?: string
   price?: number
   wholesalePrice?: number
+  form?: string
+  rxId?: string
 }
 
 interface PharmacyAssignment {
@@ -50,6 +52,8 @@ interface PharmacyAssignment {
   pharmacyProductName?: string
   pharmacyWholesaleCost?: number
   sig?: string
+  form?: string
+  rxId?: string
   pharmacy: Pharmacy
 }
 
@@ -183,6 +187,8 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
         payload.pharmacyProductName = selectedPharmacyProduct.nameWithStrength || selectedPharmacyProduct.name
         payload.sig = selectedPharmacyProduct.sig
         payload.pharmacyWholesaleCost = selectedPharmacyProduct.wholesalePrice || selectedPharmacyProduct.price
+        payload.form = selectedPharmacyProduct.form
+        payload.rxId = selectedPharmacyProduct.rxId
       }
 
       const response = await fetch(`${baseUrl}/products/${productId}/pharmacy-assignments`, {
@@ -546,31 +552,51 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                                 <span className="text-[#1F2937] italic">{firstAssignment.sig}</span>
                               </div>
                             )}
+                            {firstAssignment.form && (
+                              <div className="text-sm">
+                                <span className="text-[#9CA3AF]">Medication Form: </span>
+                                <span className="text-[#1F2937]">{firstAssignment.form}</span>
+                              </div>
+                            )}
+                            {firstAssignment.rxId && (
+                              <div className="text-sm">
+                                <span className="text-[#9CA3AF]">RX ID: </span>
+                                <span className="text-[#1F2937] font-mono">{firstAssignment.rxId}</span>
+                              </div>
+                            )}
                           </div>
                         )}
                         
-                        {/* Pricing section - always show, always editable */}
+                        {/* Pricing section - editable only if not from spreadsheet */}
                         {firstAssignment && (
                           <div className="flex items-center gap-2">
                             <span className="text-[#9CA3AF] text-sm">Wholesale Price:</span>
                             <div className="flex items-center gap-1">
                               <span className="text-sm text-[#4B5563]">$</span>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="0.00"
-                                className="w-24 h-8 text-sm px-3 py-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                                defaultValue={firstAssignment.pharmacyWholesaleCost || ""}
-                                onBlur={(e) => {
-                                  const customPrice = parseFloat(e.target.value)
-                                  if (!isNaN(customPrice) && customPrice > 0) {
-                                    handleUpdateCustomPrice(firstAssignment.id, customPrice)
-                                  }
-                                }}
-                              />
+                              {firstAssignment.form || firstAssignment.rxId ? (
+                                // From spreadsheet - read only
+                                <span className="text-sm font-semibold text-[#1F2937]">
+                                  {firstAssignment.pharmacyWholesaleCost ? Number(firstAssignment.pharmacyWholesaleCost).toFixed(2) : '0.00'}
+                                </span>
+                              ) : (
+                                // Manual entry - editable
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  className="w-24 h-8 text-sm px-3 py-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                                  defaultValue={firstAssignment.pharmacyWholesaleCost || ""}
+                                  onBlur={(e) => {
+                                    const customPrice = parseFloat(e.target.value)
+                                    if (!isNaN(customPrice) && customPrice > 0) {
+                                      handleUpdateCustomPrice(firstAssignment.id, customPrice)
+                                    }
+                                  }}
+                                />
+                              )}
                             </div>
-                            {firstAssignment.pharmacyWholesaleCost && (
+                            {(firstAssignment.form || firstAssignment.rxId) && (
                               <span className="inline-block px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs">From Spreadsheet</span>
                             )}
                           </div>

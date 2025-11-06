@@ -99,7 +99,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
             }
 
             const { productId } = req.params;
-            const { pharmacyId, states, pharmacyProductId, pharmacyProductName, pharmacyWholesaleCost, sig } = req.body;
+            const { pharmacyId, states, pharmacyProductId, pharmacyProductName, pharmacyWholesaleCost, sig, rxId, form } = req.body;
 
             if (!pharmacyId || !states || !Array.isArray(states) || states.length === 0) {
                 return res.status(400).json({
@@ -152,7 +152,9 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                         pharmacyProductId,
                         pharmacyProductName,
                         pharmacyWholesaleCost: wholesaleCost,
-                        sig
+                        sig,
+                        rxId,
+                        form
                     })
                 )
             );
