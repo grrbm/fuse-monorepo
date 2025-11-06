@@ -22,9 +22,14 @@ export class MailsSender {
   /**
    * Send a verification email to activate user account
    */
-  static async sendVerificationEmail(email: string, activationToken: string, firstName: string): Promise<boolean> {
+  static async sendVerificationEmail(email: string, activationToken: string, firstName: string, frontendOrigin?: string): Promise<boolean> {
     // Determine the frontend URL based on environment
     const getFrontendUrl = () => {
+      // Use provided origin from the request
+      if (frontendOrigin) {
+        return frontendOrigin
+      }
+      
       if (process.env.FRONTEND_URL) {
         return process.env.FRONTEND_URL
       }

@@ -585,11 +585,16 @@ app.post("/auth/signup", async (req, res) => {
 
     console.log('🔑 Generated activation token for user:', user.email);
 
+    // Get the frontend origin from the request to send the verification link to the correct portal
+    const frontendOrigin = req.get('origin') || req.get('referer')?.split('/').slice(0, 3).join('/');
+    console.log('🌐 Frontend origin detected:', frontendOrigin);
+
     // Send verification email
     const emailSent = await MailsSender.sendVerificationEmail(
       user.email,
       activationToken,
-      user.firstName
+      user.firstName,
+      frontendOrigin
     );
 
     if (emailSent) {
