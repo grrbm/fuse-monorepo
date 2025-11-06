@@ -93,6 +93,7 @@ import QuestionnaireStep from "./models/QuestionnaireStep";
 import DashboardService from "./services/dashboard.service";
 import DoctorPatientChats from "./models/DoctorPatientChats";
 import WebSocketService from "./services/websocket.service";
+import MessageTemplate from "./models/MessageTemplate";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -10437,6 +10438,370 @@ app.delete("/tenant-products/:id", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete tenant product"
+    });
+  }
+});
+
+// ==================== MESSAGE TEMPLATES ROUTES ====================
+
+// GET all message templates for the current clinic
+app.get("/message-templates", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    if (!currentUser.clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "User does not belong to a clinic"
+      });
+    }
+
+    const { type } = req.query; // Optional filter by type: 'email' or 'sms'
+
+    const whereClause: any = {
+      clinicId: currentUser.clinicId
+    };
+
+    if (type && (type === 'email' || type === 'sms')) {
+      whereClause.type = type;
+    }
+
+    const templates = await MessageTemplate.findAll({
+      where: whereClause,
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.status(200).json({
+      success: true,
+      data: templates
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching message templates:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch message templates"
+    });
+  }
+});
+
+// GET single message template by ID
+app.get("/message-templates/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const { id } = req.params;
+
+    const template = await MessageTemplate.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId
+      }
+    });
+
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: "Message template not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: template
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching message template:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch message template"
+    });
+  }
+});
+
+// CREATE new message template
+app.post("/message-templates", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    if (!currentUser.clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "User does not belong to a clinic"
+      });
+    }
+
+    const { name, description, type, subject, body, category, mergeFields } = req.body;
+
+    // Basic validation
+    if (!name || !type || !body) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, type, and body are required"
+      });
+    }
+
+    if (type !== 'email' && type !== 'sms') {
+      return res.status(400).json({
+        success: false,
+        message: "Type must be 'email' or 'sms'"
+      });
+    }
+
+    // Auto-extract merge fields from body if not provided
+    let extractedMergeFields = mergeFields || [];
+    if (!mergeFields || mergeFields.length === 0) {
+      const regex = /\{\{([^}]+)\}\}/g;
+      const fields = new Set<string>();
+      let match;
+      while ((match = regex.exec(body)) !== null) {
+        fields.add(match[1].trim());
+      }
+      if (subject) {
+        while ((match = regex.exec(subject)) !== null) {
+          fields.add(match[1].trim());
+        }
+      }
+      extractedMergeFields = Array.from(fields);
+    }
+
+    const template = await MessageTemplate.create({
+      clinicId: currentUser.clinicId,
+      name,
+      description,
+      type,
+      subject,
+      body,
+      category,
+      mergeFields: extractedMergeFields,
+      createdBy: currentUser.id,
+      isActive: true,
+      version: 1
+    });
+
+    console.log('✅ Message template created:', {
+      templateId: template.id,
+      name: template.name,
+      type: template.type
+    });
+
+    res.status(201).json({
+      success: true,
+      data: template
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating message template:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create message template"
+    });
+  }
+});
+
+// UPDATE message template
+app.put("/message-templates/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const { id } = req.params;
+    const { name, description, type, subject, body, category, mergeFields, isActive } = req.body;
+
+    const template = await MessageTemplate.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId
+      }
+    });
+
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: "Message template not found"
+      });
+    }
+
+    // Auto-extract merge fields if body changed
+    let extractedMergeFields = mergeFields;
+    if (body && body !== template.body) {
+      const regex = /\{\{([^}]+)\}\}/g;
+      const fields = new Set<string>();
+      let match;
+      while ((match = regex.exec(body)) !== null) {
+        fields.add(match[1].trim());
+      }
+      if (subject) {
+        while ((match = regex.exec(subject)) !== null) {
+          fields.add(match[1].trim());
+        }
+      }
+      extractedMergeFields = Array.from(fields);
+    }
+
+    // Update fields
+    if (name !== undefined) template.name = name;
+    if (description !== undefined) template.description = description;
+    if (type !== undefined) template.type = type;
+    if (subject !== undefined) template.subject = subject;
+    if (body !== undefined) template.body = body;
+    if (category !== undefined) template.category = category;
+    if (extractedMergeFields !== undefined) template.mergeFields = extractedMergeFields;
+    if (isActive !== undefined) template.isActive = isActive;
+
+    // Increment version
+    template.version += 1;
+
+    await template.save();
+
+    console.log('✅ Message template updated:', {
+      templateId: template.id,
+      version: template.version
+    });
+
+    res.status(200).json({
+      success: true,
+      data: template
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating message template:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update message template"
+    });
+  }
+});
+
+// DUPLICATE message template
+app.post("/message-templates/:id/duplicate", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const { id } = req.params;
+
+    const originalTemplate = await MessageTemplate.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId
+      }
+    });
+
+    if (!originalTemplate) {
+      return res.status(404).json({
+        success: false,
+        message: "Message template not found"
+      });
+    }
+
+    // Create duplicate with " (Copy)" appended to name
+    const duplicateTemplate = await MessageTemplate.create({
+      clinicId: originalTemplate.clinicId,
+      name: `${originalTemplate.name} (Copy)`,
+      description: originalTemplate.description,
+      type: originalTemplate.type,
+      subject: originalTemplate.subject,
+      body: originalTemplate.body,
+      category: originalTemplate.category,
+      mergeFields: originalTemplate.mergeFields,
+      createdBy: currentUser.id,
+      isActive: true,
+      version: 1
+    });
+
+    console.log('✅ Message template duplicated:', {
+      originalId: id,
+      duplicateId: duplicateTemplate.id,
+      name: duplicateTemplate.name
+    });
+
+    res.status(201).json({
+      success: true,
+      data: duplicateTemplate
+    });
+
+  } catch (error) {
+    console.error('❌ Error duplicating message template:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to duplicate message template"
+    });
+  }
+});
+
+// DELETE message template (soft delete)
+app.delete("/message-templates/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const { id } = req.params;
+
+    const template = await MessageTemplate.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId
+      }
+    });
+
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: "Message template not found"
+      });
+    }
+
+    await template.destroy(); // Soft delete (paranoid mode)
+
+    console.log('✅ Message template soft deleted:', {
+      templateId: id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Message template deleted successfully"
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting message template:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete message template"
     });
   }
 });
