@@ -24,6 +24,7 @@ interface Step {
   stepType: "question" | "info"
   isDeadEnd?: boolean
   conditionalLogic?: string | null
+  required?: boolean
   questions?: Question[]
   conditionalQuestions?: ConditionalQuestion[]
 }
@@ -347,6 +348,7 @@ export default function ProductEditor() {
           stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
           isDeadEnd: Boolean(s.isDeadEnd),
           conditionalLogic: index === 0 ? null : (s.conditionalLogic || null),
+          required: s.required !== undefined ? Boolean(s.required) : true, // Default to required
           questions: (s.questions || []).map((q: any) => ({
             id: String(q.id),
             type: q.answerType || 'single-choice',
@@ -430,7 +432,7 @@ export default function ProductEditor() {
 
     try {
       setSavingTemplate(true)
-      
+
       // Clone current form as a new template
       const response = await fetch(`${baseUrl}/questionnaires/${templateId}/save-as-template`, {
         method: "POST",
@@ -471,9 +473,9 @@ export default function ProductEditor() {
       const currentFormResponse = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      
+
       if (!currentFormResponse.ok) throw new Error("Failed to fetch current form")
-      
+
       const currentForm = await currentFormResponse.json()
 
       // Update the selected template with current form structure
@@ -576,7 +578,7 @@ export default function ProductEditor() {
 
     try {
       setAttachingForm(true)
-      
+
       // Clone the template to create an independent copy for this product
       const response = await fetch(`${baseUrl}/questionnaires/templates/${selectedFormIdForAttach}/clone-for-product`, {
         method: "POST",
@@ -596,13 +598,13 @@ export default function ProductEditor() {
 
       const data = await response.json()
       const clonedQuestionnaireId = data.data?.id
-      
+
       if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
-      
+
       setSaveMessage("Form template cloned and attached successfully! You can now customize it for this product.")
       setTemplateId(clonedQuestionnaireId) // Use the clone's ID, not the template's
       setShowFormSelector(false)
-      
+
       // Reload the page to show the cloned form
       window.location.reload()
     } catch (error: any) {
@@ -647,13 +649,13 @@ export default function ProductEditor() {
 
       const data = await response.json()
       const clonedQuestionnaireId = data.data?.id
-      
+
       if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
-      
+
       setSaveMessage("Form template switched! Cloned and attached successfully.")
       setTemplateId(clonedQuestionnaireId)
       setShowFormSelector(false)
-      
+
       // Reload to show the new cloned form
       window.location.reload()
     } catch (error: any) {
@@ -971,6 +973,7 @@ export default function ProductEditor() {
         stepOrder: Number(s.stepOrder || 0),
         category: (s.category === 'info' ? 'info' : 'normal') as 'normal' | 'info',
         stepType: (s.questions && s.questions.length > 0) ? 'question' : 'info',
+        required: s.required !== undefined ? Boolean(s.required) : true, // Default to required
         questions: (s.questions || []).map((q: any) => ({
           id: String(q.id),
           type: q.answerType || 'single-choice',
@@ -1073,6 +1076,36 @@ export default function ProductEditor() {
 
   const handleUpdateStep = (stepId: string, updates: Partial<Step>) => {
     setSteps(steps.map(s => s.id === stepId ? { ...s, ...updates } : s))
+  }
+
+  const handleToggleStepRequired = async (stepId: string) => {
+    if (!token) return
+    const step = steps.find(s => s.id === stepId)
+    if (!step) return
+
+    const newRequiredValue = !step.required
+
+    // Optimistically update UI
+    setSteps(steps.map(s => s.id === stepId ? { ...s, required: newRequiredValue } : s))
+
+    // Persist to backend
+    try {
+      const res = await fetch(`${baseUrl}/questionnaires/step`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          stepId: stepId,
+          required: newRequiredValue
+        }),
+      })
+      if (!res.ok) {
+        // Revert on error
+        setSteps(steps.map(s => s.id === stepId ? { ...s, required: !newRequiredValue } : s))
+        throw new Error('Failed to update step')
+      }
+    } catch (e) {
+      console.error('❌ Failed to toggle step required', e)
+    }
   }
 
   const handleAddOption = (stepId: string, questionId: string) => {
@@ -2032,7 +2065,7 @@ export default function ProductEditor() {
               </div>
               <div className="p-6">
                 <p className="text-sm text-red-700 mb-4">{error || "Product not found"}</p>
-                <button 
+                <button
                   onClick={handleBack}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
                 >
@@ -2054,8 +2087,8 @@ export default function ProductEditor() {
         <Header />
         <main className="flex-1 overflow-y-auto p-8 space-y-6">
           {/* Back Button */}
-          <button 
-            onClick={handleBack} 
+          <button
+            onClick={handleBack}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1F2937] hover:bg-white rounded-xl transition-all -ml-2"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -2205,86 +2238,86 @@ export default function ProductEditor() {
                   <div className="flex gap-3 flex-wrap">
                     {formStatus === 'in_progress' && (
                       <button
-                          onClick={async () => {
-                            if (!token || !templateId) return
-                            try {
-                              // Update status to ready_for_review
-                              const res = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                body: JSON.stringify({ status: 'ready_for_review' })
-                              })
+                        onClick={async () => {
+                          if (!token || !templateId) return
+                          try {
+                            // Update status to ready_for_review
+                            const res = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ status: 'ready_for_review' })
+                            })
 
-                              if (res.ok) {
-                                setFormStatus('ready_for_review')
-                                const updatedData = await res.json()
-                                setTemplate(updatedData.data)
-                                setSaveMessage("✅ Form submitted for review!")
-                                setTimeout(() => setSaveMessage(null), 3000)
-                              } else {
-                                const errorData = await res.json().catch(() => ({}))
-                                setSaveMessage(`❌ ${errorData.message || 'Failed to submit for review'}`)
-                                setTimeout(() => setSaveMessage(null), 5000)
-                              }
-                            } catch (e: any) {
-                              console.error('Failed to submit for review:', e)
-                              setSaveMessage(`❌ ${e.message || 'Failed to submit for review'}`)
+                            if (res.ok) {
+                              setFormStatus('ready_for_review')
+                              const updatedData = await res.json()
+                              setTemplate(updatedData.data)
+                              setSaveMessage("✅ Form submitted for review!")
+                              setTimeout(() => setSaveMessage(null), 3000)
+                            } else {
+                              const errorData = await res.json().catch(() => ({}))
+                              setSaveMessage(`❌ ${errorData.message || 'Failed to submit for review'}`)
                               setTimeout(() => setSaveMessage(null), 5000)
                             }
-                          }}
-                          className="rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm hover:shadow-md transition-all text-sm font-medium"
-                        >
-                          Submit for Review
-                        </button>
-                      )}
-
-                      {formStatus !== 'in_progress' && (
-                        <button
-                          onClick={handleSave}
-                          disabled={saving}
-                          className="flex items-center gap-2 rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm hover:shadow-md transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {saving ? (
-                            <>
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            "Save Changes"
-                          )}
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => {
-                          if (!templateId) return
-                          const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
-                          const previewUrl = `${patientFrontendUrl}/preview/questionnaire/${templateId}`
-                          window.open(previewUrl, '_blank')
+                          } catch (e: any) {
+                            console.error('Failed to submit for review:', e)
+                            setSaveMessage(`❌ ${e.message || 'Failed to submit for review'}`)
+                            setTimeout(() => setSaveMessage(null), 5000)
+                          }
                         }}
-                        className="flex items-center gap-2 rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] shadow-sm hover:shadow-md transition-all text-sm font-medium"
+                        className="rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm hover:shadow-md transition-all text-sm font-medium"
                       >
-                        <Eye className="h-4 w-4" />
-                        Preview
+                        Submit for Review
                       </button>
+                    )}
 
-                      {/* Activate Product Button - only show if product is inactive */}
-                      {product && !product.isActive && (
-                        <button
-                          onClick={handleActivateProduct}
-                          disabled={activatingProduct || !templateId}
-                          className="flex items-center gap-2 rounded-full px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {activatingProduct ? (
-                            <>
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                              Activating...
-                            </>
-                          ) : (
-                            "Activate Product"
-                          )}
-                        </button>
-                      )}
+                    {formStatus !== 'in_progress' && (
+                      <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="flex items-center gap-2 rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm hover:shadow-md transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {saving ? (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          "Save Changes"
+                        )}
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        if (!templateId) return
+                        const patientFrontendUrl = process.env.NEXT_PUBLIC_PATIENT_FRONTEND_URL || 'http://localhost:3000'
+                        const previewUrl = `${patientFrontendUrl}/preview/questionnaire/${templateId}`
+                        window.open(previewUrl, '_blank')
+                      }}
+                      className="flex items-center gap-2 rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] shadow-sm hover:shadow-md transition-all text-sm font-medium"
+                    >
+                      <Eye className="h-4 w-4" />
+                      Preview
+                    </button>
+
+                    {/* Activate Product Button - only show if product is inactive */}
+                    {product && !product.isActive && (
+                      <button
+                        onClick={handleActivateProduct}
+                        disabled={activatingProduct || !templateId}
+                        className="flex items-center gap-2 rounded-full px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {activatingProduct ? (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            Activating...
+                          </>
+                        ) : (
+                          "Activate Product"
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2982,6 +3015,28 @@ export default function ProductEditor() {
 
                                 {/* Action Icons */}
                                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                  {/* Required Toggle */}
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          onClick={() => handleToggleStepRequired(step.id)}
+                                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-offset-2 ${step.required !== false ? 'bg-[#4FA59C]' : 'bg-gray-300'
+                                            }`}
+                                          title={step.required !== false ? "Required (click to make optional)" : "Optional (click to make required)"}
+                                        >
+                                          <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${step.required !== false ? 'translate-x-6' : 'translate-x-1'
+                                              }`}
+                                          />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{step.required !== false ? 'Step is required' : 'Step is optional'}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+
                                   {/* Only show "Create Rule" button if this is NOT the first step */}
                                   {index > 0 && (
                                     <Button
@@ -3282,7 +3337,7 @@ export default function ProductEditor() {
                   {selectedTemplateToUpdate && (
                     <div className="p-4 rounded-2xl bg-yellow-50 border border-yellow-200">
                       <p className="text-sm text-yellow-800">
-                        <strong>⚠️ Warning:</strong> This will replace the selected template's structure with your current form. 
+                        <strong>⚠️ Warning:</strong> This will replace the selected template's structure with your current form.
                         This change will affect all future products that import this template.
                       </p>
                     </div>

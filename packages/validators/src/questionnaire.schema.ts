@@ -39,8 +39,9 @@ export const questionnaireStepUpdateSchema = z.object({
   description: z.string().optional(),
   isDeadEnd: z.boolean().optional(),
   conditionalLogic: z.string().optional().nullable(),
-}).refine(data => data.title !== undefined || data.description !== undefined || data.isDeadEnd !== undefined || data.conditionalLogic !== undefined, {
-  message: 'At least one field (title, description, isDeadEnd, or conditionalLogic) must be provided'
+  required: z.boolean().optional(),
+}).refine(data => data.title !== undefined || data.description !== undefined || data.isDeadEnd !== undefined || data.conditionalLogic !== undefined || data.required !== undefined, {
+  message: 'At least one field (title, description, isDeadEnd, conditionalLogic, or required) must be provided'
 });
 
 export const questionnaireStepOrderSchema = z.object({

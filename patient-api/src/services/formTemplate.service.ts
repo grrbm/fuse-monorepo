@@ -3,6 +3,7 @@ import TenantProductForm from '../models/TenantProductForm'
 import Treatment from '../models/Treatment'
 import Product from '../models/Product'
 import Questionnaire from '../models/Questionnaire'
+import Clinic from '../models/Clinic'
 import { sequelize } from '../config/database'
 
 interface TemplateAssignmentInput {
@@ -14,6 +15,57 @@ interface TemplateAssignmentInput {
   layoutTemplate: string
   themeId?: string | null
   lockedUntil?: Date | null
+}
+
+const isProd = process.env.NODE_ENV === 'production'
+
+const sanitizeSlug = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+async function ensureProductSlug(product: Product): Promise<string> {
+  if (product.slug) {
+    return product.slug
+  }
+
+  const base = sanitizeSlug(product.name || 'product') || `product-${Date.now()}`
+  let candidate = base
+  let attempt = 1
+
+  while (await Product.findOne({ where: { slug: candidate } })) {
+    candidate = `${base}-${Date.now()}${attempt > 1 ? `-${attempt}` : ''}`
+    attempt += 1
+  }
+
+  await product.update({ slug: candidate })
+  return candidate
+}
+
+async function ensurePublishedUrl(form: TenantProductForm): Promise<void> {
+  if (form.publishedUrl || !form.productId || !form.clinicId) {
+    return
+  }
+
+  const product = (form as any).product as Product | undefined || await Product.findByPk(form.productId)
+  const clinic = (form as any).clinic as Clinic | undefined || await Clinic.findByPk(form.clinicId)
+
+  if (!product || !clinic || !clinic.slug) {
+    return
+  }
+
+  const productSlug = await ensureProductSlug(product)
+  const domain = isProd
+    ? `${clinic.slug}.fuse.health`
+    : `${clinic.slug}.localhost:3000`
+  const protocol = isProd ? 'https' : 'http'
+  const publishedUrl = `${protocol}://${domain}/my-products/${form.id}/${productSlug}`
+
+  await form.update({
+    publishedUrl,
+    lastPublishedAt: form.lastPublishedAt ?? new Date(),
+  } as any)
 }
 
 class FormTemplateService {
@@ -152,26 +204,40 @@ class FormTemplateService {
   }
 
   async getTenantProductForm(tenantId: string, treatmentId: string) {
-    return TenantProductForm.findOne({
+    const form = await TenantProductForm.findOne({
       where: { tenantId, treatmentId },
       include: [
         { model: Treatment },
         { model: Product },
         { model: Questionnaire },
+        { model: Clinic },
       ],
     })
+
+    if (form) {
+      await ensurePublishedUrl(form)
+    }
+
+    return form
   }
 
   async listTenantProductForms(tenantId: string) {
-    return TenantProductForm.findAll({
+    const forms = await TenantProductForm.findAll({
       where: { tenantId },
       include: [
         { model: Treatment },
         { model: Product },
         { model: Questionnaire },
+        { model: Clinic },
       ],
       order: [['createdAt', 'DESC']],
     })
+
+    for (const form of forms) {
+      await ensurePublishedUrl(form)
+    }
+
+    return forms
   }
 }
 

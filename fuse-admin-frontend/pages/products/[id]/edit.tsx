@@ -686,7 +686,7 @@ export default function ProductEdit() {
                                                     value={formData.placeholderSig}
                                                         onChange={handleInputChange}
                                                         className="w-full px-4 py-3 border border-input bg-background text-foreground rounded-xl focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                                                    placeholder="e.g., 500mg"
+                                                        placeholder="e.g., 500mg"
                                                     />
                                                 </div>
 

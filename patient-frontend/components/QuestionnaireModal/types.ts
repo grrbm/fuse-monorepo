@@ -28,6 +28,7 @@ export interface QuestionnaireStep {
     stepOrder: number;
     category?: 'normal' | 'user_profile' | 'doctor';
     isDeadEnd?: boolean;
+    required?: boolean;
     questions?: Question[];
 }
 
@@ -80,6 +81,7 @@ export interface QuestionnaireModalProps {
     productName?: string; // optional label when questionnaire is product-based
     productCategory?: string; // optional product category (e.g., weight_loss)
     productFormVariant?: string; // '1' | '2' when product-based; if '2' prepend standardized steps
+    globalFormStructure?: any; // Global Form Structure to control section ordering
     // Product checkout fallback pricing
     productPrice?: number;
     productStripePriceId?: string;

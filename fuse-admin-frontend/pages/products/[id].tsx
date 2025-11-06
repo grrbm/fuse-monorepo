@@ -14,7 +14,8 @@ import {
     Users,
     FileText,
     Edit,
-    Palette
+    Palette,
+    DollarSign
 } from 'lucide-react'
 
 interface Product {
@@ -71,6 +72,8 @@ export default function ProductDetail() {
     const [copiedPreview, setCopiedPreview] = useState<boolean>(false)
     const router = useRouter()
     const { id } = router.query
+
+    const wholesaleCost = product?.pharmacyWholesaleCost ?? product?.price ?? 0
 
     // Preset colors
     const presetColors = [
@@ -197,14 +200,30 @@ export default function ProductDetail() {
                 const userWithClinic: any = user
                 const clinicId = userWithClinic?.clinicId
 
-                // Fetch tenant products, templates, and forms in parallel
-                const [tpRes, templatesRes, tpfRes, ordersRes] = await Promise.all([
+                // Fetch product to get its category
+                const productRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products/${id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                const productData = await productRes.json()
+                const productCategory = productData?.data?.category || productData?.data?.categories?.[0] || null
+
+                // Fetch global structures, product forms, standardized forms, and tenant data
+                const [tpRes, globalStructuresRes, productFormsRes, standardizedFormsRes, tpfRes, ordersRes] = await Promise.all([
                     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/tenant-products`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
+                    // Get global form structures
+                    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/global-form-structures`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    // Get product-specific questionnaires
                     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/product/${id}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
+                    // Get standardized templates for this product's category
+                    productCategory ? fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/questionnaires/standardized?category=${productCategory}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }) : Promise.resolve(null),
                     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms?productId=${id}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
@@ -220,16 +239,132 @@ export default function ProductDetail() {
                     setTenantProduct(tenantProd || null)
                 }
 
-                // Process templates
-                if (templatesRes.ok) {
-                    const data = await templatesRes.json()
-                    setTemplates(Array.isArray(data?.data) ? data.data : [])
+                // Process global structures - show structures themselves, not underlying forms
+                let displayTemplates = []
+                
+                if (globalStructuresRes.ok) {
+                    const structuresData = await globalStructuresRes.json()
+                    const globalStructures = Array.isArray(structuresData?.data) ? structuresData.data : []
+                    
+                    // Get product and standardized forms for reference
+                    let productForms: any[] = []
+                    let standardizedForms: any[] = []
+                    
+                    if (productFormsRes.ok) {
+                        const data = await productFormsRes.json()
+                        productForms = Array.isArray(data?.data) ? data.data : []
+                    }
+                    
+                    if (standardizedFormsRes && standardizedFormsRes.ok) {
+                        const data = await standardizedFormsRes.json()
+                        standardizedForms = Array.isArray(data?.data) ? data.data : []
+                    }
+                    
+                    // Display ONE entry per global structure (consolidate product + category forms)
+                    for (const structure of globalStructures) {
+                        const enabledSections = structure.sections?.filter((s: any) => s.enabled) || []
+                        const hasProductSection = enabledSections.some((s: any) => s.type === 'product_questions')
+                        const hasCategorySection = enabledSections.some((s: any) => s.type === 'category_questions')
+                        
+                        // Use product form if available, otherwise create placeholder
+                        const baseForm = productForms[0] || standardizedForms[0] || {
+                            id: `structure-${structure.id}`,
+                            title: structure.name,
+                            formTemplateType: hasCategorySection ? 'standardized_template' : 'normal',
+                            isTemplate: hasCategorySection
+                        }
+                        
+                        // Add ONE entry per structure - use structure ID to ensure uniqueness
+                        displayTemplates.push({
+                            ...baseForm,
+                            id: `structure-${structure.id}`, // Override with structure ID for uniqueness
+                            title: structure.name,
+                            _structureName: structure.name,
+                            _structureId: structure.id,
+                            _structure: structure,
+                            _hasProductSection: hasProductSection,
+                            _hasCategorySection: hasCategorySection,
+                            _productForm: productForms[0] || null,
+                            _categoryForms: standardizedForms,
+                            _underlyingQuestionnaireId: baseForm.id, // Keep the original questionnaire ID
+                            _isStructurePlaceholder: !productForms[0] && !standardizedForms[0]
+                        })
+                    }
+                } else {
+                    // Fallback: show all forms if global structures not available
+                    if (productFormsRes.ok) {
+                        const data = await productFormsRes.json()
+                        displayTemplates.push(...(Array.isArray(data?.data) ? data.data : []))
+                    }
+                    if (standardizedFormsRes && standardizedFormsRes.ok) {
+                        const data = await standardizedFormsRes.json()
+                        displayTemplates.push(...(Array.isArray(data?.data) ? data.data : []))
+                    }
                 }
+                
+                setTemplates(displayTemplates)
 
                 // Process enabled forms
                 if (tpfRes.ok) {
                     const data = await tpfRes.json()
                     setEnabledForms(Array.isArray(data?.data) ? data.data : [])
+                }
+
+                // Auto-enable exactly 1 form per Global Form Structure
+                const enabledTracker = new Set<string>()
+                
+                for (const template of displayTemplates) {
+                    const structureId = (template as any)._structureId || 'default'
+                    const questionnaireId = (template as any)._underlyingQuestionnaireId || template.id
+                    const trackingKey = `${structureId}:${questionnaireId}`
+                    
+                    // Skip if we've already enabled this structure
+                    if (enabledTracker.has(trackingKey)) continue
+                    
+                    // Skip if no valid questionnaire ID
+                    if (!questionnaireId || questionnaireId.startsWith('structure-')) {
+                        console.log(`Skipping structure ${structureId} - no valid questionnaire ID`)
+                        continue
+                    }
+                    
+                    // Check if a form exists for this structure
+                    const existingFormsForStructure = enabledForms.filter((f: any) => 
+                        f?.questionnaireId === questionnaireId && 
+                        (f?.globalFormStructureId ?? 'default') === structureId
+                    )
+                    
+                    // Only auto-enable if ZERO forms exist for this structure
+                    if (existingFormsForStructure.length === 0) {
+                        try {
+                            console.log(`Auto-enabling form for structure ${structureId} with questionnaire ${questionnaireId}`)
+                            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                    productId: String(id), 
+                                    questionnaireId: questionnaireId, 
+                                    currentFormVariant: null,
+                                    globalFormStructureId: structureId
+                                })
+                            })
+                            
+                            if (res.ok) {
+                                const formData = await res.json()
+                                if (formData?.success && formData?.data) {
+                                    setEnabledForms(prev => [...prev, formData.data])
+                                    enabledTracker.add(trackingKey)
+                                    console.log(`✅ Form created for structure ${structureId}`)
+                                }
+                            } else {
+                                console.error(`Failed to create form for structure ${structureId}:`, await res.text())
+                            }
+                        } catch (e) {
+                            console.error('Error auto-enabling form:', e)
+                        }
+                    } else if (existingFormsForStructure.length > 0) {
+                        // Mark as already enabled
+                        enabledTracker.add(trackingKey)
+                    }
                 }
 
                 // Process orders to get stats
@@ -364,9 +499,10 @@ export default function ProductDetail() {
         }
     }
 
-    const enableTemplateWithVariant = async (questionnaireId: string, currentFormVariant: string) => {
+    const enableTemplateWithVariant = async (questionnaireId: string, currentFormVariant: string | null) => {
         if (!token || !id) return
-        setEnablingId(questionnaireId)
+        const enablingKey = `${questionnaireId}:${currentFormVariant ?? 'main'}`
+        setEnablingId(enablingKey)
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
                 method: 'POST',
@@ -386,60 +522,35 @@ export default function ProductDetail() {
 
             const data = await res.json().catch(() => ({} as any))
             if (data?.success && data?.data) {
-                setEnabledForms(prev => [...prev.filter((f: any) => f?.questionnaireId !== questionnaireId), data.data])
-                window.location.reload()
+                setEnabledForms(prev => {
+                    const withoutDuplicate = prev.filter((f: any) => f?.id !== data.data.id)
+                    return [...withoutDuplicate, data.data]
+                })
+                await fetchCustomizations()
             } else {
                 throw new Error(data?.message || 'Failed to enable form')
             }
         } catch (e: any) {
             setError(e?.message || 'Failed to enable form')
         } finally {
-            setEnablingId(null)
+            setEnablingId(prev => (prev === enablingKey ? null : prev))
         }
     }
 
-    const switchToVariant = async (questionnaireId: string, currentFormVariant: string) => {
-        if (!token || !id) return
-        setEnablingId(questionnaireId)
-        try {
-            // Disable current mapping first
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId: String(id), questionnaireId })
-            })
-            // Re-enable with new variant
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId: String(id), questionnaireId, currentFormVariant })
-            })
-            if (!res.ok) {
-                const text = await res.text().catch(() => '')
-                try { const json = JSON.parse(text); throw new Error(json?.message || `Failed to switch variant (${res.status})`) } catch { throw new Error(text || `Failed to switch variant (${res.status})`) }
-            }
-            window.location.reload()
-        } catch (e: any) {
-            setError(e?.message || 'Failed to switch variant')
-        } finally {
-            setEnablingId(null)
-        }
-    }
-
-    const disableTemplate = async (questionnaireId: string) => {
+    const disableTemplate = async (formId: string, questionnaireId: string) => {
         if (!token || !id) return
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId: id, questionnaireId })
+                body: JSON.stringify({ tenantProductFormId: formId, questionnaireId, productId: id })
             })
 
             if (!res.ok) {
                 throw new Error('Failed to disable form')
             }
 
-            setEnabledForms(prev => prev.filter((f: any) => f?.questionnaireId !== questionnaireId))
+            setEnabledForms(prev => prev.filter((f: any) => f?.id !== formId))
         } catch (e: any) {
             setError(e?.message || 'Failed to disable form')
         }
@@ -496,23 +607,46 @@ export default function ProductDetail() {
     }
 
     const buildPreviewUrl = () => {
+        const published = enabledForms.find((form: any) => form?.publishedUrl)
+        if (published?.publishedUrl) {
+            return published.publishedUrl as string
+        }
+
         if (!product?.slug) return null
-        
+
         // Build dynamic URL based on user's clinic
         const isLocalhost = process.env.NODE_ENV !== 'production'
-        
+
         // Priority 1: Use custom domain if set up and enabled
         if (clinicIsCustomDomain && clinicCustomDomain) {
             return `https://app.${clinicCustomDomain}/my-products/${product.slug}`
         }
-        
+
         // Priority 2: Use subdomain URL
         if (!clinicSlug) return null
-        const baseUrl = isLocalhost 
+        const baseUrl = isLocalhost
             ? `http://${clinicSlug}.localhost:3000`
             : `https://${clinicSlug}.fuse.health`
-        
+
         return `${baseUrl}/my-products/${product.slug}`
+    }
+
+    const buildFormPreviewUrlFor = (form: any, _variantKey: string | null) => {
+        if (form?.publishedUrl) {
+            return form.publishedUrl as string
+        }
+
+        const base = buildPreviewUrl()
+        if (!base) return null
+
+        const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base
+        const formId = form?.id
+
+        if (formId && normalizedBase.includes('/my-products/')) {
+            return `${normalizedBase}/${formId}`
+        }
+
+        return normalizedBase
     }
 
     const handleCopyPreview = async () => {
@@ -564,27 +698,34 @@ export default function ProductDetail() {
                 <title>{product?.name || 'Product'} - Fuse Admin</title>
             </Head>
 
-            <div className="w-full bg-background p-8" style={{ fontFamily: 'Inter, sans-serif' }}>
-                <div className="max-w-6xl mx-auto">
-                    {/* Header */}
-                    <Button
-                        variant="outline"
+            <div className="min-h-screen bg-[#F9FAFB] p-8" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                <div className="max-w-7xl mx-auto">
+                    {/* Back Button */}
+                    <button
                         onClick={() => router.push('/products')}
-                        className="mb-6 text-sm font-medium"
+                        className="mb-6 flex items-center gap-2 px-4 py-2 rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] text-[#4B5563] text-sm font-medium transition-all shadow-sm"
                     >
-                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        <ArrowLeft className="h-4 w-4" />
                         Back to Products
-                    </Button>
+                    </button>
 
-                    <div className="flex items-start justify-between mb-8">
-                        <div>
-                            <h1 className="text-3xl font-semibold text-foreground mb-2">{product?.name}</h1>
-                            <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">{product?.description}</p>
-                            {product?.placeholderSig && (
-                                <p className="text-sm text-muted-foreground mt-1">Placeholder Sig: <span className="font-medium">{product.placeholderSig}</span></p>
-                            )}
+                    {/* Product Header Card */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
+                        <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <h1 className="text-3xl font-semibold text-[#1F2937]">{product?.name}</h1>
+                                    {product && getStatusBadge(product.active)}
+                                </div>
+                                <p className="text-[#6B7280] text-base leading-relaxed max-w-3xl">{product?.description}</p>
+                                {product?.placeholderSig && (
+                                    <div className="mt-4 pt-4 border-t border-[#E5E7EB] inline-block">
+                                        <span className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Placeholder Sig</span>
+                                        <p className="text-sm text-[#1F2937] mt-1 font-medium">{product.placeholderSig}</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        {product && getStatusBadge(product.active)}
                     </div>
 
                     {/* Success/Error Messages */}
@@ -594,30 +735,30 @@ export default function ProductDetail() {
                         </div>
                     )}
 
-                    {/* PRIORITY 1: Pricing & Configuration */}
-                    <Card className="mb-6 border-border shadow-sm">
-                        <CardHeader className="border-b border-border">
-                            <CardTitle className="text-lg font-semibold">Pricing & Configuration</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-8">
-
-                            {/* Pricing Section */}
-                            <div>
-                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Pricing</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                                    {/* Pharmacy Cost */}
-                                    <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
-                                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Pharmacy Wholesale Cost</div>
-                                        <div className="text-xs text-muted-foreground mb-3">What you pay</div>
-                                        <div className="text-3xl font-semibold text-foreground">
-                                            {product ? formatPrice(product.price) : '$0.00'}
-                                        </div>
+                    {/* Pricing Section */}
+                    <div className="grid grid-cols-12 gap-6 mb-6">
+                        {/* Pharmacy Wholesale Cost */}
+                        <div className="col-span-6">
+                            <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="w-10 h-10 bg-[#F3F4F6] rounded-xl flex items-center justify-center">
+                                        <DollarSign className="h-5 w-5 text-[#4FA59C]" />
                                     </div>
+                                    <div>
+                                        <p className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Pharmacy Wholesale Cost</p>
+                                        <p className="text-[10px] text-[#9CA3AF]">What you pay</p>
+                                    </div>
+                                </div>
+                                <p className="text-3xl font-semibold text-[#1F2937]">
+                                    {product ? formatPrice(wholesaleCost) : '$0.00'}
+                                </p>
+                            </div>
+                        </div>
 
-                                    {/* Retail Price */}
-                                    {tenantProduct ? (
-                                        <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
+                        {/* Retail Price */}
+                        <div className="col-span-6">
+                            {tenantProduct ? (
+                                <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all h-full">
                                             <div className="flex items-center justify-between mb-1">
                                                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Your Retail Price</div>
                                                 {!editingPrice && (
@@ -667,7 +808,7 @@ export default function ProductDetail() {
                                                     <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
                                                         {(() => {
                                                             const price = parseFloat(newPrice) || 0
-                                                            const cost = product?.price || 0
+                                                            const cost = wholesaleCost
                                                             const profit = price - cost
                                                             const margin = price > 0 ? ((profit / price) * 100) : 0
                                                             return `Profit: ${formatPrice(profit)} (${margin.toFixed(1)}% margin)`
@@ -682,7 +823,7 @@ export default function ProductDetail() {
                                                     <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
                                                         {(() => {
                                                             const price = tenantProduct.price
-                                                            const cost = product?.price || 0
+                                                            const cost = wholesaleCost
                                                             const profit = price - cost
                                                             const margin = price > 0 ? ((profit / price) * 100) : 0
                                                             return `Profit: ${formatPrice(profit)} per unit (${margin.toFixed(1)}% margin)`
@@ -690,156 +831,171 @@ export default function ProductDetail() {
                                                     </div>
                                                 </div>
                                             )}
-                                        </div>
-                                    ) : (
-                                        <div className="p-5 border border-dashed border-border rounded-lg bg-muted/30 flex items-center justify-center">
-                                            <p className="text-sm text-muted-foreground text-center">
-                                                Enable this product to set custom pricing
-                                            </p>
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="bg-white rounded-2xl shadow-sm border-2 border-dashed border-[#E5E7EB] p-6 flex items-center justify-center h-full">
+                                    <p className="text-sm text-[#6B7280] text-center">
+                                        Enable this product to set custom pricing
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
-                            {/* Forms Section */}
-                            <div>
-                                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">Product Forms</h3>
+                    {/* Forms Section */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
+                        <div>
+                                <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Forms</h3>
                                 {templates.length === 0 ? (
-                                    <div className="p-6 border border-dashed border-border rounded-lg text-center bg-muted/20">
-                                        <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                                        <p className="text-sm text-muted-foreground">No forms available for this product</p>
+                                    <div className="p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl text-center bg-[#F9FAFB]/50">
+                                        <FileText className="h-10 w-10 text-[#9CA3AF] mx-auto mb-3" />
+                                        <p className="text-sm text-[#6B7280] font-medium">No forms available for this product</p>
+                                        <p className="text-xs text-[#9CA3AF] mt-1">Create a global structure in the tenant portal to get started</p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-3">
-                                        {templates.map(t => {
-                                            const existingForm = enabledForms.find((f: any) => f?.questionnaireId === t.id)
-                                            const currentVariant: string | null = existingForm?.currentFormVariant ?? null
+                                    <div className="space-y-4">
+                                        {/* Show all structures - each with exactly 1 form */}
+                                        {templates.map((t, structureIndex) => {
+                                            const structure = (t as any)._structure
+                                            const structureId = (t as any)._structureId || 'default'
+                                            // Filter forms for THIS specific structure
+                                            const questionnaireId = (t as any)._underlyingQuestionnaireId || (t as any)._productForm?.id || t.id
+                                            const formsForStructure = enabledForms.filter((f: any) => 
+                                                f?.questionnaireId === questionnaireId &&
+                                                (f?.globalFormStructureId ?? 'default') === structureId
+                                            )
+                                            const form = formsForStructure[0] // Just get the single form for this structure
+
                                             return (
-                                                <div key={t.id} className="p-4 border border-border rounded-lg hover:shadow-sm transition-all bg-card space-y-3">
-                                                    {[1, 2].map((variantNum) => {
-                                                        const pv = buildPreviewUrl()
-                                                        const previewUrl = pv ? pv.replace('/my-products/', `/my-products/${variantNum}/`) : null
-                                                        const variantKey = String(variantNum)
-                                                        const isVariantEnabled = !!existingForm && currentVariant === variantKey
-                                                        const hasAnyEnabled = !!existingForm
-                                                        return (
-                                                            <div key={`${t.id}-${variantNum}`} className="border border-dashed border-border rounded-md p-3">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex-1">
-                                                                        <div className="font-medium text-foreground">{t.title}</div>
-                                                                        <div className="text-xs text-muted-foreground mt-0.5">{t.formTemplateType || 'Standard Form'} • Variant {variantNum}</div>
-                                                                    </div>
-                                                                    {hasAnyEnabled ? (
-                                                                        <div className="flex items-center gap-3">
-                                                                            {isVariantEnabled ? (
-                                                                                <>
-                                                                                    {/* Color Picker */}
-                                                                                    <div className="relative color-picker-container">
-                                                                                        <button
-                                                                                            onClick={() => setColorPickerOpen(colorPickerOpen === t.id ? null : t.id)}
-                                                                                            className="w-8 h-8 rounded border-2 border-border hover:border-muted-foreground transition-colors flex items-center justify-center"
-                                                                                            style={{ 
-                                                                                                backgroundColor: customizations[t.id]?.customColor || 'transparent',
-                                                                                                backgroundImage: !customizations[t.id]?.customColor 
-                                                                                                    ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb)'
-                                                                                                    : 'none',
-                                                                                                backgroundSize: '8px 8px',
-                                                                                                backgroundPosition: '0 0, 4px 4px'
-                                                                                            }}
-                                                                                            title={customizations[t.id]?.customColor ? 'Change form color' : 'Set custom color (currently using clinic default)'}
-                                                                                        >
-                                                                                            <Palette className="h-4 w-4 text-muted-foreground" />
-                                                                                        </button>
-                                                                                        
-                                                                                        {/* Color Palette Dropdown */}
-                                                                                        {colorPickerOpen === t.id && (
-                                                                                            <div className="absolute right-0 mt-2 p-3 bg-card border border-border rounded-lg shadow-lg z-10 w-48">
-                                                                                                <p className="text-xs font-medium text-foreground mb-2">Select Color</p>
-                                                                                                <div className="grid grid-cols-4 gap-2 mb-3">
-                                                                                                    {presetColors.map((preset) => (
-                                                                                                        <button
-                                                                                                            key={preset.color}
-                                                                                                            onClick={() => updateFormColor(t.id, preset.color)}
-                                                                                                            className="w-10 h-10 rounded border-2 border-border hover:border-muted-foreground transition-colors"
-                                                                                                            style={{ backgroundColor: preset.color }}
-                                                                                                            title={preset.name}
-                                                                                                        />
-                                                                                                    ))}
-                                                                                                </div>
-                                                                                                {customizations[t.id]?.customColor && (
-                                                                                                    <button
-                                                                                                        onClick={() => updateFormColor(t.id, '')}
-                                                                                                        className="w-full text-xs py-1.5 px-2 text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground rounded transition-colors"
-                                                                                                    >
-                                                                                                        Clear (use clinic default)
-                                                                                                    </button>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        )}
+                                                <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                                    {/* Structure Header with Inline Form Flow + Color Picker */}
+                                                    <div className="p-5 border-b border-[#E5E7EB] bg-gradient-to-r from-[#F9FAFB] to-white">
+                                                        <div className="flex items-center justify-between gap-6">
+                                                            {/* Left: Name and Type */}
+                                                            <div className="flex-shrink-0">
+                                                                <h4 className="text-lg font-semibold text-[#1F2937] mb-1">
+                                                                    {(t as any)._structureName || t.title}
+                                                                </h4>
+                                                                <p className="text-xs text-[#6B7280]">
+                                                                    {t.formTemplateType === 'normal' ? '📦 Product-Specific Form' : 
+                                                                     t.formTemplateType === 'standardized_template' ? '📋 Standardized Category Template' :
+                                                                     'Standard Form'}
+                                                                </p>
+                                                            </div>
+
+                                                            {/* Center: Form Flow Preview (Inline) */}
+                                                            {structure?.sections && (
+                                                                <div className="flex items-center gap-2 overflow-x-auto flex-1">
+                                                                    {structure.sections
+                                                                        .filter((s: any) => s.enabled)
+                                                                        .sort((a: any, b: any) => a.order - b.order)
+                                                                        .map((section: any, idx: number, arr: any[]) => (
+                                                                            <div key={section.id} className="flex items-center gap-2 flex-shrink-0">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-lg border border-[#E5E7EB]">
+                                                                                        {section.icon}
                                                                                     </div>
-                                                                                    
-                                                                                    <Button size="sm" variant="outline" onClick={() => disableTemplate(t.id)}>
-                                                                                        Disable
-                                                                                    </Button>
-                                                                                </>
-                                                                            ) : (
-                                                                                <Button size="sm" onClick={() => switchToVariant(t.id, String(variantNum))} disabled={enablingId === t.id}>
-                                                                                    {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
-                                                                                </Button>
-                                                                            )}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <Button size="sm" onClick={() => enableTemplateWithVariant(t.id, String(variantNum))} disabled={enablingId === t.id}>
-                                                                            {enablingId === t.id ? 'Enabling...' : 'Enable for Clinic'}
-                                                                        </Button>
-                                                                    )}
-                                                                </div>
-                                                                {previewUrl && (
-                                                                    <div className="mt-3 flex items-center justify-between">
-                                                                        <div className="text-xs text-muted-foreground truncate">
-                                                                            Preview URL: <span className="text-foreground">{previewUrl}</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <div className="relative group inline-block">
-                                                                                <Button 
-                                                                                    size="sm" 
-                                                                                    variant="outline" 
-                                                                                    onClick={() => window.open(previewUrl, '_blank')}
-                                                                                    disabled={!isVariantEnabled}
-                                                                                >
-                                                                                    Preview
-                                                                                </Button>
-                                                                                {!isVariantEnabled && (
-                                                                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                                                                        Enable form to preview
-                                                                                    </div>
+                                                                                    <span className="text-[10px] font-medium text-[#6B7280] max-w-[60px] leading-tight">
+                                                                                        {section.label}
+                                                                                    </span>
+                                                                                </div>
+                                                                                {idx < arr.length - 1 && (
+                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-[#D1D5DB] flex-shrink-0">
+                                                                                        <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                                                    </svg>
                                                                                 )}
                                                                             </div>
-                                                                            <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
-                                                                                Copy
-                                                                            </Button>
+                                                                        ))}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Right: Color Picker */}
+                                                            <div className="relative color-picker-container flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => setColorPickerOpen(colorPickerOpen === t.id ? null : t.id)}
+                                                                    className="w-8 h-8 rounded border-2 border-border hover:border-muted-foreground transition-colors flex items-center justify-center"
+                                                                    style={{ 
+                                                                        backgroundColor: customizations[t.id]?.customColor || 'transparent',
+                                                                        backgroundImage: !customizations[t.id]?.customColor 
+                                                                            ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb)'
+                                                                            : 'none',
+                                                                        backgroundSize: '8px 8px',
+                                                                        backgroundPosition: '0 0, 4px 4px'
+                                                                    }}
+                                                                    title={customizations[t.id]?.customColor ? 'Change form color' : 'Set custom color (currently using clinic default)'}
+                                                                >
+                                                                    <Palette className="h-4 w-4 text-muted-foreground" />
+                                                                </button>
+
+                                                                {colorPickerOpen === t.id && (
+                                                                    <div className="absolute right-0 mt-2 p-3 bg-card border border-border rounded-lg shadow-lg z-10 w-48">
+                                                                        <p className="text-xs font-medium text-foreground mb-2">Select Color</p>
+                                                                        <div className="grid grid-cols-4 gap-2 mb-3">
+                                                                            {presetColors.map((preset) => (
+                                                                                <button
+                                                                                    key={preset.color}
+                                                                                    onClick={() => updateFormColor(t.id, preset.color)}
+                                                                                    className="w-10 h-10 rounded border-2 border-border hover:border-muted-foreground transition-colors"
+                                                                                    style={{ backgroundColor: preset.color }}
+                                                                                    title={preset.name}
+                                                                                />
+                                                                            ))}
                                                                         </div>
+                                                                        {customizations[t.id]?.customColor && (
+                                                                            <button
+                                                                                onClick={() => updateFormColor(t.id, '')}
+                                                                                className="w-full text-xs py-1.5 px-2 text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground rounded transition-colors"
+                                                                            >
+                                                                                Clear (use clinic default)
+                                                                            </button>
+                                                                        )}
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                        )
-                                                    })}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Form URL - Show single form for this structure */}
+                                                    {form && (
+                                                        <div className="p-5">
+                                                            <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
+                                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <div className="text-sm font-medium text-[#1F2937]">
+                                                                            Form #{structureIndex + 1}
+                                                                        </div>
+                                                                        <div className="text-xs text-[#6B7280] mt-1 truncate">
+                                                                            {form.publishedUrl ? `Preview URL: ${form.publishedUrl}` : 'Preview URL will generate after publishing'}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                                        {form.publishedUrl && (
+                                                                            <>
+                                                                                <Button size="sm" variant="outline" onClick={() => window.open(form.publishedUrl, '_blank')}>
+                                                                                    Preview
+                                                                                </Button>
+                                                                                <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(form.publishedUrl) }}>
+                                                                                    Copy
+                                                                                </Button>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )
                                         })}
                                     </div>
                                 )}
-                            </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
 
-                    {/* PRIORITY 2: Product Performance */}
-                    <Card className="mb-6 border-border shadow-sm">
-                        <CardHeader className="border-b border-border">
-                            <CardTitle className="text-lg font-semibold">Product Performance</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                            <div className="grid grid-cols-2 gap-6">
+                    {/* Product Performance */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
+                        <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Performance</h3>
+                        <div className="grid grid-cols-2 gap-6">
 
                                 {/* Total Orders */}
                                 <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
@@ -859,39 +1015,34 @@ export default function ProductDetail() {
                                     </div>
                                     <div className="text-3xl font-semibold text-foreground">{productStats.activeSubscribers}</div>
                                     <p className="text-xs text-muted-foreground mt-2">Customers with active subscriptions</p>
-                                </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
 
                     {/* Product Details */}
-                    <Card className="border-border shadow-sm">
-                        <CardHeader className="border-b border-border">
-                            <CardTitle className="text-lg font-semibold">Product Details</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                            <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                                <div>
-                                    <span className="text-muted-foreground text-xs uppercase tracking-wide">Pharmacy Product ID</span>
-                                    <p className="font-medium text-foreground mt-1">{product?.pharmacyProductId || 'Not assigned'}</p>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground text-xs uppercase tracking-wide">Default Dosage</span>
-                                    <p className="font-medium text-foreground mt-1">{product?.placeholderSig || 'N/A'}</p>
-                                </div>
-                                {product?.activeIngredients && product.activeIngredients.length > 0 && (
-                                    <div className="col-span-2">
-                                        <span className="text-muted-foreground text-xs uppercase tracking-wide">Active Ingredients</span>
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                            {product.activeIngredients.map((ing, i) => (
-                                                <Badge key={i} variant="outline" className="text-xs font-normal">{ing}</Badge>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6">
+                        <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Details</h3>
+                        <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                            <div>
+                                <span className="text-muted-foreground text-xs uppercase tracking-wide">Pharmacy Product ID</span>
+                                <p className="font-medium text-foreground mt-1">{product?.pharmacyProductId || 'Not assigned'}</p>
                             </div>
-                        </CardContent>
-                    </Card>
+                            <div>
+                                <span className="text-muted-foreground text-xs uppercase tracking-wide">Default Dosage</span>
+                                <p className="font-medium text-foreground mt-1">{product?.placeholderSig || 'N/A'}</p>
+                            </div>
+                            {product?.activeIngredients && product.activeIngredients.length > 0 && (
+                                <div className="col-span-2">
+                                    <span className="text-muted-foreground text-xs uppercase tracking-wide">Active Ingredients</span>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {product.activeIngredients.map((ing, i) => (
+                                            <Badge key={i} variant="outline" className="text-xs font-normal">{ing}</Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </Layout>

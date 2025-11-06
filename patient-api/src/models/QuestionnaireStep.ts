@@ -20,11 +20,11 @@ export default class QuestionnaireStep extends Entity {
     declare description: string;
 
     @Column({
-        type: DataType.ENUM('normal', 'user_profile', 'doctor'),
+        type: DataType.ENUM('normal', 'user_profile'),
         allowNull: false,
         defaultValue: 'normal',
     })
-    declare category: 'normal' | 'user_profile' | 'doctor';
+    declare category: 'normal' | 'user_profile';
 
     @Column({
         type: DataType.INTEGER,
@@ -44,6 +44,13 @@ export default class QuestionnaireStep extends Entity {
         allowNull: true,
     })
     declare conditionalLogic: string;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+    })
+    declare required: boolean;
 
     @ForeignKey(() => Questionnaire)
     @Column({
