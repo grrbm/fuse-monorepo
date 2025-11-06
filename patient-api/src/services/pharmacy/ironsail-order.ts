@@ -101,10 +101,10 @@ class IronSailOrderService {
         const dob = patient?.dob ? new Date(patient.dob).toISOString().split('T')[0] : '';
 
         // Use SIG from pharmacy coverage if available, otherwise fallback to order notes or default
-        const sig = coverage?.sig || 
-                   order.doctorNotes || 
-                   order.notes ||
-                   `Take as directed by your healthcare provider`;
+        const sig = coverage?.sig ||
+            order.doctorNotes ||
+            order.notes ||
+            `Take as directed by your healthcare provider`;
 
         // Dispense format
         const dispense = `${quantity} ${product?.medicationSize || 'Unit'}`;
@@ -303,64 +303,14 @@ class IronSailOrderService {
             // Use configurable sheet name or default to 'Sheet1'
             const sheetName = process.env.IRONSAIL_SPREADSHEET_SHEET_NAME || 'Sheet1';
 
-            // Check if headers exist (read first row)
-            try {
-                const headerResponse = await sheets.spreadsheets.values.get({
-                    spreadsheetId: this.spreadsheetId,
-                    range: `${sheetName}!A1:AA1`,
-                });
+            // Note: Headers are manually managed in the spreadsheet
+            // We just append data rows without touching the header row
 
-                const existingHeaders = headerResponse.data.values?.[0];
-
-                // If no headers or empty sheet, add headers
-                if (!existingHeaders || existingHeaders.length === 0) {
-                    console.log(`📋 [IronSail] Creating headers in spreadsheet`);
-                    const headers = [
-                        'Date',
-                        'Order Number',
-                        'Prescriber',
-                        'License',
-                        'NPI',
-                        'Patient First Name',
-                        'Patient Last Name',
-                        'Patient Gender',
-                        'Patient Phone',
-                        'Patient Email',
-                        'Patient DOB',
-                        'Patient Address',
-                        'Patient City',
-                        'Patient State',
-                        'Patient Zip Code',
-                        'Patient Country',
-                        'Medication Name',
-                        'Product SKU',
-                        'RX ID',
-                        'Medication Form',
-                        'Sig',
-                        'Dispense',
-                        'Days Supply',
-                        'Refills',
-                        'Shipping Information',
-                        'Memo',
-                        'Status'
-                    ];
-
-                    await sheets.spreadsheets.values.update({
-                        spreadsheetId: this.spreadsheetId,
-                        range: `${sheetName}!A1:AA1`,
-                        valueInputOption: 'USER_ENTERED',
-                        requestBody: {
-                            values: [headers],
-                        },
-                    });
-
-                    console.log(`✅ [IronSail] Headers created successfully`);
-                }
-            } catch (headerError) {
-                console.log(`⚠️ [IronSail] Could not check headers, will attempt to append anyway:`, headerError);
-            }
-
-            // Prepare row data
+            // Prepare row data to match the spreadsheet column order
+            // Column order: Date, Order Number, Prescriber, License, NPI, 
+            // Patient First Name, Patient Last Name, Patient Gender, Patient Phone, Patient Email,
+            // RX_ID, Patient DOB, Patient Address, Patient City, Patient State, Patient Zip Code, Patient Country,
+            // Medication Name, Product SKU, Sig, Dispense, Days Supply, Refills, Shipping Information, Memo, Status
             const row = [
                 data.orderDate,
                 data.orderNumber,
@@ -372,6 +322,7 @@ class IronSailOrderService {
                 data.patientGender,
                 data.patientPhone,
                 data.patientEmail,
+                data.rxId, // RX_ID comes after email, before DOB
                 data.patientDOB,
                 data.patientAddress,
                 data.patientCity,
@@ -380,8 +331,6 @@ class IronSailOrderService {
                 data.patientCountry,
                 data.productName,
                 data.productSKU,
-                data.rxId,
-                data.medicationForm,
                 data.sig,
                 data.dispense,
                 data.daysSupply,
@@ -391,7 +340,7 @@ class IronSailOrderService {
                 'Pending' // Status
             ];
 
-            const appendRange = `${sheetName}!A:AA`;
+            const appendRange = `${sheetName}!A:Z`;
             console.log(`📝 [IronSail] Appending order data to ${appendRange}`);
 
             // Append to spreadsheet
