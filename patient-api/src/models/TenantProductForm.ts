@@ -17,7 +17,7 @@ export default class TenantProductForm extends Entity {
     type: DataType.UUID,
     allowNull: true,
   })
-  declare tenantId: string
+  declare tenantId?: string | null
 
   @BelongsTo(() => User)
   declare tenant: User

@@ -213,6 +213,7 @@ class TenantProductService {
         }
 
         // 7. Prepare data for bulk upsert
+        // Note: questionnaireId is optional - forms will be generated from global structures
         const productsToUpsert = data.products.map(item => ({
             productId: item.productId,
             questionnaireId: (item as any).questionnaireId || null,
@@ -220,6 +221,64 @@ class TenantProductService {
 
         // 8. Bulk upsert tenant products
         const tenantProducts = await bulkUpsertTenantProducts(clinicId, productsToUpsert);
+
+        // 8.5. Auto-create TenantProductForms for all global structures
+        // Forms are built based on global structure sections, not pre-existing questionnaires
+        try {
+            const GlobalFormStructure = require('../models/GlobalFormStructure').default;
+            const TenantProductForm = require('../models/TenantProductForm').default;
+            const Product = require('../models/Product').default;
+            const Clinic = require('../models/Clinic').default;
+
+            // Get all global form structures for this clinic
+            const globalStructures = await GlobalFormStructure.findAll({
+                where: {
+                    clinicId,
+                    isActive: true
+                }
+            });
+
+            // Get clinic for URL generation
+            const clinic = await Clinic.findByPk(clinicId);
+
+            // For each activated product, create forms for all structures
+            for (const tp of tenantProducts) {
+                const product = await Product.findByPk(tp.productId);
+                if (!product) continue;
+
+                for (const structure of globalStructures) {
+                    // Check if form already exists
+                    const existingForm = await TenantProductForm.findOne({
+                        where: {
+                            productId: tp.productId,
+                            clinicId,
+                            globalFormStructureId: structure.structureId
+                        }
+                    });
+
+                    if (!existingForm) {
+                        // Create new form - questionnaire will be built from global structure sections
+                        const publishedUrl = `${clinic.slug}${clinic.isCustomDomain && clinic.customDomain ? `.${clinic.customDomain}` : '.localhost:3000'}/my-products/${require('crypto').randomUUID()}/${product.slug}`;
+
+                        await TenantProductForm.create({
+                            productId: tp.productId,
+                            clinicId,
+                            questionnaireId: tp.questionnaireId, // Can be null - form built from global structure
+                            globalFormStructureId: structure.structureId,
+                            globalFormStructureUUID: structure.id,
+                            layoutTemplate: 'layout_a',
+                            publishedUrl,
+                            lastPublishedAt: new Date()
+                        });
+
+                        console.log(`✅ Auto-created form for product ${product.slug} with structure ${structure.name}`);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('⚠️ Failed to auto-create forms:', error);
+            // Don't fail the whole request - forms can be created later
+        }
 
         // 9. Return the created/updated tenant products with full relations
         const result = await Promise.all(

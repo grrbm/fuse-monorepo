@@ -29,6 +29,7 @@ import UserPatient from '../models/UserPatient';
 import TenantProduct from '../models/TenantProduct';
 import FormSectionTemplate from '../models/FormSectionTemplate';
 import TenantProductForm from '../models/TenantProductForm';
+import GlobalFormStructure from '../models/GlobalFormStructure';
 import Sale from '../models/Sale';
 import DoctorPatientChats from '../models/DoctorPatientChats';
 import Pharmacy from '../models/Pharmacy';
@@ -87,7 +88,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
-    TenantProductForm, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct
+    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct
   ],
 });
 
