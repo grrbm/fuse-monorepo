@@ -99,5 +99,11 @@ export default class TenantProductForm extends Entity {
   })
   declare currentFormVariant?: string | null
 
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare globalFormStructureId?: string | null
+
 }
 

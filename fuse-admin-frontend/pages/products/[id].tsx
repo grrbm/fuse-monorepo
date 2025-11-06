@@ -73,6 +73,8 @@ export default function ProductDetail() {
     const router = useRouter()
     const { id } = router.query
 
+    const wholesaleCost = product?.pharmacyWholesaleCost ?? product?.price ?? 0
+
     // Preset colors
     const presetColors = [
         { name: "Ocean Blue", color: "#0EA5E9" },
@@ -272,9 +274,10 @@ export default function ProductDetail() {
                             isTemplate: hasCategorySection
                         }
                         
-                        // Add ONE entry per structure
+                        // Add ONE entry per structure - use structure ID to ensure uniqueness
                         displayTemplates.push({
                             ...baseForm,
+                            id: `structure-${structure.id}`, // Override with structure ID for uniqueness
                             title: structure.name,
                             _structureName: structure.name,
                             _structureId: structure.id,
@@ -283,6 +286,7 @@ export default function ProductDetail() {
                             _hasCategorySection: hasCategorySection,
                             _productForm: productForms[0] || null,
                             _categoryForms: standardizedForms,
+                            _underlyingQuestionnaireId: baseForm.id, // Keep the original questionnaire ID
                             _isStructurePlaceholder: !productForms[0] && !standardizedForms[0]
                         })
                     }
@@ -306,47 +310,60 @@ export default function ProductDetail() {
                     setEnabledForms(Array.isArray(data?.data) ? data.data : [])
                 }
 
-                // Auto-enable exactly 1 form per variant for each structure
-                const enabledTracker = new Set<string>() // Track what we've already enabled
+                // Auto-enable exactly 1 form per Global Form Structure
+                const enabledTracker = new Set<string>()
                 
                 for (const template of displayTemplates) {
-                    const hasCategorySection = (template as any)._hasCategorySection
-                    const variantsToEnable = hasCategorySection ? [1, 2] : [null]
+                    const structureId = (template as any)._structureId || 'default'
+                    const questionnaireId = (template as any)._underlyingQuestionnaireId || template.id
+                    const trackingKey = `${structureId}:${questionnaireId}`
                     
-                    for (const variantNum of variantsToEnable) {
-                        const variantKey = variantNum ? String(variantNum) : null
-                        const trackingKey = `${template.id}:${variantKey ?? 'main'}`
-                        
-                        // Skip if we've already enabled this variant for this questionnaire
-                        if (enabledTracker.has(trackingKey)) continue
-                        
-                        const existingFormsForVariant = enabledForms.filter((f: any) => 
-                            f?.questionnaireId === template.id && (f?.currentFormVariant ?? null) === variantKey
-                        )
-                        
-                        // Only auto-enable if ZERO forms exist for this variant
-                        if (existingFormsForVariant.length === 0 && template.id && !template.id.startsWith('structure-')) {
-                            try {
-                                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
-                                    method: 'POST',
-                                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ productId: String(id), questionnaireId: template.id, currentFormVariant: variantKey })
+                    // Skip if we've already enabled this structure
+                    if (enabledTracker.has(trackingKey)) continue
+                    
+                    // Skip if no valid questionnaire ID
+                    if (!questionnaireId || questionnaireId.startsWith('structure-')) {
+                        console.log(`Skipping structure ${structureId} - no valid questionnaire ID`)
+                        continue
+                    }
+                    
+                    // Check if a form exists for this structure
+                    const existingFormsForStructure = enabledForms.filter((f: any) => 
+                        f?.questionnaireId === questionnaireId && 
+                        (f?.globalFormStructureId ?? 'default') === structureId
+                    )
+                    
+                    // Only auto-enable if ZERO forms exist for this structure
+                    if (existingFormsForStructure.length === 0) {
+                        try {
+                            console.log(`Auto-enabling form for structure ${structureId} with questionnaire ${questionnaireId}`)
+                            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                    productId: String(id), 
+                                    questionnaireId: questionnaireId, 
+                                    currentFormVariant: null,
+                                    globalFormStructureId: structureId
                                 })
-                                
-                                if (res.ok) {
-                                    const formData = await res.json()
-                                    if (formData?.success && formData?.data) {
-                                        setEnabledForms(prev => [...prev, formData.data])
-                                        enabledTracker.add(trackingKey)
-                                    }
+                            })
+                            
+                            if (res.ok) {
+                                const formData = await res.json()
+                                if (formData?.success && formData?.data) {
+                                    setEnabledForms(prev => [...prev, formData.data])
+                                    enabledTracker.add(trackingKey)
+                                    console.log(`✅ Form created for structure ${structureId}`)
                                 }
-                            } catch (e) {
-                                console.error('Error auto-enabling form:', e)
+                            } else {
+                                console.error(`Failed to create form for structure ${structureId}:`, await res.text())
                             }
-                        } else if (existingFormsForVariant.length > 0) {
-                            // Mark as already enabled
-                            enabledTracker.add(trackingKey)
+                        } catch (e) {
+                            console.error('Error auto-enabling form:', e)
                         }
+                    } else if (existingFormsForStructure.length > 0) {
+                        // Mark as already enabled
+                        enabledTracker.add(trackingKey)
                     }
                 }
 
@@ -590,63 +607,46 @@ export default function ProductDetail() {
     }
 
     const buildPreviewUrl = () => {
+        const published = enabledForms.find((form: any) => form?.publishedUrl)
+        if (published?.publishedUrl) {
+            return published.publishedUrl as string
+        }
+
         if (!product?.slug) return null
-        
+
         // Build dynamic URL based on user's clinic
         const isLocalhost = process.env.NODE_ENV !== 'production'
-        
+
         // Priority 1: Use custom domain if set up and enabled
         if (clinicIsCustomDomain && clinicCustomDomain) {
             return `https://app.${clinicCustomDomain}/my-products/${product.slug}`
         }
-        
+
         // Priority 2: Use subdomain URL
         if (!clinicSlug) return null
-        const baseUrl = isLocalhost 
+        const baseUrl = isLocalhost
             ? `http://${clinicSlug}.localhost:3000`
             : `https://${clinicSlug}.fuse.health`
-        
+
         return `${baseUrl}/my-products/${product.slug}`
     }
 
-    const buildFormPreviewUrlFor = (form: any, variantKey: string | null) => {
+    const buildFormPreviewUrlFor = (form: any, _variantKey: string | null) => {
+        if (form?.publishedUrl) {
+            return form.publishedUrl as string
+        }
+
         const base = buildPreviewUrl()
         if (!base) return null
-        
-        // Generate URL slug: category + product-name + medication-size + variant
-        const slugParts: string[] = []
-        
-        // Add product category (first one if multiple)
-        const categories = Array.isArray((product as any)?.categories) ? (product as any).categories : []
-        if (categories.length > 0 && categories[0]) {
-            slugParts.push(categories[0].toLowerCase().replace(/[^a-z0-9]+/g, '-'))
+
+        const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base
+        const formId = form?.id
+
+        if (formId && normalizedBase.includes('/my-products/')) {
+            return `${normalizedBase}/${formId}`
         }
-        
-        // Add product name
-        if (product?.name) {
-            slugParts.push(product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
-        }
-        
-        // Add medication size (skip if not present)
-        if ((product as any)?.medicationSize) {
-            slugParts.push((product as any).medicationSize.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
-        }
-        
-        // Add standardized variant (default is 1, skip if no variant or variant is null)
-        const variantIdentifier = variantKey || (form?.currentFormVariant ?? null)
-        if (variantIdentifier) {
-            slugParts.push(variantIdentifier.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
-        } else {
-            slugParts.push('1') // Default variant
-        }
-        
-        const uniqueSlug = slugParts.filter(Boolean).join('-')
-        
-        if (base.includes('/my-products/')) {
-            return base.replace('/my-products/', `/my-products/${uniqueSlug}/`)
-        }
-        
-        return `${base.replace(/\/$/, '')}/${uniqueSlug}`
+
+        return normalizedBase
     }
 
     const handleCopyPreview = async () => {
@@ -750,7 +750,7 @@ export default function ProductDetail() {
                                     </div>
                                 </div>
                                 <p className="text-3xl font-semibold text-[#1F2937]">
-                                    {product ? formatPrice(product.price) : '$0.00'}
+                                    {product ? formatPrice(wholesaleCost) : '$0.00'}
                                 </p>
                             </div>
                         </div>
@@ -808,7 +808,7 @@ export default function ProductDetail() {
                                                     <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
                                                         {(() => {
                                                             const price = parseFloat(newPrice) || 0
-                                                            const cost = product?.price || 0
+                                                            const cost = wholesaleCost
                                                             const profit = price - cost
                                                             const margin = price > 0 ? ((profit / price) * 100) : 0
                                                             return `Profit: ${formatPrice(profit)} (${margin.toFixed(1)}% margin)`
@@ -823,7 +823,7 @@ export default function ProductDetail() {
                                                     <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
                                                         {(() => {
                                                             const price = tenantProduct.price
-                                                            const cost = product?.price || 0
+                                                            const cost = wholesaleCost
                                                             const profit = price - cost
                                                             const margin = price > 0 ? ((profit / price) * 100) : 0
                                                             return `Profit: ${formatPrice(profit)} per unit (${margin.toFixed(1)}% margin)`
@@ -854,12 +854,17 @@ export default function ProductDetail() {
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
-                                        {templates.map(t => {
-                                            // Show variants only if structure has category questions enabled
-                                            const hasCategorySection = (t as any)._hasCategorySection
-                                            const variantsToShow = hasCategorySection ? [1, 2] : [null]
+                                        {/* Show all structures - each with exactly 1 form */}
+                                        {templates.map((t, structureIndex) => {
                                             const structure = (t as any)._structure
-                                            const formsForStructure = enabledForms.filter((f: any) => f?.questionnaireId === t.id)
+                                            const structureId = (t as any)._structureId || 'default'
+                                            // Filter forms for THIS specific structure
+                                            const questionnaireId = (t as any)._underlyingQuestionnaireId || (t as any)._productForm?.id || t.id
+                                            const formsForStructure = enabledForms.filter((f: any) => 
+                                                f?.questionnaireId === questionnaireId &&
+                                                (f?.globalFormStructureId ?? 'default') === structureId
+                                            )
+                                            const form = formsForStructure[0] // Just get the single form for this structure
 
                                             return (
                                                 <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
@@ -950,54 +955,35 @@ export default function ProductDetail() {
                                                         </div>
                                                     </div>
 
-                                                    {/* Form URLs - Always displayed */}
-                                                    <div className="p-5 space-y-3">
-                                                    {variantsToShow.map((variantNum) => {
-                                                        const variantKey = variantNum ? String(variantNum) : null
-                                                        const variantForms = formsForStructure.filter((f: any) => (f?.currentFormVariant ?? null) === variantKey)
-                                                        const variantLabel = variantNum ? `Variant ${variantNum}` : 'Main Form'
-
-                                                        return (
-                                                            <div key={`${t.id}-${variantNum || 'main'}`} className="space-y-2">
-                                                                {/* Variant label */}
-                                                                {hasCategorySection && (
-                                                                    <div className="text-sm font-medium text-[#1F2937] mb-2">{variantLabel}</div>
-                                                                )}
-                                                                
-                                                                {/* Form URLs list */}
-                                                                {variantForms.map((form: any, index: number) => {
-                                                                    const previewUrl = buildFormPreviewUrlFor(form, variantKey)
-                                                                    return (
-                                                                        <div key={form.id} className="bg-white border border-[#E5E7EB] rounded-lg p-3">
-                                                                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                                                                <div className="min-w-0 flex-1">
-                                                                                    <div className="text-sm font-medium text-[#1F2937]">
-                                                                                        Form #{hasCategorySection ? `${variantNum}.${index + 1}` : index + 1}
-                                                                                    </div>
-                                                                                    <div className="text-xs text-[#6B7280] mt-1 truncate">
-                                                                                        {previewUrl ? `Preview URL: ${previewUrl}` : 'Preview URL will generate after publishing'}
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div className="flex items-center gap-2 flex-shrink-0">
-                                                                                    {previewUrl && (
-                                                                                        <>
-                                                                                            <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, '_blank')}>
-                                                                                                Preview
-                                                                                            </Button>
-                                                                                            <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
-                                                                                                Copy
-                                                                                            </Button>
-                                                                                        </>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
+                                                    {/* Form URL - Show single form for this structure */}
+                                                    {form && (
+                                                        <div className="p-5">
+                                                            <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
+                                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <div className="text-sm font-medium text-[#1F2937]">
+                                                                            Form #{structureIndex + 1}
                                                                         </div>
-                                                                    )
-                                                                })}
+                                                                        <div className="text-xs text-[#6B7280] mt-1 truncate">
+                                                                            {form.publishedUrl ? `Preview URL: ${form.publishedUrl}` : 'Preview URL will generate after publishing'}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                                        {form.publishedUrl && (
+                                                                            <>
+                                                                                <Button size="sm" variant="outline" onClick={() => window.open(form.publishedUrl, '_blank')}>
+                                                                                    Preview
+                                                                                </Button>
+                                                                                <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(form.publishedUrl) }}>
+                                                                                    Copy
+                                                                                </Button>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        )
-                                                    })}
-                                                    </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )
                                         })}

@@ -1506,7 +1506,7 @@ app.get("/products/:id", async (req, res) => {
 
     console.log(`🛍️ Fetching single product: ${id}, user role: ${user.role}`);
 
-    // Fetch product with associated treatments
+    // Fetch product with associated treatments and pharmacy products
     const product = await Product.findByPk(id, {
       include: [
         {
@@ -1517,6 +1517,21 @@ app.get("/products/:id", async (req, res) => {
         }
       ]
     });
+
+    // If product has no pharmacyWholesaleCost, try to get it from PharmacyProduct
+    if (product && !product.pharmacyWholesaleCost) {
+      const PharmacyProduct = (await import('./models/PharmacyProduct')).default;
+      const pharmacyProduct = await PharmacyProduct.findOne({
+        where: { productId: id },
+        order: [['createdAt', 'DESC']] // Get the most recent one
+      });
+      
+      if (pharmacyProduct && pharmacyProduct.pharmacyWholesaleCost) {
+        // Update the product's pharmacyWholesaleCost for future queries
+        await product.update({ pharmacyWholesaleCost: pharmacyProduct.pharmacyWholesaleCost });
+        console.log(`✅ Synced pharmacyWholesaleCost from PharmacyProduct: $${pharmacyProduct.pharmacyWholesaleCost}`);
+      }
+    }
 
     if (!product) {
       return res.status(404).json({
@@ -5860,6 +5875,65 @@ app.get("/questionnaires/product/:productId", authenticateJWT, async (req, res) 
   }
 });
 
+const isProductionEnvironment = process.env.NODE_ENV === 'production'
+
+const sanitizeSlug = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+async function ensureProductSlug(product: Product): Promise<string> {
+  if (product.slug) {
+    return product.slug
+  }
+
+  const base = sanitizeSlug(product.name || 'product') || `product-${Date.now()}`
+  let candidate = base
+  let attempt = 1
+
+  while (await Product.findOne({ where: { slug: candidate } })) {
+    candidate = `${base}-${Date.now()}${attempt > 1 ? `-${attempt}` : ''}`
+    attempt += 1
+  }
+
+  await product.update({ slug: candidate })
+  return candidate
+}
+
+async function ensureTenantFormPublishedUrl(form: TenantProductForm): Promise<string | null> {
+  if (form.publishedUrl) {
+    return form.publishedUrl
+  }
+
+  if (!form.productId || !form.clinicId) {
+    return null
+  }
+
+  const [product, clinic] = await Promise.all([
+    Product.findByPk(form.productId),
+    Clinic.findByPk(form.clinicId),
+  ])
+
+  if (!product || !clinic || !clinic.slug) {
+    return null
+  }
+
+  const productSlug = await ensureProductSlug(product)
+  const domain = isProductionEnvironment
+    ? `${clinic.slug}.fuse.health`
+    : `${clinic.slug}.localhost:3000`
+  const protocol = isProductionEnvironment ? 'https' : 'http'
+  const publishedUrl = `${protocol}://${domain}/my-products/${form.id}/${productSlug}`
+
+  await form.update({
+    publishedUrl,
+    lastPublishedAt: form.lastPublishedAt ?? new Date(),
+  } as any)
+
+  return publishedUrl
+}
+
 // Enable a questionnaire for current user's clinic and product
 app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
   try {
@@ -5873,9 +5947,20 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "User clinic not found" });
     }
 
-    const { productId, questionnaireId, currentFormVariant } = req.body || {};
+    const { productId, questionnaireId, currentFormVariant, globalFormStructureId } = req.body || {};
     if (!productId || !questionnaireId) {
       return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
+    }
+
+    // Fetch product and clinic to generate published URL
+    const product = await Product.findByPk(productId);
+    const clinic = await Clinic.findByPk(user.clinicId);
+    
+    if (!product) {
+      return res.status(400).json({ success: false, message: "Product not found" });
+    }
+    if (!clinic) {
+      return res.status(400).json({ success: false, message: "Clinic not found" });
     }
 
     // Enforce product slots and ensure a TenantProduct exists
@@ -5887,17 +5972,55 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: msg });
     }
 
-    const record = await TenantProductForm.create({
-      tenantId: currentUser.id,
-      treatmentId: null,
-      productId,
-      questionnaireId,
-      clinicId: user.clinicId,
-      layoutTemplate: 'layout_a',
-      themeId: null,
-      lockedUntil: null,
-      currentFormVariant: currentFormVariant ?? null,
+    // Find or create the form - prevent duplicates
+    // Multi-tenant isolation: Uses tenantId AND clinicId to ensure forms are clinic-specific
+    // Now also includes globalFormStructureId to support multiple structures
+    const [record, created] = await TenantProductForm.findOrCreate({
+      where: {
+        tenantId: currentUser.id,
+        clinicId: user.clinicId,
+        productId,
+        currentFormVariant: currentFormVariant ?? null,
+        globalFormStructureId: globalFormStructureId ?? null,
+      },
+      defaults: {
+        treatmentId: null,
+        questionnaireId,
+        layoutTemplate: 'layout_a',
+        themeId: null,
+        lockedUntil: null,
+        publishedUrl: null,
+        lastPublishedAt: new Date(),
+      }
     });
+
+    // If form already existed, update the questionnaireId if it changed
+    if (!created && record.questionnaireId !== questionnaireId) {
+      await record.update({ 
+        questionnaireId,
+        lastPublishedAt: new Date()
+      } as any);
+      console.log(`✅ Updated existing form ${record.id} with new questionnaireId`);
+    }
+
+    if (!clinic.slug) {
+      return res.status(400).json({ success: false, message: "Clinic does not have a URL slug configured" });
+    }
+
+    const productSlug = await ensureProductSlug(product);
+    const domain = isProductionEnvironment
+      ? `${clinic.slug}.fuse.health`
+      : `${clinic.slug}.localhost:3000`
+    const protocol = isProductionEnvironment ? 'https' : 'http'
+    const publishedUrl = `${protocol}://${domain}/my-products/${record.id}/${productSlug}`
+
+    await record.update({
+      publishedUrl,
+      lastPublishedAt: record.lastPublishedAt ?? new Date(),
+    } as any)
+    await record.reload()
+
+    console.log(`✅ Generated published URL for form ${record.id}: ${publishedUrl}`);
 
     // Handle QuestionnaireCustomization (activate current questionnaire without disabling others)
     try {
@@ -5931,6 +6054,7 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
 });
 
 // List enabled forms for current user's clinic and a product
+// IMPORTANT: Multi-tenant isolation - only shows forms for the current user's clinic
 app.get("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
@@ -5948,11 +6072,20 @@ app.get("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "productId is required" });
     }
 
+    // Filter by tenantId AND clinicId to ensure proper multi-tenant isolation
+    // This ensures users only see forms for their own clinic, not other companies
     const records = await TenantProductForm.findAll({
       where: { tenantId: currentUser.id, clinicId: user.clinicId, productId },
+      order: [['createdAt', 'DESC']],
     });
 
-    res.status(200).json({ success: true, data: records });
+    const data = [] as any[]
+    for (const record of records) {
+      await ensureTenantFormPublishedUrl(record)
+      data.push(record.toJSON())
+    }
+
+    res.status(200).json({ success: true, data });
   } catch (error) {
     console.error('❌ Error listing tenant product forms:', error);
     res.status(500).json({ success: false, message: 'Failed to list enabled forms' });
@@ -9898,6 +10031,14 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
       ? ((product as any).categories as string[]).filter(Boolean)
       : [];
 
+    // Get Global Form Structure if form has one assigned
+    let globalFormStructure: any | null = null;
+    if (selectedForm?.globalFormStructureId && (clinic as any).globalFormStructures) {
+      const structures = (clinic as any).globalFormStructures || [];
+      globalFormStructure = structures.find((s: any) => s.id === selectedForm.globalFormStructureId) || null;
+      console.log(`✅ Found Global Form Structure: ${globalFormStructure?.name || 'none'} for form ${selectedForm.id}`);
+    }
+
     return res.status(200).json({
       success: true,
       data: {
@@ -9910,6 +10051,8 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
         categories,
         currentFormVariant: selectedForm?.currentFormVariant ?? null,
         tenantProductFormId: selectedForm?.id ?? null,
+        globalFormStructureId: selectedForm?.globalFormStructureId ?? null,
+        globalFormStructure: globalFormStructure,
         // Expose tenant product pricing + stripe identifiers for checkout when available
         price: tenantProduct ? (tenantProduct as any).price ?? null : null,
         stripeProductId: tenantProduct ? (tenantProduct as any).stripeProductId ?? null : null,

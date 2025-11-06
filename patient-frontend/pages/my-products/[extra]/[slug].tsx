@@ -18,6 +18,8 @@ interface PublicProduct {
     stripePriceId?: string | null
     tenantProductId?: string | null
     tenantProductFormId?: string | null
+    globalFormStructureId?: string | null
+    globalFormStructure?: any | null
 }
 
 export default function PublicProductPage() {
@@ -87,7 +89,7 @@ export default function PublicProductPage() {
                 }
             }
 
-            setProduct({
+            const productData = {
                 id: data.data.id,
                 name: data.data.name,
                 slug: data.data.slug,
@@ -99,7 +101,11 @@ export default function PublicProductPage() {
                 stripePriceId: data.data.stripePriceId ?? null,
                 tenantProductId: data.data.tenantProductId ?? null,
                 tenantProductFormId,
-            })
+                globalFormStructureId: data.data.globalFormStructureId,
+                globalFormStructure: data.data.globalFormStructure,
+            }
+            console.log('🎯 Product data received with Global Form Structure:', productData.globalFormStructure?.name)
+            setProduct(productData)
             setIsModalOpen(true)
         } catch (err) {
             console.error('❌ Public product load error:', err)
@@ -146,6 +152,7 @@ export default function PublicProductPage() {
                         ? product.categories[0]
                         : product.category || undefined}
                     productFormVariant={typeof extra === 'string' ? extra : undefined}
+                    globalFormStructure={product.globalFormStructure || undefined}
                     // Pass pricing data for fallback plan rendering
                     productPrice={typeof product.price === 'number' ? product.price : undefined}
                     productStripeProductId={product.stripeProductId || undefined}
