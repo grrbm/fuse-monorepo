@@ -6170,10 +6170,10 @@ app.get("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "productId is required" });
     }
 
-    // Filter by tenantId AND clinicId to ensure proper multi-tenant isolation
+    // Filter by clinicId to ensure proper multi-tenant isolation
     // This ensures users only see forms for their own clinic, not other companies
     const records = await TenantProductForm.findAll({
-      where: { tenantId: currentUser.id, clinicId: user.clinicId, productId },
+      where: { clinicId: user.clinicId, productId },
       order: [['createdAt', 'DESC']],
     });
 
