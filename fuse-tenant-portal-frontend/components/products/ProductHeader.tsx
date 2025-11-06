@@ -7,6 +7,7 @@ interface Product {
     name: string
     description: string
     price: number
+    pharmacyWholesaleCost?: number | null
     placeholderSig: string
     activeIngredients: string[]
     category?: string
@@ -24,6 +25,10 @@ export function ProductHeader({ product }: ProductHeaderProps) {
         : product.category
             ? [product.category]
             : []
+
+    const wholesaleCost = typeof product.pharmacyWholesaleCost === 'number'
+        ? product.pharmacyWholesaleCost
+        : product.price
 
     return (
         <div className="mb-6 pb-6 border-b border-border/40">
@@ -63,7 +68,7 @@ export function ProductHeader({ product }: ProductHeaderProps) {
                         )}
                         <div className="flex items-center gap-2 text-sm">
                             <span className="font-medium text-muted-foreground">Wholesale Cost:</span>
-                            <span className="text-foreground">${product.price.toFixed(2)}</span>
+                            <span className="text-foreground">${wholesaleCost.toFixed(2)}</span>
                         </div>
                         {product.activeIngredients && product.activeIngredients.length > 0 && (
                             <div className="flex items-center gap-2 text-sm">

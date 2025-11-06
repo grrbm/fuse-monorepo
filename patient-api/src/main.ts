@@ -81,6 +81,7 @@ import MessageService from "./services/Message.service";
 import ProductService from "./services/product.service";
 import TenantProductForm from "./models/TenantProductForm";
 import TenantProduct from "./models/TenantProduct";
+import GlobalFormStructure from "./models/GlobalFormStructure";
 // import QuestionnaireStep twice causes duplicate identifier; keep single import below
 import Question from "./models/Question";
 import QuestionOption from "./models/QuestionOption";
@@ -524,6 +525,8 @@ app.post("/auth/signup", async (req, res) => {
         businessType: businessType || null,
       });
 
+      // Note: Global form structures are created at database initialization (ensureDefaultFormStructures)
+
       finalClinicId = clinic.id;
       console.log('✅ Clinic created successfully with ID:', clinic.id);
       console.log('🏥 Created clinic details:', { id: clinic.id, name: clinic.name, slug: clinic.slug });
@@ -582,11 +585,16 @@ app.post("/auth/signup", async (req, res) => {
 
     console.log('🔑 Generated activation token for user:', user.email);
 
+    // Get the frontend origin from the request to send the verification link to the correct portal
+    const frontendOrigin = req.get('origin') || req.get('referer')?.split('/').slice(0, 3).join('/');
+    console.log('🌐 Frontend origin detected:', frontendOrigin);
+
     // Send verification email
     const emailSent = await MailsSender.sendVerificationEmail(
       user.email,
       activationToken,
-      user.firstName
+      user.firstName,
+      frontendOrigin
     );
 
     if (emailSent) {
@@ -1199,6 +1207,145 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
   }
 });
 
+// Get standardized templates (authenticated version)
+app.get("/questionnaires/standardized", authenticateJWT, async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const where: any = {
+      isTemplate: true,
+      formTemplateType: 'standardized_template'
+    };
+    if (typeof category === 'string' && category.trim().length > 0) {
+      where.category = category.trim();
+    }
+
+    const questionnaires = await Questionnaire.findAll({
+      where,
+      include: [
+        {
+          model: QuestionnaireStep,
+          as: 'steps',
+          include: [
+            {
+              model: Question,
+              as: 'questions',
+              include: [{ model: QuestionOption, as: 'options' }],
+            },
+          ],
+        },
+      ],
+      order: [
+        [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
+        [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, { model: QuestionOption, as: 'options' }, 'optionOrder', 'ASC'],
+      ] as any,
+    });
+
+    res.status(200).json({ success: true, data: questionnaires });
+  } catch (error) {
+    console.error('Error fetching standardized templates:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch standardized templates' });
+  }
+});
+
+// Get global form structures
+app.get("/global-form-structures", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Query from GlobalFormStructures table
+    const structures = await GlobalFormStructure.findAll({
+      where: {
+        isActive: true
+      },
+      order: [
+        ['isDefault', 'DESC'], // Default structures first
+        ['createdAt', 'ASC']
+      ]
+    });
+
+    // Transform to match frontend expectations
+    const formattedStructures = structures.map(s => ({
+      id: s.structureId,
+      name: s.name,
+      description: s.description,
+      sections: s.sections,
+      isDefault: s.isDefault,
+      createdAt: s.createdAt
+    }));
+
+    res.status(200).json({ success: true, data: formattedStructures });
+  } catch (error) {
+    console.error('Error fetching global form structures:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch structures' });
+  }
+});
+
+// Save global form structures for clinic
+app.post("/global-form-structures", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { structures } = req.body;
+    if (!Array.isArray(structures)) {
+      return res.status(400).json({ success: false, message: "Structures must be an array" });
+    }
+
+    // Get existing structures to track what needs to be created/updated/deleted
+    const existingStructures = await GlobalFormStructure.findAll();
+
+    const existingIds = new Set(existingStructures.map(s => s.structureId));
+    const incomingIds = new Set(structures.map((s: any) => s.id));
+
+    // Delete structures that are no longer in the incoming data
+    const toDelete = existingStructures.filter(s => !incomingIds.has(s.structureId));
+    for (const structure of toDelete) {
+      await structure.destroy();
+    }
+
+    // Create or update structures
+    for (const structureData of structures) {
+      if (existingIds.has(structureData.id)) {
+        // Update existing
+        await GlobalFormStructure.update({
+          name: structureData.name,
+          description: structureData.description || '',
+          sections: structureData.sections,
+          isDefault: structureData.isDefault || false
+        }, {
+          where: {
+            structureId: structureData.id
+          }
+        });
+      } else {
+        // Create new
+        await GlobalFormStructure.create({
+          structureId: structureData.id,
+          name: structureData.name,
+          description: structureData.description || '',
+          sections: structureData.sections,
+          isDefault: structureData.isDefault || false,
+          isActive: true
+        });
+      }
+    }
+
+    console.log('✅ Saved global form structures');
+
+    res.status(200).json({ success: true, message: 'Structures saved successfully', data: structures });
+  } catch (error) {
+    console.error('Error saving global form structures:', error);
+    res.status(500).json({ success: false, message: 'Failed to save structures' });
+  }
+});
+
 // Products by clinic endpoint
 app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
   try {
@@ -1388,7 +1535,7 @@ app.get("/products/:id", async (req, res) => {
 
     console.log(`🛍️ Fetching single product: ${id}, user role: ${user.role}`);
 
-    // Fetch product with associated treatments
+    // Fetch product with associated treatments and pharmacy products
     const product = await Product.findByPk(id, {
       include: [
         {
@@ -1399,6 +1546,21 @@ app.get("/products/:id", async (req, res) => {
         }
       ]
     });
+
+    // If product has no pharmacyWholesaleCost, try to get it from PharmacyProduct
+    if (product && !product.pharmacyWholesaleCost) {
+      const PharmacyProduct = (await import('./models/PharmacyProduct')).default;
+      const pharmacyProduct = await PharmacyProduct.findOne({
+        where: { productId: id },
+        order: [['createdAt', 'DESC']] // Get the most recent one
+      });
+
+      if (pharmacyProduct && pharmacyProduct.pharmacyWholesaleCost) {
+        // Update the product's pharmacyWholesaleCost for future queries
+        await product.update({ pharmacyWholesaleCost: pharmacyProduct.pharmacyWholesaleCost });
+        console.log(`✅ Synced pharmacyWholesaleCost from PharmacyProduct: $${pharmacyProduct.pharmacyWholesaleCost}`);
+      }
+    }
 
     if (!product) {
       return res.status(404).json({
@@ -5290,10 +5452,10 @@ app.post("/questionnaires/:id/save-as-template", authenticateJWT, async (req, re
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5370,8 +5532,8 @@ app.post("/questionnaires/:id/save-as-template", authenticateJWT, async (req, re
       templateName: templateName
     });
 
-    return res.status(201).json({ 
-      success: true, 
+    return res.status(201).json({
+      success: true,
       data: { id: newTemplate.id, title: templateName },
       message: `Template "${templateName}" created successfully!`
     });
@@ -5401,10 +5563,10 @@ app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJW
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5418,10 +5580,10 @@ app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJW
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5490,9 +5652,9 @@ app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJW
       sourceQuestionnaireId: sourceQuestionnaireId
     });
 
-    return res.status(200).json({ 
-      success: true, 
-      message: 'Template updated successfully!' 
+    return res.status(200).json({
+      success: true,
+      message: 'Template updated successfully!'
     });
   } catch (error) {
     console.error('❌ Error updating template from product form:', error);
@@ -5520,10 +5682,10 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5620,10 +5782,10 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5638,8 +5800,8 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
   } catch (error: any) {
     console.error('❌ Error cloning template for product:', error);
     const errorMessage = error?.message || 'Failed to clone template for product';
-    return res.status(500).json({ 
-      success: false, 
+    return res.status(500).json({
+      success: false,
       message: errorMessage,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
@@ -5742,6 +5904,65 @@ app.get("/questionnaires/product/:productId", authenticateJWT, async (req, res) 
   }
 });
 
+const isProductionEnvironment = process.env.NODE_ENV === 'production'
+
+const sanitizeSlug = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+async function ensureProductSlug(product: Product): Promise<string> {
+  if (product.slug) {
+    return product.slug
+  }
+
+  const base = sanitizeSlug(product.name || 'product') || `product-${Date.now()}`
+  let candidate = base
+  let attempt = 1
+
+  while (await Product.findOne({ where: { slug: candidate } })) {
+    candidate = `${base}-${Date.now()}${attempt > 1 ? `-${attempt}` : ''}`
+    attempt += 1
+  }
+
+  await product.update({ slug: candidate })
+  return candidate
+}
+
+async function ensureTenantFormPublishedUrl(form: TenantProductForm): Promise<string | null> {
+  if (form.publishedUrl) {
+    return form.publishedUrl
+  }
+
+  if (!form.productId || !form.clinicId) {
+    return null
+  }
+
+  const [product, clinic] = await Promise.all([
+    Product.findByPk(form.productId),
+    Clinic.findByPk(form.clinicId),
+  ])
+
+  if (!product || !clinic || !clinic.slug) {
+    return null
+  }
+
+  const productSlug = await ensureProductSlug(product)
+  const domain = isProductionEnvironment
+    ? `${clinic.slug}.fuse.health`
+    : `${clinic.slug}.localhost:3000`
+  const protocol = isProductionEnvironment ? 'https' : 'http'
+  const publishedUrl = `${protocol}://${domain}/my-products/${form.id}/${productSlug}`
+
+  await form.update({
+    publishedUrl,
+    lastPublishedAt: form.lastPublishedAt ?? new Date(),
+  } as any)
+
+  return publishedUrl
+}
+
 // Enable a questionnaire for current user's clinic and product
 app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
   try {
@@ -5755,9 +5976,20 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "User clinic not found" });
     }
 
-    const { productId, questionnaireId, currentFormVariant } = req.body || {};
+    const { productId, questionnaireId, currentFormVariant, globalFormStructureId } = req.body || {};
     if (!productId || !questionnaireId) {
       return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
+    }
+
+    // Fetch product and clinic to generate published URL
+    const product = await Product.findByPk(productId);
+    const clinic = await Clinic.findByPk(user.clinicId);
+
+    if (!product) {
+      return res.status(400).json({ success: false, message: "Product not found" });
+    }
+    if (!clinic) {
+      return res.status(400).json({ success: false, message: "Clinic not found" });
     }
 
     // Enforce product slots and ensure a TenantProduct exists
@@ -5769,56 +6001,75 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: msg });
     }
 
-    const record = await TenantProductForm.create({
-      tenantId: currentUser.id,
-      treatmentId: null,
-      productId,
-      questionnaireId,
-      clinicId: user.clinicId,
-      layoutTemplate: 'layout_a',
-      themeId: null,
-      lockedUntil: null,
-      currentFormVariant: currentFormVariant ?? null,
+    // Find or create the form - prevent duplicates
+    // Multi-tenant isolation: Uses tenantId AND clinicId to ensure forms are clinic-specific
+    // Now also includes globalFormStructureId to support multiple structures
+    const [record, created] = await TenantProductForm.findOrCreate({
+      where: {
+        tenantId: currentUser.id,
+        clinicId: user.clinicId,
+        productId,
+        currentFormVariant: currentFormVariant ?? null,
+        globalFormStructureId: globalFormStructureId ?? null,
+      },
+      defaults: {
+        treatmentId: null,
+        questionnaireId,
+        layoutTemplate: 'layout_a',
+        themeId: null,
+        lockedUntil: null,
+        publishedUrl: null,
+        lastPublishedAt: new Date(),
+      }
     });
 
-    // Handle QuestionnaireCustomization
+    // If form already existed, update the questionnaireId if it changed
+    if (!created && record.questionnaireId !== questionnaireId) {
+      await record.update({
+        questionnaireId,
+        lastPublishedAt: new Date()
+      } as any);
+      console.log(`✅ Updated existing form ${record.id} with new questionnaireId`);
+    }
+
+    if (!clinic.slug) {
+      return res.status(400).json({ success: false, message: "Clinic does not have a URL slug configured" });
+    }
+
+    const productSlug = await ensureProductSlug(product);
+    const domain = isProductionEnvironment
+      ? `${clinic.slug}.fuse.health`
+      : `${clinic.slug}.localhost:3000`
+    const protocol = isProductionEnvironment ? 'https' : 'http'
+    const publishedUrl = `${protocol}://${domain}/my-products/${record.id}/${productSlug}`
+
+    await record.update({
+      publishedUrl,
+      lastPublishedAt: record.lastPublishedAt ?? new Date(),
+    } as any)
+    await record.reload()
+
+    console.log(`✅ Generated published URL for form ${record.id}: ${publishedUrl}`);
+
+    // Handle QuestionnaireCustomization (activate current questionnaire without disabling others)
     try {
-      // STEP 1: Deactivate ALL active records for this user (except the one we're activating)
-      const deactivatedCount = await QuestionnaireCustomization.update(
-        { isActive: false },
-        {
-          where: {
-            userId: currentUser.id,
-            questionnaireId: { [Op.ne]: questionnaireId }, // All except current
-            isActive: true // Only active ones
-          }
-        }
-      );
-
-      if (deactivatedCount[0] > 0) {
-        console.log(`🔄 Deactivated ${deactivatedCount[0]} previous QuestionnaireCustomization(s) for user ${currentUser.id}`);
-      }
-
-      // STEP 2: Check if customization already exists for this questionnaire
       let customization = await QuestionnaireCustomization.findOne({
         where: { userId: currentUser.id, questionnaireId }
       });
 
       if (customization) {
-        // STEP 3A: Already exists, just activate it (keep existing color, even if null)
-        await customization.update({
-          isActive: true
-        });
-        console.log(`✅ Reactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: ${customization.customColor || 'none (will use defaults)'}`);
+        if (!customization.isActive) {
+          await customization.update({ isActive: true } as any);
+          console.log(`✅ Reactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}`);
+        }
       } else {
-        // STEP 3B: Doesn't exist, create it with no color (null) - admin can set it later
         customization = await QuestionnaireCustomization.create({
           userId: currentUser.id,
           questionnaireId,
-          customColor: null, // Start with no custom color
+          customColor: null,
           isActive: true,
         });
-        console.log(`✅ Created NEW QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}, color: none (will use clinic default)`);
+        console.log(`✅ Created QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}`);
       }
     } catch (customizationError) {
       console.error('⚠️ Error managing QuestionnaireCustomization:', customizationError);
@@ -5832,6 +6083,7 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
 });
 
 // List enabled forms for current user's clinic and a product
+// IMPORTANT: Multi-tenant isolation - only shows forms for the current user's clinic
 app.get("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
@@ -5849,11 +6101,20 @@ app.get("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "productId is required" });
     }
 
+    // Filter by clinicId to ensure proper multi-tenant isolation
+    // This ensures users only see forms for their own clinic, not other companies
     const records = await TenantProductForm.findAll({
-      where: { tenantId: currentUser.id, clinicId: user.clinicId, productId },
+      where: { clinicId: user.clinicId, productId },
+      order: [['createdAt', 'DESC']],
     });
 
-    res.status(200).json({ success: true, data: records });
+    const data = [] as any[]
+    for (const record of records) {
+      await ensureTenantFormPublishedUrl(record)
+      data.push(record.toJSON())
+    }
+
+    res.status(200).json({ success: true, data });
   } catch (error) {
     console.error('❌ Error listing tenant product forms:', error);
     res.status(500).json({ success: false, message: 'Failed to list enabled forms' });
@@ -5873,34 +6134,58 @@ app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
       return res.status(400).json({ success: false, message: "User clinic not found" });
     }
 
-    const { productId, questionnaireId } = req.body || {};
-    if (!productId || !questionnaireId) {
-      return res.status(400).json({ success: false, message: "productId and questionnaireId are required" });
+    const { productId, questionnaireId, tenantProductFormId } = req.body || {};
+    if (!tenantProductFormId && (!productId || !questionnaireId)) {
+      return res.status(400).json({ success: false, message: "tenantProductFormId or (productId + questionnaireId) is required" });
     }
 
-    const record = await TenantProductForm.findOne({
-      where: { tenantId: currentUser.id, clinicId: user.clinicId, productId, questionnaireId },
-    });
+    let record: TenantProductForm | null = null;
+
+    if (tenantProductFormId) {
+      record = await TenantProductForm.findOne({
+        where: { id: tenantProductFormId, tenantId: currentUser.id, clinicId: user.clinicId },
+      });
+    }
+
+    if (!record && productId && questionnaireId) {
+      record = await TenantProductForm.findOne({
+        where: { tenantId: currentUser.id, clinicId: user.clinicId, productId, questionnaireId },
+      });
+    }
 
     if (!record) {
       return res.status(404).json({ success: false, message: 'Enabled form not found' });
     }
 
+    const recordProductId = record.productId;
+    const recordQuestionnaireId = record.questionnaireId;
+
     await record.destroy({ force: true } as any);
 
-    // Deactivate the corresponding QuestionnaireCustomization
+    // Only deactivate customization if no other forms for this questionnaire remain active
     try {
-      const updated = await QuestionnaireCustomization.update(
-        { isActive: false },
-        {
-          where: {
-            userId: currentUser.id,
-            questionnaireId
-          }
+      const remaining = await TenantProductForm.count({
+        where: {
+          tenantId: currentUser.id,
+          clinicId: user.clinicId,
+          productId: recordProductId,
+          questionnaireId: recordQuestionnaireId,
         }
-      );
-      if (updated[0] > 0) {
-        console.log(`✅ Deactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}`);
+      });
+
+      if (remaining === 0) {
+        const updated = await QuestionnaireCustomization.update(
+          { isActive: false },
+          {
+            where: {
+              userId: currentUser.id,
+              questionnaireId: recordQuestionnaireId
+            }
+          }
+        );
+        if (updated[0] > 0) {
+          console.log(`✅ Deactivated QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${recordQuestionnaireId}`);
+        }
       }
     } catch (customizationError) {
       console.error('⚠️ Error deactivating QuestionnaireCustomization:', customizationError);
@@ -6198,7 +6483,7 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { stepId, title, description, isDeadEnd, conditionalLogic } = validation.data;
+    const { stepId, title, description, isDeadEnd, conditionalLogic, required } = validation.data;
 
     // Create questionnaire step service instance
     const questionnaireStepService = new QuestionnaireStepService();
@@ -6206,7 +6491,7 @@ app.put("/questionnaires/step", authenticateJWT, async (req, res) => {
     // Update questionnaire step
     const updatedStep = await questionnaireStepService.updateQuestionnaireStep(
       stepId,
-      { title, description, isDeadEnd, conditionalLogic: conditionalLogic ?? undefined },
+      { title, description, isDeadEnd, conditionalLogic: conditionalLogic ?? undefined, required },
       currentUser.id
     );
 
@@ -9712,140 +9997,112 @@ app.get("/brand-treatments/published", authenticateJWT, async (req, res) => {
 app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
   try {
     const { clinicSlug, slug } = req.params;
+    const variantParam = typeof req.query.variant === 'string' ? req.query.variant : undefined;
+    const normalizedVariant = variantParam === 'main' ? undefined : variantParam;
 
     const clinic = await Clinic.findOne({ where: { slug: clinicSlug } });
     if (!clinic) {
       return res.status(404).json({ success: false, message: "Clinic not found" });
     }
 
-    console.log('Public: get product form by clinic slug + product slug Edu', clinicSlug, slug);
-    // First try legacy enablement via TenantProduct (selected products)
-    // First try legacy enablement via TenantProduct (selected products)
+    const product = await Product.findOne({ where: { slug } });
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    // Ensure the product is enabled either via TenantProduct or TenantProductForm
     const tenantProduct = await TenantProduct.findOne({
-      where: { clinicId: clinic.id },
-      include: [
-        {
-          model: Product,
-          required: true,
-          where: { slug },
-        },
-        {
-          model: Questionnaire,
-          required: false,
-        },
-      ],
-    });
-    console.log('Public: tenantProduct Edu', tenantProduct);
-
-    if (tenantProduct && tenantProduct.product) {
-      const product = tenantProduct.product as any;
-      // Try to resolve currentFormVariant from TenantProductForm for the same clinic/product
-      let currentFormVariant: string | null = null;
-      try {
-        const tpf = await TenantProductForm.findOne({ where: { clinicId: clinic.id, productId: product.id } as any });
-        currentFormVariant = (tpf as any)?.currentFormVariant ?? null;
-      } catch { }
-
-      // Always check for the most recently attached form via Questionnaire.productId
-      // This takes precedence over TenantProduct.questionnaireId to ensure form switching works
-      let questionnaireId = tenantProduct.questionnaireId || null;
-      try {
-        const productQuestionnaire = await Questionnaire.findOne({
-          where: {
-            productId: product.id,
-            formTemplateType: 'normal'
-          },
-          order: [['updatedAt', 'DESC']]
-        });
-        if (productQuestionnaire) {
-          questionnaireId = productQuestionnaire.id;
-          console.log('✅ Using questionnaire from Questionnaire.productId:', questionnaireId);
-        } else if (questionnaireId) {
-          console.log('⚠️ No Questionnaire.productId found, falling back to TenantProduct.questionnaireId:', questionnaireId);
-        }
-      } catch (e) {
-        console.error('Error finding product questionnaire:', e);
-      }
-
-      const categories = Array.isArray(product.categories)
-        ? (product.categories as string[]).filter(Boolean)
-        : [];
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          id: product.id,
-          name: product.name,
-          slug: product.slug,
-          questionnaireId,
-          clinicSlug: clinic.slug,
-          category: categories[0] ?? null,
-          categories,
-          currentFormVariant,
-          // Expose tenant product pricing + stripe identifiers for checkout
-          price: (tenantProduct as any).price ?? null,
-          stripeProductId: (tenantProduct as any).stripeProductId ?? null,
-          stripePriceId: (tenantProduct as any).stripePriceId ?? null,
-          tenantProductId: (tenantProduct as any).id ?? null,
-        },
-      });
-    }
-
-    // Fallback: consider enablement via TenantProductForm (form assignment)
-    const tenantProductForm = await TenantProductForm.findOne({
-      where: { clinicId: clinic.id },
-      include: [
-        {
-          model: Product,
-          required: true,
-          where: { slug },
-        },
-      ],
+      where: { clinicId: clinic.id, productId: product.id },
     });
 
-    if (tenantProductForm && (tenantProductForm as any).product) {
-      const product = (tenantProductForm as any).product;
-      const categories = Array.isArray(product.categories)
-        ? (product.categories as string[]).filter(Boolean)
-        : [];
-      
-      // Always check for the most recently attached form via Questionnaire.productId
-      // This takes precedence over TenantProductForm.questionnaireId to ensure form switching works
-      let questionnaireId = tenantProductForm.questionnaireId || null;
-      try {
-        const productQuestionnaire = await Questionnaire.findOne({
-          where: {
-            productId: product.id,
-            formTemplateType: 'normal'
-          },
-          order: [['updatedAt', 'DESC']]
-        });
-        if (productQuestionnaire) {
-          questionnaireId = productQuestionnaire.id;
-          console.log('✅ Using questionnaire from Questionnaire.productId:', questionnaireId);
-        } else if (questionnaireId) {
-          console.log('⚠️ No Questionnaire.productId found, falling back to TenantProductForm.questionnaireId:', questionnaireId);
-        }
-      } catch (e) {
-        console.error('Error finding product questionnaire:', e);
-      }
+    const tenantProductForms = await TenantProductForm.findAll({
+      where: { clinicId: clinic.id, productId: product.id },
+      order: [['createdAt', 'DESC']] as any,
+    });
 
-      return res.status(200).json({
-        success: true,
-        data: {
-          id: product.id,
-          name: product.name,
-          slug: product.slug,
-          questionnaireId,
-          clinicSlug: clinic.slug,
-          category: categories[0] ?? null,
-          categories,
-          currentFormVariant: (tenantProductForm as any).currentFormVariant ?? null,
-        },
-      });
+    if (!tenantProduct && tenantProductForms.length === 0) {
+      return res.status(404).json({ success: false, message: "Product not enabled for this brand" });
     }
 
-    return res.status(404).json({ success: false, message: "Product not enabled for this brand" });
+    // Locate the specific form requested (if any)
+    let selectedForm: TenantProductForm | null = null;
+    if (normalizedVariant) {
+      selectedForm = tenantProductForms.find((form) => form.id === normalizedVariant) ||
+        tenantProductForms.find((form) => (form.currentFormVariant ?? null) === normalizedVariant) ||
+        null;
+
+      if (!selectedForm) {
+        return res.status(404).json({ success: false, message: 'Requested form variant not enabled' });
+      }
+    } else if (tenantProductForms.length > 0) {
+      selectedForm = tenantProductForms[0];
+    }
+
+    // Determine questionnaire
+    let questionnaireId = selectedForm?.questionnaireId || tenantProduct?.questionnaireId || null;
+    try {
+      const productQuestionnaire = await Questionnaire.findOne({
+        where: {
+          productId: product.id,
+          formTemplateType: 'normal'
+        },
+        order: [['updatedAt', 'DESC']]
+      });
+      if (productQuestionnaire) {
+        questionnaireId = productQuestionnaire.id;
+        console.log('✅ Using questionnaire from Questionnaire.productId:', questionnaireId);
+      }
+    } catch (e) {
+      console.error('Error finding product questionnaire:', e);
+    }
+
+    const categories = Array.isArray((product as any).categories)
+      ? ((product as any).categories as string[]).filter(Boolean)
+      : [];
+
+    // Get Global Form Structure if form has one assigned
+    let globalFormStructure: any | null = null;
+    if (selectedForm?.globalFormStructureId) {
+      const structure = await GlobalFormStructure.findOne({
+        where: {
+          structureId: selectedForm.globalFormStructureId,
+          isActive: true
+        }
+      });
+
+      if (structure) {
+        globalFormStructure = {
+          id: structure.structureId,
+          name: structure.name,
+          description: structure.description,
+          sections: structure.sections,
+          isDefault: structure.isDefault
+        };
+        console.log(`✅ Found Global Form Structure: ${globalFormStructure.name} for form ${selectedForm.id}`);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        questionnaireId,
+        clinicSlug: clinic.slug,
+        category: categories[0] ?? null,
+        categories,
+        currentFormVariant: selectedForm?.currentFormVariant ?? null,
+        tenantProductFormId: selectedForm?.id ?? null,
+        globalFormStructureId: selectedForm?.globalFormStructureId ?? null,
+        globalFormStructure: globalFormStructure,
+        // Expose tenant product pricing + stripe identifiers for checkout when available
+        price: tenantProduct ? (tenantProduct as any).price ?? null : null,
+        stripeProductId: tenantProduct ? (tenantProduct as any).stripeProductId ?? null : null,
+        stripePriceId: tenantProduct ? (tenantProduct as any).stripePriceId ?? null : null,
+        tenantProductId: tenantProduct ? (tenantProduct as any).id ?? null : null,
+      },
+    });
   } catch (error) {
     console.error('❌ Error fetching published brand products:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch published products' });

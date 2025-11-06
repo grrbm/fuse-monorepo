@@ -21,7 +21,7 @@
     "@heroui/react": "^2.8.3",
     "@iconify/react": "^6.0.1",
     "@stripe/react-stripe-js": "^2.8.1",
-    "@stripe/stripe-js": "^4.8.0",
+    "@stripe/stripe-js": "^4.10.0",
     "framer-motion": "^12.23.12",
     "next": "catalog:next14",
     "react": "catalog:react18",

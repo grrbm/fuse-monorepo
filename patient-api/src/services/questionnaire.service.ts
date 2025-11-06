@@ -79,13 +79,13 @@ class QuestionnaireService {
     }
 
     async listTemplatesByProduct(productId: string) {
-        return Questionnaire.findAll({
+        // Return only the actual product form, not templates
+        // There should only be ONE questionnaire per product
+        const questionnaires = await Questionnaire.findAll({
             where: {
                 productId,
-                [Op.or]: [
-                    { isTemplate: false },
-                    { isTemplate: true, formTemplateType: 'normal' },
-                ],
+                isTemplate: false, // Only return the actual product form, not saved templates
+                formTemplateType: 'normal',
             },
             include: [
                 {

@@ -24,6 +24,7 @@ interface Product {
     name: string
     price: number
     pharmacyProductId?: string
+    pharmacyWholesaleCost?: number
     placeholderSig?: string
     imageUrl?: string | null
     clinicId?: string
@@ -775,7 +776,7 @@ export default function Products() {
                                                 {/* Pharmacy Wholesale Price */}
                                                 <div className="flex-shrink-0 w-28">
                                                     <div className="text-xs text-gray-500 mb-0.5">Pharmacy</div>
-                                                    <span className="text-sm font-medium text-gray-900">{formatPrice(product.price)}</span>
+                                                    <span className="text-sm font-medium text-gray-900">{formatPrice(product.pharmacyWholesaleCost ?? product.price)}</span>
                                                 </div>
 
                                                 {/* Clinic Retail Price */}
