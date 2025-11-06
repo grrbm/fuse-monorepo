@@ -10646,15 +10646,43 @@ app.put("/message-templates/:id", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Auto-extract merge fields if body changed
+    // Handle merge fields
+    // If mergeFields is explicitly provided, use it as-is (supports name|dbField format)
+    // Otherwise, auto-extract from body/subject for backward compatibility
     let extractedMergeFields = mergeFields;
-    if (body && body !== template.body) {
+    
+    if (mergeFields === undefined && body && body !== template.body) {
+      // Only auto-extract if mergeFields not provided
       const regex = /\{\{([^}]+)\}\}/g;
       const fields = new Set<string>();
       let match;
-      while ((match = regex.exec(body)) !== null) {
-        fields.add(match[1].trim());
+      
+      // Check if body is JSON (blocks structure)
+      try {
+        const parsed = JSON.parse(body);
+        if (Array.isArray(parsed)) {
+          // Extract merge fields from block contents
+          parsed.forEach((block: any) => {
+            if (block.content) {
+              while ((match = regex.exec(block.content)) !== null) {
+                fields.add(match[1].trim());
+              }
+            }
+          });
+        } else {
+          // Plain text - use original logic
+          while ((match = regex.exec(body)) !== null) {
+            fields.add(match[1].trim());
+          }
+        }
+      } catch {
+        // Not JSON, treat as plain text
+        while ((match = regex.exec(body)) !== null) {
+          fields.add(match[1].trim());
+        }
       }
+      
+      // Also check subject
       if (subject) {
         while ((match = regex.exec(subject)) !== null) {
           fields.add(match[1].trim());
