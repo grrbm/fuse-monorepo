@@ -522,6 +522,21 @@ app.post("/auth/signup", async (req, res) => {
         slug: slug,
         logo: '', // Default empty logo, can be updated later
         businessType: businessType || null,
+        globalFormStructures: [
+          {
+            id: 'default',
+            name: 'Default Flow',
+            description: 'Standard questionnaire flow for all products',
+            sections: [
+              { id: 'product', type: 'product_questions', label: 'Product Questions', description: 'Questions specific to each individual product', order: 1, enabled: true, icon: '📦' },
+              { id: 'category', type: 'category_questions', label: 'Standardized Category Questions', description: 'Questions shared across all products in a category', order: 2, enabled: true, icon: '📋' },
+              { id: 'account', type: 'account_creation', label: 'Create Account', description: 'Patient information collection', order: 3, enabled: true, icon: '👤' },
+              { id: 'checkout', type: 'checkout', label: 'Payment & Checkout', description: 'Billing and shipping', order: 4, enabled: true, icon: '💳' }
+            ],
+            isDefault: true,
+            createdAt: new Date().toISOString()
+          }
+        ]
       });
 
       finalClinicId = clinic.id;
