@@ -16,6 +16,7 @@ import {
   Crown,
   Lock,
   CreditCard,
+  Workflow,
 } from "lucide-react"
 import Tutorial from "./ui/tutorial"
 
@@ -30,6 +31,7 @@ const operations = [
   // { name: "Offerings", icon: Gift, current: false, href: "/offerings" },
   { name: "Products", icon: Package, current: false, href: "/products", id: "tutorial-step-3" },
   { name: "Orders", icon: ShoppingCart, current: false, href: "/orders", hasSubmenu: true },
+  { name: "Flows", icon: Workflow, current: false, href: "/flows" },
 ]
 
 const services: { name: string; icon: any; current: boolean; href?: string; hasSubmenu?: boolean; comingSoon?: boolean }[] = [
