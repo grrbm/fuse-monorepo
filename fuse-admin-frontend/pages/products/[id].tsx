@@ -306,18 +306,25 @@ export default function ProductDetail() {
                     setEnabledForms(Array.isArray(data?.data) ? data.data : [])
                 }
 
-                // Auto-enable all variants for all structures if not already enabled
+                // Auto-enable exactly 1 form per variant for each structure
+                const enabledTracker = new Set<string>() // Track what we've already enabled
+                
                 for (const template of displayTemplates) {
                     const hasCategorySection = (template as any)._hasCategorySection
                     const variantsToEnable = hasCategorySection ? [1, 2] : [null]
                     
                     for (const variantNum of variantsToEnable) {
                         const variantKey = variantNum ? String(variantNum) : null
+                        const trackingKey = `${template.id}:${variantKey ?? 'main'}`
+                        
+                        // Skip if we've already enabled this variant for this questionnaire
+                        if (enabledTracker.has(trackingKey)) continue
+                        
                         const existingFormsForVariant = enabledForms.filter((f: any) => 
                             f?.questionnaireId === template.id && (f?.currentFormVariant ?? null) === variantKey
                         )
                         
-                        // Only auto-enable if no forms exist for this variant
+                        // Only auto-enable if ZERO forms exist for this variant
                         if (existingFormsForVariant.length === 0 && template.id && !template.id.startsWith('structure-')) {
                             try {
                                 const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
@@ -330,11 +337,15 @@ export default function ProductDetail() {
                                     const formData = await res.json()
                                     if (formData?.success && formData?.data) {
                                         setEnabledForms(prev => [...prev, formData.data])
+                                        enabledTracker.add(trackingKey)
                                     }
                                 }
                             } catch (e) {
                                 console.error('Error auto-enabling form:', e)
                             }
+                        } else if (existingFormsForVariant.length > 0) {
+                            // Mark as already enabled
+                            enabledTracker.add(trackingKey)
                         }
                     }
                 }
