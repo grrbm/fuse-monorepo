@@ -10097,9 +10097,10 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
         globalFormStructureId: selectedForm?.globalFormStructureId ?? null,
         globalFormStructure: globalFormStructure,
         // Expose tenant product pricing + stripe identifiers for checkout when available
-        price: tenantProduct ? (tenantProduct as any).price ?? null : null,
-        stripeProductId: tenantProduct ? (tenantProduct as any).stripeProductId ?? null : null,
-        stripePriceId: tenantProduct ? (tenantProduct as any).stripePriceId ?? null : null,
+        // Return pricing data even if tenantProduct doesn't exist (fallback to product base price)
+        price: tenantProduct ? (tenantProduct as any).price ?? (product as any).price ?? null : (product as any).price ?? null,
+        stripeProductId: tenantProduct ? (tenantProduct as any).stripeProductId ?? (product as any).stripeProductId ?? null : (product as any).stripeProductId ?? null,
+        stripePriceId: tenantProduct ? (tenantProduct as any).stripePriceId ?? (product as any).stripePriceId ?? null : (product as any).stripePriceId ?? null,
         tenantProductId: tenantProduct ? (tenantProduct as any).id ?? null : null,
       },
     });

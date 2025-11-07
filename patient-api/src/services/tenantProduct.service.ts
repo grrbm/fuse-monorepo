@@ -222,6 +222,74 @@ class TenantProductService {
         // 8. Bulk upsert tenant products
         const tenantProducts = await bulkUpsertTenantProducts(clinicId, productsToUpsert);
 
+        // 8.4. Ensure Stripe products and prices exist for all tenant products
+        try {
+            const stripeService = new StripeService();
+            const Clinic = require('../models/Clinic').default;
+            const clinic = await Clinic.findByPk(clinicId);
+
+            for (const tp of tenantProducts) {
+                // Skip if price is 0 or Stripe IDs already exist
+                if (tp.price <= 0 || (tp.stripeProductId && tp.stripePriceId)) {
+                    continue;
+                }
+
+                const product = await Product.findByPk(tp.productId);
+                if (!product) continue;
+
+                // Create Stripe product if doesn't exist
+                let stripeProductId = tp.stripeProductId;
+                if (!stripeProductId) {
+                    console.log(`📦 Creating Stripe product for ${product.name} (${clinic?.name})`);
+
+                    const productParams: any = {
+                        name: `${product.name} - ${clinic?.name || 'Subscription'}`,
+                        metadata: {
+                            productId: product.id,
+                            tenantProductId: tp.id,
+                            clinicId: tp.clinicId
+                        }
+                    };
+
+                    if (product.description && product.description.trim() !== '') {
+                        productParams.description = product.description;
+                    }
+
+                    const stripeProduct = await stripeService.createProduct(productParams);
+                    stripeProductId = stripeProduct.id;
+                    await tp.update({ stripeProductId });
+                    console.log(`✅ Stripe product created: ${stripeProductId}`);
+                }
+
+                // Create Stripe price if doesn't exist
+                if (!tp.stripePriceId) {
+                    console.log(`💰 Creating Stripe price for ${product.name}: $${tp.price}`);
+
+                    const stripePrice = await stripeService.createPrice({
+                        product: stripeProductId,
+                        currency: 'usd',
+                        unit_amount: Math.round(tp.price * 100), // Convert to cents
+                        recurring: {
+                            interval: 'month',
+                            interval_count: 1
+                        },
+                        metadata: {
+                            productId: product.id,
+                            tenantProductId: tp.id,
+                            clinicId: tp.clinicId,
+                            priceType: 'base_price'
+                        }
+                    });
+
+                    await tp.update({ stripePriceId: stripePrice.id });
+                    console.log(`✅ Stripe price created: ${stripePrice.id}`);
+                }
+            }
+        } catch (error) {
+            console.error('⚠️ Failed to create Stripe products/prices:', error);
+            // Don't fail the whole request - products can still be enabled without Stripe
+        }
+
         // 8.5. Auto-create TenantProductForms for all global structures
         // Forms are built based on global structure sections, not pre-existing questionnaires
         try {
