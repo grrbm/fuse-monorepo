@@ -1554,7 +1554,7 @@ app.get("/products/:id", async (req, res) => {
         where: { productId: id },
         order: [['createdAt', 'DESC']] // Get the most recent one
       });
-
+      
       if (pharmacyProduct && pharmacyProduct.pharmacyWholesaleCost) {
         // Update the product's pharmacyWholesaleCost for future queries
         await product.update({ pharmacyWholesaleCost: pharmacyProduct.pharmacyWholesaleCost });
@@ -5452,10 +5452,10 @@ app.post("/questionnaires/:id/save-as-template", authenticateJWT, async (req, re
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{
-          model: Question,
-          as: 'questions',
-          include: [{ model: QuestionOption, as: 'options' }]
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
         }]
       }]
     });
@@ -5532,8 +5532,8 @@ app.post("/questionnaires/:id/save-as-template", authenticateJWT, async (req, re
       templateName: templateName
     });
 
-    return res.status(201).json({
-      success: true,
+    return res.status(201).json({ 
+      success: true, 
       data: { id: newTemplate.id, title: templateName },
       message: `Template "${templateName}" created successfully!`
     });
@@ -5563,10 +5563,10 @@ app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJW
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{
-          model: Question,
-          as: 'questions',
-          include: [{ model: QuestionOption, as: 'options' }]
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
         }]
       }]
     });
@@ -5580,10 +5580,10 @@ app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJW
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{
-          model: Question,
-          as: 'questions',
-          include: [{ model: QuestionOption, as: 'options' }]
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
         }]
       }]
     });
@@ -5652,9 +5652,9 @@ app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJW
       sourceQuestionnaireId: sourceQuestionnaireId
     });
 
-    return res.status(200).json({
-      success: true,
-      message: 'Template updated successfully!'
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Template updated successfully!' 
     });
   } catch (error) {
     console.error('❌ Error updating template from product form:', error);
@@ -5682,10 +5682,10 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{
-          model: Question,
-          as: 'questions',
-          include: [{ model: QuestionOption, as: 'options' }]
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
         }]
       }]
     });
@@ -5782,10 +5782,10 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{
-          model: Question,
-          as: 'questions',
-          include: [{ model: QuestionOption, as: 'options' }]
+        include: [{ 
+          model: Question, 
+          as: 'questions', 
+          include: [{ model: QuestionOption, as: 'options' }] 
         }]
       }]
     });
@@ -5800,8 +5800,8 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
   } catch (error: any) {
     console.error('❌ Error cloning template for product:', error);
     const errorMessage = error?.message || 'Failed to clone template for product';
-    return res.status(500).json({
-      success: false,
+    return res.status(500).json({ 
+      success: false, 
       message: errorMessage,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
@@ -5984,7 +5984,7 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
     // Fetch product and clinic to generate published URL
     const product = await Product.findByPk(productId);
     const clinic = await Clinic.findByPk(user.clinicId);
-
+    
     if (!product) {
       return res.status(400).json({ success: false, message: "Product not found" });
     }
@@ -6025,7 +6025,7 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
 
     // If form already existed, update the questionnaireId if it changed
     if (!created && record.questionnaireId !== questionnaireId) {
-      await record.update({
+      await record.update({ 
         questionnaireId,
         lastPublishedAt: new Date()
       } as any);
@@ -10069,7 +10069,7 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
           isActive: true
         }
       });
-
+      
       if (structure) {
         globalFormStructure = {
           id: structure.structureId,

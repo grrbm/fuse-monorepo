@@ -599,47 +599,37 @@ export default function ProductDetail() {
             : <Badge variant="outline" className="text-xs font-medium text-muted-foreground"><XCircle className="h-3 w-3 mr-1" /> Inactive</Badge>
     }
 
-    const buildPreviewUrl = () => {
-        const published = enabledForms.find((form: any) => form?.publishedUrl)
-        if (published?.publishedUrl) {
-            return published.publishedUrl as string
-        }
-
+    const buildFormPreviewUrlFor = (form: any, _variantKey: string | null) => {
         if (!product?.slug) return null
+        if (!form?.id) return null
 
-        // Build dynamic URL based on user's clinic
+        const formId = form.id
         const isLocalhost = process.env.NODE_ENV !== 'production'
 
         // Priority 1: Use custom domain if set up and enabled
         if (clinicIsCustomDomain && clinicCustomDomain) {
-            return `https://app.${clinicCustomDomain}/my-products/${product.slug}`
+            // Format: /my-products/<form-id>/<product-slug>
+            return `https://app.${clinicCustomDomain}/my-products/${formId}/${product.slug}`
         }
 
         // Priority 2: Use subdomain URL
         if (!clinicSlug) return null
+        
         const baseUrl = isLocalhost
             ? `http://${clinicSlug}.localhost:3000`
             : `https://${clinicSlug}.fuse.health`
 
-        return `${baseUrl}/my-products/${product.slug}`
+        // Same format for both local and prod: /my-products/<form-id>/<product-slug>
+        return `${baseUrl}/my-products/${formId}/${product.slug}`
     }
 
-    const buildFormPreviewUrlFor = (form: any, _variantKey: string | null) => {
-        if (form?.publishedUrl) {
-            return form.publishedUrl as string
+    const buildPreviewUrl = () => {
+        // This is for backward compatibility, just return the first form's URL if available
+        const firstForm = enabledForms[0]
+        if (firstForm) {
+            return buildFormPreviewUrlFor(firstForm, null)
         }
-
-        const base = buildPreviewUrl()
-        if (!base) return null
-
-        const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base
-        const formId = form?.id
-
-        if (formId && normalizedBase.includes('/my-products/')) {
-            return `${normalizedBase}/${formId}`
-        }
-
-        return normalizedBase
+        return null
     }
 
     const handleCopyPreview = async () => {
@@ -952,34 +942,37 @@ export default function ProductDetail() {
                                                     </div>
 
                                                     {/* Form URL - Show single form for this structure */}
-                                                    {form && (
-                                                        <div className="p-5">
-                                                            <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
-                                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <div className="text-sm font-medium text-[#1F2937]">
-                                                                            Form #{structureIndex + 1}
+                                                    {form && (() => {
+                                                        const previewUrl = buildFormPreviewUrlFor(form, null)
+                                                        return (
+                                                            <div className="p-5">
+                                                                <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
+                                                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="text-sm font-medium text-[#1F2937]">
+                                                                                Form #{structureIndex + 1}
+                                                                            </div>
+                                                                            <div className="text-xs text-[#6B7280] mt-1 truncate">
+                                                                                {previewUrl ? `Preview URL: ${previewUrl}` : 'Preview URL not available'}
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="text-xs text-[#6B7280] mt-1 truncate">
-                                                                            {form.publishedUrl ? `Preview URL: ${form.publishedUrl}` : 'Preview URL will generate after publishing'}
+                                                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                                                            {previewUrl && (
+                                                                                <>
+                                                                                    <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, '_blank')}>
+                                                                                        Preview
+                                                                                    </Button>
+                                                                                    <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
+                                                                                        Copy
+                                                                                    </Button>
+                                                                                </>
+                                                                            )}
                                                                         </div>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                                                        {form.publishedUrl && (
-                                                                            <>
-                                                                                <Button size="sm" variant="outline" onClick={() => window.open(form.publishedUrl, '_blank')}>
-                                                                                    Preview
-                                                                                </Button>
-                                                                                <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(form.publishedUrl) }}>
-                                                                                    Copy
-                                                                                </Button>
-                                                                            </>
-                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    )}
+                                                        )
+                                                    })()}
                                                 </div>
                                             )
                                         })}
