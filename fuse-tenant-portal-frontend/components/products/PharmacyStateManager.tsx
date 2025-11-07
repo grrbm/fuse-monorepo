@@ -40,6 +40,8 @@ interface PharmacyProduct {
   sig?: string
   price?: number
   wholesalePrice?: number
+  form?: string
+  rxId?: string
 }
 
 interface PharmacyAssignment {
@@ -50,6 +52,8 @@ interface PharmacyAssignment {
   pharmacyProductName?: string
   pharmacyWholesaleCost?: number
   sig?: string
+  form?: string
+  rxId?: string
   pharmacy: Pharmacy
 }
 
@@ -133,6 +137,7 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
 
         if (response.ok) {
           const data = await response.json()
+          console.log('📦 Fetched pharmacy products:', data.data?.slice(0, 2)) // Log first 2 products
           setPharmacyProducts(data.data || [])
         } else {
           console.error('Failed to fetch pharmacy products')
@@ -183,6 +188,18 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
         payload.pharmacyProductName = selectedPharmacyProduct.nameWithStrength || selectedPharmacyProduct.name
         payload.sig = selectedPharmacyProduct.sig
         payload.pharmacyWholesaleCost = selectedPharmacyProduct.wholesalePrice || selectedPharmacyProduct.price
+        payload.form = selectedPharmacyProduct.form
+        payload.rxId = selectedPharmacyProduct.rxId
+        
+        console.log('📦 Selected pharmacy product:', {
+          sku: selectedPharmacyProduct.sku,
+          name: selectedPharmacyProduct.name,
+          sig: selectedPharmacyProduct.sig,
+          form: selectedPharmacyProduct.form,
+          rxId: selectedPharmacyProduct.rxId,
+          wholesalePrice: selectedPharmacyProduct.wholesalePrice
+        })
+        console.log('📤 Sending payload to API:', payload)
       }
 
       const response = await fetch(`${baseUrl}/products/${productId}/pharmacy-assignments`, {
@@ -544,6 +561,18 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                               <div className="text-sm">
                                 <span className="text-[#9CA3AF]">SIG: </span>
                                 <span className="text-[#1F2937] italic">{firstAssignment.sig}</span>
+                              </div>
+                            )}
+                            {pharmacy.slug === 'ironsail' && firstAssignment.form && (
+                              <div className="text-sm">
+                                <span className="text-[#9CA3AF]">Medication Form: </span>
+                                <span className="text-[#1F2937]">{firstAssignment.form}</span>
+                              </div>
+                            )}
+                            {pharmacy.slug === 'ironsail' && firstAssignment.rxId && (
+                              <div className="text-sm">
+                                <span className="text-[#9CA3AF]">RX ID: </span>
+                                <span className="text-[#1F2937] font-mono">{firstAssignment.rxId}</span>
                               </div>
                             )}
                           </div>

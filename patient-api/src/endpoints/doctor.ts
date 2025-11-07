@@ -448,6 +448,17 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 });
             }
 
+            console.log('📋 Pharmacy coverage data:', {
+                pharmacy: coverage.pharmacy.name,
+                state: patientState,
+                pharmacyProductId: coverage.pharmacyProductId,
+                pharmacyProductName: coverage.pharmacyProductName,
+                sig: coverage.sig,
+                form: coverage.form,
+                rxId: coverage.rxId,
+                wholesaleCost: coverage.pharmacyWholesaleCost
+            });
+
             res.json({
                 success: true,
                 hasCoverage: true,
@@ -462,7 +473,9 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         pharmacyProductId: coverage.pharmacyProductId,
                         pharmacyProductName: coverage.pharmacyProductName,
                         pharmacyWholesaleCost: coverage.pharmacyWholesaleCost,
-                        sig: coverage.sig
+                        sig: coverage.sig,
+                        form: coverage.form,
+                        rxId: coverage.rxId
                     },
                     product: {
                         id: productId,
