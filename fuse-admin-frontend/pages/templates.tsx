@@ -70,11 +70,14 @@ export default function Templates() {
     const [showDeleteModal, setShowDeleteModal] = useState(false)
     const [deleteConfirmName, setDeleteConfirmName] = useState('')
     const [isEditMode, setIsEditMode] = useState(false)
+    const [isCreatingNew, setIsCreatingNew] = useState(false)
     const [templateBlocks, setTemplateBlocks] = useState<TemplateBlock[]>([])
     const [draggedBlock, setDraggedBlock] = useState<'text' | 'image' | null>(null)
     const [saving, setSaving] = useState(false)
     const [editedName, setEditedName] = useState('')
     const [editedDescription, setEditedDescription] = useState('')
+    const [editedSubject, setEditedSubject] = useState('')
+    const [editedType, setEditedType] = useState<'email' | 'sms'>('email')
     const [editedMergeFields, setEditedMergeFields] = useState<string[]>([])
     const [newMergeField, setNewMergeField] = useState('')
     const [showMergeFieldModal, setShowMergeFieldModal] = useState(false)
@@ -235,12 +238,34 @@ export default function Templates() {
         }
     }
 
+    const handleCreateNew = () => {
+        console.log('✨ Creating new template')
+        setIsCreatingNew(true)
+        setIsEditMode(true)
+        setShowModal(true)
+        setEditedName('Untitled Template')
+        setEditedDescription('')
+        setEditedSubject('')
+        setEditedType(activeTab) // Use current active tab
+        setEditedMergeFields([])
+        setNewMergeField('')
+        setTemplateBlocks([{
+            id: '1',
+            type: 'text',
+            content: 'Start typing your message here...',
+            order: 0
+        }])
+        setSelectedTemplate(null)
+    }
+
     const handleEditClick = () => {
         if (!selectedTemplate) return
         console.log('🔧 Entering edit mode')
         setIsEditMode(true)
         setEditedName(selectedTemplate.name)
         setEditedDescription(selectedTemplate.description || '')
+        setEditedSubject(selectedTemplate.subject || '')
+        setEditedType(selectedTemplate.type)
         setEditedMergeFields(selectedTemplate.mergeFields || [])
         setNewMergeField('')
         // Parse body to blocks if needed
@@ -270,6 +295,11 @@ export default function Templates() {
 
     const handleCancelEdit = () => {
         setIsEditMode(false)
+        if (isCreatingNew) {
+            setIsCreatingNew(false)
+            setShowModal(false)
+            setSelectedTemplate(null)
+        }
     }
 
     const handleAddMergeField = () => {
@@ -331,58 +361,144 @@ export default function Templates() {
         success('Merge field added! Click "Save Changes" to persist.', 'Added to template')
     }
 
-    const handleSaveChanges = async () => {
-        if (!selectedTemplate) return
+    // Helper function to render template body (handles both JSON blocks and plain text)
+    const renderTemplateBody = (body: string) => {
+        try {
+            const parsed = JSON.parse(body)
+            if (Array.isArray(parsed)) {
+                // It's a JSON array of blocks
+                return (
+                    <div className="space-y-2">
+                        {parsed.map((block: TemplateBlock) => {
+                            if (block.type === 'text') {
+                                return (
+                                    <div key={block.id} className="text-[10px] text-gray-700 leading-relaxed">
+                                        {block.content}
+                                    </div>
+                                )
+                            } else if (block.type === 'image') {
+                                return (
+                                    <div key={block.id} className="my-2">
+                                        {block.content ? (
+                                            <img 
+                                                src={block.content} 
+                                                alt="Template image" 
+                                                className="w-full rounded"
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).style.display = 'none'
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="bg-gray-100 rounded p-2 text-center">
+                                                <Eye className="h-4 w-4 mx-auto text-gray-400" />
+                                                <p className="text-[8px] text-gray-400 mt-1">Image placeholder</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            }
+                            return null
+                        })}
+                    </div>
+                )
+            }
+        } catch {
+            // Not JSON, return as plain text
+        }
+        
+        // Plain text fallback
+        return <div className="text-[10px] text-gray-700 whitespace-pre-line leading-relaxed">{body}</div>
+    }
 
+    const handleSaveChanges = async () => {
         try {
             setSaving(true)
 
             // Convert blocks to JSON string
             const bodyAsJson = JSON.stringify(templateBlocks)
 
-            console.log('Saving template with body:', bodyAsJson)
+            if (isCreatingNew) {
+                // CREATE new template
+                console.log('Creating new template')
 
-            const response = await fetch(`${API_URL}/message-templates/${selectedTemplate.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    name: editedName,
-                    description: editedDescription,
-                    body: bodyAsJson,
-                    mergeFields: editedMergeFields
+                const response = await fetch(`${API_URL}/message-templates`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: editedName,
+                        description: editedDescription,
+                        type: editedType,
+                        subject: editedType === 'email' ? editedSubject : undefined,
+                        body: bodyAsJson,
+                        mergeFields: editedMergeFields,
+                        category: 'custom'
+                    })
                 })
-            })
 
-            console.log('Response status:', response.status)
+                if (!response.ok) {
+                    const errorData = await response.json()
+                    throw new Error(errorData.message || 'Failed to create template')
+                }
 
-            if (!response.ok) {
-                const errorData = await response.json()
-                console.error('Error response:', errorData)
-                throw new Error(errorData.message || 'Failed to update template')
-            }
+                const data = await response.json()
 
-            const data = await response.json()
-            console.log('Success response:', data)
-
-            if (data.success) {
-                // Update local state
-                setSelectedTemplate({ 
-                    ...selectedTemplate, 
-                    name: editedName,
-                    description: editedDescription,
-                    body: bodyAsJson,
-                    mergeFields: editedMergeFields
-                })
-                // Refresh templates list
-                await fetchTemplates()
-                // Exit edit mode
-                setIsEditMode(false)
-                success('Template saved successfully!')
+                if (data.success) {
+                    await fetchTemplates()
+                    setIsEditMode(false)
+                    setIsCreatingNew(false)
+                    setShowModal(false)
+                    success('Template created successfully!')
+                } else {
+                    throw new Error(data.message || 'Failed to create template')
+                }
             } else {
-                throw new Error(data.message || 'Failed to update template')
+                // UPDATE existing template
+                if (!selectedTemplate) return
+
+                console.log('Updating template with body:', bodyAsJson)
+
+                const response = await fetch(`${API_URL}/message-templates/${selectedTemplate.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: editedName,
+                        description: editedDescription,
+                        type: editedType,
+                        subject: editedType === 'email' ? editedSubject : undefined,
+                        body: bodyAsJson,
+                        mergeFields: editedMergeFields
+                    })
+                })
+
+                if (!response.ok) {
+                    const errorData = await response.json()
+                    throw new Error(errorData.message || 'Failed to update template')
+                }
+
+                const data = await response.json()
+
+                if (data.success) {
+                    setSelectedTemplate({ 
+                        ...selectedTemplate, 
+                        name: editedName,
+                        description: editedDescription,
+                        type: editedType,
+                        subject: editedType === 'email' ? editedSubject : undefined,
+                        body: bodyAsJson,
+                        mergeFields: editedMergeFields
+                    })
+                    await fetchTemplates()
+                    setIsEditMode(false)
+                    success('Template saved successfully!')
+                } else {
+                    throw new Error(data.message || 'Failed to update template')
+                }
             }
         } catch (err) {
             console.error('Error saving template:', err)
@@ -431,12 +547,29 @@ export default function Templates() {
     const closeModal = () => {
         setShowModal(false)
         setSelectedTemplate(null)
+        setIsCreatingNew(false)
+        setIsEditMode(false)
     }
 
     return (
         <>
             <Head>
                 <title>Message Templates - Admin Portal</title>
+                <style jsx global>{`
+                    .phone-preview-scroll::-webkit-scrollbar {
+                        width: 1px;
+                    }
+                    .phone-preview-scroll::-webkit-scrollbar-track {
+                        background: transparent;
+                    }
+                    .phone-preview-scroll::-webkit-scrollbar-thumb {
+                        background: rgba(0, 0, 0, 0.08);
+                        border-radius: 0px;
+                    }
+                    .phone-preview-scroll::-webkit-scrollbar-thumb:hover {
+                        background: rgba(0, 0, 0, 0.15);
+                    }
+                `}</style>
             </Head>
             <Layout>
                 <div className="space-y-6 p-6">
@@ -451,7 +584,7 @@ export default function Templates() {
                                 Create and manage reusable email and SMS templates
                             </p>
                         </div>
-                        <Button className="gap-2">
+                        <Button className="gap-2" onClick={handleCreateNew}>
                             <Plus className="h-4 w-4" />
                             New Template
                         </Button>
@@ -699,19 +832,22 @@ export default function Templates() {
                 </div>
 
                 {/* Modal */}
-                {showModal && selectedTemplate && (
+                {(showModal && (selectedTemplate || isCreatingNew)) && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                         <div className="bg-background rounded-lg shadow-xl max-w-6xl w-full h-[70vh] flex flex-col overflow-hidden">
                             {/* Modal Header */}
                             <div className="sticky top-0 bg-background border-b border-border p-6 flex items-start justify-between">
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-3 mb-2">
-                                        {selectedTemplate.type === 'email' ? (
-                                            <Mail className="h-6 w-6 text-primary flex-shrink-0" />
-                                        ) : (
-                                            <MessageSquare className="h-6 w-6 text-primary flex-shrink-0" />
-                                        )}
-                                        {isEditMode ? (
+                                        {(() => {
+                                            const currentType = (isEditMode || isCreatingNew) ? editedType : selectedTemplate?.type
+                                            return currentType === 'email' ? (
+                                                <Mail className="h-6 w-6 text-primary flex-shrink-0" />
+                                            ) : (
+                                                <MessageSquare className="h-6 w-6 text-primary flex-shrink-0" />
+                                            )
+                                        })()}
+                                        {isEditMode || isCreatingNew ? (
                                             <input
                                                 type="text"
                                                 value={editedName}
@@ -720,16 +856,16 @@ export default function Templates() {
                                                 placeholder="Template name"
                                             />
                                         ) : (
-                                            <h2 className="text-2xl font-semibold truncate">{selectedTemplate.name}</h2>
+                                            <h2 className="text-2xl font-semibold truncate">{selectedTemplate?.name}</h2>
                                         )}
                                         <Badge variant="outline" className="flex-shrink-0">
-                                            {selectedTemplate.type.toUpperCase()}
+                                            {((isEditMode || isCreatingNew) ? editedType : selectedTemplate?.type || 'email').toUpperCase()}
                                         </Badge>
-                                        {selectedTemplate.version > 1 && (
+                                        {selectedTemplate && selectedTemplate.version > 1 && (
                                             <Badge variant="secondary" className="flex-shrink-0">v{selectedTemplate.version}</Badge>
                                         )}
                                     </div>
-                                    {isEditMode ? (
+                                    {isEditMode || isCreatingNew ? (
                                         <input
                                             type="text"
                                             value={editedDescription}
@@ -738,7 +874,7 @@ export default function Templates() {
                                             placeholder="Template description (optional)"
                                         />
                                     ) : (
-                                        selectedTemplate.description && (
+                                        selectedTemplate?.description && (
                                             <p className="text-muted-foreground">{selectedTemplate.description}</p>
                                         )
                                     )}
@@ -762,7 +898,7 @@ export default function Templates() {
                                                 onClick={handleSaveChanges}
                                                 disabled={saving}
                                             >
-                                                {saving ? 'Saving...' : 'Save'}
+                                                {saving ? (isCreatingNew ? 'Creating...' : 'Saving...') : (isCreatingNew ? 'Create' : 'Save')}
                                             </Button>
                                         </>
                                     ) : (
@@ -772,6 +908,22 @@ export default function Templates() {
                                     )}
                                 </div>
                             </div>
+
+                            {/* Subject Field - Full Width (Only in edit/create mode) */}
+                            {(isEditMode || isCreatingNew) && editedType === 'email' && (
+                                <div className="px-6 py-4 border-b border-border bg-muted/30">
+                                    <div className="relative">
+                                        <label className="absolute -top-2 left-3 px-2 text-xs font-semibold text-foreground bg-background">Subject</label>
+                                        <input
+                                            type="text"
+                                            value={editedSubject}
+                                            onChange={(e) => setEditedSubject(e.target.value)}
+                                            className="w-full px-4 py-3 pt-4 text-lg font-medium border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                                            placeholder="Enter email subject..."
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Modal Body - Two Column Layout */}
                             <div className="flex-1 overflow-y-auto p-6">
@@ -850,29 +1002,31 @@ export default function Templates() {
                                             /* View Mode - Template Info */
                                             <>
                                         {/* Metadata */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <p className="text-sm text-muted-foreground mb-1">Category</p>
-                                                <Badge variant="outline">{selectedTemplate.category || 'Uncategorized'}</Badge>
+                                        {selectedTemplate && (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-sm text-muted-foreground mb-1">Category</p>
+                                                    <Badge variant="outline">{selectedTemplate.category || 'Uncategorized'}</Badge>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm text-muted-foreground mb-1">Status</p>
+                                                    <Badge variant={selectedTemplate.isActive ? 'default' : 'secondary'}>
+                                                        {selectedTemplate.isActive ? 'Active' : 'Inactive'}
+                                                    </Badge>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm text-muted-foreground mb-1">Created</p>
+                                                    <p className="text-sm">{new Date(selectedTemplate.createdAt).toLocaleDateString()}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm text-muted-foreground mb-1">Last Updated</p>
+                                                    <p className="text-sm">{new Date(selectedTemplate.updatedAt).toLocaleDateString()}</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="text-sm text-muted-foreground mb-1">Status</p>
-                                                <Badge variant={selectedTemplate.isActive ? 'default' : 'secondary'}>
-                                                    {selectedTemplate.isActive ? 'Active' : 'Inactive'}
-                                                </Badge>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm text-muted-foreground mb-1">Created</p>
-                                                <p className="text-sm">{new Date(selectedTemplate.createdAt).toLocaleDateString()}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm text-muted-foreground mb-1">Last Updated</p>
-                                                <p className="text-sm">{new Date(selectedTemplate.updatedAt).toLocaleDateString()}</p>
-                                            </div>
-                                        </div>
+                                        )}
 
-                                        {/* Subject (only for emails) */}
-                                        {selectedTemplate.type === 'email' && selectedTemplate.subject && (
+                                        {/* Subject (only in view mode) */}
+                                        {!isEditMode && !isCreatingNew && selectedTemplate?.type === 'email' && selectedTemplate?.subject && (
                                             <div>
                                                 <h3 className="font-semibold mb-2">Subject</h3>
                                                 <div className="bg-muted p-3 rounded-lg">
@@ -884,7 +1038,7 @@ export default function Templates() {
                                         {/* Merge Fields */}
                                         <div>
                                             <h3 className="font-semibold mb-2">Merge Fields</h3>
-                                            {isEditMode ? (
+                                            {(isEditMode || isCreatingNew) ? (
                                                 <div className="space-y-3">
                                                     {/* Input to add new merge field */}
                                                     <div className="flex gap-2">
@@ -943,7 +1097,7 @@ export default function Templates() {
                                                     </p>
                                                 </div>
                                             ) : (
-                                                selectedTemplate.mergeFields.length > 0 ? (
+                                                selectedTemplate && selectedTemplate.mergeFields && selectedTemplate.mergeFields.length > 0 ? (
                                                     <div>
                                                         <div className="space-y-2 mb-2">
                                                             {selectedTemplate.mergeFields.map((field, idx) => {
@@ -989,8 +1143,8 @@ export default function Templates() {
                                                 <Button 
                                                     variant="outline" 
                                                     className="gap-2"
-                                                    onClick={() => handleDuplicate(selectedTemplate.id)}
-                                                    disabled={duplicating || deleting}
+                                                    onClick={() => selectedTemplate && handleDuplicate(selectedTemplate.id)}
+                                                    disabled={duplicating || deleting || !selectedTemplate}
                                                 >
                                                     <Copy className="h-4 w-4" />
                                                     {duplicating ? 'Duplicating...' : 'Duplicate'}
@@ -1051,6 +1205,45 @@ export default function Templates() {
                                                         </div>
                                                     </div>
 
+                                                    {/* Template Type Selector */}
+                                                    <div className="pt-4 border-t border-border space-y-3">
+                                                        <h4 className="font-semibold text-sm">Template Type</h4>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setEditedType('email')
+                                                                }}
+                                                                className={`flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg border-2 transition-all ${
+                                                                    editedType === 'email'
+                                                                        ? 'border-primary bg-primary/10 text-primary'
+                                                                        : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                                                                }`}
+                                                            >
+                                                                <Mail className="h-4 w-4" />
+                                                                <span className="text-sm font-medium">Email</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setEditedType('sms')
+                                                                    // Clear subject when switching to SMS
+                                                                    if (editedType === 'email') {
+                                                                        setEditedSubject('')
+                                                                    }
+                                                                }}
+                                                                className={`flex-1 flex items-center justify-center gap-2 p-2.5 rounded-lg border-2 transition-all ${
+                                                                    editedType === 'sms'
+                                                                        ? 'border-primary bg-primary/10 text-primary'
+                                                                        : 'border-border bg-background text-muted-foreground hover:border-primary/50'
+                                                                }`}
+                                                            >
+                                                                <MessageSquare className="h-4 w-4" />
+                                                                <span className="text-sm font-medium">SMS</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
                                                     {/* Merge Fields Section */}
                                                     <div className="pt-4 border-t border-border space-y-3">
                                                         <h4 className="font-semibold text-sm">Merge Fields</h4>
@@ -1107,14 +1300,26 @@ export default function Templates() {
 
                                             {/* Mobile Phone Mockup */}
                                             <div className="flex justify-center">
-                                                <div className="w-full max-w-[280px]">
+                                                <div className="w-full max-w-[340px]">
                                                     <div className="relative border-[12px] border-gray-800 rounded-[2rem] shadow-2xl bg-white overflow-hidden" style={{ aspectRatio: '9/19.5' }}>
                                                         {/* Phone notch */}
                                                         <div className="absolute top-0 inset-x-0 h-5 bg-gray-800 rounded-b-3xl mx-auto w-32 z-10"></div>
                                                         
                                                         {/* Screen content */}
-                                                        <div className="h-full overflow-y-auto bg-gradient-to-b from-gray-50 to-white">
-                                                            {selectedTemplate.type === 'sms' ? (
+                                                        <div 
+                                                            className="h-full overflow-y-auto bg-gradient-to-b from-gray-50 to-white phone-preview-scroll"
+                                                            style={{
+                                                                scrollbarWidth: 'thin',
+                                                                scrollbarColor: 'rgba(0, 0, 0, 0.1) transparent'
+                                                            }}
+                                                        >
+                                                            {(() => {
+                                                                // Use edited values if in edit/create mode, otherwise use selectedTemplate
+                                                                const currentType = (isEditMode || isCreatingNew) ? editedType : selectedTemplate?.type
+                                                                const currentBody = (isEditMode || isCreatingNew) ? JSON.stringify(templateBlocks) : selectedTemplate?.body || ''
+                                                                const currentSubject = (isEditMode || isCreatingNew) ? editedSubject : selectedTemplate?.subject || ''
+                                                                
+                                                                return currentType === 'sms' ? (
                                                                 /* SMS View */
                                                                 <div className="p-3 pt-7 space-y-2">
                                                                     {/* Header */}
@@ -1131,9 +1336,9 @@ export default function Templates() {
                                                                     {/* Message bubble */}
                                                                     <div className="flex justify-start px-1">
                                                                         <div className="bg-gray-200 rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]">
-                                                                            <p className="text-[11px] text-gray-900 whitespace-pre-line leading-relaxed">
-                                                                                {selectedTemplate.body}
-                                                                            </p>
+                                                                            <div className="text-[11px] text-gray-900 leading-relaxed">
+                                                                                {renderTemplateBody(currentBody)}
+                                                                            </div>
                                                                             <p className="text-[9px] text-gray-500 mt-1">Just now</p>
                                                                         </div>
                                                                     </div>
@@ -1153,22 +1358,20 @@ export default function Templates() {
                                                                                     <p className="text-[9px] text-gray-500 truncate">support@healthclinic.com</p>
                                                                                 </div>
                                                                             </div>
-                                                                            {selectedTemplate.subject && (
+                                                                            {currentSubject && (
                                                                                 <h3 className="text-[11px] font-semibold text-gray-900 mt-1 leading-tight">
-                                                                                    {selectedTemplate.subject}
+                                                                                    {currentSubject}
                                                                                 </h3>
                                                                             )}
                                                                         </div>
                                                                         
                                                                         {/* Email body */}
                                                                         <div className="p-3">
-                                                                            <div className="text-[10px] text-gray-700 whitespace-pre-line leading-relaxed">
-                                                                                {selectedTemplate.body}
-                                                                            </div>
+                                                                            {renderTemplateBody(currentBody)}
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                            )}
+                                                            )})()}
                                                         </div>
                                                     </div>
                                                 </div>
