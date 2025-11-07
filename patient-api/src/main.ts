@@ -1005,6 +1005,8 @@ app.get("/clinic/:id", authenticateJWT, async (req, res) => {
         name: clinic.name,
         slug: clinic.slug,
         logo: clinic.logo,
+        customDomain: (clinic as any).customDomain,
+        isCustomDomain: (clinic as any).isCustomDomain,
       }
     });
 

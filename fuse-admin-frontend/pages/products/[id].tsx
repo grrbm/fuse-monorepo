@@ -149,6 +149,8 @@ export default function ProductDetail() {
                 if (response.ok) {
                     const data = await response.json()
                     if (data.success && data.data) {
+                        console.log('🏥 Clinic data:', data.data)
+                        console.log('🌐 Custom Domain:', data.data.customDomain)
                         setClinicSlug(data.data.slug)
                         setClinicCustomDomain(data.data.customDomain || null)
                         setClinicIsCustomDomain(data.data.isCustomDomain || false)
@@ -605,8 +607,8 @@ export default function ProductDetail() {
         // Build dynamic URL based on user's clinic
         const isLocalhost = process.env.NODE_ENV !== 'production'
 
-        // Priority 1: Use custom domain if set up and enabled
-        if (clinicIsCustomDomain && clinicCustomDomain) {
+        // Priority 1: Use custom domain if configured
+        if (clinicCustomDomain) {
             const protocol = isLocalhost ? 'http' : 'https'
             return `${protocol}://${clinicCustomDomain}/my-products/${product.slug}`
         }
@@ -637,25 +639,29 @@ export default function ProductDetail() {
     // Build BOTH URLs for forms with custom domains
     const buildFormUrls = (form: any) => {
         if (!product?.slug || !clinicSlug) return null
-
+        
         const isLocalhost = process.env.NODE_ENV !== 'production'
         const formId = form?.id
         if (!formId) return null
-
+        
         const protocol = isLocalhost ? 'http' : 'https'
-
+        
         // Standard subdomain URL (always available)
         const subdomainBase = isLocalhost
             ? `http://${clinicSlug}.localhost:3000`
             : `https://${clinicSlug}.fuse.health`
         const subdomainUrl = `${subdomainBase}/my-products/${formId}/${product.slug}`
-
+        
         // Custom domain URL (if configured)
         let customDomainUrl = null
-        if (clinicIsCustomDomain && clinicCustomDomain) {
+        console.log('🔍 Building URLs - clinicCustomDomain:', clinicCustomDomain)
+        if (clinicCustomDomain) {
             customDomainUrl = `${protocol}://${clinicCustomDomain}/my-products/${formId}/${product.slug}`
+            console.log('✅ Custom domain URL:', customDomainUrl)
+        } else {
+            console.log('❌ No custom domain configured')
         }
-
+        
         return {
             subdomainUrl,
             customDomainUrl
