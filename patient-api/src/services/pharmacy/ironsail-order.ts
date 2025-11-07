@@ -118,6 +118,22 @@ class IronSailOrderService {
         // Dispense format
         const dispense = `${quantity} ${product?.medicationSize || 'Unit'}`;
 
+        // Use patient address if available, otherwise fall back to shipping address
+        const address = patient?.address || shippingAddr?.address || '';
+        const apartment = shippingAddr?.apartment ? `, ${shippingAddr.apartment}` : '';
+        const fullAddress = apartment ? `${address}${apartment}` : address;
+        const city = patient?.city || shippingAddr?.city || '';
+        const state = patient?.state || shippingAddr?.state || '';
+        const zipCode = patient?.zipCode || shippingAddr?.zipCode || '';
+
+        console.log('📋 [IronSail] Resolved address fields:', {
+            address: fullAddress,
+            city,
+            state,
+            zipCode,
+            source: patient?.address ? 'patient' : 'shipping'
+        });
+
         return {
             orderNumber: order.orderNumber,
             patientFirstName: patient?.firstName || '',
@@ -126,10 +142,10 @@ class IronSailOrderService {
             patientPhone: patient?.phoneNumber || '',
             patientGender: gender,
             patientDOB: dob,
-            patientAddress: patient?.address || '',
-            patientCity: patient?.city || '',
-            patientState: patient?.state || '',
-            patientZipCode: patient?.zipCode || '',
+            patientAddress: fullAddress,
+            patientCity: city,
+            patientState: state,
+            patientZipCode: zipCode,
             patientCountry: 'USA',
             productName: coverage?.pharmacyProductName || product?.name || 'Unknown Product',
             productSKU: coverage?.pharmacyProductId || product?.pharmacyProductId || '',
