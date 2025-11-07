@@ -81,6 +81,7 @@ export default function ProductEditor() {
 
   // Form editor state
   const [templateId, setTemplateId] = useState<string | null>(null)
+  const [sourceTemplateId, setSourceTemplateId] = useState<string | null>(null) // Track which template this was cloned from
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -603,6 +604,7 @@ export default function ProductEditor() {
 
       setSaveMessage("Form template cloned and attached successfully! You can now customize it for this product.")
       setTemplateId(clonedQuestionnaireId) // Use the clone's ID, not the template's
+      setSourceTemplateId(selectedFormIdForAttach) // Track which template this was cloned from
       setShowFormSelector(false)
 
       // The useEffect will automatically fetch the new template when templateId changes
@@ -653,6 +655,7 @@ export default function ProductEditor() {
 
       setSaveMessage("Form template switched! Cloned and attached successfully.")
       setTemplateId(clonedQuestionnaireId)
+      setSourceTemplateId(newFormId) // Track which template this was cloned from
       setShowFormSelector(false)
 
       // The useEffect will automatically fetch the new template when templateId changes
@@ -2023,11 +2026,33 @@ export default function ProductEditor() {
       }
       await Promise.all(questionUpdates)
 
-      setSaveMessage("✅ Template saved successfully!")
+      // If this form was cloned from a template, also update the source template
+      // This ensures changes persist when switching forms
+      if (sourceTemplateId && templateId) {
+        console.log('🔄 Updating source template:', sourceTemplateId)
+        const updateTemplateResponse = await fetch(`${baseUrl}/questionnaires/templates/${sourceTemplateId}/update-from-product-form`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            sourceQuestionnaireId: templateId,
+          }),
+        })
+
+        if (!updateTemplateResponse.ok) {
+          console.warn('⚠️ Failed to update source template, but changes to current form were saved')
+        } else {
+          console.log('✅ Source template updated successfully')
+        }
+      }
+
+      setSaveMessage("✅ Changes saved successfully!")
       setTimeout(() => setSaveMessage(null), 3000)
     } catch (err: any) {
       console.error("Error saving template:", err)
-      setSaveMessage(`❌ ${err.message || "Failed to save template"}`)
+      setSaveMessage(`❌ ${err.message || "Failed to save changes"}`)
     } finally {
       setSaving(false)
     }
