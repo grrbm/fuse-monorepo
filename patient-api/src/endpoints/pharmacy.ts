@@ -83,6 +83,17 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 order: [['state', 'ASC']]
             });
 
+            if (assignments.length > 0) {
+                console.log('📋 Returning assignments, first assignment:', {
+                    pharmacyProductId: assignments[0].pharmacyProductId,
+                    pharmacyProductName: assignments[0].pharmacyProductName,
+                    sig: assignments[0].sig,
+                    form: assignments[0].form,
+                    rxId: assignments[0].rxId,
+                    wholesaleCost: assignments[0].pharmacyWholesaleCost
+                });
+            }
+
             res.json({ success: true, data: assignments });
         } catch (error) {
             console.error('Error fetching pharmacy assignments:', error);
@@ -99,7 +110,18 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
             }
 
             const { productId } = req.params;
-            const { pharmacyId, states, pharmacyProductId, pharmacyProductName, pharmacyWholesaleCost, sig } = req.body;
+            const { pharmacyId, states, pharmacyProductId, pharmacyProductName, pharmacyWholesaleCost, sig, form, rxId } = req.body;
+
+            console.log('📋 Creating pharmacy assignment with data:', {
+                pharmacyId,
+                states,
+                pharmacyProductId,
+                pharmacyProductName,
+                pharmacyWholesaleCost,
+                sig,
+                form,
+                rxId
+            });
 
             if (!pharmacyId || !states || !Array.isArray(states) || states.length === 0) {
                 return res.status(400).json({
@@ -152,10 +174,21 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                         pharmacyProductId,
                         pharmacyProductName,
                         pharmacyWholesaleCost: wholesaleCost,
-                        sig
+                        sig,
+                        form,
+                        rxId
                     })
                 )
             );
+
+            console.log('✅ Created assignments, first assignment data:', {
+                pharmacyProductId: assignments[0].pharmacyProductId,
+                pharmacyProductName: assignments[0].pharmacyProductName,
+                sig: assignments[0].sig,
+                form: assignments[0].form,
+                rxId: assignments[0].rxId,
+                wholesaleCost: assignments[0].pharmacyWholesaleCost
+            });
 
             res.status(201).json({ success: true, data: assignments });
         } catch (error: any) {

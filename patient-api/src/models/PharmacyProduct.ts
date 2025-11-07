@@ -66,6 +66,18 @@ export default class PharmacyProduct extends Model {
     })
     declare sig?: string; // Medication instructions (Sig) from pharmacy
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare form?: string; // Medication form (e.g., Injectable, Tablet) from pharmacy
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    declare rxId?: string; // RX ID from pharmacy spreadsheet
+
     @BelongsTo(() => Product)
     declare product: Product;
 
