@@ -100,7 +100,7 @@ export default function ProductDetail() {
                 if (res.ok) {
                     const data = await res.json()
                     const customizationsMap: Record<string, { customColor?: string; isActive: boolean }> = {}
-                    
+
                     if (Array.isArray(data?.data)) {
                         data.data.forEach((c: any) => {
                             customizationsMap[c.questionnaireId] = {
@@ -109,7 +109,7 @@ export default function ProductDetail() {
                             }
                         })
                     }
-                    
+
                     setCustomizations(customizationsMap)
                 }
             } catch (err) {
@@ -241,31 +241,31 @@ export default function ProductDetail() {
 
                 // Process global structures - show structures themselves, not underlying forms
                 let displayTemplates = []
-                
+
                 if (globalStructuresRes.ok) {
                     const structuresData = await globalStructuresRes.json()
                     const globalStructures = Array.isArray(structuresData?.data) ? structuresData.data : []
-                    
+
                     // Get product and standardized forms for reference
                     let productForms: any[] = []
                     let standardizedForms: any[] = []
-                    
+
                     if (productFormsRes.ok) {
                         const data = await productFormsRes.json()
                         productForms = Array.isArray(data?.data) ? data.data : []
                     }
-                    
+
                     if (standardizedFormsRes && standardizedFormsRes.ok) {
                         const data = await standardizedFormsRes.json()
                         standardizedForms = Array.isArray(data?.data) ? data.data : []
                     }
-                    
+
                     // Display ONE entry per global structure (consolidate product + category forms)
                     for (const structure of globalStructures) {
                         const enabledSections = structure.sections?.filter((s: any) => s.enabled) || []
                         const hasProductSection = enabledSections.some((s: any) => s.type === 'product_questions')
                         const hasCategorySection = enabledSections.some((s: any) => s.type === 'category_questions')
-                        
+
                         // Use product form if available, otherwise create placeholder
                         const baseForm = productForms[0] || standardizedForms[0] || {
                             id: `structure-${structure.id}`,
@@ -273,7 +273,7 @@ export default function ProductDetail() {
                             formTemplateType: hasCategorySection ? 'standardized_template' : 'normal',
                             isTemplate: hasCategorySection
                         }
-                        
+
                         // Add ONE entry per structure - use structure ID to ensure uniqueness
                         displayTemplates.push({
                             ...baseForm,
@@ -301,7 +301,7 @@ export default function ProductDetail() {
                         displayTemplates.push(...(Array.isArray(data?.data) ? data.data : []))
                     }
                 }
-                
+
                 setTemplates(displayTemplates)
 
                 // Process enabled forms
@@ -313,19 +313,19 @@ export default function ProductDetail() {
                 // Auto-enable exactly 1 form per Global Form Structure
                 // Forms are built from global structure blueprint - no questionnaire needed
                 const enabledTracker = new Set<string>()
-                
+
                 for (const template of displayTemplates) {
                     const structureId = (template as any)._structureId || 'default'
                     const trackingKey = `${structureId}:${String(id)}` // Product ID is the key
-                    
+
                     // Skip if we've already enabled this structure
                     if (enabledTracker.has(trackingKey)) continue
-                    
+
                     // Check if a form exists for this structure + product
-                    const existingFormsForStructure = enabledForms.filter((f: any) => 
+                    const existingFormsForStructure = enabledForms.filter((f: any) =>
                         (f?.globalFormStructureId ?? 'default') === structureId
                     )
-                    
+
                     // Only auto-enable if ZERO forms exist for this structure
                     if (existingFormsForStructure.length === 0) {
                         try {
@@ -333,14 +333,14 @@ export default function ProductDetail() {
                             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/admin/tenant-product-forms`, {
                                 method: 'POST',
                                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ 
-                                    productId: String(id), 
+                                body: JSON.stringify({
+                                    productId: String(id),
                                     questionnaireId: null, // No questionnaire needed - built from global structure
                                     currentFormVariant: null,
                                     globalFormStructureId: structureId
                                 })
                             })
-                            
+
                             if (res.ok) {
                                 const formData = await res.json()
                                 if (formData?.success && formData?.data) {
@@ -438,7 +438,7 @@ export default function ProductDetail() {
             if (res.ok) {
                 const data = await res.json()
                 const customizationsMap: Record<string, { customColor?: string; isActive: boolean }> = {}
-                
+
                 if (Array.isArray(data?.data)) {
                     data.data.forEach((c: any) => {
                         customizationsMap[c.questionnaireId] = {
@@ -447,7 +447,7 @@ export default function ProductDetail() {
                         }
                     })
                 }
-                
+
                 setCustomizations(customizationsMap)
             }
         } catch (err) {
@@ -551,16 +551,16 @@ export default function ProductDetail() {
 
     const updateFormColor = async (questionnaireId: string, color: string) => {
         if (!token) return
-        
+
         try {
             // Empty string means "clear color" - send null to backend
             const colorValue = color === '' ? null : color;
-            
+
             const res = await fetch(`${API_URL}/admin/questionnaire-customization/color`, {
                 method: 'PUT',
-                headers: { 
-                    'Authorization': `Bearer ${token}`, 
-                    'Content-Type': 'application/json' 
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ questionnaireId, customColor: colorValue })
             })
@@ -614,7 +614,7 @@ export default function ProductDetail() {
 
         // Priority 2: Use subdomain URL
         if (!clinicSlug) return null
-        
+
         const baseUrl = isLocalhost
             ? `http://${clinicSlug}.localhost:3000`
             : `https://${clinicSlug}.fuse.health`
@@ -742,78 +742,78 @@ export default function ProductDetail() {
                         <div className="col-span-6">
                             {tenantProduct ? (
                                 <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all h-full">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Your Retail Price</div>
-                                                {!editingPrice && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-7 px-2 text-xs font-medium hover:bg-muted"
-                                                        onClick={() => {
-                                                            setEditingPrice(true)
-                                                            setNewPrice(tenantProduct.price.toString())
-                                                        }}
-                                                    >
-                                                        <Edit className="h-3 w-3 mr-1" />
-                                                        Edit
-                                                    </Button>
-                                                )}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground mb-3">What customers pay</div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Your Retail Price</div>
+                                        {!editingPrice && (
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-7 px-2 text-xs font-medium hover:bg-muted"
+                                                onClick={() => {
+                                                    setEditingPrice(true)
+                                                    setNewPrice(tenantProduct.price.toString())
+                                                }}
+                                            >
+                                                <Edit className="h-3 w-3 mr-1" />
+                                                Edit
+                                            </Button>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mb-3">What customers pay</div>
 
-                                            {editingPrice ? (
-                                                <div>
-                                                    <div className="mb-3">
-                                                        <div className="relative">
-                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-muted-foreground">$</span>
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                value={newPrice}
-                                                                onChange={(e) => setNewPrice(e.target.value)}
-                                                                className="w-full pl-8 pr-3 py-2 text-2xl font-semibold border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                                                                autoFocus
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <Button size="sm" onClick={handleUpdatePrice} disabled={savingPrice} className="flex-1">
-                                                            {savingPrice ? 'Saving...' : 'Save'}
-                                                        </Button>
-                                                        <Button size="sm" variant="outline" onClick={() => {
-                                                            setEditingPrice(false)
-                                                            setNewPrice('')
-                                                        }} disabled={savingPrice}>
-                                                            Cancel
-                                                        </Button>
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
-                                                        {(() => {
-                                                            const price = parseFloat(newPrice) || 0
-                                                            const cost = wholesaleCost
-                                                            const profit = price - cost
-                                                            const margin = price > 0 ? ((profit / price) * 100) : 0
-                                                            return `Profit: ${formatPrice(profit)} (${margin.toFixed(1)}% margin)`
-                                                        })()}
-                                                    </div>
+                                    {editingPrice ? (
+                                        <div>
+                                            <div className="mb-3">
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-muted-foreground">$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={newPrice}
+                                                        onChange={(e) => setNewPrice(e.target.value)}
+                                                        className="w-full pl-8 pr-3 py-2 text-2xl font-semibold border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                                                        autoFocus
+                                                    />
                                                 </div>
-                                            ) : (
-                                                <div>
-                                                    <div className="text-3xl font-semibold text-foreground">
-                                                        {formatPrice(tenantProduct.price)}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
-                                                        {(() => {
-                                                            const price = tenantProduct.price
-                                                            const cost = wholesaleCost
-                                                            const profit = price - cost
-                                                            const margin = price > 0 ? ((profit / price) * 100) : 0
-                                                            return `Profit: ${formatPrice(profit)} per unit (${margin.toFixed(1)}% margin)`
-                                                        })()}
-                                                    </div>
-                                                </div>
-                                            )}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button size="sm" onClick={handleUpdatePrice} disabled={savingPrice} className="flex-1">
+                                                    {savingPrice ? 'Saving...' : 'Save'}
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => {
+                                                    setEditingPrice(false)
+                                                    setNewPrice('')
+                                                }} disabled={savingPrice}>
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+                                                {(() => {
+                                                    const price = parseFloat(newPrice) || 0
+                                                    const cost = wholesaleCost
+                                                    const profit = price - cost
+                                                    const margin = price > 0 ? ((profit / price) * 100) : 0
+                                                    return `Profit: ${formatPrice(profit)} (${margin.toFixed(1)}% margin)`
+                                                })()}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <div className="text-3xl font-semibold text-foreground">
+                                                {formatPrice(tenantProduct.price)}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+                                                {(() => {
+                                                    const price = tenantProduct.price
+                                                    const cost = wholesaleCost
+                                                    const profit = price - cost
+                                                    const margin = price > 0 ? ((profit / price) * 100) : 0
+                                                    return `Profit: ${formatPrice(profit)} per unit (${margin.toFixed(1)}% margin)`
+                                                })()}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="bg-white rounded-2xl shadow-sm border-2 border-dashed border-[#E5E7EB] p-6 flex items-center justify-center h-full">
@@ -828,156 +828,156 @@ export default function ProductDetail() {
                     {/* Forms Section */}
                     <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
                         <div>
-                                <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Forms</h3>
-                                {templates.length === 0 ? (
-                                    <div className="p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl text-center bg-[#F9FAFB]/50">
-                                        <FileText className="h-10 w-10 text-[#9CA3AF] mx-auto mb-3" />
-                                        <p className="text-sm text-[#6B7280] font-medium">No forms available for this product</p>
-                                        <p className="text-xs text-[#9CA3AF] mt-1">Create a global structure in the tenant portal to get started</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {/* Show all structures - each with exactly 1 form */}
-                                        {templates.map((t, structureIndex) => {
-                                            const structure = (t as any)._structure
-                                            const structureId = (t as any)._structureId || 'default'
-                                            
-                                            // Filter forms for THIS specific structure
-                                            // New global form structure system: match by globalFormStructureId and productId
-                                            // Forms created from global structures have questionnaireId: null
-                                            const formsForStructure = enabledForms.filter((f: any) => {
-                                                const matchesStructure = (f?.globalFormStructureId ?? 'default') === structureId
-                                                const matchesProduct = f?.productId === id
-                                                return matchesStructure && matchesProduct
-                                            })
-                                            const form = formsForStructure[0] // Just get the single form for this structure
+                            <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Forms</h3>
+                            {templates.length === 0 ? (
+                                <div className="p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl text-center bg-[#F9FAFB]/50">
+                                    <FileText className="h-10 w-10 text-[#9CA3AF] mx-auto mb-3" />
+                                    <p className="text-sm text-[#6B7280] font-medium">No forms available for this product</p>
+                                    <p className="text-xs text-[#9CA3AF] mt-1">Create a global structure in the tenant portal to get started</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {/* Show all structures - each with exactly 1 form */}
+                                    {templates.map((t, structureIndex) => {
+                                        const structure = (t as any)._structure
+                                        const structureId = (t as any)._structureId || 'default'
 
-                                            return (
-                                                <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
-                                                    {/* Structure Header with Inline Form Flow + Color Picker */}
-                                                    <div className="p-5 border-b border-[#E5E7EB] bg-gradient-to-r from-[#F9FAFB] to-white">
-                                                        <div className="flex items-center justify-between gap-6">
-                                                            {/* Left: Name and Type */}
-                                                            <div className="flex-shrink-0">
-                                                                <h4 className="text-lg font-semibold text-[#1F2937] mb-1">
-                                                                    {(t as any)._structureName || t.title}
-                                                                </h4>
-                                                                <p className="text-xs text-[#6B7280]">
-                                                                    {t.formTemplateType === 'normal' ? '📦 Product-Specific Form' : 
-                                                                     t.formTemplateType === 'standardized_template' ? '📋 Standardized Category Template' :
-                                                                     'Standard Form'}
-                                                                </p>
-                                                            </div>
+                                        // Filter forms for THIS specific structure
+                                        // New global form structure system: match by globalFormStructureId and productId
+                                        // Forms created from global structures have questionnaireId: null
+                                        const formsForStructure = enabledForms.filter((f: any) => {
+                                            const matchesStructure = (f?.globalFormStructureId ?? 'default') === structureId
+                                            const matchesProduct = f?.productId === id
+                                            return matchesStructure && matchesProduct
+                                        })
+                                        const form = formsForStructure[0] // Just get the single form for this structure
 
-                                                            {/* Center: Form Flow Preview (Inline) */}
-                                                            {structure?.sections && (
-                                                                <div className="flex items-center gap-2 overflow-x-auto flex-1">
-                                                                    {structure.sections
-                                                                        .filter((s: any) => s.enabled)
-                                                                        .sort((a: any, b: any) => a.order - b.order)
-                                                                        .map((section: any, idx: number, arr: any[]) => (
-                                                                            <div key={section.id} className="flex items-center gap-2 flex-shrink-0">
-                                                                                <div className="flex items-center gap-1.5">
-                                                                                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-lg border border-[#E5E7EB]">
-                                                                                        {section.icon}
-                                                                                    </div>
-                                                                                    <span className="text-[10px] font-medium text-[#6B7280] max-w-[60px] leading-tight">
-                                                                                        {section.label}
-                                                                                    </span>
-                                                                                </div>
-                                                                                {idx < arr.length - 1 && (
-                                                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-[#D1D5DB] flex-shrink-0">
-                                                                                        <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                                                                    </svg>
-                                                                                )}
-                                                                            </div>
-                                                                        ))}
-                                                                </div>
-                                                            )}
-
-                                                            {/* Right: Color Picker */}
-                                                            <div className="relative color-picker-container flex-shrink-0">
-                                                                <button
-                                                                    onClick={() => setColorPickerOpen(colorPickerOpen === t.id ? null : t.id)}
-                                                                    className="w-8 h-8 rounded border-2 border-border hover:border-muted-foreground transition-colors flex items-center justify-center"
-                                                                    style={{ 
-                                                                        backgroundColor: customizations[t.id]?.customColor || 'transparent',
-                                                                        backgroundImage: !customizations[t.id]?.customColor 
-                                                                            ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb)'
-                                                                            : 'none',
-                                                                        backgroundSize: '8px 8px',
-                                                                        backgroundPosition: '0 0, 4px 4px'
-                                                                    }}
-                                                                    title={customizations[t.id]?.customColor ? 'Change form color' : 'Set custom color (currently using clinic default)'}
-                                                                >
-                                                                    <Palette className="h-4 w-4 text-muted-foreground" />
-                                                                </button>
-
-                                                                {colorPickerOpen === t.id && (
-                                                                    <div className="absolute right-0 mt-2 p-3 bg-card border border-border rounded-lg shadow-lg z-10 w-48">
-                                                                        <p className="text-xs font-medium text-foreground mb-2">Select Color</p>
-                                                                        <div className="grid grid-cols-4 gap-2 mb-3">
-                                                                            {presetColors.map((preset) => (
-                                                                                <button
-                                                                                    key={preset.color}
-                                                                                    onClick={() => updateFormColor(t.id, preset.color)}
-                                                                                    className="w-10 h-10 rounded border-2 border-border hover:border-muted-foreground transition-colors"
-                                                                                    style={{ backgroundColor: preset.color }}
-                                                                                    title={preset.name}
-                                                                                />
-                                                                            ))}
-                                                                        </div>
-                                                                        {customizations[t.id]?.customColor && (
-                                                                            <button
-                                                                                onClick={() => updateFormColor(t.id, '')}
-                                                                                className="w-full text-xs py-1.5 px-2 text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground rounded transition-colors"
-                                                                            >
-                                                                                Clear (use clinic default)
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                        return (
+                                            <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                                {/* Structure Header with Inline Form Flow + Color Picker */}
+                                                <div className="p-5 border-b border-[#E5E7EB] bg-gradient-to-r from-[#F9FAFB] to-white">
+                                                    <div className="flex items-center justify-between gap-6">
+                                                        {/* Left: Name and Type */}
+                                                        <div className="flex-shrink-0">
+                                                            <h4 className="text-lg font-semibold text-[#1F2937] mb-1">
+                                                                {(t as any)._structureName || t.title}
+                                                            </h4>
+                                                            <p className="text-xs text-[#6B7280]">
+                                                                {t.formTemplateType === 'normal' ? '📦 Product-Specific Form' :
+                                                                    t.formTemplateType === 'standardized_template' ? '📋 Standardized Category Template' :
+                                                                        'Standard Form'}
+                                                            </p>
                                                         </div>
-                                                    </div>
 
-                                                    {/* Form URL - Show single form for this structure */}
-                                                    {form && (() => {
-                                                        const previewUrl = buildFormPreviewUrlFor(form, null)
-                                                        return (
-                                                            <div className="p-5">
-                                                                <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
-                                                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                                                        <div className="min-w-0 flex-1">
-                                                                            <div className="text-sm font-medium text-[#1F2937]">
-                                                                                Form #{structureIndex + 1}
+                                                        {/* Center: Form Flow Preview (Inline) */}
+                                                        {structure?.sections && (
+                                                            <div className="flex items-center gap-2 overflow-x-auto flex-1">
+                                                                {structure.sections
+                                                                    .filter((s: any) => s.enabled)
+                                                                    .sort((a: any, b: any) => a.order - b.order)
+                                                                    .map((section: any, idx: number, arr: any[]) => (
+                                                                        <div key={section.id} className="flex items-center gap-2 flex-shrink-0">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-lg border border-[#E5E7EB]">
+                                                                                    {section.icon}
+                                                                                </div>
+                                                                                <span className="text-[10px] font-medium text-[#6B7280] max-w-[60px] leading-tight">
+                                                                                    {section.label}
+                                                                                </span>
                                                                             </div>
-                                                                            <div className="text-xs text-[#6B7280] mt-1 truncate">
-                                                                                {previewUrl ? `Preview URL: ${previewUrl}` : 'Preview URL not available'}
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                                                            {previewUrl && (
-                                                                                <>
-                                                                                    <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, '_blank')}>
-                                                                                        Preview
-                                                                                    </Button>
-                                                                                    <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
-                                                                                        Copy
-                                                                                    </Button>
-                                                                                </>
+                                                                            {idx < arr.length - 1 && (
+                                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-[#D1D5DB] flex-shrink-0">
+                                                                                    <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                                                                </svg>
                                                                             )}
                                                                         </div>
+                                                                    ))}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Right: Color Picker */}
+                                                        <div className="relative color-picker-container flex-shrink-0">
+                                                            <button
+                                                                onClick={() => setColorPickerOpen(colorPickerOpen === t.id ? null : t.id)}
+                                                                className="w-8 h-8 rounded border-2 border-border hover:border-muted-foreground transition-colors flex items-center justify-center"
+                                                                style={{
+                                                                    backgroundColor: customizations[t.id]?.customColor || 'transparent',
+                                                                    backgroundImage: !customizations[t.id]?.customColor
+                                                                        ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb)'
+                                                                        : 'none',
+                                                                    backgroundSize: '8px 8px',
+                                                                    backgroundPosition: '0 0, 4px 4px'
+                                                                }}
+                                                                title={customizations[t.id]?.customColor ? 'Change form color' : 'Set custom color (currently using clinic default)'}
+                                                            >
+                                                                <Palette className="h-4 w-4 text-muted-foreground" />
+                                                            </button>
+
+                                                            {colorPickerOpen === t.id && (
+                                                                <div className="absolute right-0 mt-2 p-3 bg-card border border-border rounded-lg shadow-lg z-10 w-48">
+                                                                    <p className="text-xs font-medium text-foreground mb-2">Select Color</p>
+                                                                    <div className="grid grid-cols-4 gap-2 mb-3">
+                                                                        {presetColors.map((preset) => (
+                                                                            <button
+                                                                                key={preset.color}
+                                                                                onClick={() => updateFormColor(t.id, preset.color)}
+                                                                                className="w-10 h-10 rounded border-2 border-border hover:border-muted-foreground transition-colors"
+                                                                                style={{ backgroundColor: preset.color }}
+                                                                                title={preset.name}
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                    {customizations[t.id]?.customColor && (
+                                                                        <button
+                                                                            onClick={() => updateFormColor(t.id, '')}
+                                                                            className="w-full text-xs py-1.5 px-2 text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground rounded transition-colors"
+                                                                        >
+                                                                            Clear (use clinic default)
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Form URL - Show single form for this structure */}
+                                                {form && (() => {
+                                                    const previewUrl = buildFormPreviewUrlFor(form, null)
+                                                    return (
+                                                        <div className="p-5">
+                                                            <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
+                                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <div className="text-sm font-medium text-[#1F2937]">
+                                                                            Form #{structureIndex + 1}
+                                                                        </div>
+                                                                        <div className="text-xs text-[#6B7280] mt-1 truncate">
+                                                                            {previewUrl ? `Preview URL: ${previewUrl}` : 'Preview URL not available'}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                                        {previewUrl && (
+                                                                            <>
+                                                                                <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, '_blank')}>
+                                                                                    Preview
+                                                                                </Button>
+                                                                                <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
+                                                                                    Copy
+                                                                                </Button>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                        )
-                                                    })()}
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                )}
+                                                        </div>
+                                                    )
+                                                })()}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -986,24 +986,24 @@ export default function ProductDetail() {
                         <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Performance</h3>
                         <div className="grid grid-cols-2 gap-6">
 
-                                {/* Total Orders */}
-                                <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Orders</span>
-                                    </div>
-                                    <div className="text-3xl font-semibold text-foreground">{productStats.totalOrders}</div>
-                                    <p className="text-xs text-muted-foreground mt-2">All-time orders for this product</p>
+                            {/* Total Orders */}
+                            <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Orders</span>
                                 </div>
+                                <div className="text-3xl font-semibold text-foreground">{productStats.totalOrders}</div>
+                                <p className="text-xs text-muted-foreground mt-2">All-time orders for this product</p>
+                            </div>
 
-                                {/* Active Subscribers */}
-                                <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <Users className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Active Subscribers</span>
-                                    </div>
-                                    <div className="text-3xl font-semibold text-foreground">{productStats.activeSubscribers}</div>
-                                    <p className="text-xs text-muted-foreground mt-2">Customers with active subscriptions</p>
+                            {/* Active Subscribers */}
+                            <div className="p-5 border border-border rounded-lg bg-card hover:shadow-sm transition-shadow">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Users className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Active Subscribers</span>
+                                </div>
+                                <div className="text-3xl font-semibold text-foreground">{productStats.activeSubscribers}</div>
+                                <p className="text-xs text-muted-foreground mt-2">Customers with active subscriptions</p>
                             </div>
                         </div>
                     </div>
