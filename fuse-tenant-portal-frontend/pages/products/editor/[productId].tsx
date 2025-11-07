@@ -605,8 +605,7 @@ export default function ProductEditor() {
       setTemplateId(clonedQuestionnaireId) // Use the clone's ID, not the template's
       setShowFormSelector(false)
 
-      // Reload the page to show the cloned form
-      window.location.reload()
+      // The useEffect will automatically fetch the new template when templateId changes
     } catch (error: any) {
       console.error("❌ Error attaching form:", error)
       setSaveMessage(error.message)
@@ -656,8 +655,7 @@ export default function ProductEditor() {
       setTemplateId(clonedQuestionnaireId)
       setShowFormSelector(false)
 
-      // Reload to show the new cloned form
-      window.location.reload()
+      // The useEffect will automatically fetch the new template when templateId changes
     } catch (error: any) {
       console.error("❌ Error switching form:", error)
       setSaveMessage(error.message)
@@ -2200,15 +2198,18 @@ export default function ProductEditor() {
                                 .map((form) => (
                                   <button
                                     key={form.id}
-                                    onClick={() => {
-                                      handleSwitchForm(form.id)
-                                      setShowFormSelector(false)
+                                    onClick={async () => {
+                                      await handleSwitchForm(form.id)
                                     }}
-                                    className="w-full text-left px-4 py-3 hover:bg-[#F9FAFB] border-b border-[#E5E7EB] last:border-b-0 transition-colors"
+                                    disabled={attachingForm}
+                                    className="w-full text-left px-4 py-3 hover:bg-[#F9FAFB] border-b border-[#E5E7EB] last:border-b-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     <div className="font-medium text-sm text-[#1F2937]">{form.title}</div>
                                     {form.description && (
                                       <div className="text-xs text-[#9CA3AF] mt-1">{form.description}</div>
+                                    )}
+                                    {attachingForm && (
+                                      <div className="text-xs text-[#4FA59C] mt-1">Switching template...</div>
                                     )}
                                   </button>
                                 ))}
