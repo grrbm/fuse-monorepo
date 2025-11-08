@@ -2802,9 +2802,7 @@ export default function ProductEditor() {
                                   </div>
                                   {/* Always show collapsed view */}
                                   <div className="space-y-2">
-                                    {console.log('🎨 STEP DETAILS - Step:', step.id, 'Questions:', step.questions?.length, 'Data:', step.questions)}
                                     {step.stepType === "question" && (step.questions || []).map((q) => {
-                                      console.log('🎨 RENDERING QUESTION:', q.id, q.questionText)
                                       // Only render the conditional header once for the first conditional question
                                       const isFirstConditional = (q.conditionalLevel || 0) > 0 &&
                                         step.questions?.findIndex(sq => (sq.conditionalLevel || 0) > 0) === step.questions?.findIndex(sq => sq.id === q.id)
