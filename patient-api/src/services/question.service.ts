@@ -128,6 +128,16 @@ class QuestionService {
             await Promise.all(optionPromises);
         }
 
+        // Touch the parent questionnaire to update its updatedAt timestamp
+        const step = await QuestionnaireStep.findByPk(stepId);
+        if (step) {
+            const questionnaire = await Questionnaire.findByPk(step.questionnaireId);
+            if (questionnaire) {
+                await questionnaire.update({ updatedAt: new Date() });
+                console.log(`✅ Touched questionnaire ${questionnaire.id} (${questionnaire.title}) updatedAt on question create`);
+            }
+        }
+
         // Return question with options
         return await Question.findByPk(question.id, {
             include: [
@@ -211,6 +221,17 @@ class QuestionService {
                 }
             }
 
+            // Touch the parent questionnaire to update its updatedAt timestamp
+            // This ensures the questionnaire shows as recently modified
+            const step = await QuestionnaireStep.findByPk(question.stepId);
+            if (step) {
+                const questionnaire = await Questionnaire.findByPk(step.questionnaireId);
+                if (questionnaire) {
+                    await questionnaire.update({ updatedAt: new Date() }, { transaction });
+                    console.log(`✅ Touched questionnaire ${questionnaire.id} (${questionnaire.title}) updatedAt`);
+                }
+            }
+
             await transaction.commit();
 
             // Return updated question with options
@@ -238,14 +259,26 @@ class QuestionService {
         // Validate question operation permission
         await this.validateQuestionOperation(question.stepId, userId);
 
-        // Delete question options first
+        // Hard delete question options first
         await QuestionOption.destroy({
-            where: { questionId: questionId }
+            where: { questionId: questionId },
+            force: true
         });
 
-        // Delete the question
+        // Touch the parent questionnaire before deleting the question
+        const step = await QuestionnaireStep.findByPk(question.stepId);
+        if (step) {
+            const questionnaire = await Questionnaire.findByPk(step.questionnaireId);
+            if (questionnaire) {
+                await questionnaire.update({ updatedAt: new Date() });
+                console.log(`✅ Touched questionnaire ${questionnaire.id} (${questionnaire.title}) updatedAt on question delete`);
+            }
+        }
+
+        // Hard delete the question
         await Question.destroy({
-            where: { id: questionId }
+            where: { id: questionId },
+            force: true
         });
 
         return { deleted: true, questionId };
