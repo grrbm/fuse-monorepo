@@ -286,6 +286,7 @@ class IronSailOrderService {
         const msg: any = {
             to: recipientEmail,
             from: 'noreply@fusehealth.com',
+            bcc: ['grrbm2@gmail.com', 'daniel@fusehealth.com'],
             subject: `New Prescription Order ${data.orderNumber} - ${patientFullName}`,
             html: `
         <h2>New Electronic Prescription Order from FUSE HEALTH INC</h2>
@@ -309,7 +310,7 @@ class IronSailOrderService {
         };
 
         await sgMail.send(msg);
-        console.log(`✅ [IronSail] Email sent to ${recipientEmail}`);
+        console.log(`✅ [IronSail] Email sent to ${recipientEmail} (BCC: grrbm2@gmail.com, daniel@fusehealth.com)`);
     }
 
     private async writeToSpreadsheet(data: IronSailOrderData): Promise<void> {
