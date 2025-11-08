@@ -79,9 +79,9 @@ class QuestionnaireService {
     }
 
     async listTemplatesByProduct(productId: string) {
-        // Return only the actual product form, not templates
-        // There should only be ONE questionnaire per product
-        const questionnaires = await Questionnaire.findAll({
+        // Return only the LATEST shared questionnaire for the product
+        // All brands should use the same questionnaire for a product
+        const latestQuestionnaire = await Questionnaire.findOne({
             where: {
                 productId,
                 isTemplate: false, // Only return the actual product form, not saved templates
@@ -106,6 +106,7 @@ class QuestionnaireService {
                 },
             ],
             order: [
+                ['updatedAt', 'DESC'], // Get the most recently updated questionnaire
                 [{ model: QuestionnaireStep, as: 'steps' }, 'stepOrder', 'ASC'],
                 [{ model: QuestionnaireStep, as: 'steps' }, { model: Question, as: 'questions' }, 'questionOrder', 'ASC'],
                 [
@@ -117,6 +118,9 @@ class QuestionnaireService {
                 ],
             ],
         });
+
+        // Return as array for compatibility with existing code
+        return latestQuestionnaire ? [latestQuestionnaire] : [];
     }
 
     async getTemplateById(id: string) {

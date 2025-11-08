@@ -81,6 +81,7 @@ export default function ProductEditor() {
 
   // Form editor state
   const [templateId, setTemplateId] = useState<string | null>(null)
+  const [sourceTemplateId, setSourceTemplateId] = useState<string | null>(null) // Track which template this was cloned from
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -579,37 +580,62 @@ export default function ProductEditor() {
     try {
       setAttachingForm(true)
 
-      // Clone the template to create an independent copy for this product
-      const response = await fetch(`${baseUrl}/questionnaires/templates/${selectedFormIdForAttach}/clone-for-product`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ productId: productId }),
-      })
+      // If we already have a questionnaire, import the template steps into it
+      if (templateId) {
+        console.log(`📋 Importing template ${selectedFormIdForAttach} into shared questionnaire ${templateId}...`)
+        const response = await fetch(`${baseUrl}/questionnaires/${templateId}/import-template-steps`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ templateId: selectedFormIdForAttach }),
+        })
 
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => null)
-        console.error("❌ Attach template error response:", errorPayload)
-        const message = errorPayload?.message || errorPayload?.error || `Failed to clone template (${response.status})`
-        throw new Error(message)
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => null)
+          console.error("❌ Import template error response:", errorPayload)
+          const message = errorPayload?.message || errorPayload?.error || `Failed to import template (${response.status})`
+          throw new Error(message)
+        }
+
+        const data = await response.json()
+        console.log('📦 Import response data:', data)
+        console.log('📦 Import response data.data:', data.data)
+        console.log('📦 Import response steps:', data.data?.steps)
+        console.log('📦 Steps count:', data.data?.steps?.length)
+
+        // Update state with the fresh data from the import response
+        if (data.data) {
+          console.log('🔄 Updating template state with:', data.data)
+          console.log('🔄 Updating steps state with:', data.data.steps || [])
+
+          // Force React to recognize the state change by creating new array references
+          const newSteps = [...(data.data.steps || [])]
+          setTemplate({ ...data.data })
+          setSteps(newSteps)
+
+          console.log('✅ State updated! New steps count:', newSteps.length)
+
+          // Force component update by setting loading state
+          setLoading(true)
+          setTimeout(() => setLoading(false), 0)
+        } else {
+          console.error('❌ No data.data in response!')
+        }
+
+        setSaveMessage("Template imported! All steps replaced with template's original steps.")
+        setSourceTemplateId(selectedFormIdForAttach)
+        setShowFormSelector(false)
+      } else {
+        // No questionnaire yet - shouldn't happen but handle gracefully
+        console.error("❌ No questionnaire ID found, cannot import template")
+        setSaveMessage("Error: No questionnaire found for this product")
       }
-
-      const data = await response.json()
-      const clonedQuestionnaireId = data.data?.id
-
-      if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
-
-      setSaveMessage("Form template cloned and attached successfully! You can now customize it for this product.")
-      setTemplateId(clonedQuestionnaireId) // Use the clone's ID, not the template's
-      setShowFormSelector(false)
-
-      // Reload the page to show the cloned form
-      window.location.reload()
     } catch (error: any) {
       console.error("❌ Error attaching form:", error)
       setSaveMessage(error.message)
+      setLoading(false)
     } finally {
       setAttachingForm(false)
     }
@@ -621,46 +647,61 @@ export default function ProductEditor() {
     try {
       setAttachingForm(true)
 
-      // Delete current form (it's a clone specific to this product)
-      await fetch(`${baseUrl}/questionnaires/${templateId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }).catch(() => console.log('Old form deletion failed or already deleted'))
-
-      // Clone the new template for this product
-      const response = await fetch(`${baseUrl}/questionnaires/templates/${newFormId}/clone-for-product`, {
+      // Import template steps into the shared questionnaire (replaces existing steps)
+      console.log(`📋 Importing template ${newFormId} into shared questionnaire ${templateId}...`)
+      const response = await fetch(`${baseUrl}/questionnaires/${templateId}/import-template-steps`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ productId: productId }),
+        body: JSON.stringify({ templateId: newFormId }),
       })
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null)
-        console.error("❌ Clone template error response:", errorPayload)
-        const message = errorPayload?.message || errorPayload?.error || `Failed to clone template (${response.status})`
+        console.error("❌ Import template error response:", errorPayload)
+        const message = errorPayload?.message || errorPayload?.error || `Failed to import template (${response.status})`
         throw new Error(message)
       }
 
       const data = await response.json()
-      const clonedQuestionnaireId = data.data?.id
+      console.log(`✅ Template imported successfully, steps replaced`)
+      console.log('📦 Import response data:', data)
+      console.log('📦 Import response data.data:', data.data)
+      console.log('📦 Import response steps:', data.data?.steps)
+      console.log('📦 Steps count:', data.data?.steps?.length)
 
-      if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
+      // Update state with the fresh data from the import response
+      if (data.data) {
+        console.log('🔄 Updating template state with:', data.data)
+        console.log('🔄 Updating steps state with:', data.data.steps || [])
+        console.log('🔄 BEFORE UPDATE - Current steps:', steps)
+        console.log('🔄 BEFORE UPDATE - Current steps length:', steps.length)
 
-      setSaveMessage("Form template switched! Cloned and attached successfully.")
-      setTemplateId(clonedQuestionnaireId)
+        // Force React to recognize the state change by creating new array references
+        const newSteps = [...(data.data.steps || [])]
+        setTemplate({ ...data.data })
+        setSteps(newSteps)
+
+        console.log('✅ State updated! New steps count:', newSteps.length)
+        console.log('✅ AFTER UPDATE - New steps:', newSteps)
+
+        // Log what should be rendered after a tick
+        setTimeout(() => {
+          console.log('🎯 AFTER RENDER - Current steps state should be:', newSteps.length)
+        }, 100)
+      } else {
+        console.error('❌ No data.data in response!')
+      }
+
+      setSaveMessage("Template imported! All steps replaced with template's original steps.")
+      setSourceTemplateId(newFormId) // Track which template this was imported from
       setShowFormSelector(false)
-
-      // Reload to show the new cloned form
-      window.location.reload()
     } catch (error: any) {
       console.error("❌ Error switching form:", error)
       setSaveMessage(error.message)
+      setLoading(false)
     } finally {
       setAttachingForm(false)
     }
@@ -2025,11 +2066,15 @@ export default function ProductEditor() {
       }
       await Promise.all(questionUpdates)
 
-      setSaveMessage("✅ Template saved successfully!")
+      // NOTE: We do NOT update the source template when saving.
+      // Templates should remain unchanged. Only "Save as Template" creates/updates templates.
+      console.log('✅ Product form saved (template unchanged)')
+
+      setSaveMessage("✅ Changes saved successfully!")
       setTimeout(() => setSaveMessage(null), 3000)
     } catch (err: any) {
       console.error("Error saving template:", err)
-      setSaveMessage(`❌ ${err.message || "Failed to save template"}`)
+      setSaveMessage(`❌ ${err.message || "Failed to save changes"}`)
     } finally {
       setSaving(false)
     }
@@ -2200,15 +2245,18 @@ export default function ProductEditor() {
                                 .map((form) => (
                                   <button
                                     key={form.id}
-                                    onClick={() => {
-                                      handleSwitchForm(form.id)
-                                      setShowFormSelector(false)
+                                    onClick={async () => {
+                                      await handleSwitchForm(form.id)
                                     }}
-                                    className="w-full text-left px-4 py-3 hover:bg-[#F9FAFB] border-b border-[#E5E7EB] last:border-b-0 transition-colors"
+                                    disabled={attachingForm}
+                                    className="w-full text-left px-4 py-3 hover:bg-[#F9FAFB] border-b border-[#E5E7EB] last:border-b-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     <div className="font-medium text-sm text-[#1F2937]">{form.title}</div>
                                     {form.description && (
                                       <div className="text-xs text-[#9CA3AF] mt-1">{form.description}</div>
+                                    )}
+                                    {attachingForm && (
+                                      <div className="text-xs text-[#4FA59C] mt-1">Switching template...</div>
                                     )}
                                   </button>
                                 ))}
@@ -2647,9 +2695,11 @@ export default function ProductEditor() {
                     </p>
                   </div>
 
+                  {console.log('🎨 RENDERING - Current steps:', steps, 'Length:', steps.length)}
                   {steps.length > 0 ? (
                     <div className="space-y-3 relative">
 
+                      {console.log('🎨 RENDERING - Mapping over', steps.length, 'steps')}
                       {steps.map((step, index) => {
                         // Check if this step or any question in it is referenced by the hovered conditional step
                         const referencedQuestionIds = hoveredConditionalStepId && steps.find(s => s.id === hoveredConditionalStepId)?.conditionalLogic
@@ -2754,7 +2804,9 @@ export default function ProductEditor() {
                                   </div>
                                   {/* Always show collapsed view */}
                                   <div className="space-y-2">
+                                    {console.log('🎨 STEP DETAILS - Step:', step.id, 'Questions:', step.questions?.length, 'Data:', step.questions)}
                                     {step.stepType === "question" && (step.questions || []).map((q) => {
+                                      console.log('🎨 RENDERING QUESTION:', q.id, q.questionText)
                                       // Only render the conditional header once for the first conditional question
                                       const isFirstConditional = (q.conditionalLevel || 0) > 0 &&
                                         step.questions?.findIndex(sq => (sq.conditionalLevel || 0) > 0) === step.questions?.findIndex(sq => sq.id === q.id)

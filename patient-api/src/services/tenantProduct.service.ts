@@ -313,6 +313,19 @@ class TenantProductService {
                 const product = await Product.findByPk(tp.productId);
                 if (!product) continue;
 
+                // Find the product's SHARED questionnaire (formTemplateType = 'normal')
+                // This is the questionnaire that gets edited in the form builder
+                // and should be used by ALL clinics that enable this product
+                const productQuestionnaire = await Questionnaire.findOne({
+                    where: {
+                        productId: tp.productId,
+                        formTemplateType: 'normal'
+                    },
+                    order: [['updatedAt', 'DESC']]
+                });
+
+                const sharedQuestionnaireId = productQuestionnaire?.id || tp.questionnaireId || null;
+
                 for (const structure of globalStructures) {
                     // Check if form already exists
                     const existingForm = await TenantProductForm.findOne({
@@ -332,7 +345,7 @@ class TenantProductService {
                         await TenantProductForm.create({
                             productId: tp.productId,
                             clinicId,
-                            questionnaireId: tp.questionnaireId, // Can be null - form built from global structure
+                            questionnaireId: sharedQuestionnaireId, // Use the shared product questionnaire
                             globalFormStructureId: structure.structureId,
                             globalFormStructureUUID: structure.id,
                             layoutTemplate: 'layout_a',
@@ -340,7 +353,15 @@ class TenantProductService {
                             lastPublishedAt: new Date()
                         });
 
-                        console.log(`✅ Auto-created form for product ${product.slug} with structure ${structure.name}`);
+                        console.log(`✅ Auto-created form for product ${product.slug} with structure ${structure.name} using ${productQuestionnaire ? 'shared questionnaire' : 'tenant questionnaire'}`);
+                    } else {
+                        // Update existing form to use the shared questionnaire (in case it changed)
+                        if (existingForm.questionnaireId !== sharedQuestionnaireId) {
+                            await existingForm.update({
+                                questionnaireId: sharedQuestionnaireId
+                            });
+                            console.log(`✅ Updated form for product ${product.slug} with structure ${structure.name} to use ${productQuestionnaire ? 'shared questionnaire' : 'tenant questionnaire'}`);
+                        }
                     }
                 }
             }

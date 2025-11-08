@@ -5810,6 +5810,205 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
   }
 });
 
+// Import template steps into an existing questionnaire (replaces current steps)
+app.post("/questionnaires/:id/import-template-steps", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id: questionnaireId } = req.params;
+    const { templateId } = req.body;
+
+    if (!questionnaireId || !templateId) {
+      return res.status(400).json({ success: false, message: "questionnaireId and templateId are required" });
+    }
+
+    console.log(`📋 Starting template import: ${templateId} -> ${questionnaireId}`);
+
+    // Fetch the target questionnaire
+    const questionnaire = await Questionnaire.findByPk(questionnaireId, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
+        }]
+      }]
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'Questionnaire not found' });
+    }
+
+    // Fetch ALL steps from the template (don't use Sequelize include, it's buggy with ordering)
+    const template = await Questionnaire.findByPk(templateId);
+
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+
+    // Manually fetch all steps
+    const templateSteps = await QuestionnaireStep.findAll({
+      where: { questionnaireId: templateId },
+      order: [['stepOrder', 'ASC'], ['createdAt', 'ASC']]
+    });
+
+    console.log(`📋 Template has ${templateSteps.length} steps (fetched manually)`);
+
+    // Fetch questions for each step
+    for (const step of templateSteps) {
+      (step as any).questions = await Question.findAll({
+        where: { stepId: step.id },
+        order: [['questionOrder', 'ASC']]
+      });
+
+      // Fetch options for each question
+      for (const question of (step as any).questions) {
+        (question as any).options = await QuestionOption.findAll({
+          where: { questionId: question.id },
+          order: [['optionOrder', 'ASC']]
+        });
+      }
+    }
+
+    if (templateSteps.length === 0) {
+      return res.status(400).json({ success: false, message: 'Template has no steps to import' });
+    }
+
+    // Delete existing steps, questions, and options from the questionnaire
+    console.log(`🗑️ Deleting existing steps from questionnaire ${questionnaireId}...`);
+    const existingSteps: any[] = (questionnaire as any).steps || [];
+    for (const step of existingSteps) {
+      const questions = step.questions || [];
+      console.log(`🗑️ Deleting ${questions.length} questions from step ${step.id}...`);
+      for (const question of questions) {
+        await QuestionOption.destroy({ where: { questionId: question.id }, force: true });
+        await Question.destroy({ where: { id: question.id }, force: true });
+      }
+      await QuestionnaireStep.destroy({ where: { id: step.id } });
+    }
+
+    // Copy all steps from template to questionnaire
+    // IMPORTANT: Create NEW IDs so we don't modify the template when editing
+    console.log(`📋 Copying ${templateSteps.length} steps from template ${templateId}...`);
+    for (const step of templateSteps as any[]) {
+      const questions = step.questions || [];
+      console.log(`📋 Copying step "${step.title}" with ${questions.length} questions (creating NEW IDs)...`);
+
+      // Create NEW step (Sequelize automatically creates a new ID)
+      const newStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: step.stepOrder,
+        isDeadEnd: step.isDeadEnd,
+        conditionalLogic: step.conditionalLogic,
+        questionnaireId: questionnaire.id,
+      });
+
+      console.log(`  ✅ Created new step with ID: ${newStep.id} (original: ${step.id})`);
+
+      // Copy all questions in this step
+      for (const question of questions) {
+        console.log(`  📋 Copying question: "${question.questionText}" (creating NEW ID)...`);
+
+        // Create NEW question (Sequelize automatically creates a new ID)
+        const newQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: question.questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: question.subQuestionOrder,
+          conditionalLevel: question.conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: question.footerNote,
+          conditionalLogic: question.conditionalLogic,
+          stepId: newStep.id, // Link to NEW step
+        });
+
+        console.log(`    ✅ Created new question with ID: ${newQuestion.id} (original: ${question.id})`);
+
+        // Copy all options for this question
+        const options = question.options || [];
+        if (options.length > 0) {
+          console.log(`    📋 Copying ${options.length} options (creating NEW IDs)...`);
+          await QuestionOption.bulkCreate(
+            options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              riskLevel: opt.riskLevel,
+              questionId: newQuestion.id, // Link to NEW question
+            }))
+          );
+        }
+      }
+    }
+
+    // Touch the questionnaire to update its updatedAt timestamp
+    await questionnaire.update({ updatedAt: new Date() });
+    console.log(`✅ Imported ${templateSteps.length} steps into questionnaire ${questionnaireId}, updatedAt touched`);
+
+    // Return the updated questionnaire with manually fetched steps
+    const updatedQuestionnaire = await Questionnaire.findByPk(questionnaireId);
+
+    // Manually fetch all steps (avoiding Sequelize include bug)
+    const updatedSteps = await QuestionnaireStep.findAll({
+      where: { questionnaireId: questionnaireId },
+      order: [['stepOrder', 'ASC'], ['createdAt', 'ASC']]
+    });
+
+    console.log(`📋 Fetched ${updatedSteps.length} steps for response`);
+
+    // Fetch questions for each step
+    for (const step of updatedSteps) {
+      (step as any).questions = await Question.findAll({
+        where: { stepId: step.id },
+        order: [['questionOrder', 'ASC']]
+      });
+
+      // Fetch options for each question
+      for (const question of (step as any).questions) {
+        (question as any).options = await QuestionOption.findAll({
+          where: { questionId: question.id },
+          order: [['optionOrder', 'ASC']]
+        });
+      }
+    }
+
+    // Convert to plain object and attach steps
+    const result = {
+      ...(updatedQuestionnaire as any).toJSON(),
+      steps: updatedSteps.map((step: any) => ({
+        ...step.toJSON(),
+        stepType: step.category === 'info' ? 'info' : 'question', // Add stepType for frontend
+        questions: (step.questions || []).map((q: any) => ({
+          ...q.toJSON(),
+          options: (q.options || []).map((opt: any) => opt.toJSON())
+        }))
+      }))
+    };
+
+    console.log(`✅ Returning questionnaire with ${result.steps.length} steps`);
+
+    return res.status(200).json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('❌ Error importing template steps:', error);
+    console.error('Stack:', error.stack);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to import template steps',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // IMPORTANT: This route must come AFTER all specific /questionnaires/templates/* routes
 app.get("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
   try {
