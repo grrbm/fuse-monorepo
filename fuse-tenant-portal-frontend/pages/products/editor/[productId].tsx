@@ -2695,11 +2695,9 @@ export default function ProductEditor() {
                     </p>
                   </div>
 
-                  {console.log('🎨 RENDERING - Current steps:', steps, 'Length:', steps.length)}
                   {steps.length > 0 ? (
                     <div className="space-y-3 relative">
 
-                      {console.log('🎨 RENDERING - Mapping over', steps.length, 'steps')}
                       {steps.map((step, index) => {
                         // Check if this step or any question in it is referenced by the hovered conditional step
                         const referencedQuestionIds = hoveredConditionalStepId && steps.find(s => s.id === hoveredConditionalStepId)?.conditionalLogic
