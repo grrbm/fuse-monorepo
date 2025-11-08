@@ -239,7 +239,7 @@ class OrderService {
                             {
                                 model: Product,
                                 as: 'product',
-                                attributes: ['id', 'name', 'pharmacyProvider', 'pharmacyProductId']
+                                attributes: ['id', 'name', 'pharmacyProvider', 'pharmacyProductId', 'placeholderSig', 'medicationSize']
                             }
                         ]
                     }
