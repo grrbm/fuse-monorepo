@@ -5891,11 +5891,13 @@ app.post("/questionnaires/:id/import-template-steps", authenticateJWT, async (re
     }
 
     // Copy all steps from template to questionnaire
+    // IMPORTANT: Create NEW IDs so we don't modify the template when editing
     console.log(`📋 Copying ${templateSteps.length} steps from template ${templateId}...`);
     for (const step of templateSteps as any[]) {
       const questions = step.questions || [];
-      console.log(`📋 Copying step "${step.title}" with ${questions.length} questions...`);
+      console.log(`📋 Copying step "${step.title}" with ${questions.length} questions (creating NEW IDs)...`);
 
+      // Create NEW step (Sequelize automatically creates a new ID)
       const newStep = await QuestionnaireStep.create({
         title: step.title,
         description: step.description,
@@ -5906,9 +5908,13 @@ app.post("/questionnaires/:id/import-template-steps", authenticateJWT, async (re
         questionnaireId: questionnaire.id,
       });
 
+      console.log(`  ✅ Created new step with ID: ${newStep.id} (original: ${step.id})`);
+
       // Copy all questions in this step
       for (const question of questions) {
-        console.log(`  📋 Copying question: "${question.questionText}"`);
+        console.log(`  📋 Copying question: "${question.questionText}" (creating NEW ID)...`);
+
+        // Create NEW question (Sequelize automatically creates a new ID)
         const newQuestion = await Question.create({
           questionText: question.questionText,
           answerType: question.answerType,
@@ -5921,20 +5927,22 @@ app.post("/questionnaires/:id/import-template-steps", authenticateJWT, async (re
           helpText: question.helpText,
           footerNote: question.footerNote,
           conditionalLogic: question.conditionalLogic,
-          stepId: newStep.id,
+          stepId: newStep.id, // Link to NEW step
         });
+
+        console.log(`    ✅ Created new question with ID: ${newQuestion.id} (original: ${question.id})`);
 
         // Copy all options for this question
         const options = question.options || [];
         if (options.length > 0) {
-          console.log(`    📋 Copying ${options.length} options...`);
+          console.log(`    📋 Copying ${options.length} options (creating NEW IDs)...`);
           await QuestionOption.bulkCreate(
             options.map((opt: any) => ({
               optionText: opt.optionText,
               optionValue: opt.optionValue,
               optionOrder: opt.optionOrder,
               riskLevel: opt.riskLevel,
-              questionId: newQuestion.id,
+              questionId: newQuestion.id, // Link to NEW question
             }))
           );
         }

@@ -609,14 +609,14 @@ export default function ProductEditor() {
         if (data.data) {
           console.log('🔄 Updating template state with:', data.data)
           console.log('🔄 Updating steps state with:', data.data.steps || [])
-          
+
           // Force React to recognize the state change by creating new array references
           const newSteps = [...(data.data.steps || [])]
-          setTemplate({...data.data})
+          setTemplate({ ...data.data })
           setSteps(newSteps)
-          
+
           console.log('✅ State updated! New steps count:', newSteps.length)
-          
+
           // Force component update by setting loading state
           setLoading(true)
           setTimeout(() => setLoading(false), 0)
@@ -678,15 +678,15 @@ export default function ProductEditor() {
         console.log('🔄 Updating steps state with:', data.data.steps || [])
         console.log('🔄 BEFORE UPDATE - Current steps:', steps)
         console.log('🔄 BEFORE UPDATE - Current steps length:', steps.length)
-        
+
         // Force React to recognize the state change by creating new array references
         const newSteps = [...(data.data.steps || [])]
-        setTemplate({...data.data})
+        setTemplate({ ...data.data })
         setSteps(newSteps)
-        
+
         console.log('✅ State updated! New steps count:', newSteps.length)
         console.log('✅ AFTER UPDATE - New steps:', newSteps)
-        
+
         // Log what should be rendered after a tick
         setTimeout(() => {
           console.log('🎯 AFTER RENDER - Current steps state should be:', newSteps.length)
@@ -2066,27 +2066,9 @@ export default function ProductEditor() {
       }
       await Promise.all(questionUpdates)
 
-      // If this form was cloned from a template, also update the source template
-      // This ensures changes persist when switching forms
-      if (sourceTemplateId && templateId) {
-        console.log('🔄 Updating source template:', sourceTemplateId)
-        const updateTemplateResponse = await fetch(`${baseUrl}/questionnaires/templates/${sourceTemplateId}/update-from-product-form`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            sourceQuestionnaireId: templateId,
-          }),
-        })
-
-        if (!updateTemplateResponse.ok) {
-          console.warn('⚠️ Failed to update source template, but changes to current form were saved')
-        } else {
-          console.log('✅ Source template updated successfully')
-        }
-      }
+      // NOTE: We do NOT update the source template when saving.
+      // Templates should remain unchanged. Only "Save as Template" creates/updates templates.
+      console.log('✅ Product form saved (template unchanged)')
 
       setSaveMessage("✅ Changes saved successfully!")
       setTimeout(() => setSaveMessage(null), 3000)
