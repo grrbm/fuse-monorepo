@@ -5977,6 +5977,7 @@ app.post("/questionnaires/:id/import-template-steps", authenticateJWT, async (re
       ...(updatedQuestionnaire as any).toJSON(),
       steps: updatedSteps.map((step: any) => ({
         ...step.toJSON(),
+        stepType: step.category === 'info' ? 'info' : 'question', // Add stepType for frontend
         questions: (step.questions || []).map((q: any) => ({
           ...q.toJSON(),
           options: (q.options || []).map((opt: any) => opt.toJSON())

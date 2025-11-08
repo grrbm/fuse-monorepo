@@ -676,6 +676,8 @@ export default function ProductEditor() {
       if (data.data) {
         console.log('🔄 Updating template state with:', data.data)
         console.log('🔄 Updating steps state with:', data.data.steps || [])
+        console.log('🔄 BEFORE UPDATE - Current steps:', steps)
+        console.log('🔄 BEFORE UPDATE - Current steps length:', steps.length)
         
         // Force React to recognize the state change by creating new array references
         const newSteps = [...(data.data.steps || [])]
@@ -683,10 +685,12 @@ export default function ProductEditor() {
         setSteps(newSteps)
         
         console.log('✅ State updated! New steps count:', newSteps.length)
+        console.log('✅ AFTER UPDATE - New steps:', newSteps)
         
-        // Force component update by setting loading state
-        setLoading(true)
-        setTimeout(() => setLoading(false), 0)
+        // Log what should be rendered after a tick
+        setTimeout(() => {
+          console.log('🎯 AFTER RENDER - Current steps state should be:', newSteps.length)
+        }, 100)
       } else {
         console.error('❌ No data.data in response!')
       }
@@ -2709,9 +2713,11 @@ export default function ProductEditor() {
                     </p>
                   </div>
 
+                  {console.log('🎨 RENDERING - Current steps:', steps, 'Length:', steps.length)}
                   {steps.length > 0 ? (
                     <div className="space-y-3 relative">
 
+                      {console.log('🎨 RENDERING - Mapping over', steps.length, 'steps')}
                       {steps.map((step, index) => {
                         // Check if this step or any question in it is referenced by the hovered conditional step
                         const referencedQuestionIds = hoveredConditionalStepId && steps.find(s => s.id === hoveredConditionalStepId)?.conditionalLogic
@@ -2816,7 +2822,9 @@ export default function ProductEditor() {
                                   </div>
                                   {/* Always show collapsed view */}
                                   <div className="space-y-2">
+                                    {console.log('🎨 STEP DETAILS - Step:', step.id, 'Questions:', step.questions?.length, 'Data:', step.questions)}
                                     {step.stepType === "question" && (step.questions || []).map((q) => {
+                                      console.log('🎨 RENDERING QUESTION:', q.id, q.questionText)
                                       // Only render the conditional header once for the first conditional question
                                       const isFirstConditional = (q.conditionalLevel || 0) > 0 &&
                                         step.questions?.findIndex(sq => (sq.conditionalLevel || 0) > 0) === step.questions?.findIndex(sq => sq.id === q.id)
