@@ -599,21 +599,34 @@ export default function ProductEditor() {
           throw new Error(message)
         }
 
+        const data = await response.json()
+        console.log('📦 Import response data:', data)
+        console.log('📦 Import response data.data:', data.data)
+        console.log('📦 Import response steps:', data.data?.steps)
+        console.log('📦 Steps count:', data.data?.steps?.length)
+
+        // Update state with the fresh data from the import response
+        if (data.data) {
+          console.log('🔄 Updating template state with:', data.data)
+          console.log('🔄 Updating steps state with:', data.data.steps || [])
+          
+          // Force React to recognize the state change by creating new array references
+          const newSteps = [...(data.data.steps || [])]
+          setTemplate({...data.data})
+          setSteps(newSteps)
+          
+          console.log('✅ State updated! New steps count:', newSteps.length)
+          
+          // Force component update by setting loading state
+          setLoading(true)
+          setTimeout(() => setLoading(false), 0)
+        } else {
+          console.error('❌ No data.data in response!')
+        }
+
         setSaveMessage("Template imported! All steps replaced with template's original steps.")
         setSourceTemplateId(selectedFormIdForAttach)
         setShowFormSelector(false)
-
-        // Force reload the questionnaire
-        setLoading(true)
-        const fetchRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (fetchRes.ok) {
-          const fetchData = await fetchRes.json()
-          setTemplate(fetchData.data)
-          setSteps(fetchData.data.steps || [])
-        }
-        setLoading(false)
       } else {
         // No questionnaire yet - shouldn't happen but handle gracefully
         console.error("❌ No questionnaire ID found, cannot import template")
@@ -652,23 +665,35 @@ export default function ProductEditor() {
         throw new Error(message)
       }
 
+      const data = await response.json()
       console.log(`✅ Template imported successfully, steps replaced`)
+      console.log('📦 Import response data:', data)
+      console.log('📦 Import response data.data:', data.data)
+      console.log('📦 Import response steps:', data.data?.steps)
+      console.log('📦 Steps count:', data.data?.steps?.length)
+
+      // Update state with the fresh data from the import response
+      if (data.data) {
+        console.log('🔄 Updating template state with:', data.data)
+        console.log('🔄 Updating steps state with:', data.data.steps || [])
+        
+        // Force React to recognize the state change by creating new array references
+        const newSteps = [...(data.data.steps || [])]
+        setTemplate({...data.data})
+        setSteps(newSteps)
+        
+        console.log('✅ State updated! New steps count:', newSteps.length)
+        
+        // Force component update by setting loading state
+        setLoading(true)
+        setTimeout(() => setLoading(false), 0)
+      } else {
+        console.error('❌ No data.data in response!')
+      }
 
       setSaveMessage("Template imported! All steps replaced with template's original steps.")
       setSourceTemplateId(newFormId) // Track which template this was imported from
       setShowFormSelector(false)
-
-      // Force reload the questionnaire to see the new steps
-      setLoading(true)
-      const fetchRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (fetchRes.ok) {
-        const fetchData = await fetchRes.json()
-        setTemplate(fetchData.data)
-        setSteps(fetchData.data.steps || [])
-      }
-      setLoading(false)
     } catch (error: any) {
       console.error("❌ Error switching form:", error)
       setSaveMessage(error.message)

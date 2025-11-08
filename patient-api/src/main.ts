@@ -5945,20 +5945,48 @@ app.post("/questionnaires/:id/import-template-steps", authenticateJWT, async (re
     await questionnaire.update({ updatedAt: new Date() });
     console.log(`✅ Imported ${templateSteps.length} steps into questionnaire ${questionnaireId}, updatedAt touched`);
 
-    // Return the updated questionnaire
-    const updatedQuestionnaire = await Questionnaire.findByPk(questionnaireId, {
-      include: [{
-        model: QuestionnaireStep,
-        as: 'steps',
-        include: [{
-          model: Question,
-          as: 'questions',
-          include: [{ model: QuestionOption, as: 'options' }]
-        }]
-      }]
+    // Return the updated questionnaire with manually fetched steps
+    const updatedQuestionnaire = await Questionnaire.findByPk(questionnaireId);
+
+    // Manually fetch all steps (avoiding Sequelize include bug)
+    const updatedSteps = await QuestionnaireStep.findAll({
+      where: { questionnaireId: questionnaireId },
+      order: [['stepOrder', 'ASC'], ['createdAt', 'ASC']]
     });
 
-    return res.status(200).json({ success: true, data: updatedQuestionnaire });
+    console.log(`📋 Fetched ${updatedSteps.length} steps for response`);
+
+    // Fetch questions for each step
+    for (const step of updatedSteps) {
+      (step as any).questions = await Question.findAll({
+        where: { stepId: step.id },
+        order: [['questionOrder', 'ASC']]
+      });
+
+      // Fetch options for each question
+      for (const question of (step as any).questions) {
+        (question as any).options = await QuestionOption.findAll({
+          where: { questionId: question.id },
+          order: [['optionOrder', 'ASC']]
+        });
+      }
+    }
+
+    // Convert to plain object and attach steps
+    const result = {
+      ...(updatedQuestionnaire as any).toJSON(),
+      steps: updatedSteps.map((step: any) => ({
+        ...step.toJSON(),
+        questions: (step.questions || []).map((q: any) => ({
+          ...q.toJSON(),
+          options: (q.options || []).map((opt: any) => opt.toJSON())
+        }))
+      }))
+    };
+
+    console.log(`✅ Returning questionnaire with ${result.steps.length} steps`);
+
+    return res.status(200).json({ success: true, data: result });
   } catch (error: any) {
     console.error('❌ Error importing template steps:', error);
     console.error('Stack:', error.stack);
