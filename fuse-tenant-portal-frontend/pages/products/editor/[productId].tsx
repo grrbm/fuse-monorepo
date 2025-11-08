@@ -580,37 +580,49 @@ export default function ProductEditor() {
     try {
       setAttachingForm(true)
 
-      // Clone the template to create an independent copy for this product
-      const response = await fetch(`${baseUrl}/questionnaires/templates/${selectedFormIdForAttach}/clone-for-product`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ productId: productId }),
-      })
+      // If we already have a questionnaire, import the template steps into it
+      if (templateId) {
+        console.log(`📋 Importing template ${selectedFormIdForAttach} into shared questionnaire ${templateId}...`)
+        const response = await fetch(`${baseUrl}/questionnaires/${templateId}/import-template-steps`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ templateId: selectedFormIdForAttach }),
+        })
 
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => null)
-        console.error("❌ Attach template error response:", errorPayload)
-        const message = errorPayload?.message || errorPayload?.error || `Failed to clone template (${response.status})`
-        throw new Error(message)
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => null)
+          console.error("❌ Import template error response:", errorPayload)
+          const message = errorPayload?.message || errorPayload?.error || `Failed to import template (${response.status})`
+          throw new Error(message)
+        }
+
+        setSaveMessage("Template imported! All steps replaced with template's original steps.")
+        setSourceTemplateId(selectedFormIdForAttach)
+        setShowFormSelector(false)
+
+        // Force reload the questionnaire
+        setLoading(true)
+        const fetchRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (fetchRes.ok) {
+          const fetchData = await fetchRes.json()
+          setTemplate(fetchData.data)
+          setSteps(fetchData.data.steps || [])
+        }
+        setLoading(false)
+      } else {
+        // No questionnaire yet - shouldn't happen but handle gracefully
+        console.error("❌ No questionnaire ID found, cannot import template")
+        setSaveMessage("Error: No questionnaire found for this product")
       }
-
-      const data = await response.json()
-      const clonedQuestionnaireId = data.data?.id
-
-      if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
-
-      setSaveMessage("Form template cloned and attached successfully! You can now customize it for this product.")
-      setTemplateId(clonedQuestionnaireId) // Use the clone's ID, not the template's
-      setSourceTemplateId(selectedFormIdForAttach) // Track which template this was cloned from
-      setShowFormSelector(false)
-
-      // The useEffect will automatically fetch the new template when templateId changes
     } catch (error: any) {
       console.error("❌ Error attaching form:", error)
       setSaveMessage(error.message)
+      setLoading(false)
     } finally {
       setAttachingForm(false)
     }
@@ -622,46 +634,45 @@ export default function ProductEditor() {
     try {
       setAttachingForm(true)
 
-      // Delete current form (it's a clone specific to this product)
-      await fetch(`${baseUrl}/questionnaires/${templateId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }).catch(() => console.log('Old form deletion failed or already deleted'))
-
-      // Clone the new template for this product
-      const response = await fetch(`${baseUrl}/questionnaires/templates/${newFormId}/clone-for-product`, {
+      // Import template steps into the shared questionnaire (replaces existing steps)
+      console.log(`📋 Importing template ${newFormId} into shared questionnaire ${templateId}...`)
+      const response = await fetch(`${baseUrl}/questionnaires/${templateId}/import-template-steps`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ productId: productId }),
+        body: JSON.stringify({ templateId: newFormId }),
       })
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null)
-        console.error("❌ Clone template error response:", errorPayload)
-        const message = errorPayload?.message || errorPayload?.error || `Failed to clone template (${response.status})`
+        console.error("❌ Import template error response:", errorPayload)
+        const message = errorPayload?.message || errorPayload?.error || `Failed to import template (${response.status})`
         throw new Error(message)
       }
 
-      const data = await response.json()
-      const clonedQuestionnaireId = data.data?.id
+      console.log(`✅ Template imported successfully, steps replaced`)
 
-      if (!clonedQuestionnaireId) throw new Error("Failed to get cloned questionnaire ID")
-
-      setSaveMessage("Form template switched! Cloned and attached successfully.")
-      setTemplateId(clonedQuestionnaireId)
-      setSourceTemplateId(newFormId) // Track which template this was cloned from
+      setSaveMessage("Template imported! All steps replaced with template's original steps.")
+      setSourceTemplateId(newFormId) // Track which template this was imported from
       setShowFormSelector(false)
 
-      // The useEffect will automatically fetch the new template when templateId changes
+      // Force reload the questionnaire to see the new steps
+      setLoading(true)
+      const fetchRes = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (fetchRes.ok) {
+        const fetchData = await fetchRes.json()
+        setTemplate(fetchData.data)
+        setSteps(fetchData.data.steps || [])
+      }
+      setLoading(false)
     } catch (error: any) {
       console.error("❌ Error switching form:", error)
       setSaveMessage(error.message)
+      setLoading(false)
     } finally {
       setAttachingForm(false)
     }

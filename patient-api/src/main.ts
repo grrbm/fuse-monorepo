@@ -1554,7 +1554,7 @@ app.get("/products/:id", async (req, res) => {
         where: { productId: id },
         order: [['createdAt', 'DESC']] // Get the most recent one
       });
-      
+
       if (pharmacyProduct && pharmacyProduct.pharmacyWholesaleCost) {
         // Update the product's pharmacyWholesaleCost for future queries
         await product.update({ pharmacyWholesaleCost: pharmacyProduct.pharmacyWholesaleCost });
@@ -5452,10 +5452,10 @@ app.post("/questionnaires/:id/save-as-template", authenticateJWT, async (req, re
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5532,8 +5532,8 @@ app.post("/questionnaires/:id/save-as-template", authenticateJWT, async (req, re
       templateName: templateName
     });
 
-    return res.status(201).json({ 
-      success: true, 
+    return res.status(201).json({
+      success: true,
       data: { id: newTemplate.id, title: templateName },
       message: `Template "${templateName}" created successfully!`
     });
@@ -5563,10 +5563,10 @@ app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJW
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5580,10 +5580,10 @@ app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJW
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5652,9 +5652,9 @@ app.put("/questionnaires/templates/:id/update-from-product-form", authenticateJW
       sourceQuestionnaireId: sourceQuestionnaireId
     });
 
-    return res.status(200).json({ 
-      success: true, 
-      message: 'Template updated successfully!' 
+    return res.status(200).json({
+      success: true,
+      message: 'Template updated successfully!'
     });
   } catch (error) {
     console.error('❌ Error updating template from product form:', error);
@@ -5682,10 +5682,10 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5782,10 +5782,10 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
       include: [{
         model: QuestionnaireStep,
         as: 'steps',
-        include: [{ 
-          model: Question, 
-          as: 'questions', 
-          include: [{ model: QuestionOption, as: 'options' }] 
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
         }]
       }]
     });
@@ -5800,9 +5800,171 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
   } catch (error: any) {
     console.error('❌ Error cloning template for product:', error);
     const errorMessage = error?.message || 'Failed to clone template for product';
-    return res.status(500).json({ 
-      success: false, 
+    return res.status(500).json({
+      success: false,
       message: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Import template steps into an existing questionnaire (replaces current steps)
+app.post("/questionnaires/:id/import-template-steps", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    const { id: questionnaireId } = req.params;
+    const { templateId } = req.body;
+
+    if (!questionnaireId || !templateId) {
+      return res.status(400).json({ success: false, message: "questionnaireId and templateId are required" });
+    }
+
+    console.log(`📋 Starting template import: ${templateId} -> ${questionnaireId}`);
+
+    // Fetch the target questionnaire
+    const questionnaire = await Questionnaire.findByPk(questionnaireId, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
+        }]
+      }]
+    });
+
+    if (!questionnaire) {
+      return res.status(404).json({ success: false, message: 'Questionnaire not found' });
+    }
+
+    // Fetch ALL steps from the template (don't use Sequelize include, it's buggy with ordering)
+    const template = await Questionnaire.findByPk(templateId);
+
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found' });
+    }
+
+    // Manually fetch all steps
+    const templateSteps = await QuestionnaireStep.findAll({
+      where: { questionnaireId: templateId },
+      order: [['stepOrder', 'ASC'], ['createdAt', 'ASC']]
+    });
+
+    console.log(`📋 Template has ${templateSteps.length} steps (fetched manually)`);
+
+    // Fetch questions for each step
+    for (const step of templateSteps) {
+      (step as any).questions = await Question.findAll({
+        where: { stepId: step.id },
+        order: [['questionOrder', 'ASC']]
+      });
+
+      // Fetch options for each question
+      for (const question of (step as any).questions) {
+        (question as any).options = await QuestionOption.findAll({
+          where: { questionId: question.id },
+          order: [['optionOrder', 'ASC']]
+        });
+      }
+    }
+
+    if (templateSteps.length === 0) {
+      return res.status(400).json({ success: false, message: 'Template has no steps to import' });
+    }
+
+    // Delete existing steps, questions, and options from the questionnaire
+    console.log(`🗑️ Deleting existing steps from questionnaire ${questionnaireId}...`);
+    const existingSteps: any[] = (questionnaire as any).steps || [];
+    for (const step of existingSteps) {
+      const questions = step.questions || [];
+      console.log(`🗑️ Deleting ${questions.length} questions from step ${step.id}...`);
+      for (const question of questions) {
+        await QuestionOption.destroy({ where: { questionId: question.id }, force: true });
+        await Question.destroy({ where: { id: question.id }, force: true });
+      }
+      await QuestionnaireStep.destroy({ where: { id: step.id } });
+    }
+
+    // Copy all steps from template to questionnaire
+    console.log(`📋 Copying ${templateSteps.length} steps from template ${templateId}...`);
+    for (const step of templateSteps as any[]) {
+      const questions = step.questions || [];
+      console.log(`📋 Copying step "${step.title}" with ${questions.length} questions...`);
+
+      const newStep = await QuestionnaireStep.create({
+        title: step.title,
+        description: step.description,
+        category: step.category,
+        stepOrder: step.stepOrder,
+        isDeadEnd: step.isDeadEnd,
+        conditionalLogic: step.conditionalLogic,
+        questionnaireId: questionnaire.id,
+      });
+
+      // Copy all questions in this step
+      for (const question of questions) {
+        console.log(`  📋 Copying question: "${question.questionText}"`);
+        const newQuestion = await Question.create({
+          questionText: question.questionText,
+          answerType: question.answerType,
+          questionSubtype: question.questionSubtype,
+          isRequired: question.isRequired,
+          questionOrder: question.questionOrder,
+          subQuestionOrder: question.subQuestionOrder,
+          conditionalLevel: question.conditionalLevel,
+          placeholder: question.placeholder,
+          helpText: question.helpText,
+          footerNote: question.footerNote,
+          conditionalLogic: question.conditionalLogic,
+          stepId: newStep.id,
+        });
+
+        // Copy all options for this question
+        const options = question.options || [];
+        if (options.length > 0) {
+          console.log(`    📋 Copying ${options.length} options...`);
+          await QuestionOption.bulkCreate(
+            options.map((opt: any) => ({
+              optionText: opt.optionText,
+              optionValue: opt.optionValue,
+              optionOrder: opt.optionOrder,
+              riskLevel: opt.riskLevel,
+              questionId: newQuestion.id,
+            }))
+          );
+        }
+      }
+    }
+
+    // Touch the questionnaire to update its updatedAt timestamp
+    await questionnaire.update({ updatedAt: new Date() });
+    console.log(`✅ Imported ${templateSteps.length} steps into questionnaire ${questionnaireId}, updatedAt touched`);
+
+    // Return the updated questionnaire
+    const updatedQuestionnaire = await Questionnaire.findByPk(questionnaireId, {
+      include: [{
+        model: QuestionnaireStep,
+        as: 'steps',
+        include: [{
+          model: Question,
+          as: 'questions',
+          include: [{ model: QuestionOption, as: 'options' }]
+        }]
+      }]
+    });
+
+    return res.status(200).json({ success: true, data: updatedQuestionnaire });
+  } catch (error: any) {
+    console.error('❌ Error importing template steps:', error);
+    console.error('Stack:', error.stack);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to import template steps',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
@@ -5984,7 +6146,7 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
     // Fetch product and clinic to generate published URL
     const product = await Product.findByPk(productId);
     const clinic = await Clinic.findByPk(user.clinicId);
-    
+
     if (!product) {
       return res.status(400).json({ success: false, message: "Product not found" });
     }
@@ -6025,7 +6187,7 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
 
     // If form already existed, update the questionnaireId if it changed
     if (!created && record.questionnaireId !== questionnaireId) {
-      await record.update({ 
+      await record.update({
         questionnaireId,
         lastPublishedAt: new Date()
       } as any);
@@ -10069,7 +10231,7 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
           isActive: true
         }
       });
-      
+
       if (structure) {
         globalFormStructure = {
           id: structure.structureId,
