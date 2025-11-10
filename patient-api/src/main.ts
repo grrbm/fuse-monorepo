@@ -133,8 +133,8 @@ async function generateUniqueSlug(clinicName: string, excludeId?: string): Promi
   }
 }
 
-// Aptible SSL workaround - disable SSL certificate validation in production
-// This is safe within Aptible's secure network environment
+// SSL workaround - disable SSL certificate validation in production
+// This is safe within a secure network environment
 if (process.env.NODE_ENV === 'production') {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 }
@@ -195,17 +195,15 @@ app.use(cors({
 
     const allowedOrigins = process.env.NODE_ENV === 'production'
       ? [
-        process.env.FRONTEND_URL || 'https://app-95863.on-aptible.com',
-        'https://app-95883.on-aptible.com', // Current frontend URL
+        process.env.FRONTEND_URL,
         'http://3.140.178.30', // Add your frontend IP
         'https://unboundedhealth.xyz', // Add unboundedhealth.xyz
         'https://www.unboundedhealth.xyz'
-      ]
+      ].filter(Boolean) // Remove undefined values
       : ['http://localhost:3000', 'http://localhost:3002', 'http://localhost:3003', 'http://localhost:3030', 'http://3.140.178.30', 'https://unboundedhealth.xyz']; // Allow local frontends, your IP, and unboundedhealth.xyz during development
 
     // Check if origin is in allowed list or matches patterns
     const isAllowed = allowedOrigins.includes(origin) ||
-      (process.env.NODE_ENV === 'production' && /^https:\/\/app-\d+\.on-aptible\.com$/.test(origin)) ||
       // Allow clinic subdomains in development (e.g., g-health.localhost:3000, saboia.xyz.localhost:3000)
       (process.env.NODE_ENV === 'development' && /^http:\/\/[a-zA-Z0-9.-]+\.localhost:3000$/.test(origin)) ||
       // Allow production clinic domains (e.g., app.limitless.health, app.hims.com)
