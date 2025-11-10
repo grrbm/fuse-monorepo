@@ -19,18 +19,18 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
-DROP DATABASE fusehealth_database;
+-- DROP DATABASE fusehealth_database;
 --
 -- TOC entry 11244 (class 1262 OID 373888)
 -- Name: fusehealth_database; Type: DATABASE; Schema: -; Owner: fusehealth_user
 --
 
-CREATE DATABASE fusehealth_database WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.UTF-8';
+-- CREATE DATABASE fusehealth_database WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.UTF-8';
 
 
-ALTER DATABASE fusehealth_database OWNER TO fusehealth_user;
+-- ALTER DATABASE fusehealth_database OWNER TO fusehealth_user;
 
-\connect fusehealth_database
+\connect fusehealth_staging
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
