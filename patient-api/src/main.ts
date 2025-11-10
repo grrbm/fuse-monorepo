@@ -94,6 +94,7 @@ import DashboardService from "./services/dashboard.service";
 import DoctorPatientChats from "./models/DoctorPatientChats";
 import WebSocketService from "./services/websocket.service";
 import MessageTemplate from "./models/MessageTemplate";
+import Sequence from "./models/Sequence";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -10830,6 +10831,441 @@ app.delete("/message-templates/:id", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete message template"
+    });
+  }
+});
+
+// LIST sequences
+app.get("/sequences", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    if (!currentUser.clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "User does not belong to a clinic"
+      });
+    }
+
+    const { status } = req.query;
+
+    const whereClause: any = {
+      clinicId: currentUser.clinicId
+    };
+
+    if (status && typeof status === 'string') {
+      whereClause.status = status;
+    }
+
+    const sequences = await Sequence.findAll({
+      where: whereClause,
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.status(200).json({
+      success: true,
+      data: sequences
+    });
+  } catch (error) {
+    console.error('❌ Error fetching sequences:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch sequences"
+    });
+  }
+});
+
+// GET sequence by id
+app.get("/sequences/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const { id } = req.params;
+
+    const sequence = await Sequence.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId
+      }
+    });
+
+    if (!sequence) {
+      return res.status(404).json({
+        success: false,
+        message: "Sequence not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: sequence
+    });
+  } catch (error) {
+    console.error('❌ Error fetching sequence:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch sequence"
+    });
+  }
+});
+
+app.post("/sequences", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    if (!currentUser.clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "User does not belong to a clinic"
+      });
+    }
+
+    const { name, triggerEvent } = req.body;
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Name is required"
+      });
+    }
+
+    if (!triggerEvent || typeof triggerEvent !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: "Trigger event is required"
+      });
+    }
+
+    const triggerPayload = {
+      event: triggerEvent,
+      type: triggerEvent
+    };
+
+    const analyticsPayload = {
+      totalSent: 0,
+      openRate: 0,
+      clickRate: 0,
+      activeContacts: 0
+    };
+
+    const sequence = await Sequence.create({
+      clinicId: currentUser.clinicId,
+      name: name.trim(),
+      description: null,
+      status: 'draft',
+      trigger: triggerPayload,
+      steps: [],
+      audience: null,
+      analytics: analyticsPayload,
+      isActive: false,
+      createdBy: currentUser.id,
+      updatedBy: currentUser.id
+    });
+
+    res.status(201).json({
+      success: true,
+      data: sequence
+    });
+  } catch (error) {
+    console.error('❌ Error creating sequence:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create sequence"
+    });
+  }
+});
+
+app.put("/sequences/:id/steps", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    if (!currentUser.clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "User does not belong to a clinic"
+      });
+    }
+
+    const { id } = req.params;
+    const { steps } = req.body;
+
+    if (!Array.isArray(steps)) {
+      return res.status(400).json({
+        success: false,
+        message: "Steps must be an array"
+      });
+    }
+
+    const sequence = await Sequence.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId
+      }
+    });
+
+    if (!sequence) {
+      return res.status(404).json({
+        success: false,
+        message: "Sequence not found"
+      });
+    }
+
+    const sanitizedSteps: Array<Record<string, unknown>> = [];
+
+    for (let index = 0; index < steps.length; index += 1) {
+      const rawStep = steps[index];
+      if (!rawStep || typeof rawStep !== "object") {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid step payload at index ${index}`
+        });
+      }
+
+      const stepIdRaw =
+        typeof (rawStep as any).id === "string"
+          ? (rawStep as any).id
+          : typeof (rawStep as any).step_id === "string"
+            ? (rawStep as any).step_id
+            : undefined;
+
+      if (!stepIdRaw || !stepIdRaw.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: `Missing step id at index ${index}`
+        });
+      }
+
+      const stepId = stepIdRaw.trim();
+
+      const stepTypeRaw = typeof rawStep.type === "string"
+        ? rawStep.type
+        : typeof (rawStep as any).stepType === "string"
+          ? (rawStep as any).stepType
+          : undefined;
+
+      if (!stepTypeRaw) {
+        return res.status(400).json({
+          success: false,
+          message: `Missing step type at index ${index}`
+        });
+      }
+
+      const stepType = stepTypeRaw.toLowerCase();
+
+      if (stepType === "delay") {
+        const candidateTime =
+          typeof (rawStep as any).timeSeconds === "number"
+            ? (rawStep as any).timeSeconds
+            : typeof (rawStep as any).time_seconds === "number"
+              ? (rawStep as any).time_seconds
+              : typeof (rawStep as any).time === "number"
+                ? (rawStep as any).time
+                : typeof (rawStep as any).delay === "number"
+                  ? (rawStep as any).delay
+                  : 0;
+
+        if (!Number.isFinite(candidateTime) || candidateTime < 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid delay time at index ${index}`
+          });
+        }
+
+        sanitizedSteps.push({
+          id: stepId,
+          type: "delay",
+          timeSeconds: Math.floor(candidateTime)
+        });
+        continue;
+      }
+
+      if (stepType === "email" || stepType === "sms") {
+        const templateIdRaw =
+          typeof (rawStep as any).templateId === "string"
+            ? (rawStep as any).templateId
+            : typeof (rawStep as any).template_id === "string"
+              ? (rawStep as any).template_id
+              : undefined;
+
+        if (templateIdRaw !== undefined && templateIdRaw.trim() === "") {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid template id at index ${index}`
+          });
+        }
+
+        const sanitizedStep: Record<string, unknown> = {
+          type: stepType
+        };
+
+        if (templateIdRaw !== undefined) {
+          sanitizedStep.templateId = templateIdRaw;
+        }
+
+        sanitizedSteps.push({
+          id: stepId,
+          ...sanitizedStep
+        });
+        continue;
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: `Unsupported step type "${stepType}" at index ${index}`
+      });
+    }
+
+    sequence.steps = sanitizedSteps;
+    sequence.updatedBy = currentUser.id;
+
+    await sequence.save();
+
+    res.status(200).json({
+      success: true,
+      data: sequence
+    });
+  } catch (error) {
+    console.error("❌ Error updating sequence steps:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update sequence steps"
+    });
+  }
+});
+
+app.put("/sequences/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    if (!currentUser.clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "User does not belong to a clinic"
+      });
+    }
+
+    const { id } = req.params;
+    const { name, description, triggerEvent, status } = req.body ?? {};
+
+    if (
+      name !== undefined &&
+      (typeof name !== "string" || !name.trim())
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Name must be a non-empty string"
+      });
+    }
+
+    if (
+      description !== undefined &&
+      description !== null &&
+      typeof description !== "string"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Description must be a string"
+      });
+    }
+
+    if (
+      triggerEvent !== undefined &&
+      (typeof triggerEvent !== "string" || !triggerEvent.trim())
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Trigger event must be a non-empty string"
+      });
+    }
+
+    const allowedStatuses = ["draft", "active", "paused", "archived"] as const;
+    if (
+      status !== undefined &&
+      !allowedStatuses.includes(status)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Status must be one of: ${allowedStatuses.join(", ")}`
+      });
+    }
+
+    const sequence = await Sequence.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId
+      }
+    });
+
+    if (!sequence) {
+      return res.status(404).json({
+        success: false,
+        message: "Sequence not found"
+      });
+    }
+
+    if (name !== undefined) {
+      sequence.name = name.trim();
+    }
+
+    if (description !== undefined) {
+      sequence.description = description === null ? null : description;
+    }
+
+    if (triggerEvent !== undefined) {
+      sequence.trigger = {
+        event: triggerEvent,
+        type: triggerEvent
+      };
+    }
+
+    if (status !== undefined) {
+      sequence.status = status;
+      sequence.isActive = status === "active";
+    }
+
+    sequence.updatedBy = currentUser.id;
+
+    await sequence.save();
+
+    res.status(200).json({
+      success: true,
+      data: sequence
+    });
+  } catch (error) {
+    console.error("❌ Error updating sequence:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update sequence"
     });
   }
 });
