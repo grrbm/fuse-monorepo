@@ -373,6 +373,8 @@ export default function Flows() {
     const [savingSequenceDetails, setSavingSequenceDetails] = useState(false)
     const [updatingTrigger, setUpdatingTrigger] = useState(false)
     const [togglingSequenceStatus, setTogglingSequenceStatus] = useState(false)
+    const [draggedExistingStepId, setDraggedExistingStepId] = useState<string | null>(null)
+    const [dropIndicator, setDropIndicator] = useState<{ stepId: string; position: 'before' | 'after' } | null>(null)
 
     useEffect(() => {
         return () => {
@@ -504,73 +506,202 @@ export default function Flows() {
         }
     }
 
-    const appendNewStep = (type: 'delay' | 'sms' | 'email') => {
+    const insertNewStep = (type: 'delay' | 'sms' | 'email', insertIndex?: number) => {
         if (!selectedSequence) return
 
         const sequenceId = selectedSequence.id
         const newStep = createStepTemplate(type)
-        const updatedSteps = [...editableSteps, newStep]
+        const updatedSteps = [...editableSteps]
+        const targetIndex = typeof insertIndex === 'number'
+            ? Math.max(0, Math.min(insertIndex, updatedSteps.length))
+            : updatedSteps.length
 
-        setEditableSteps(updatedSteps)
-        setSelectedSequence(prev => prev && prev.id === sequenceId ? { ...prev, steps: updatedSteps } : prev)
-        setSequences(prev => prev.map(seq =>
-            seq.id === sequenceId ? { ...seq, steps: updatedSteps } : seq
-        ))
+        updatedSteps.splice(targetIndex, 0, newStep)
+
+        applyStepsUpdate(sequenceId, updatedSteps)
         setSelectedStepForPreview(newStep.id)
         schedulePersistSequenceSteps(sequenceId, updatedSteps)
     }
 
+    const moveExistingStep = (stepId: string, targetIndex: number) => {
+        if (!selectedSequence) return
+
+        const sequenceId = selectedSequence.id
+        const currentIndex = editableSteps.findIndex(step => step.id === stepId)
+
+        if (currentIndex === -1) return
+
+        const desiredIndex = Math.max(0, Math.min(targetIndex, editableSteps.length))
+
+        if (desiredIndex === currentIndex || desiredIndex === currentIndex + 1) {
+            return
+        }
+
+        const updatedSteps = [...editableSteps]
+        const [movedStep] = updatedSteps.splice(currentIndex, 1)
+
+        const adjustedIndex = desiredIndex > currentIndex ? desiredIndex - 1 : desiredIndex
+
+        updatedSteps.splice(adjustedIndex, 0, movedStep)
+
+        applyStepsUpdate(sequenceId, updatedSteps)
+        schedulePersistSequenceSteps(sequenceId, updatedSteps)
+    }
+
+    const handleStepReorderDrop = (draggedId: string, targetStepId: string, position: 'before' | 'after') => {
+        const targetIndex = editableSteps.findIndex(step => step.id === targetStepId)
+        if (targetIndex === -1) return
+        const insertIndex = targetIndex + (position === 'after' ? 1 : 0)
+        moveExistingStep(draggedId, insertIndex)
+    }
+
+    const handleNewStepDrop = (type: 'delay' | 'sms' | 'email', targetStepId: string, position: 'before' | 'after') => {
+        const targetIndex = editableSteps.findIndex(step => step.id === targetStepId)
+        if (targetIndex === -1) return
+        const insertIndex = targetIndex + (position === 'after' ? 1 : 0)
+        insertNewStep(type, insertIndex)
+    }
+
+    const handleStepDragOver = (event: React.DragEvent<HTMLDivElement>, stepId: string) => {
+        if (!(draggedStepType || draggedExistingStepId)) return
+        event.preventDefault()
+        const bounds = event.currentTarget.getBoundingClientRect()
+        const isBefore = event.clientY < bounds.top + bounds.height / 2
+        const position: 'before' | 'after' = isBefore ? 'before' : 'after'
+
+        setDropIndicator(prev => {
+            if (!prev || prev.stepId !== stepId || prev.position !== position) {
+                return { stepId, position }
+            }
+            return prev
+        })
+    }
+
+    const handleStepDragLeave = (event: React.DragEvent<HTMLDivElement>, stepId: string) => {
+        const related = event.relatedTarget as Node | null
+        if (related && event.currentTarget.contains(related)) {
+            return
+        }
+        setDropIndicator(prev => (prev?.stepId === stepId ? null : prev))
+    }
+
+    const handleStepDrop = (event: React.DragEvent<HTMLDivElement>, targetStepId: string) => {
+        event.preventDefault()
+        event.stopPropagation()
+
+        const position = dropIndicator && dropIndicator.stepId === targetStepId
+            ? dropIndicator.position
+            : 'after'
+
+        const draggedIdFromData = event.dataTransfer.getData('application/flow-step-id')
+        const stepTypeFromData = event.dataTransfer.getData('application/flow-step-type')
+
+        if (draggedExistingStepId || draggedIdFromData) {
+            const stepId = draggedExistingStepId || draggedIdFromData
+            if (stepId && stepId !== targetStepId) {
+                handleStepReorderDrop(stepId, targetStepId, position)
+            }
+            clearDragState()
+            return
+        }
+
+        let type = draggedStepType
+        if (!type && (stepTypeFromData === 'delay' || stepTypeFromData === 'sms' || stepTypeFromData === 'email')) {
+            type = stepTypeFromData
+        }
+
+        if (type) {
+            handleNewStepDrop(type, targetStepId, position)
+        }
+
+        clearDragState()
+    }
+
     const handleStepDragStart = (type: 'delay' | 'sms' | 'email') => {
         setDraggedStepType(type)
+        setDraggedExistingStepId(null)
+        setIsDropTargetActive(true)
     }
 
     const handleStepDragEnd = () => {
+        clearDragState()
+    }
+
+    const handleExistingStepDragStart = (event: React.DragEvent<HTMLDivElement>, stepId: string) => {
+        setDraggedExistingStepId(stepId)
         setDraggedStepType(null)
-        setIsDropTargetActive(false)
+        setIsDropTargetActive(true)
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData('application/flow-step-id', stepId)
+    }
+
+    const handleExistingStepDragEnd = () => {
+        clearDragState()
     }
 
     const handleStepsDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault()
-        if (draggedStepType) {
+        if (draggedStepType || draggedExistingStepId) {
             setIsDropTargetActive(true)
         }
     }
 
     const handleStepsDragOver = (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault()
-        if (draggedStepType) {
+        if (draggedStepType || draggedExistingStepId) {
             setIsDropTargetActive(true)
+            if (!dropIndicator) {
+                setDropIndicator(null)
+            }
         }
     }
 
     const handleStepsDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault()
-        setIsDropTargetActive(false)
+        const related = event.relatedTarget as Node | null
+        if (!related || !event.currentTarget.contains(related)) {
+            setIsDropTargetActive(false)
+            setDropIndicator(null)
+        }
     }
 
     const handleStepsDrop = (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault()
-        setIsDropTargetActive(false)
+        event.stopPropagation()
+
+        if (!selectedSequence) {
+            clearDragState()
+            return
+        }
+
+        const sequenceId = selectedSequence.id
+
+        if (draggedExistingStepId) {
+            moveExistingStep(draggedExistingStepId, editableSteps.length)
+            clearDragState()
+            return
+        }
 
         let type = draggedStepType
         if (!type) {
             const dataType = event.dataTransfer.getData('application/flow-step-type')
             if (dataType === 'delay' || dataType === 'sms' || dataType === 'email') {
-                type = dataType
+                type = dataType as 'delay' | 'sms' | 'email'
             }
         }
 
         if (!type) {
+            clearDragState()
             return
         }
 
-        appendNewStep(type)
-        setDraggedStepType(null)
+        insertNewStep(type)
+        clearDragState()
     }
 
     const handlePaletteAdd = (type: 'delay' | 'sms' | 'email') => {
         if (!selectedSequence) return
-        appendNewStep(type)
+        insertNewStep(type)
     }
 
     const handleTemplateSelect = (stepId: string, templateId: string) => {
@@ -612,9 +743,7 @@ export default function Flows() {
 
         const updatedSteps = editableSteps.map(applyTemplateToStep)
 
-        setEditableSteps(updatedSteps)
-        setSelectedSequence(prev => prev && prev.id === sequenceId ? { ...prev, steps: updatedSteps } : prev)
-        setSequences(prev => prev.map(seq => seq.id === sequenceId ? { ...seq, steps: updatedSteps } : seq))
+        applyStepsUpdate(sequenceId, updatedSteps)
         schedulePersistSequenceSteps(sequenceId, updatedSteps)
     }
 
@@ -702,6 +831,21 @@ export default function Flows() {
         }, 400)
     }, [persistSequenceSteps, token])
 
+    const applyStepsUpdate = useCallback((sequenceId: string, updatedSteps: SequenceStep[]) => {
+        setEditableSteps(updatedSteps)
+        setSelectedSequence(prev => prev && prev.id === sequenceId ? { ...prev, steps: updatedSteps } : prev)
+        setSequences(prev => prev.map(seq =>
+            seq.id === sequenceId ? { ...seq, steps: updatedSteps } : seq
+        ))
+    }, [])
+
+    const clearDragState = useCallback(() => {
+        setDraggedStepType(null)
+        setDraggedExistingStepId(null)
+        setDropIndicator(null)
+        setIsDropTargetActive(false)
+    }, [])
+
     const updateSequenceOnServer = useCallback(async (
         sequenceId: string,
         payload: {
@@ -783,9 +927,7 @@ export default function Flows() {
 
         const updatedSteps = editableSteps.map(applyDelay)
 
-        setEditableSteps(updatedSteps)
-        setSelectedSequence(prev => prev && prev.id === sequenceId ? { ...prev, steps: updatedSteps } : prev)
-        setSequences(prev => prev.map(seq => seq.id === sequenceId ? { ...seq, steps: updatedSteps } : seq))
+        applyStepsUpdate(sequenceId, updatedSteps)
         schedulePersistSequenceSteps(sequenceId, updatedSteps)
     }
 
@@ -799,11 +941,7 @@ export default function Flows() {
             setSelectedStepForPreview(updatedSteps[0]?.id ?? null)
         }
 
-        setEditableSteps(updatedSteps)
-        setSelectedSequence(prev => prev && prev.id === sequenceId ? { ...prev, steps: updatedSteps } : prev)
-        setSequences(prev => prev.map(seq =>
-            seq.id === sequenceId ? { ...seq, steps: updatedSteps } : seq
-        ))
+        applyStepsUpdate(sequenceId, updatedSteps)
         schedulePersistSequenceSteps(sequenceId, updatedSteps)
     }
 
@@ -1566,14 +1704,26 @@ export default function Flows() {
                                                 <div className="space-y-3">
                                                     {displaySteps.map((step, index) => {
                                                         const isSelected = selectedStepForPreview === step.id
+                                                        const showIndicatorBefore = dropIndicator?.stepId === step.id && dropIndicator.position === 'before'
+                                                        const showIndicatorAfter = dropIndicator?.stepId === step.id && dropIndicator.position === 'after'
                                                         return (
-                                                            <div
-                                                                key={step.id}
-                                                                className={`relative flex gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer hover:border-primary/50 ${
-                                                                    isSelected ? 'border-primary bg-primary/5' : 'border-border bg-background hover:bg-muted/50'
-                                                                }`}
-                                                                onClick={() => setSelectedStepForPreview(step.id)}
-                                                            >
+                                                            <div key={step.id} className="space-y-1">
+                                                                {showIndicatorBefore && (
+                                                                    <div className="h-2 border-2 border-dashed border-primary rounded" />
+                                                                )}
+                                                                <div
+                                                                    className={`relative flex gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer hover:border-primary/50 ${
+                                                                        isSelected ? 'border-primary bg-primary/5' : 'border-border bg-background hover:bg-muted/50'
+                                                                    } ${draggedExistingStepId === step.id ? 'opacity-60' : ''}`}
+                                                                    onClick={() => setSelectedStepForPreview(step.id)}
+                                                                    draggable
+                                                                    onDragStart={(event) => handleExistingStepDragStart(event, step.id)}
+                                                                    onDragEnd={handleExistingStepDragEnd}
+                                                                    onDragOver={(event) => handleStepDragOver(event, step.id)}
+                                                                    onDragEnter={(event) => handleStepDragOver(event, step.id)}
+                                                                    onDragLeave={(event) => handleStepDragLeave(event, step.id)}
+                                                                    onDrop={(event) => handleStepDrop(event, step.id)}
+                                                                >
                                                                 <div className="flex-shrink-0">
                                                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
                                                                         isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
@@ -1679,6 +1829,10 @@ export default function Flows() {
 
                                                                 {index < displaySteps.length - 1 && (
                                                                     <div className="absolute left-8 -bottom-3 w-0.5 h-3 bg-border" />
+                                                                )}
+                                                                </div>
+                                                                {showIndicatorAfter && (
+                                                                    <div className="h-2 border-2 border-dashed border-primary rounded" />
                                                                 )}
                                                             </div>
                                                         )
