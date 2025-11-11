@@ -1417,7 +1417,9 @@ export default function Settings({
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    const cnameValue = organizationData.slug ? `${organizationData.slug}.fuse.health` : 'your-subdomain.fuse.health';
+                                    const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true';
+                                    const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fuse.health';
+                                    const cnameValue = organizationData.slug ? `${organizationData.slug}.${baseDomain}` : `your-subdomain.${baseDomain}`;
                                     navigator.clipboard.writeText(cnameValue);
                                     showToast("success", "Copied to clipboard!");
                                   }}
@@ -1428,7 +1430,11 @@ export default function Settings({
                                 </button>
                               </div>
                               <code className="text-sm font-mono font-semibold text-blue-900 bg-blue-50 px-3 py-2 rounded-md block break-all text-center">
-                                {organizationData.slug ? `${organizationData.slug}.fuse.health` : 'your-subdomain.fuse.health'}
+                                {(() => {
+                                  const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true';
+                                  const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fuse.health';
+                                  return organizationData.slug ? `${organizationData.slug}.${baseDomain}` : `your-subdomain.${baseDomain}`;
+                                })()}
                               </code>
                             </div>
                           </div>

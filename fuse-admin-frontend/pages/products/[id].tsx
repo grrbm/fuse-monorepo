@@ -618,9 +618,11 @@ export default function ProductDetail() {
         // Priority 2: Use subdomain URL
         if (!clinicSlug) return null
 
+        const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true'
+        const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fuse.health'
         const baseUrl = isLocalhost
             ? `http://${clinicSlug}.localhost:3000`
-            : `https://${clinicSlug}.fuse.health`
+            : `https://${clinicSlug}.${baseDomain}`
 
         // Same format for both local and prod: /my-products/<form-id>/<product-slug>
         return `${baseUrl}/my-products/${formId}/${product.slug}`
@@ -637,9 +639,11 @@ export default function ProductDetail() {
         const protocol = isLocalhost ? 'http' : 'https'
 
         // Standard subdomain URL (always available)
+        const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true'
+        const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fuse.health'
         const subdomainBase = isLocalhost
             ? `http://${clinicSlug}.localhost:3000`
-            : `https://${clinicSlug}.fuse.health`
+            : `https://${clinicSlug}.${baseDomain}`
         const subdomainUrl = `${subdomainBase}/my-products/${formId}/${product.slug}`
 
         // Custom domain URL (if configured)
