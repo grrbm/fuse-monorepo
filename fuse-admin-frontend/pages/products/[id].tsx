@@ -607,11 +607,12 @@ export default function ProductDetail() {
 
         const formId = form.id
         const isLocalhost = process.env.NODE_ENV !== 'production'
+        const protocol = isLocalhost ? 'http' : 'https'
 
-        // Priority 1: Use custom domain if set up and enabled
-        if (clinicIsCustomDomain && clinicCustomDomain) {
-            // Format: /my-products/<form-id>/<product-slug>
-            return `https://app.${clinicCustomDomain}/my-products/${formId}/${product.slug}`
+        // Priority 1: Use custom domain if configured
+        if (clinicCustomDomain) {
+            // customDomain already includes the full domain (e.g., app.limitless2.health)
+            return `${protocol}://${clinicCustomDomain}/my-products/${formId}/${product.slug}`
         }
 
         // Priority 2: Use subdomain URL
@@ -623,6 +624,34 @@ export default function ProductDetail() {
 
         // Same format for both local and prod: /my-products/<form-id>/<product-slug>
         return `${baseUrl}/my-products/${formId}/${product.slug}`
+    }
+
+    // Build BOTH URLs for forms with custom domains
+    const buildFormUrls = (form: any) => {
+        if (!product?.slug || !clinicSlug) return null
+
+        const isLocalhost = process.env.NODE_ENV !== 'production'
+        const formId = form?.id
+        if (!formId) return null
+
+        const protocol = isLocalhost ? 'http' : 'https'
+
+        // Standard subdomain URL (always available)
+        const subdomainBase = isLocalhost
+            ? `http://${clinicSlug}.localhost:3000`
+            : `https://${clinicSlug}.fuse.health`
+        const subdomainUrl = `${subdomainBase}/my-products/${formId}/${product.slug}`
+
+        // Custom domain URL (if configured)
+        let customDomainUrl = null
+        if (clinicCustomDomain) {
+            customDomainUrl = `${protocol}://${clinicCustomDomain}/my-products/${formId}/${product.slug}`
+        }
+
+        return {
+            subdomainUrl,
+            customDomainUrl
+        }
     }
 
     const buildPreviewUrl = () => {
@@ -943,34 +972,67 @@ export default function ProductDetail() {
                                                     </div>
                                                 </div>
 
-                                                {/* Form URL - Show single form for this structure */}
+                                                {/* Form URL - Show BOTH subdomain and custom domain URLs */}
                                                 {form && (() => {
-                                                    const previewUrl = buildFormPreviewUrlFor(form, null)
+                                                    const urls = buildFormUrls(form)
                                                     return (
                                                         <div className="p-5">
                                                             <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
-                                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <div className="text-sm font-medium text-[#1F2937]">
-                                                                            Form #{structureIndex + 1}
-                                                                        </div>
-                                                                        <div className="text-xs text-[#6B7280] mt-1 truncate">
-                                                                            {previewUrl ? `Preview URL: ${previewUrl}` : 'Preview URL not available'}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                                                        {previewUrl && (
-                                                                            <>
-                                                                                <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, '_blank')}>
+                                                                <div className="text-sm font-medium text-[#1F2937] mb-3">
+                                                                    Form #{structureIndex + 1}
+                                                                </div>
+
+                                                                {urls && (
+                                                                    <div className="space-y-3">
+                                                                        {/* Standard Subdomain URL */}
+                                                                        <div>
+                                                                            <div className="text-xs font-medium text-[#6B7280] mb-1">
+                                                                                Subdomain URL:
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="text-xs text-[#1F2937] truncate flex-1 font-mono bg-gray-50 px-2 py-1 rounded">
+                                                                                    {urls.subdomainUrl}
+                                                                                </div>
+                                                                                <Button size="sm" variant="outline" onClick={() => window.open(urls.subdomainUrl, '_blank')}>
                                                                                     Preview
                                                                                 </Button>
-                                                                                <Button size="sm" variant="outline" onClick={async () => { await navigator.clipboard.writeText(previewUrl) }}>
+                                                                                <Button size="sm" variant="outline" onClick={async () => {
+                                                                                    await navigator.clipboard.writeText(urls.subdomainUrl)
+                                                                                }}>
                                                                                     Copy
                                                                                 </Button>
-                                                                            </>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Custom Domain URL (if configured) */}
+                                                                        {urls.customDomainUrl && (
+                                                                            <div>
+                                                                                <div className="text-xs font-medium text-[#6B7280] mb-1">
+                                                                                    Custom Domain URL:
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <div className="text-xs text-[#1F2937] truncate flex-1 font-mono bg-gray-50 px-2 py-1 rounded">
+                                                                                        {urls.customDomainUrl}
+                                                                                    </div>
+                                                                                    <Button size="sm" variant="outline" onClick={() => urls.customDomainUrl && window.open(urls.customDomainUrl, '_blank')}>
+                                                                                        Preview
+                                                                                    </Button>
+                                                                                    <Button size="sm" variant="outline" onClick={async () => {
+                                                                                        if (urls.customDomainUrl) await navigator.clipboard.writeText(urls.customDomainUrl)
+                                                                                    }}>
+                                                                                        Copy
+                                                                                    </Button>
+                                                                                </div>
+                                                                            </div>
                                                                         )}
                                                                     </div>
-                                                                </div>
+                                                                )}
+
+                                                                {!urls && (
+                                                                    <div className="text-xs text-[#6B7280]">
+                                                                        Preview URL will generate after publishing
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     )
