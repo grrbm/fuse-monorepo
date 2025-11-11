@@ -95,6 +95,7 @@ import DoctorPatientChats from "./models/DoctorPatientChats";
 import WebSocketService from "./services/websocket.service";
 import MessageTemplate from "./models/MessageTemplate";
 import Sequence from "./models/Sequence";
+import SequenceRun from "./models/SequenceRun";
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -9724,16 +9725,13 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
     // First try legacy enablement via TenantProduct (selected products)
     // First try legacy enablement via TenantProduct (selected products)
     const tenantProduct = await TenantProduct.findOne({
-      where: { clinicId: clinic.id },
+      where: { clinicId: clinic.id, productId: slug },
       include: [
         {
           model: Product,
-          required: true,
-          where: { slug },
         },
         {
           model: Questionnaire,
-          required: false,
         },
       ],
     });
@@ -11266,6 +11264,66 @@ app.put("/sequences/:id", authenticateJWT, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update sequence"
+    });
+  }
+});
+
+app.post("/sequence-triggers/checkout", async (req, res) => {
+  try {
+    const { clinicId, payload } = req.body ?? {};
+
+    if (!clinicId || typeof clinicId !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "clinicId is required"
+      });
+    }
+
+    const activeSequences = await Sequence.findAll({
+      where: {
+        clinicId,
+        status: "active",
+        isActive: true
+      },
+      order: [["updatedAt", "DESC"]]
+    });
+
+    const matchingSequence = activeSequences.find(sequence => {
+      if (!sequence?.trigger || typeof sequence.trigger !== "object") {
+        return false;
+      }
+      const triggerData = sequence.trigger as Record<string, unknown>;
+      const triggerEvent = (triggerData.event || triggerData.eventKey || triggerData.type) as string | undefined;
+      return triggerEvent === "checkout_completed";
+    });
+
+    if (!matchingSequence) {
+      return res.status(404).json({
+        success: false,
+        message: "No active sequence found for checkout trigger"
+      });
+    }
+
+    const sequenceRun = await SequenceRun.create({
+      sequenceId: matchingSequence.id,
+      clinicId,
+      triggerEvent: "checkout_completed",
+      status: "pending",
+      payload: payload ?? null
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        sequenceRunId: sequenceRun.id,
+        sequenceId: matchingSequence.id
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error triggering checkout sequence:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to trigger sequence for checkout"
     });
   }
 });
