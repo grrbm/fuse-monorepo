@@ -49,11 +49,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   productName,
   productCategory,
   productFormVariant,
+  globalFormStructure,
   productPrice,
   productStripePriceId,
   productStripeProductId,
   tenantProductId
 }) => {
+  console.log('🔍 QuestionnaireModal received globalFormStructure:', globalFormStructure)
   const { clinic: domainClinic, isLoading: isLoadingClinic } = useClinicFromDomain();
   const [questionnaire, setQuestionnaire] = React.useState<QuestionnaireData | null>(null);
   const [customColor, setCustomColor] = React.useState<string | null>(null);
@@ -66,6 +68,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [paymentIntentId, setPaymentIntentId] = React.useState<string | null>(null);
   const [orderId, setOrderId] = React.useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = React.useState<'idle' | 'processing' | 'succeeded' | 'failed'>('idle');
+  const [userId, setUserId] = React.useState<string | null>(null);
+  const [accountCreated, setAccountCreated] = React.useState(false);
+  const [patientName, setPatientName] = React.useState<string>('');
+  const [patientFirstName, setPatientFirstName] = React.useState<string>('');
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -302,42 +308,120 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             }
           }
 
-          // Variant-specific standardized step handling
+          // Load standardized category questions for Global Form Structure usage
+          let categoryQuestionSteps: any[] = []
           try {
             if (productCategory) {
               const stdRes = await fetch(`/api/public/questionnaires/standardized?category=${encodeURIComponent(productCategory)}`)
               const stdData = await stdRes.json().catch(() => null)
               if (stdRes.ok && stdData?.success && Array.isArray(stdData?.data) && stdData.data.length > 0) {
-                // Merge standardized templates' steps
-                const standardizedSteps = stdData.data.flatMap((q: any) => q.steps || [])
-                if (standardizedSteps.length > 0) {
-                  const currentSteps = Array.isArray(questionnaireData.steps) ? questionnaireData.steps : []
-
-                  const standardizedSorted = standardizedSteps.sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
-
-                  if (productFormVariant === '2') {
-                    // Prepend standardized
-                    questionnaireData.steps = [...standardizedSorted, ...currentSteps]
-                  } else {
-                    // Default behavior: append after user_profile
-                    const normal = currentSteps
-                      .filter((s: any) => s.category === 'normal' || !s.category)
-                      .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
-                    const userProfile = currentSteps
-                      .filter((s: any) => s.category === 'user_profile')
-                      .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
-                    const others = currentSteps
-                      .filter((s: any) => s.category && s.category !== 'normal' && s.category !== 'user_profile')
-                      .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
-
-                    // Order: normal, user_profile, standardized, others
-                    questionnaireData.steps = [...normal, ...userProfile, ...standardizedSorted, ...others]
-                  }
-                }
+                categoryQuestionSteps = stdData.data.flatMap((q: any) => q.steps || []).sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+                console.log(`✅ Loaded ${categoryQuestionSteps.length} category question steps for ${productCategory}`)
               }
             }
           } catch (e) {
-            console.warn('Failed to adjust standardized steps:', e)
+            console.warn('Failed to load standardized steps:', e)
+          }
+
+          // Apply Global Form Structure section ordering if provided
+          if (globalFormStructure && globalFormStructure.sections && Array.isArray(globalFormStructure.sections)) {
+            console.log('🎯 Applying Global Form Structure ordering:', globalFormStructure.name)
+            const currentSteps = Array.isArray(questionnaireData.steps) ? questionnaireData.steps : []
+            
+            // Categorize current steps by their actual category field
+            const normalSteps = currentSteps.filter((s: any) => s.category === 'normal' || !s.category).sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+            const userProfileSteps = currentSteps.filter((s: any) => s.category === 'user_profile').sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+            const otherSteps = currentSteps.filter((s: any) => s.category && s.category !== 'normal' && s.category !== 'user_profile').sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+            
+            // Get enabled sections in order
+            const enabledSections = globalFormStructure.sections
+              .filter((s: any) => s.enabled)
+              .sort((a: any, b: any) => a.order - b.order)
+            
+            console.log('  Enabled sections:', enabledSections.map((s: any) => `${s.order}. ${s.label} (${s.type})`))
+            console.log('  Available steps - normal:', normalSteps.length, 'userProfile:', userProfileSteps.length, 'category:', categoryQuestionSteps.length)
+            
+            const orderedSteps: any[] = []
+            
+            for (const section of enabledSections) {
+              switch (section.type) {
+                case 'product_questions':
+                  console.log(`  → Adding ${normalSteps.length} product question steps`)
+                  orderedSteps.push(...normalSteps)
+                  break
+                case 'category_questions':
+                  console.log(`  → Adding ${categoryQuestionSteps.length} category question steps`)
+                  orderedSteps.push(...categoryQuestionSteps)
+                  break
+                case 'account_creation':
+                  console.log(`  → Adding ${userProfileSteps.length} account creation steps`)
+                  orderedSteps.push(...userProfileSteps)
+                  break
+                case 'checkout':
+                  // Checkout is handled separately via checkoutStepPosition
+                  console.log('  → Checkout section (handled separately)')
+                  break
+                default:
+                  console.log(`  → Unknown section type: ${section.type}`)
+              }
+            }
+            
+            // Add any other steps that weren't categorized
+            if (otherSteps.length > 0) {
+              console.log(`  → Adding ${otherSteps.length} other steps`)
+              orderedSteps.push(...otherSteps)
+            }
+            
+            questionnaireData.steps = orderedSteps
+            console.log(`✅ Global Form Structure applied: ${orderedSteps.length} total steps`)
+            
+            // Update checkout step position based on Global Form Structure
+            const checkoutSection = enabledSections.find((s: any) => s.type === 'checkout')
+            if (checkoutSection) {
+              // Calculate position: count how many section types come before checkout
+              const sectionsBeforeCheckout = enabledSections.filter((s: any) => s.order < checkoutSection.order && s.enabled && s.type !== 'checkout')
+              let checkoutPosition = 0
+              
+              for (const section of sectionsBeforeCheckout) {
+                switch (section.type) {
+                  case 'product_questions':
+                    checkoutPosition += normalSteps.length
+                    break
+                  case 'category_questions':
+                    checkoutPosition += categoryQuestionSteps.length
+                    break
+                  case 'account_creation':
+                    checkoutPosition += userProfileSteps.length
+                    break
+                }
+              }
+              
+              questionnaireData.checkoutStepPosition = checkoutPosition
+              console.log(`✅ Checkout position set to: ${checkoutPosition} (based on Global Form Structure)`)
+            }
+          } else if (categoryQuestionSteps.length > 0) {
+            // Fallback: No Global Form Structure - use default ordering
+            console.log('ℹ️ No Global Form Structure - using default section ordering')
+            const currentSteps = Array.isArray(questionnaireData.steps) ? questionnaireData.steps : []
+            
+            if (productFormVariant === '2') {
+              // Prepend standardized
+              questionnaireData.steps = [...categoryQuestionSteps, ...currentSteps]
+            } else {
+              // Default behavior: append after user_profile
+              const normal = currentSteps
+                .filter((s: any) => s.category === 'normal' || !s.category)
+                .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+              const userProfile = currentSteps
+                .filter((s: any) => s.category === 'user_profile')
+                .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+              const others = currentSteps
+                .filter((s: any) => s.category && s.category !== 'normal' && s.category !== 'user_profile')
+                .sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+
+              // Order: normal, user_profile, category questions, others
+              questionnaireData.steps = [...normal, ...userProfile, ...categoryQuestionSteps, ...others]
+            }
           }
 
           // Fetch clinic data for variable replacement
@@ -366,6 +450,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                 const variables = {
                   ...getVariablesFromClinic(clinic),
                   productName: productName || ''
+                  // Don't include patientName/patientFirstName yet - they'll be set after account creation
                 };
 
                 // Replace variables in all step titles, descriptions, and questions
@@ -1227,6 +1312,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const currentStep = getCurrentQuestionnaireStep();
     if (!currentStep) return true;
 
+    // If step is marked as not required, skip validation
+    if (currentStep.required === false) {
+      return true;
+    }
+
     // Special validation for Create Your Account step
     if (currentStep.title === 'Create Your Account') {
       const stepErrors: Record<string, string> = {};
@@ -1363,8 +1453,89 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   };
 
   // Navigate to next step
-  const handleNext = () => {
+  // Helper function to replace variables dynamically based on current state
+  const replaceCurrentVariables = (text: string): string => {
+    if (!text) return text;
+    
+    const variables = {
+      ...getVariablesFromClinic(domainClinic || {}),
+      productName: productName || '',
+      patientFirstName: patientFirstName || '', // Put patientFirstName BEFORE patientName to avoid partial matches
+      patientName: patientName || ''
+    };
+    
+    const result = replaceVariables(text, variables);
+    
+    // Debug logging
+    if (text.includes('{{patient')) {
+      console.log('🔄 Variable replacement:', {
+        original: text,
+        variables,
+        result
+      });
+    }
+    
+    return result;
+  };
+
+  // Create user account after "Create Your Account" step
+  const createUserAccount = async () => {
+    // Immediately set patient name from answers (don't modify questionnaire to avoid re-render)
+    const firstName = answers['firstName'] || '';
+    const lastName = answers['lastName'] || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    
+    setPatientFirstName(firstName);
+    setPatientName(fullName);
+    
+    console.log('👤 Set patient variables:', { firstName, fullName });
+    
+    // Try to create user account in background (don't block if it fails)
+    try {
+      console.log('🔐 Creating user account with data:', {
+        firstName: answers['firstName'],
+        lastName: answers['lastName'],
+        email: answers['email'],
+        mobile: answers['mobile']
+      });
+
+      const result = await apiCall('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          firstName: answers['firstName'],
+          lastName: answers['lastName'],
+          email: answers['email'],
+          phoneNumber: answers['mobile'],
+          password: Math.random().toString(36).slice(-12) + 'Aa1!', // Generate stronger password
+          role: 'patient',
+          clinicId: domainClinic?.id || null
+        })
+      });
+
+      if (result.success && result.data) {
+        setUserId(result.data.userId || result.data.id);
+        setAccountCreated(true);
+        console.log('✅ User account created:', result.data.userId || result.data.id);
+      } else {
+        // If account creation failed (likely duplicate email), that's okay
+        console.log('ℹ️ Account creation failed (likely duplicate), will use existing account at payment');
+        setAccountCreated(true);
+      }
+    } catch (error) {
+      console.error('❌ Failed to create user account:', error);
+      // Don't block progression - account will be created/linked at payment time
+    }
+  };
+
+  const handleNext = async () => {
     if (validateCurrentStep() && questionnaire) {
+      const currentStep = getCurrentQuestionnaireStep();
+      
+      // If we just completed "Create Your Account" step and haven't created account yet, do it now
+      if (currentStep?.title === 'Create Your Account' && !accountCreated) {
+        await createUserAccount();
+      }
+      
       const totalSteps = getTotalSteps();
       if (currentStepIndex < totalSteps - 1) {
         setCurrentStepIndex(prev => prev + 1);
@@ -1637,8 +1808,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     stepTitle = 'Complete Your Order';
     stepDescription = 'Secure checkout for your weight management treatment';
   } else if (currentStep) {
-    stepTitle = currentStep.title;
-    stepDescription = currentStep.description || '';
+    // Apply dynamic variable replacement for patient variables
+    stepTitle = replaceCurrentVariables(currentStep.title);
+    stepDescription = replaceCurrentVariables(currentStep.description || '');
   }
 
   if (!currentStep && !isProductSelectionStep() && !isCheckoutStep()) {
@@ -2395,13 +2567,22 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
                               return a.questionOrder - b.questionOrder;
                             })
-                            .map((question) => (
+                            .map((question) => {
+                              // Apply dynamic variable replacement to question text
+                              const questionWithReplacedVars = {
+                                ...question,
+                                questionText: replaceCurrentVariables(question.questionText || ''),
+                                placeholder: replaceCurrentVariables(question.placeholder || '')
+                              };
+                              
+                              return (
                               <QuestionRenderer
                                 key={question.id}
-                                question={question}
+                                  question={questionWithReplacedVars}
                                 answers={answers}
                                 errors={errors}
                                 theme={theme}
+                                  stepRequired={currentStep.required}
                                 onAnswerChange={handleAnswerChange}
                                 onRadioChange={(questionId: string, value: any) => {
                                   // Clear any existing error on first selection
@@ -2414,7 +2595,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                 }}
                                 onCheckboxChange={handleCheckboxChange}
                               />
-                            ))}
+                              );
+                            })}
                         </div>
                       ) : (
                         // Informational steps (like Welcome)

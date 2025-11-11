@@ -15,7 +15,7 @@ function getNormalizedHost(req: NextApiRequest): string | null {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     try {
-        const { slug } = req.query
+        const { slug, variant } = req.query
         const hostname = getNormalizedHost(req)
         const debugHeaders = {
             xOriginalHost: (req.headers as any)['x-original-host'],
@@ -72,7 +72,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ success: false, message: 'Unable to determine clinic from hostname' })
         }
 
-        const url = `${API_BASE}/public/brand-products/${encodeURIComponent(clinicSlug)}/${encodeURIComponent(slug)}`
+        const variantQuery = typeof variant === 'string' ? `?variant=${encodeURIComponent(variant)}` : ''
+        const url = `${API_BASE}/public/brand-products/${encodeURIComponent(clinicSlug)}/${encodeURIComponent(slug)}${variantQuery}`
         console.log('[brand-products] fetching backend', { url })
 
         const response = await fetch(url)

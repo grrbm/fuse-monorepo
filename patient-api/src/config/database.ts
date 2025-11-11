@@ -29,6 +29,7 @@ import UserPatient from '../models/UserPatient';
 import TenantProduct from '../models/TenantProduct';
 import FormSectionTemplate from '../models/FormSectionTemplate';
 import TenantProductForm from '../models/TenantProductForm';
+import GlobalFormStructure from '../models/GlobalFormStructure';
 import Sale from '../models/Sale';
 import DoctorPatientChats from '../models/DoctorPatientChats';
 import Pharmacy from '../models/Pharmacy';
@@ -50,7 +51,7 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL (or DEV_DATABASE_URL for development) environment variable is required');
 }
 
-// Check if we're connecting to localhost (Aptible tunnel)
+// Check if we're connecting to localhost
 const isLocalhost = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
 
 // HIPAA-compliant database connection
@@ -58,9 +59,9 @@ const sequelizeConfig = {
   dialect: 'postgres' as const,
   dialectOptions: {
     // SSL configuration: 
-    // - Production (Aptible): require SSL with relaxed validation
+    // - Production: require SSL with relaxed validation
     // - Development with localhost: no SSL
-    // - Localhost tunnel (non-development): use SSL but don't require it
+    // - Localhost (non-development): use SSL but don't require it
     ssl: process.env.NODE_ENV === 'production' ? {
       require: true,
       rejectUnauthorized: false,
@@ -82,7 +83,7 @@ const sequelizeConfig = {
 
 export const sequelize = new Sequelize(databaseUrl, {
   ...sequelizeConfig,
-  models: [User, Entity, Product,
+  models: [User, Product,
     Prescription, Treatment, PrescriptionProducts,
     TreatmentProducts, Clinic, Questionnaire, QuestionnaireCustomization,
     QuestionnaireStep, Question, QuestionOption,
@@ -90,7 +91,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
-    TenantProductForm, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
+    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
     MessageTemplate, Sequence, SequenceRun
   ],
 });
@@ -171,6 +172,81 @@ async function ensureProductCategoriesColumn() {
   }
 }
 
+async function ensureDefaultFormStructures() {
+  const defaultStructures = [
+    {
+      id: "default",
+      name: "Default - Short form",
+      sections: [
+        { id: "product", icon: "📦", type: "product_questions", label: "Product Questions", order: 1, enabled: true, description: "Questions specific to each individual product" },
+        { id: "account", icon: "👤", type: "account_creation", label: "Create Account", order: 2, enabled: true, description: "Patient information collection" },
+        { id: "checkout", icon: "💳", type: "checkout", label: "Payment & Checkout", order: 3, enabled: true, description: "Billing and shipping" },
+        { id: "category", icon: "📋", type: "category_questions", label: "Standardized Category Questions", order: 4, enabled: false, description: "Questions shared across all products in a category" }
+      ],
+      createdAt: "2025-11-06T00:00:00.000Z",
+      description: "Standard questionnaire flow for all products"
+    },
+    {
+      id: "1762381752300",
+      name: "Personalized Long",
+      sections: [
+        { id: "category", icon: "📋", type: "category_questions", label: "Standardized Category Questions", order: 1, enabled: true, description: "Questions shared across all products in a category" },
+        { id: "product", icon: "📦", type: "product_questions", label: "Product Questions", order: 2, enabled: true, description: "Questions specific to each individual product" },
+        { id: "account", icon: "👤", type: "account_creation", label: "Create Account", order: 3, enabled: true, description: "Patient information collection" },
+        { id: "checkout", icon: "💳", type: "checkout", label: "Payment & Checkout", order: 4, enabled: true, description: "Billing information and payment processing" }
+      ],
+      createdAt: "2025-11-06T00:00:00.000Z",
+      description: "Category questions first for comprehensive intake"
+    },
+    {
+      id: "1762382187889",
+      name: "Personalized and Payment First",
+      sections: [
+        { id: "category", icon: "📋", type: "category_questions", label: "Standardized Category Questions", order: 1, enabled: true, description: "Questions shared across all products in a category" },
+        { id: "account", icon: "👤", type: "account_creation", label: "Create Account", order: 2, enabled: true, description: "Patient information collection" },
+        { id: "checkout", icon: "💳", type: "checkout", label: "Payment & Checkout", order: 3, enabled: true, description: "Billing information and payment processing" },
+        { id: "product", icon: "📦", type: "product_questions", label: "Product Questions", order: 4, enabled: true, description: "Questions specific to each individual product" }
+      ],
+      createdAt: "2025-11-06T00:00:00.000Z",
+      description: "Payment after category questions"
+    },
+    {
+      id: "1762382604408",
+      name: "Payment First",
+      sections: [
+        { id: "checkout", icon: "💳", type: "checkout", label: "Payment & Checkout", order: 1, enabled: true, description: "Billing information and payment processing" },
+        { id: "account", icon: "👤", type: "account_creation", label: "Create Account", order: 2, enabled: true, description: "Patient information collection" },
+        { id: "product", icon: "📦", type: "product_questions", label: "Product Questions", order: 3, enabled: true, description: "Questions specific to each individual product" },
+        { id: "category", icon: "📋", type: "category_questions", label: "Standardized Category Questions", order: 4, enabled: false, description: "Questions shared across all products in a category" }
+      ],
+      createdAt: "2025-11-06T00:00:00.000Z",
+      description: "Collect payment before medical questions"
+    }
+  ];
+
+  try {
+    for (const structure of defaultStructures) {
+      const existing = await GlobalFormStructure.findOne({
+        where: { structureId: structure.id }
+      });
+
+      if (!existing) {
+        await GlobalFormStructure.create({
+          structureId: structure.id,
+          name: structure.name,
+          description: structure.description,
+          sections: structure.sections,
+          isDefault: structure.id === "default",
+          isActive: true
+        });
+        console.log(`✅ Created default form structure: ${structure.name}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error ensuring default form structures:', error);
+  }
+}
+
 export async function initializeDatabase() {
   try {
     await sequelize.authenticate();
@@ -178,11 +254,29 @@ export async function initializeDatabase() {
 
     console.log("Syncing...")
     // Sync all models to database (safer sync mode)
-    // Temporarily using alter: { drop: false } to avoid constraint conflicts
-    await sequelize.sync({ alter: { drop: false } });
-    // await sequelize.sync({ alter: true });
+    await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
 
+    // Force recreate GlobalFormStructure table (drop and recreate)
+    try {
+      console.log('🔄 Dropping and recreating GlobalFormStructure table...');
+      // First, try to drop the table if it exists with wrong permissions
+      try {
+        await sequelize.query('DROP TABLE IF EXISTS "GlobalFormStructures" CASCADE;');
+        console.log('✅ Dropped existing GlobalFormStructures table');
+      } catch (dropError) {
+        console.log('⚠️  Could not drop table (may not exist):', dropError instanceof Error ? dropError.message : dropError);
+      }
+
+      // Now force create the table fresh
+      await GlobalFormStructure.sync({ force: true });
+      console.log('✅ GlobalFormStructure table created fresh');
+    } catch (syncError) {
+      console.error('❌ Error syncing GlobalFormStructure:', syncError);
+      throw syncError;
+    }
+
+    await ensureDefaultFormStructures();
     await ensureProductCategoriesColumn();
 
     // Run active to isActive migration

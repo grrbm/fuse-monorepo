@@ -17,7 +17,7 @@ export default class TenantProductForm extends Entity {
     type: DataType.UUID,
     allowNull: true,
   })
-  declare tenantId: string
+  declare tenantId?: string | null
 
   @BelongsTo(() => User)
   declare tenant: User
@@ -98,6 +98,12 @@ export default class TenantProductForm extends Entity {
     allowNull: true,
   })
   declare currentFormVariant?: string | null
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  declare globalFormStructureId?: string | null
 
 }
 

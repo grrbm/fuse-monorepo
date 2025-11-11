@@ -5,6 +5,7 @@ import QuestionOption from './QuestionOption';
 
 @Table({
     freezeTableName: true,
+    paranoid: false, // Use hard deletes, not soft deletes
 })
 export default class Question extends Entity {
     @Column({

@@ -75,14 +75,15 @@ export default class Questionnaire extends Entity {
     declare treatment?: Treatment | null;
 
     @Column({
-        type: DataType.ENUM('normal', 'user_profile', 'doctor', 'master_template', 'standardized_template'),
+        type: DataType.ENUM('normal', 'user_profile', 'master_template', 'standardized_template'),
         allowNull: true,
         defaultValue: null,
     })
-    //NOTE: Master template should only be assigned for a SINGLE Questionnaire !!!
-    //NOTE2: Don't confuse the master template with the user_profile template !!! the master_template is just a template and is never editable.
-    //But the user_profile template is editable and can be cloned to create a new questionnaire.
-    declare formTemplateType: 'normal' | 'user_profile' | 'doctor' | 'master_template' | 'standardized_template' | null;
+    //NOTE: normal = Product-specific form (one per product)
+    //NOTE: user_profile = Global "Create Account" template
+    //NOTE: standardized_template = Category-wide questions (weight_loss, hair_growth, etc.) - can have variants
+    //NOTE: master_template = System master template (not editable)
+    declare formTemplateType: 'normal' | 'user_profile' | 'master_template' | 'standardized_template' | null;
 
     @Column({
         // Use explicit literals to avoid runtime import/init issues

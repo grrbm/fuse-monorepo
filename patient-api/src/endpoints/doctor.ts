@@ -389,7 +389,7 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                             {
                                 model: Product,
                                 as: 'product',
-                                attributes: ['id', 'name']
+                                attributes: ['id', 'name', 'placeholderSig']
                             }
                         ]
                     }
@@ -448,6 +448,25 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 });
             }
 
+            // Use SIG from product placeholder first, then pharmacy coverage, then fallback to order notes or default
+            const sig = order.tenantProduct?.product?.placeholderSig ||
+                coverage.sig ||
+                order.doctorNotes ||
+                order.notes ||
+                'Take as directed by your healthcare provider';
+
+            console.log('📋 Pharmacy coverage data:', {
+                pharmacy: coverage.pharmacy.name,
+                state: patientState,
+                pharmacyProductId: coverage.pharmacyProductId,
+                pharmacyProductName: coverage.pharmacyProductName,
+                sig: sig,
+                sigSource: coverage.sig ? 'coverage' : order.tenantProduct?.product?.placeholderSig ? 'product' : order.doctorNotes ? 'doctorNotes' : order.notes ? 'orderNotes' : 'default',
+                form: coverage.form,
+                rxId: coverage.rxId,
+                wholesaleCost: coverage.pharmacyWholesaleCost
+            });
+
             res.json({
                 success: true,
                 hasCoverage: true,
@@ -462,7 +481,9 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         pharmacyProductId: coverage.pharmacyProductId,
                         pharmacyProductName: coverage.pharmacyProductName,
                         pharmacyWholesaleCost: coverage.pharmacyWholesaleCost,
-                        sig: coverage.sig
+                        sig: sig,
+                        form: coverage.form,
+                        rxId: coverage.rxId
                     },
                     product: {
                         id: productId,

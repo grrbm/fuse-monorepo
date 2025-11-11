@@ -190,7 +190,8 @@ class OrderService {
                         as: 'user',
                         attributes: ['id', 'firstName',
                             'lastName', 'email', 'pharmacyPatientId',
-                            'clinicId', 'address', 'city', 'state', 'zipCode'
+                            'clinicId', 'address', 'city', 'state', 'zipCode',
+                            'phoneNumber', 'gender', 'dob'
                         ]
                     },
                     {
@@ -238,7 +239,7 @@ class OrderService {
                             {
                                 model: Product,
                                 as: 'product',
-                                attributes: ['id', 'name', 'pharmacyProvider', 'pharmacyProductId']
+                                attributes: ['id', 'name', 'pharmacyProvider', 'pharmacyProductId', 'placeholderSig', 'medicationSize']
                             }
                         ]
                     }

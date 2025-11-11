@@ -12,6 +12,8 @@ export interface PharmacyProduct {
     sig?: string;
     price?: number;
     wholesalePrice?: number;
+    form?: string;
+    rxId?: string;
     [key: string]: any; // Allow additional fields from different pharmacies
 }
 
@@ -122,6 +124,8 @@ export class PharmacyIntegrationService {
             sig: product.sig,
             price: product.price,
             wholesalePrice: product.wholesalePrice,
+            form: product.form,
+            rxId: product.rxId,
             // Keep original data for reference
             _raw: product,
         }));

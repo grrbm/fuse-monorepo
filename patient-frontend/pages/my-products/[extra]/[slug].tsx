@@ -11,11 +11,15 @@ interface PublicProduct {
     slug: string
     questionnaireId: string | null
     category?: string | null
+    categories?: string[]
     currentFormVariant?: string | null
     price?: number | null
     stripeProductId?: string | null
     stripePriceId?: string | null
     tenantProductId?: string | null
+    tenantProductFormId?: string | null
+    globalFormStructureId?: string | null
+    globalFormStructure?: any | null
 }
 
 export default function PublicProductPage() {
@@ -41,7 +45,8 @@ export default function PublicProductPage() {
         setError(null)
 
         try {
-            const apiUrl = `/api/public/brand-products/${encodeURIComponent(productSlug)}`
+            const variantQuery = expectedVariant ? `?variant=${encodeURIComponent(expectedVariant)}` : ''
+            const apiUrl = `/api/public/brand-products/${encodeURIComponent(productSlug)}${variantQuery}`
             console.log('[PublicProduct] fetching', { apiUrl })
             const res = await fetch(apiUrl)
             const raw = await res.text()
@@ -58,16 +63,33 @@ export default function PublicProductPage() {
 
             // Optional: API may include currentFormVariant
             const currentFormVariant: string | null = data.data.currentFormVariant ?? null
+            const tenantProductFormId: string | null = data.data.tenantProductFormId ?? null
 
-            // If a specific variant is requested, ensure it matches the enabled one
-            if (expectedVariant && currentFormVariant && currentFormVariant !== expectedVariant) {
-                console.warn('[PublicProduct] variant mismatch', { expectedVariant, currentFormVariant })
-                setError('Form variant not enabled')
-                setStatus('idle')
-                return
+            // If a specific variant/form is requested, ensure it matches the enabled one
+            if (expectedVariant) {
+                if (tenantProductFormId) {
+                    if (tenantProductFormId !== expectedVariant) {
+                        console.warn('[PublicProduct] form id mismatch', { expectedVariant, tenantProductFormId })
+                        setError('Form variant not enabled')
+                        setStatus('idle')
+                        return
+                    }
+                } else if (currentFormVariant) {
+                    if (currentFormVariant !== expectedVariant) {
+                        console.warn('[PublicProduct] variant mismatch', { expectedVariant, currentFormVariant })
+                        setError('Form variant not enabled')
+                        setStatus('idle')
+                        return
+                    }
+                } else {
+                    console.warn('[PublicProduct] expected variant but none provided by API', { expectedVariant })
+                    setError('Form variant not enabled')
+                    setStatus('idle')
+                    return
+                }
             }
 
-            setProduct({
+            const productData = {
                 id: data.data.id,
                 name: data.data.name,
                 slug: data.data.slug,
@@ -78,7 +100,12 @@ export default function PublicProductPage() {
                 stripeProductId: data.data.stripeProductId ?? null,
                 stripePriceId: data.data.stripePriceId ?? null,
                 tenantProductId: data.data.tenantProductId ?? null,
-            })
+                tenantProductFormId,
+                globalFormStructureId: data.data.globalFormStructureId,
+                globalFormStructure: data.data.globalFormStructure,
+            }
+            console.log('🎯 Product data received with Global Form Structure:', productData.globalFormStructure?.name)
+            setProduct(productData)
             setIsModalOpen(true)
         } catch (err) {
             console.error('❌ Public product load error:', err)
@@ -123,6 +150,7 @@ export default function PublicProductPage() {
                     productName={product.name}
                     productCategory={product.category || undefined}
                     productFormVariant={typeof extra === 'string' ? extra : undefined}
+                    globalFormStructure={product.globalFormStructure || undefined}
                     // Pass pricing data for fallback plan rendering
                     productPrice={typeof product.price === 'number' ? product.price : undefined}
                     productStripeProductId={product.stripeProductId || undefined}

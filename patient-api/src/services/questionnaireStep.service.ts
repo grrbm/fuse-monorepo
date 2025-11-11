@@ -54,7 +54,7 @@ class QuestionnaireStepService {
         return newStep;
     }
 
-    async updateQuestionnaireStep(stepId: string, updateData: { title?: string; description?: string; isDeadEnd?: boolean; conditionalLogic?: string }, userId: string) {
+    async updateQuestionnaireStep(stepId: string, updateData: { title?: string; description?: string; isDeadEnd?: boolean; conditionalLogic?: string; required?: boolean }, userId: string) {
         const step = await QuestionnaireStep.findByPk(stepId);
         if (!step) {
             throw new Error('Questionnaire step not found');
@@ -71,7 +71,8 @@ class QuestionnaireStepService {
             ...(updateData.isDeadEnd !== undefined && { isDeadEnd: updateData.isDeadEnd }),
             ...(updateData.conditionalLogic !== undefined && { 
                 conditionalLogic: updateData.conditionalLogic === '' ? null : updateData.conditionalLogic 
-            })
+            }),
+            ...(updateData.required !== undefined && { required: updateData.required })
         });
 
         return updatedStep;

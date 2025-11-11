@@ -55,7 +55,7 @@ import { promises as dns } from 'dns';
 class DomainService {
   async verifyCustomDomain(
     customDomain: string,
-    expectedTarget: string = 'your-server.aptible.com'
+    expectedTarget: string = 'your-server.example.com'
   ): Promise<{ verified: boolean; error?: string }> {
     try {
       const hostname = `app.${customDomain}`;
@@ -92,7 +92,7 @@ Returns:
   instructions: {
     type: "CNAME",
     host: "app.limitless.com",
-    value: "your-server.aptible.com",
+    value: "your-server.example.com",
     ttl: 3600
   }
 }
@@ -166,7 +166,7 @@ Returns:
         <div className="p-4 bg-muted rounded">
           <div>Type: CNAME</div>
           <div>Host: app.{customDomain}</div>
-          <div>Value: your-server.aptible.com</div>
+          <div>Value: your-server.example.com</div>
           <div>TTL: 3600</div>
         </div>
         <Button onClick={handleVerify}>
@@ -273,7 +273,7 @@ Since we're **NOT allowing root domain** usage (only `app.limitless.com`, not `l
 
 ## Next Steps
 
-1. Answer: What's your Aptible/server endpoint for CNAME target?
+1. Answer: What's your server endpoint for CNAME target?
 2. Build: Database migration + API endpoints
 3. Build: Settings UI
 4. Docs: Caddy setup guide for operations team

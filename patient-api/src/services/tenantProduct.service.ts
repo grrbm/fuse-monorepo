@@ -213,6 +213,7 @@ class TenantProductService {
         }
 
         // 7. Prepare data for bulk upsert
+        // Note: questionnaireId is optional - forms will be generated from global structures
         const productsToUpsert = data.products.map(item => ({
             productId: item.productId,
             questionnaireId: (item as any).questionnaireId || null,
@@ -220,6 +221,154 @@ class TenantProductService {
 
         // 8. Bulk upsert tenant products
         const tenantProducts = await bulkUpsertTenantProducts(clinicId, productsToUpsert);
+
+        // 8.4. Ensure Stripe products and prices exist for all tenant products
+        try {
+            const stripeService = new StripeService();
+            const Clinic = require('../models/Clinic').default;
+            const clinic = await Clinic.findByPk(clinicId);
+
+            for (const tp of tenantProducts) {
+                // Skip if price is 0 or Stripe IDs already exist
+                if (tp.price <= 0 || (tp.stripeProductId && tp.stripePriceId)) {
+                    continue;
+                }
+
+                const product = await Product.findByPk(tp.productId);
+                if (!product) continue;
+
+                // Create Stripe product if doesn't exist
+                let stripeProductId = tp.stripeProductId;
+                if (!stripeProductId) {
+                    console.log(`📦 Creating Stripe product for ${product.name} (${clinic?.name})`);
+
+                    const productParams: any = {
+                        name: `${product.name} - ${clinic?.name || 'Subscription'}`,
+                        metadata: {
+                            productId: product.id,
+                            tenantProductId: tp.id,
+                            clinicId: tp.clinicId
+                        }
+                    };
+
+                    if (product.description && product.description.trim() !== '') {
+                        productParams.description = product.description;
+                    }
+
+                    const stripeProduct = await stripeService.createProduct(productParams);
+                    stripeProductId = stripeProduct.id;
+                    await tp.update({ stripeProductId });
+                    console.log(`✅ Stripe product created: ${stripeProductId}`);
+                }
+
+                // Create Stripe price if doesn't exist
+                if (!tp.stripePriceId) {
+                    console.log(`💰 Creating Stripe price for ${product.name}: $${tp.price}`);
+
+                    const stripePrice = await stripeService.createPrice({
+                        product: stripeProductId,
+                        currency: 'usd',
+                        unit_amount: Math.round(tp.price * 100), // Convert to cents
+                        recurring: {
+                            interval: 'month',
+                            interval_count: 1
+                        },
+                        metadata: {
+                            productId: product.id,
+                            tenantProductId: tp.id,
+                            clinicId: tp.clinicId,
+                            priceType: 'base_price'
+                        }
+                    });
+
+                    await tp.update({ stripePriceId: stripePrice.id });
+                    console.log(`✅ Stripe price created: ${stripePrice.id}`);
+                }
+            }
+        } catch (error) {
+            console.error('⚠️ Failed to create Stripe products/prices:', error);
+            // Don't fail the whole request - products can still be enabled without Stripe
+        }
+
+        // 8.5. Auto-create TenantProductForms for all global structures
+        // Forms are built based on global structure sections, not pre-existing questionnaires
+        try {
+            const GlobalFormStructure = require('../models/GlobalFormStructure').default;
+            const TenantProductForm = require('../models/TenantProductForm').default;
+            const Product = require('../models/Product').default;
+            const Clinic = require('../models/Clinic').default;
+
+            // Get all global form structures (now global to all clinics)
+            const globalStructures = await GlobalFormStructure.findAll({
+                where: {
+                    isActive: true
+                }
+            });
+
+            // Get clinic for URL generation
+            const clinic = await Clinic.findByPk(clinicId);
+
+            // For each activated product, create forms for all structures
+            for (const tp of tenantProducts) {
+                const product = await Product.findByPk(tp.productId);
+                if (!product) continue;
+
+                // Find the product's SHARED questionnaire (formTemplateType = 'normal')
+                // This is the questionnaire that gets edited in the form builder
+                // and should be used by ALL clinics that enable this product
+                const productQuestionnaire = await Questionnaire.findOne({
+                    where: {
+                        productId: tp.productId,
+                        formTemplateType: 'normal'
+                    },
+                    order: [['updatedAt', 'DESC']]
+                });
+
+                const sharedQuestionnaireId = productQuestionnaire?.id || tp.questionnaireId || null;
+
+                for (const structure of globalStructures) {
+                    // Check if form already exists
+                    const existingForm = await TenantProductForm.findOne({
+                        where: {
+                            productId: tp.productId,
+                            clinicId,
+                            globalFormStructureId: structure.structureId
+                        }
+                    });
+
+                    if (!existingForm) {
+                        // Create new form - questionnaire will be built from global structure sections
+                        const protocol = clinic.isCustomDomain && clinic.customDomain ? 'https' : 'http';
+                        const domain = clinic.isCustomDomain && clinic.customDomain ? clinic.customDomain : 'localhost:3000';
+                        const publishedUrl = `${protocol}://${clinic.slug}.${domain}/my-products/${require('crypto').randomUUID()}/${product.slug}`;
+
+                        await TenantProductForm.create({
+                            productId: tp.productId,
+                            clinicId,
+                            questionnaireId: sharedQuestionnaireId, // Use the shared product questionnaire
+                            globalFormStructureId: structure.structureId,
+                            globalFormStructureUUID: structure.id,
+                            layoutTemplate: 'layout_a',
+                            publishedUrl,
+                            lastPublishedAt: new Date()
+                        });
+
+                        console.log(`✅ Auto-created form for product ${product.slug} with structure ${structure.name} using ${productQuestionnaire ? 'shared questionnaire' : 'tenant questionnaire'}`);
+                    } else {
+                        // Update existing form to use the shared questionnaire (in case it changed)
+                        if (existingForm.questionnaireId !== sharedQuestionnaireId) {
+                            await existingForm.update({
+                                questionnaireId: sharedQuestionnaireId
+                            });
+                            console.log(`✅ Updated form for product ${product.slug} with structure ${structure.name} to use ${productQuestionnaire ? 'shared questionnaire' : 'tenant questionnaire'}`);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('⚠️ Failed to auto-create forms:', error);
+            // Don't fail the whole request - forms can be created later
+        }
 
         // 9. Return the created/updated tenant products with full relations
         const result = await Promise.all(

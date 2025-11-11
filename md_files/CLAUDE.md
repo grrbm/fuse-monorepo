@@ -60,7 +60,6 @@ pnpm migrate
 pnpm migrate:undo
 
 # Note: Uses Sequelize with PostgreSQL
-# Local dev uses Aptible tunnel: aptible db:tunnel patient-api-staging-postgresql --port 5433
 ```
 
 ### Testing & Quality

@@ -63,12 +63,6 @@ pnpm migrate
 pnpm migrate:undo
 ```
 
-**Note:** Local development uses Aptible tunnel:
-
-```bash
-aptible db:tunnel patient-api-staging-postgresql --port 5433
-```
-
 ### Building
 
 ```bash

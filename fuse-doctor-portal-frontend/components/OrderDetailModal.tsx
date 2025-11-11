@@ -243,6 +243,18 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                                             <span className="font-medium text-gray-900 italic">{pharmacyCoverage.coverage.sig}</span>
                                         </div>
                                     )}
+                                    {pharmacyCoverage.coverage.form && (
+                                        <div>
+                                            <span className="text-gray-600">Medication Form:</span>{' '}
+                                            <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.form}</span>
+                                        </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.rxId && (
+                                        <div>
+                                            <span className="text-gray-600">RX ID:</span>{' '}
+                                            <span className="font-mono text-sm text-gray-900">{pharmacyCoverage.coverage.rxId}</span>
+                                        </div>
+                                    )}
                                     {pharmacyCoverage.coverage.pharmacyWholesaleCost && (
                                         <div>
                                             <span className="text-gray-600">Wholesale Cost:</span>{' '}
