@@ -97,6 +97,8 @@ import WebSocketService from "./services/websocket.service";
 import MessageTemplate from "./models/MessageTemplate";
 import Sequence from "./models/Sequence";
 import SequenceRun from "./models/SequenceRun";
+import SequenceRunWorker from "./services/sequence/SequenceRunWorker";
+let sequenceRunWorker: SequenceRunWorker | null = null;
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -8824,6 +8826,9 @@ async function startServer() {
     process.exit(1);
   }
 
+  sequenceRunWorker = new SequenceRunWorker();
+  console.log('🛠️ Sequence run worker initialized');
+
   const httpServer = app.listen(PORT, () => {
     console.log(`🚀 API listening on :${PORT}`);
     console.log('📊 Database connected successfully');
@@ -11311,7 +11316,7 @@ app.get("/sequences", authenticateJWT, async (req, res) => {
       });
     }
 
-    const { status } = req.query;
+    const { status, refreshAnalytics } = req.query;
 
     const whereClause: any = {
       clinicId: currentUser.clinicId
@@ -11325,6 +11330,20 @@ app.get("/sequences", authenticateJWT, async (req, res) => {
       where: whereClause,
       order: [['createdAt', 'DESC']]
     });
+
+    // Refresh analytics if requested (default: true for better UX)
+    const shouldRefresh = refreshAnalytics !== 'false';
+    
+    if (shouldRefresh) {
+      // Calculate analytics for all sequences in parallel
+      await Promise.all(
+        sequences.map(async (sequence) => {
+          const analytics = await calculateSequenceAnalytics(sequence.id);
+          sequence.analytics = analytics;
+          await sequence.save();
+        })
+      );
+    }
 
     res.status(200).json({
       success: true,
@@ -11728,6 +11747,37 @@ app.put("/sequences/:id", authenticateJWT, async (req, res) => {
   }
 });
 
+// Helper function to calculate sequence analytics from all its runs
+async function calculateSequenceAnalytics(sequenceId: string) {
+  const runs = await SequenceRun.findAll({
+    where: { sequenceId }
+  });
+
+  const totalRuns = runs.length;
+  const completedRuns = runs.filter(r => r.status === 'completed').length;
+  const totalEmailsSent = runs.reduce((sum, r) => sum + (r.emailsSent || 0), 0);
+  const totalSmsSent = runs.reduce((sum, r) => sum + (r.smsSent || 0), 0);
+  const totalEmailsOpened = runs.reduce((sum, r) => sum + (r.emailsOpened || 0), 0);
+  const totalEmailsClicked = runs.reduce((sum, r) => sum + (r.emailsClicked || 0), 0);
+
+  const totalSent = totalEmailsSent + totalSmsSent;
+  const openRate = totalEmailsSent > 0 ? (totalEmailsOpened / totalEmailsSent) * 100 : 0;
+  const clickRate = totalEmailsOpened > 0 ? (totalEmailsClicked / totalEmailsOpened) * 100 : 0;
+
+  return {
+    totalSent,
+    openRate: Math.round(openRate * 10) / 10, // Round to 1 decimal
+    clickRate: Math.round(clickRate * 10) / 10,
+    activeContacts: completedRuns,
+    totalRuns,
+    completedRuns,
+    emailsSent: totalEmailsSent,
+    smsSent: totalSmsSent,
+    emailsOpened: totalEmailsOpened,
+    emailsClicked: totalEmailsClicked
+  };
+}
+
 app.post("/sequence-triggers/checkout", async (req, res) => {
   try {
     const { clinicId, payload } = req.body ?? {};
@@ -11779,11 +11829,306 @@ app.post("/sequence-triggers/checkout", async (req, res) => {
         sequenceId: matchingSequence.id
       }
     });
+
+    if (sequenceRunWorker) {
+      await sequenceRunWorker.enqueueRun(sequenceRun.id);
+    } else {
+      console.warn('⚠️ Sequence run worker not initialized');
+    }
   } catch (error) {
     console.error("❌ Error triggering checkout sequence:", error);
     res.status(500).json({
       success: false,
       message: "Failed to trigger sequence for checkout"
+    });
+  }
+});
+
+// Update sequence analytics based on all runs
+app.post("/sequences/:id/refresh-analytics", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const { id } = req.params;
+
+    const sequence = await Sequence.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId
+      }
+    });
+
+    if (!sequence) {
+      return res.status(404).json({
+        success: false,
+        message: "Sequence not found"
+      });
+    }
+
+    const analytics = await calculateSequenceAnalytics(id);
+
+    sequence.analytics = analytics;
+    await sequence.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        sequenceId: id,
+        analytics
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error refreshing sequence analytics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to refresh analytics"
+    });
+  }
+});
+
+// Get all sequence runs with optional filters
+app.get("/sequence-runs", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    if (!currentUser.clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "User does not belong to a clinic"
+      });
+    }
+
+    const { sequenceId, status, limit = '50', offset = '0' } = req.query;
+
+    const whereClause: any = {
+      clinicId: currentUser.clinicId
+    };
+
+    if (sequenceId && typeof sequenceId === 'string') {
+      whereClause.sequenceId = sequenceId;
+    }
+
+    if (status && typeof status === 'string') {
+      whereClause.status = status;
+    }
+
+    const parsedLimit = parseInt(limit as string, 10);
+    const parsedOffset = parseInt(offset as string, 10);
+
+    const { count, rows: runs } = await SequenceRun.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: Sequence,
+          as: 'sequence',
+          attributes: ['id', 'name', 'status']
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : 50,
+      offset: Number.isFinite(parsedOffset) ? parsedOffset : 0
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        runs,
+        total: count,
+        limit: parsedLimit,
+        offset: parsedOffset
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error fetching sequence runs:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch sequence runs"
+    });
+  }
+});
+
+// Get single sequence run by ID
+app.get("/sequence-runs/:id", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const { id } = req.params;
+
+    const run = await SequenceRun.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId
+      },
+      include: [
+        {
+          model: Sequence,
+          as: 'sequence'
+        }
+      ]
+    });
+
+    if (!run) {
+      return res.status(404).json({
+        success: false,
+        message: "Sequence run not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: run
+    });
+  } catch (error) {
+    console.error("❌ Error fetching sequence run:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch sequence run"
+    });
+  }
+});
+
+// Email tracking pixel endpoint - tracks email opens
+app.get("/track/email/:runId/open", async (req, res) => {
+  try {
+    const { runId } = req.params;
+
+    const run = await SequenceRun.findByPk(runId);
+
+    if (run) {
+      // Increment open counter only once per run (idempotent)
+      if (run.emailsOpened === 0) {
+        run.emailsOpened = 1;
+        await run.save();
+        
+        // Update sequence analytics
+        const sequence = await Sequence.findByPk(run.sequenceId);
+        if (sequence) {
+          const analytics = await calculateSequenceAnalytics(run.sequenceId);
+          sequence.analytics = analytics;
+          await sequence.save();
+        }
+        
+        console.log(`📧 Email opened tracked for run ${runId}`);
+      }
+    }
+
+    // Return 1x1 transparent GIF
+    const pixel = Buffer.from(
+      'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+      'base64'
+    );
+    res.setHeader('Content-Type', 'image/gif');
+    res.setHeader('Content-Length', pixel.length);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.send(pixel);
+  } catch (error) {
+    console.error("❌ Error tracking email open:", error);
+    // Still return pixel even on error
+    const pixel = Buffer.from(
+      'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+      'base64'
+    );
+    res.setHeader('Content-Type', 'image/gif');
+    res.send(pixel);
+  }
+});
+
+// SendGrid webhook endpoint for email events
+app.post("/webhooks/sendgrid", async (req, res) => {
+  try {
+    const events = Array.isArray(req.body) ? req.body : [req.body];
+    
+    console.log(`📨 Received ${events.length} SendGrid webhook events`);
+
+    for (const event of events) {
+      const { event: eventType, sg_message_id, email } = event;
+      
+      // Extract runId from custom args if available
+      const runId = event.runId || event.run_id;
+      
+      if (!runId) {
+        console.warn('⚠️ SendGrid event missing runId:', eventType);
+        continue;
+      }
+
+      const run = await SequenceRun.findByPk(runId);
+      
+      if (!run) {
+        console.warn(`⚠️ Run ${runId} not found for event ${eventType}`);
+        continue;
+      }
+
+      let updated = false;
+
+      // Handle different event types
+      switch (eventType) {
+        case 'open':
+        case 'opened':
+          if (run.emailsOpened === 0) {
+            run.emailsOpened = 1;
+            updated = true;
+            console.log(`📧 Email opened via webhook for run ${runId}`);
+          }
+          break;
+
+        case 'click':
+          run.emailsClicked = (run.emailsClicked || 0) + 1;
+          // Auto-increment opens if clicked (user must have opened to click)
+          if (run.emailsOpened === 0) {
+            run.emailsOpened = 1;
+          }
+          updated = true;
+          console.log(`🖱️ Email clicked via webhook for run ${runId}`);
+          break;
+
+        case 'delivered':
+          console.log(`✅ Email delivered for run ${runId}`);
+          break;
+
+        case 'bounce':
+        case 'dropped':
+          console.log(`❌ Email ${eventType} for run ${runId}`);
+          break;
+      }
+
+      if (updated) {
+        await run.save();
+        
+        // Update sequence analytics
+        const sequence = await Sequence.findByPk(run.sequenceId);
+        if (sequence) {
+          const analytics = await calculateSequenceAnalytics(run.sequenceId);
+          sequence.analytics = analytics;
+          await sequence.save();
+        }
+      }
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("❌ Error processing SendGrid webhook:", error);
+    // Return 200 to prevent SendGrid from retrying
+    res.status(200).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     });
   }
 });

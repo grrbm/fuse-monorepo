@@ -44,6 +44,13 @@ export default class SequenceRun extends Entity {
   declare status: SequenceRunStatus
 
   @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  })
+  declare currentStepIndex: number
+
+  @Column({
     type: DataType.JSONB,
     allowNull: true
   })
@@ -66,5 +73,33 @@ export default class SequenceRun extends Entity {
     allowNull: true
   })
   declare failureReason?: string | null
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  })
+  declare emailsSent: number
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  })
+  declare smsSent: number
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  })
+  declare emailsOpened: number
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  })
+  declare emailsClicked: number
 }
 
