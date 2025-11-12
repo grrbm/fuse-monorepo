@@ -372,7 +372,7 @@ export default function Forms() {
                   : "text-[#6B7280] hover:bg-[#F3F4F6]"
               }`}
             >
-              Products
+              Medical Questions
             </button>
             <button
               onClick={() => setActiveTab("templates")}
