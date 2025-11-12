@@ -247,6 +247,64 @@ export default function Products() {
     }, [activeTab, fetchTenantProductCount])
 
 
+    const handleCreateProduct = async () => {
+        if (!token) return
+
+        const skeletonProduct = {
+            name: "New Product",
+            description: "Edit product details below",
+            price: 1, // Minimum positive price
+            placeholderSig: "TBD",
+            activeIngredients: ["TBD"], // At least one required
+            active: false, // Start as inactive
+        }
+
+        console.log('🔄 Creating skeleton product:', skeletonProduct)
+
+        try {
+            // Create a skeleton product with minimum required fields
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products-management`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(skeletonProduct),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                console.error('❌ Failed to create product')
+                console.error('Response status:', response.status, response.statusText)
+                console.error('Response data:', data)
+
+                // Show specific validation errors if available
+                let errorMessage = data.message || "Failed to create product"
+                if (data.errors && Array.isArray(data.errors)) {
+                    const errorMessages = data.errors.map((e: any) => {
+                        if (typeof e === 'string') return e
+                        if (e.message) return e.message
+                        return JSON.stringify(e)
+                    })
+                    errorMessage = errorMessages.join("; ")
+                } else if (data.errors && typeof data.errors === 'object') {
+                    errorMessage = Object.entries(data.errors).map(([key, val]) => `${key}: ${val}`).join("; ")
+                }
+
+                setError(`Error: ${errorMessage}`)
+                return
+            }
+
+            console.log('✅ Product created successfully:', data.data.id)
+            // Navigate to the product editor
+            router.push(`/products/editor/${data.data.id}`)
+        } catch (error: any) {
+            console.error("❌ Exception creating product:", error)
+            setError(`Error: ${error.message || "Failed to create product"}`)
+        }
+    }
+
     const formatPrice = (price: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -516,6 +574,14 @@ export default function Products() {
                             >
                                 <Package className="h-4 w-4 mr-1.5" />
                                 Refresh
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-9 px-3 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white"
+                                onClick={handleCreateProduct}
+                            >
+                                <Plus className="h-4 w-4 mr-1.5" />
+                                Add Product
                             </Button>
                         </div>
                     </div>
