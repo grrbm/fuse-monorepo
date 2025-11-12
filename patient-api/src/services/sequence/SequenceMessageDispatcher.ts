@@ -31,44 +31,62 @@ const MERGE_FIELD_REGEX = /\{\{([^}]+)\}\}/g
 const toSnakeCase = (value: string) =>
   value.replace(/([a-z])([A-Z])/g, '$1_$2').replace(/\s+/g, '_').toLowerCase()
 
-const buildTemplateContext = (run: SequenceRun, sequence: Sequence): Record<string, string> => {
+const buildTemplateContext = (
+  run: SequenceRun, 
+  sequence: Sequence, 
+  mergeFields: string[]
+): Record<string, string> => {
   const payload = (run.payload ?? {}) as RunPayload
   const userDetails = payload?.userDetails ?? {}
+  
+  const context: Record<string, string> = {}
 
-  const firstName =
-    payload?.patientFirstName ||
-    userDetails.firstName ||
-    (userDetails as any).first_name ||
-    ''
+  // Process each merge field from the template
+  // Format: "name|firstName" where name is the variable and firstName is the DB field
+  for (const field of mergeFields) {
+    if (!field || typeof field !== 'string') continue
+    
+    const parts = field.split('|')
+    const fieldName = parts[0]?.trim() // What user types: {{name}}
+    const dbField = parts[1]?.trim()   // Database field: firstName
+    
+    if (!fieldName || !dbField) continue
 
-  const lastName =
-    userDetails.lastName ||
-    (userDetails as any).last_name ||
-    ''
-
-  const fullName = payload?.patientName || `${firstName} ${lastName}`.trim()
-
-  const entries: Record<string, string> = {
-    sequence_name: sequence.name || '',
-    patient_first_name: firstName || '',
-    patient_name: fullName || '',
-    patient_last_name: lastName || '',
-    patient_email: userDetails.email || '',
-    patient_phone_number: userDetails.phoneNumber || '',
-    trigger_event: run.triggerEvent || '',
-  }
-
-  if (payload?.selectedPlan) {
-    entries.selected_plan = String(payload.selectedPlan)
-  }
-
-  if (payload?.shippingInfo && typeof payload.shippingInfo === 'object') {
-    for (const [key, value] of Object.entries(payload.shippingInfo)) {
-      entries[`shipping_${toSnakeCase(key)}`] = value === undefined || value === null ? '' : String(value)
+    // Get value from userDetails or payload
+    let value = ''
+    
+    // Try to get from userDetails first
+    if (userDetails && dbField in userDetails) {
+      value = String(userDetails[dbField] ?? '')
     }
+    // Try payload directly
+    else if (payload && dbField in payload) {
+      value = String(payload[dbField] ?? '')
+    }
+    // Try camelCase/snake_case variations
+    else if (userDetails) {
+      const snakeCaseField = toSnakeCase(dbField)
+      if (snakeCaseField in userDetails) {
+        value = String((userDetails as any)[snakeCaseField] ?? '')
+      }
+    }
+    
+    context[fieldName] = value
   }
 
-  return entries
+  // Add some default fields that are always available
+  context.sequence_name = sequence.name || ''
+  context.trigger_event = run.triggerEvent || ''
+  
+  if (payload?.orderNumber) {
+    context.order_number = String(payload.orderNumber)
+  }
+  
+  if (payload?.totalAmount !== undefined) {
+    context.total_amount = String(payload.totalAmount)
+  }
+
+  return context
 }
 
 const replaceTemplateVariables = (text: string, context: Record<string, string>) => {
@@ -78,6 +96,29 @@ const replaceTemplateVariables = (text: string, context: Record<string, string>)
     const normalized = toSnakeCase(String(token).trim())
     return context[normalized] ?? context[String(token).trim()] ?? `{{${token}}}`
   })
+}
+
+// Parse template body - handles both JSON blocks and plain text
+const parseTemplateBody = (body: string): string => {
+  if (!body) return ''
+
+  try {
+    // Try to parse as JSON (array of blocks from the template editor)
+    const parsed = JSON.parse(body)
+    
+    if (Array.isArray(parsed)) {
+      // Extract text content from blocks
+      return parsed
+        .filter((block: any) => block && block.type === 'text' && block.content)
+        .map((block: any) => block.content)
+        .join('\n\n') // Join multiple text blocks with double line break
+    }
+  } catch {
+    // Not JSON, treat as plain text
+  }
+
+  // Return as-is if it's plain text
+  return body
 }
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
@@ -207,14 +248,28 @@ export default class SequenceMessageDispatcher {
       return
     }
 
-    const context = buildTemplateContext(run, sequence)
-    const renderedBody = replaceTemplateVariables(template.body, context)
+    // Build context using template's merge fields
+    const mergeFields = Array.isArray(template.mergeFields) ? template.mergeFields : []
+    const context = buildTemplateContext(run, sequence, mergeFields)
+    
+    // Parse template body (handles JSON blocks or plain text)
+    const parsedBody = parseTemplateBody(template.body)
+    
+    // Debug log
+    console.log(`🔍 Template context for run ${run.id}:`, {
+      mergeFields: template.mergeFields,
+      availableFields: Object.keys(context),
+      contextValues: context
+    })
+    
+    // Replace merge field variables
+    const renderedBody = replaceTemplateVariables(parsedBody, context)
 
     if (stepType === 'sms') {
-      const phone =
-        context.patient_phone_number ||
-        context.patient_phone ||
-        ''
+      // Get phone from userDetails in payload
+      const payload = (run.payload ?? {}) as RunPayload
+      const userDetails = payload?.userDetails ?? {}
+      const phone = userDetails.phoneNumber || ''
 
       if (!phone) {
         console.warn(`⚠️ No phone number available for SMS run ${run.id}`)
@@ -231,18 +286,19 @@ export default class SequenceMessageDispatcher {
       return
     }
 
-    const email =
-      context.patient_email ||
-      ''
+    // Get email from userDetails in payload
+    const payload = (run.payload ?? {}) as RunPayload
+    const userDetails = payload?.userDetails ?? {}
+    const email = userDetails.email || ''
 
     if (!email) {
       console.warn(`⚠️ No email available for email run ${run.id}`)
       return
     }
 
-    const subject = template.subject
-      ? replaceTemplateVariables(template.subject, context)
-      : sequence.name || 'Sequence Message'
+    // Parse subject (in case it's also stored as JSON)
+    const parsedSubject = template.subject ? parseTemplateBody(template.subject) : sequence.name || 'Sequence Message'
+    const subject = replaceTemplateVariables(parsedSubject, context)
 
     // Send email with tracking pixel
     await this.emailProvider.send(email, subject, renderedBody, run.id)
