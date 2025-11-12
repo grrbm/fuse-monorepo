@@ -575,16 +575,68 @@ export default function Products() {
                                 <Package className="h-4 w-4 mr-1.5" />
                                 Refresh
                             </Button>
-                            <Button
-                                size="sm"
-                                className="h-9 px-3 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white"
-                                onClick={handleCreateProduct}
-                            >
-                                <Plus className="h-4 w-4 mr-1.5" />
-                                Add Product
-                            </Button>
+                            {(() => {
+                                const planType = subscription?.plan?.type?.toLowerCase()
+                                const isPremium = planType === 'professional' || planType === 'enterprise'
+                                const isDisabled = !isPremium
+                                
+                                return (
+                                    <div className="relative group">
+                                        <Button
+                                            size="sm"
+                                            className="h-9 px-3 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                            onClick={handleCreateProduct}
+                                            disabled={isDisabled}
+                                        >
+                                            <Plus className="h-4 w-4 mr-1.5" />
+                                            Add Product
+                                        </Button>
+                                        {isDisabled && (
+                                            <div className="invisible group-hover:visible absolute right-0 top-full mt-2 w-64 z-10">
+                                                <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg">
+                                                    <p className="font-semibold mb-1">Premium Feature</p>
+                                                    <p>Creating custom products is only available on Professional and Enterprise plans. <a href="/plans" className="underline hover:text-indigo-300">Upgrade now</a></p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })()}
                         </div>
                     </div>
+
+                    {/* Premium Plan Notice for Starter users */}
+                    {(() => {
+                        const planType = subscription?.plan?.type?.toLowerCase()
+                        const isPremium = planType === 'professional' || planType === 'enterprise'
+                        
+                        if (!isPremium) {
+                            return (
+                                <div className="mb-6 px-5 py-4 rounded-lg border-2 border-amber-200 bg-amber-50">
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                                            <Package className="h-5 w-5 text-amber-600" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                                                Unlock Custom Products with Premium Plans
+                                            </h3>
+                                            <p className="text-sm text-amber-800 mb-3">
+                                                Creating custom products is available on Professional and Enterprise plans. Upgrade to add your own products to the catalog.
+                                            </p>
+                                            <a 
+                                                href="/plans" 
+                                                className="inline-flex items-center text-sm font-medium text-amber-900 hover:text-amber-700 underline"
+                                            >
+                                                View Plans & Upgrade
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        }
+                        return null
+                    })()}
 
                     {/* Subscription/product limit summary - Compact */}
                     <div className="mb-6 px-4 py-3 rounded-lg border border-gray-200 bg-white">
