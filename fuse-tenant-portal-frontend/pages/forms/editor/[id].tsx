@@ -71,6 +71,7 @@ export default function TemplateEditor() {
   const [attachingForm, setAttachingForm] = useState(false)
   const [detachingForm, setDetachingForm] = useState(false)
   const [showFormSelector, setShowFormSelector] = useState(false)
+  const [creatingForm, setCreatingForm] = useState(false)
   const [availableProducts, setAvailableProducts] = useState<Array<{ id: string; name: string }>>([])
   const [selectedProductId, setSelectedProductId] = useState<string>("")
   const [productSearchQuery, setProductSearchQuery] = useState("")
@@ -402,6 +403,58 @@ export default function TemplateEditor() {
     } finally {
       setDetachingForm(false)
     }
+  }
+
+  const handleSwitchForm = async (newFormId: string) => {
+    if (!token || !templateId || typeof templateId !== 'string') return
+
+    try {
+      setAttachingForm(true)
+      setShowFormSelector(false)
+
+      // Import template steps into the shared questionnaire (replaces existing steps)
+      console.log(`📋 Importing template ${newFormId} into questionnaire ${templateId}...`)
+      const response = await fetch(`${baseUrl}/questionnaires/${templateId}/import-template-steps`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ templateId: newFormId }),
+      })
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null)
+        console.error("❌ Import template error response:", errorPayload)
+        const message = errorPayload?.message || errorPayload?.error || `Failed to import template (${response.status})`
+        throw new Error(message)
+      }
+
+      const data = await response.json()
+      console.log(`✅ Template imported successfully, steps replaced`)
+
+      // Update state with the fresh data from the import response
+      if (data.data) {
+        // Force React to recognize the state change by creating new array references
+        const newSteps = [...(data.data.steps || [])]
+        setTemplate({ ...data.data })
+        setSteps(newSteps)
+      }
+
+      setSaveMessage("✅ Template imported! All steps replaced with template's original steps.")
+      setTimeout(() => setSaveMessage(null), 3000)
+    } catch (error: any) {
+      console.error("❌ Error switching form:", error)
+      setError(error.message || 'Failed to import template')
+      setTimeout(() => setError(null), 5000)
+    } finally {
+      setAttachingForm(false)
+    }
+  }
+
+  const handleCreateNewForm = () => {
+    // Navigate to the forms templates tab to create a new template
+    router.push("/forms?tab=templates")
   }
 
   const handleAttachToProduct = async () => {
@@ -1891,174 +1944,82 @@ export default function TemplateEditor() {
                   </div>
                 </div>
 
-                {/* Product Form Attachment - always show for product forms */}
+                {/* Template Import UI - for product forms */}
                 {template?.formTemplateType === 'normal' && (
-                  <Card className="border-border/40">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        {template?.productId && productInfo ? (
-                          <>
-                            <Link2 className="h-4 w-4" />
-                            Attached to Product: {productInfo.name}
-                          </>
-                        ) : (
-                          <>
-                            <Unlink className="h-4 w-4" />
-                            Not Attached to Any Product
-                          </>
-                        )}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {template?.productId && productInfo ? (
-                        <>
-                          <p className="text-sm text-muted-foreground">
-                            This form is currently attached to the product above. You can switch to a different form or detach this form.
-                          </p>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setShowFormSelector(!showFormSelector)}
-                            >
-                              {showFormSelector ? 'Hide' : 'Switch Form'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={handleDetachForm}
-                              disabled={detachingForm}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              {detachingForm ? (
-                                <>
-                                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                                  Detaching...
-                                </>
-                              ) : (
-                                <>
-                                  <Unlink className="mr-2 h-3 w-3" />
-                                  Detach Form
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm text-muted-foreground">
-                            This form is not attached to any product. You can attach it to a product by selecting a product below.
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setShowProductSelector(!showProductSelector)}
-                          >
-                            {showProductSelector ? 'Hide' : 'Attach to Product'}
-                          </Button>
-                        </>
-                      )}
+                  <div className="flex gap-3 flex-wrap">
+                    {/* Choose Template Dropdown */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowFormSelector(!showFormSelector)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-[#E5E7EB] bg-white text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Choose Template
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
 
-                      {/* Form Selector Dropdown - for switching forms when attached */}
-                      {showFormSelector && template?.productId && (
-                        <div className="space-y-3 pt-3 border-t border-border/40">
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Search & Select Form</label>
-                            <Input
-                              placeholder="Search forms..."
-                              value={formSearchQuery}
-                              onChange={(e) => setFormSearchQuery(e.target.value)}
-                              className="mb-2"
-                            />
-                            <select
-                              value={selectedFormId}
-                              onChange={(e) => setSelectedFormId(e.target.value)}
-                              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                            >
-                              <option value="">Select a form...</option>
+                      {showFormSelector && (
+                        <>
+                          {/* Backdrop */}
+                          <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setShowFormSelector(false)}
+                          />
+
+                          {/* Dropdown Menu */}
+                          <div className="absolute left-0 z-50 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-[#E5E7EB] overflow-hidden">
+                            <div className="p-4 border-b border-[#E5E7EB]">
+                              <input
+                                type="text"
+                                placeholder="Search templates..."
+                                value={formSearchQuery}
+                                onChange={(e) => setFormSearchQuery(e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50"
+                              />
+                            </div>
+                            <div className="max-h-64 overflow-y-auto">
                               {availableForms
                                 .filter(form =>
                                   form.title.toLowerCase().includes(formSearchQuery.toLowerCase()) ||
-                                  form.description.toLowerCase().includes(formSearchQuery.toLowerCase())
+                                  form.description?.toLowerCase().includes(formSearchQuery.toLowerCase())
                                 )
                                 .map((form) => (
-                                  <option key={form.id} value={form.id}>
-                                    {form.title}
-                                  </option>
+                                  <button
+                                    key={form.id}
+                                    onClick={async () => {
+                                      await handleSwitchForm(form.id)
+                                    }}
+                                    disabled={attachingForm}
+                                    className="w-full text-left px-4 py-3 hover:bg-[#F9FAFB] border-b border-[#E5E7EB] last:border-b-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <div className="font-medium text-sm text-[#1F2937]">{form.title}</div>
+                                    {form.description && (
+                                      <div className="text-xs text-[#9CA3AF] mt-1">{form.description}</div>
+                                    )}
+                                    {attachingForm && (
+                                      <div className="text-xs text-[#4FA59C] mt-1">Switching template...</div>
+                                    )}
+                                  </button>
                                 ))}
-                            </select>
+                              <div className="p-2 border-t-2 border-[#E5E7EB] bg-[#F9FAFB]">
+                                <button
+                                  onClick={() => {
+                                    handleCreateNewForm()
+                                    setShowFormSelector(false)
+                                  }}
+                                  disabled={creatingForm}
+                                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#4FA59C] hover:bg-[#478F87] text-white text-sm font-medium transition-all disabled:opacity-50"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                  {creatingForm ? 'Creating...' : 'Create New Template'}
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                          <Button
-                            size="sm"
-                            onClick={handleAttachForm}
-                            disabled={!selectedFormId || attachingForm}
-                            className="w-full"
-                          >
-                            {attachingForm ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Attaching...
-                              </>
-                            ) : (
-                              <>
-                                <Link2 className="mr-2 h-4 w-4" />
-                                Attach Selected Form
-                              </>
-                            )}
-                          </Button>
-                        </div>
+                        </>
                       )}
-
-                      {/* Product Selector Dropdown - for attaching to product when detached */}
-                      {showProductSelector && !template?.productId && (
-                        <div className="space-y-3 pt-3 border-t border-border/40">
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Search & Select Product</label>
-                            <Input
-                              placeholder="Search products..."
-                              value={productSearchQuery}
-                              onChange={(e) => setProductSearchQuery(e.target.value)}
-                              className="mb-2"
-                            />
-                            <select
-                              value={selectedProductId}
-                              onChange={(e) => setSelectedProductId(e.target.value)}
-                              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                            >
-                              <option value="">Select a product...</option>
-                              {availableProducts
-                                .filter(product =>
-                                  product.name.toLowerCase().includes(productSearchQuery.toLowerCase())
-                                )
-                                .map((product) => (
-                                  <option key={product.id} value={product.id}>
-                                    {product.name}
-                                  </option>
-                                ))}
-                            </select>
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={handleAttachToProduct}
-                            disabled={!selectedProductId || attachingForm}
-                            className="w-full"
-                          >
-                            {attachingForm ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Attaching...
-                              </>
-                            ) : (
-                              <>
-                                <Link2 className="mr-2 h-4 w-4" />
-                                Attach to Selected Product
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
 
                 {/* Action Buttons */}
