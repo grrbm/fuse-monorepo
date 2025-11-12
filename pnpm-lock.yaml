@@ -232,6 +232,9 @@ importers:
 
   fuse-admin-frontend:
     dependencies:
+      '@fuse/enums':
+        specifier: workspace:*
+        version: link:../packages/enums
       '@googlemaps/js-api-loader':
         specifier: ^2.0.1
         version: 2.0.1
