@@ -55,6 +55,8 @@ export default function Products() {
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [availableForms, setAvailableForms] = useState<Array<{ id: string; title: string; description: string }>>([])
+  const [attachingFormToProduct, setAttachingFormToProduct] = useState<string | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -75,6 +77,7 @@ export default function Products() {
     fetchProducts()
     fetchPharmacyVendors()
     fetchCategories()
+    fetchAvailableForms()
   }, [selectedCategory, showActiveOnly, selectedPharmacy])
 
   useEffect(() => {
@@ -359,10 +362,10 @@ export default function Products() {
     setProducts(prev => prev.map(p =>
       p.id === productId
         ? {
-            ...p,
-            categories: normalized,
-            category: normalized[0] ?? undefined,
-          }
+          ...p,
+          categories: normalized,
+          category: normalized[0] ?? undefined,
+        }
         : p
     ))
 
@@ -439,6 +442,92 @@ export default function Products() {
     return ((retail - wholesale) / wholesale * 100).toFixed(1)
   }
 
+  const fetchAvailableForms = async () => {
+    if (!token) return
+
+    try {
+      const res = await fetch(`${baseUrl}/questionnaires/templates/product-forms`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        const forms = Array.isArray(data?.data) ? data.data : []
+        setAvailableForms(forms.map((f: any) => ({
+          id: f.id,
+          title: f.title || 'Untitled Form',
+          description: f.description || ''
+        })))
+      }
+    } catch (error) {
+      console.error('Failed to fetch available forms:', error)
+    }
+  }
+
+  const handleAttachFormToProduct = async (productId: string, formId: string) => {
+    if (!token || !formId) return
+
+    setAttachingFormToProduct(productId)
+
+    try {
+      // First, check if the product has a questionnaire
+      const productRes = await fetch(`${baseUrl}/questionnaires/product/${productId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      const productData = await productRes.json()
+      const existingQuestionnaires = Array.isArray(productData?.data) ? productData.data : []
+
+      let questionnaireId: string | null = null
+
+      if (existingQuestionnaires.length > 0) {
+        // Product already has a questionnaire - import template steps into it
+        questionnaireId = existingQuestionnaires[0].id
+        console.log(`📋 Importing template ${formId} into existing questionnaire ${questionnaireId}...`)
+
+        const response = await fetch(`${baseUrl}/questionnaires/${questionnaireId}/import-template-steps`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ templateId: formId }),
+        })
+
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => null)
+          throw new Error(errorPayload?.message || errorPayload?.error || 'Failed to import template')
+        }
+
+        toast.success('Product questions updated successfully!')
+      } else {
+        // Product has no questionnaire - need to create one first by cloning the template
+        console.log(`📋 Cloning template ${formId} for product ${productId}...`)
+
+        const response = await fetch(`${baseUrl}/questionnaires/templates/${formId}/clone-for-product`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ productId: productId }),
+        })
+
+        if (!response.ok) {
+          const errorPayload = await response.json().catch(() => null)
+          throw new Error(errorPayload?.message || errorPayload?.error || 'Failed to clone template')
+        }
+
+        toast.success('Product questions added successfully!')
+      }
+    } catch (error: any) {
+      console.error("❌ Error attaching form to product:", error)
+      toast.error(error.message || 'Failed to attach template')
+    } finally {
+      setAttachingFormToProduct(null)
+    }
+  }
+
   return (
     <div className="flex h-screen bg-[#F9FAFB]">
       <Sidebar />
@@ -453,14 +542,14 @@ export default function Products() {
               </p>
             </div>
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleDeactivateAll}
                 className="rounded-full px-6 border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all"
               >
                 Deactivate All
               </Button>
-              <Button 
+              <Button
                 onClick={handleCreateProduct}
                 className="rounded-full px-6 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all"
               >
@@ -473,7 +562,7 @@ export default function Products() {
             <div className={`rounded-2xl p-4 ${saveMessage.startsWith('Error:')
               ? 'bg-red-50 border border-red-200 text-red-700'
               : 'bg-green-50 border border-green-200 text-green-700'
-            } shadow-sm`}>
+              } shadow-sm`}>
               <p className="text-sm font-medium">{saveMessage}</p>
             </div>
           )}
@@ -481,21 +570,19 @@ export default function Products() {
           <div className="flex items-center gap-2 bg-white rounded-2xl p-1.5 w-fit shadow-sm border border-[#E5E7EB]">
             <button
               onClick={() => setActiveTab('selected')}
-              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
-                activeTab === 'selected' 
-                  ? 'bg-[#4FA59C] text-white shadow-sm' 
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === 'selected'
+                  ? 'bg-[#4FA59C] text-white shadow-sm'
                   : 'text-[#6B7280] hover:bg-[#F3F4F6]'
-              }`}
+                }`}
             >
               Selected Products
             </button>
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
-                activeTab === 'all' 
-                  ? 'bg-[#4FA59C] text-white shadow-sm' 
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === 'all'
+                  ? 'bg-[#4FA59C] text-white shadow-sm'
                   : 'text-[#6B7280] hover:bg-[#F3F4F6]'
-              }`}
+                }`}
             >
               All Products
             </button>
@@ -536,7 +623,7 @@ export default function Products() {
 
           {loading ? (
             <div className="flex h-64 items-center justify-center text-[#6B7280]">
-              <Loader2 className="mr-3 h-6 w-6 animate-spin text-[#4FA59C]" /> 
+              <Loader2 className="mr-3 h-6 w-6 animate-spin text-[#4FA59C]" />
               <span className="text-base">Loading products...</span>
             </div>
           ) : products.length === 0 ? (
@@ -551,8 +638,8 @@ export default function Products() {
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {products.map((product) => (
-                <div 
-                  key={product.id} 
+                <div
+                  key={product.id}
                   className={`bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden transition-all hover:shadow-md hover:border-[#4FA59C] ${!product.isActive ? "opacity-60" : ""}`}
                 >
                   <div className="p-6 space-y-4">
@@ -570,28 +657,22 @@ export default function Products() {
 
                     <div className="space-y-3">
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Category</label>
-                        <div className="flex flex-wrap gap-2">
-                          {CATEGORY_OPTIONS.filter((c) => c.value).map((cat) => {
-                            const isSelected = getProductCategories(product).includes(cat.value)
-                            return (
-                              <button
-                                key={cat.value}
-                                onClick={() => toggleProductCategory(product, cat.value)}
-                                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
-                                  isSelected
-                                    ? 'bg-[#E0F2F1] text-[#196459] border-[#99E2D0]'
-                                    : 'bg-[#F9FAFB] text-[#4B5563] border-[#E5E7EB] hover:bg-[#F3F4F6]'
-                                }`}
-                              >
-                                {cat.label}
-                              </button>
-                            )
-                          })}
-                          {getProductCategories(product).length === 0 && (
-                            <span className="text-xs text-[#9CA3AF]">No categories</span>
-                          )}
-                        </div>
+                        <label className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Product Questions</label>
+                        <select
+                          value=""
+                          onChange={(e) => handleAttachFormToProduct(product.id, e.target.value)}
+                          disabled={attachingFormToProduct === product.id}
+                          className="w-full rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#1F2937] hover:border-[#4FA59C] transition-all focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="" disabled>
+                            {attachingFormToProduct === product.id ? 'Attaching...' : 'Choose Template...'}
+                          </option>
+                          {availableForms.map((form) => (
+                            <option key={form.id} value={form.id}>
+                              {form.title}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -642,7 +723,7 @@ export default function Products() {
             <div className="p-8 space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-[#E5E7EB]">
                 <h2 className="text-2xl font-semibold text-[#1F2937]">{editingProduct ? "Edit Product" : "Create Product"}</h2>
-                <button 
+                <button
                   onClick={() => setShowModal(false)}
                   className="rounded-full px-4 py-2 border border-[#E5E7EB] text-[#6B7280] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
                 >
@@ -791,13 +872,13 @@ export default function Products() {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
-                <button 
+                <button
                   onClick={() => setShowModal(false)}
                   className="rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#6B7280] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={handleSaveProduct}
                   className="rounded-full px-6 py-2.5 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
                 >
