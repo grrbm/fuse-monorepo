@@ -258,6 +258,28 @@ export default function Templates() {
         setSelectedTemplate(null)
     }
 
+    const openCreateModal = (type: 'email' | 'sms') => {
+        console.log(`✨ Creating new ${type} template`)
+        setIsCreatingNew(true)
+        setIsEditMode(true)
+        setShowModal(true)
+        setEditedName('Untitled Template')
+        setEditedDescription('')
+        setEditedSubject('')
+        setEditedType(type) // Set specific type
+        setEditedMergeFields([])
+        setNewMergeField('')
+        setTemplateBlocks([{
+            id: '1',
+            type: 'text',
+            content: 'Start typing your message here...',
+            order: 0
+        }])
+        setSelectedTemplate(null)
+        // Switch to the correct tab
+        setActiveTab(type)
+    }
+
     const handleEditClick = () => {
         if (!selectedTemplate) return
         console.log('🔧 Entering edit mode')
@@ -793,7 +815,7 @@ export default function Templates() {
                                         {searchTerm ? 'Try adjusting your search' : 'Create your first email template to get started'}
                                     </p>
                                     {!searchTerm && templates.length === 0 && (
-                                        <Button>
+                                        <Button onClick={() => openCreateModal('email')}>
                                             <Plus className="h-4 w-4 mr-2" />
                                             Create Email Template
                                         </Button>
@@ -878,7 +900,7 @@ export default function Templates() {
                                         {searchTerm ? 'Try adjusting your search' : 'Create your first SMS template to get started'}
                                     </p>
                                     {!searchTerm && templates.length === 0 && (
-                                        <Button>
+                                        <Button onClick={() => openCreateModal('sms')}>
                                             <Plus className="h-4 w-4 mr-2" />
                                             Create SMS Template
                                         </Button>

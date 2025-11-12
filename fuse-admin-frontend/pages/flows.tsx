@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ToastManager } from '@/components/ui/toast'
+import { useToast } from '@/hooks/use-toast'
 import Layout from '@/components/Layout'
 import {
     Workflow,
@@ -347,6 +349,7 @@ const mapSequenceFromApi = (sequence: ApiSequence): Sequence => {
 
 export default function Flows() {
     const { token } = useAuth()
+    const { toasts, dismiss, success, error: showError } = useToast()
     const [sequences, setSequences] = useState<Sequence[]>([])
     const [selectedSequence, setSelectedSequence] = useState<Sequence | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
@@ -968,6 +971,20 @@ export default function Flows() {
             return
         }
 
+        // Validate that if changing to 'active', all email/sms steps have templates
+        if (editSequenceStatus === 'active') {
+            const steps = editableSteps
+            const stepsWithoutTemplates = steps.filter(step => 
+                (step.stepType === 'email' || step.stepType === 'sms') && !step.templateId
+            )
+
+            if (stepsWithoutTemplates.length > 0) {
+                const stepTypes = stepsWithoutTemplates.map(s => s.stepType?.toUpperCase() || 'STEP').join(', ')
+                showError(`Cannot activate flow: ${stepsWithoutTemplates.length} ${stepTypes} step(s) missing templates. Please assign templates to all email and SMS steps.`)
+                return
+            }
+        }
+
         setSavingSequenceDetails(true)
 
         try {
@@ -1002,6 +1019,21 @@ export default function Flows() {
     const handleToggleSequenceStatus = async () => {
         if (!selectedSequence) return
         const nextStatus = selectedSequence.status === 'active' ? 'paused' : 'active'
+        
+        // Validate that if activating, all email/sms steps have templates
+        if (nextStatus === 'active') {
+            const steps = editableSteps
+            const stepsWithoutTemplates = steps.filter(step => 
+                (step.stepType === 'email' || step.stepType === 'sms') && !step.templateId
+            )
+
+            if (stepsWithoutTemplates.length > 0) {
+                const stepTypes = stepsWithoutTemplates.map(s => s.stepType?.toUpperCase() || 'STEP').join(', ')
+                showError(`Cannot activate flow: ${stepsWithoutTemplates.length} ${stepTypes} step(s) missing templates. Please assign templates to all email and SMS steps.`)
+                return
+            }
+        }
+        
         setTogglingSequenceStatus(true)
         try {
             await updateSequenceOnServer(selectedSequence.id, { status: nextStatus })
@@ -1177,6 +1209,7 @@ export default function Flows() {
                     <title>Flows - Admin Portal</title>
                 </Head>
                 <Layout>
+                    <ToastManager toasts={toasts} onDismiss={dismiss} />
                     <div className="space-y-6 p-6">
                         {/* Header */}
                         <div className="flex justify-between items-start">
@@ -1511,6 +1544,7 @@ export default function Flows() {
                 <title>{selectedSequence.name} - Flows</title>
             </Head>
             <Layout>
+                <ToastManager toasts={toasts} onDismiss={dismiss} />
                 <div className="space-y-6 p-6">
                     {/* Header con botón de volver */}
                     <div className="flex items-center justify-between">

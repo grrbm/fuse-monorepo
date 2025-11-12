@@ -243,8 +243,8 @@ class EmailProvider {
     // Add tracking pixel if runId is provided
     let htmlBody = body
     if (trackingRunId) {
-      const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-      const trackingPixel = `<img src="${apiUrl}/track/email/${trackingRunId}/open" width="1" height="1" alt="" style="display:none;" />`
+      const webhookBaseUrl = process.env.SENDGRID_WEBHOOK || process.env.API_URL || 'http://localhost:3001'
+      const trackingPixel = `<img src="${webhookBaseUrl}/track/email/${trackingRunId}/open" width="1" height="1" alt="" style="display:none;" />`
       htmlBody = body + trackingPixel
     }
 
