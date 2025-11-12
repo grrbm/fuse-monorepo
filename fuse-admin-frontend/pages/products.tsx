@@ -16,7 +16,8 @@ import {
     Filter,
     X,
     Loader2,
-    Check
+    Check,
+    Edit
 } from 'lucide-react'
 
 interface Product {
@@ -33,6 +34,7 @@ interface Product {
     categories?: string[]
     createdAt: string
     updatedAt: string
+    brandId?: string | null
     treatments?: Array<{
         id: string
         name: string
@@ -302,6 +304,42 @@ export default function Products() {
         } catch (error: any) {
             console.error("❌ Exception creating product:", error)
             setError(`Error: ${error.message || "Failed to create product"}`)
+        }
+    }
+
+    const handleDeleteProduct = async (productId: string, productName: string) => {
+        if (!confirm(`Are you sure you want to delete "${productName}"? This action cannot be undone.`)) {
+            return
+        }
+
+        try {
+            setLoading(true)
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products-management/${productId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(data.message || 'Failed to delete product')
+                return
+            }
+
+            // Remove product from local state
+            setAllProducts(prev => prev.filter(p => p.id !== productId))
+            setProducts(prev => prev.filter(p => p.id !== productId))
+            
+            setError('✅ Product deleted successfully!')
+            setTimeout(() => setError(null), 3000)
+        } catch (error: any) {
+            console.error('Error deleting product:', error)
+            setError(error.message || 'Failed to delete product')
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -878,6 +916,11 @@ export default function Products() {
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-0.5">
                                                         <h3 className="text-sm font-medium text-gray-900 truncate">{product.name}</h3>
+                                                        {product.brandId && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                                                Custom Product
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <p className="text-sm text-gray-500 truncate">
                                                         {product.placeholderSig || 'No Placeholder Sig specified'}
@@ -969,6 +1012,36 @@ export default function Products() {
                                                             Activate
                                                         </Button>
                                                     )}
+                                                    
+                                                    {/* Edit and Delete buttons for custom products created by current user */}
+                                                    {product.brandId && product.brandId === userWithClinic?.id && (
+                                                        <>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    router.push(`/products/editor/${product.id}`);
+                                                                }}
+                                                                className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300"
+                                                            >
+                                                                <Edit className="h-3 w-3 mr-1" />
+                                                                Edit
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteProduct(product.id, product.name);
+                                                                }}
+                                                                className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                                                            >
+                                                                Delete
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
