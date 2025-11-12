@@ -11300,6 +11300,78 @@ app.delete("/message-templates/:id", authenticateJWT, async (req, res) => {
   }
 });
 
+// Upload image for message template
+app.post("/message-templates/upload-image", authenticateJWT, upload.single('image'), async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    if (!currentUser.clinicId) {
+      return res.status(400).json({
+        success: false,
+        message: "User does not belong to a clinic"
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No image file provided"
+      });
+    }
+
+    // Validate file type (only images, no PDFs)
+    const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedImageTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid file type. Only JPEG, PNG, and WEBP images are allowed"
+      });
+    }
+
+    // Validate file size
+    if (!isValidFileSize(req.file.size)) {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Maximum size is 5MB"
+      });
+    }
+
+    // Upload to S3
+    const imageUrl = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      'template-images',  // folder in S3
+      currentUser.clinicId // prefix with clinic ID
+    );
+
+    console.log('✅ Template image uploaded:', imageUrl);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        url: imageUrl,
+        filename: req.file.originalname,
+        size: req.file.size,
+        contentType: req.file.mimetype
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error uploading template image:', error);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to upload image"
+    });
+  }
+});
+
 // LIST sequences
 app.get("/sequences", authenticateJWT, async (req, res) => {
   try {

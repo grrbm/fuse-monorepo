@@ -544,6 +544,65 @@ export default function Templates() {
         setTemplateBlocks(blocks => blocks.filter(block => block.id !== blockId))
     }
 
+    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, blockId: string) => {
+        const file = event.target.files?.[0]
+        if (!file) return
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            showError('Please select an image file')
+            return
+        }
+
+        // Validate file size (5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            showError('Image must be less than 5MB')
+            return
+        }
+
+        try {
+            // Show loading state
+            const loadingToastId = `upload-${blockId}`
+            success('Uploading image...', loadingToastId)
+
+            // Create form data
+            const formData = new FormData()
+            formData.append('image', file)
+
+            // Upload to backend
+            const response = await fetch(`${API_URL}/message-templates/upload-image`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            })
+
+            if (!response.ok) {
+                const errorData = await response.json()
+                throw new Error(errorData.message || 'Failed to upload image')
+            }
+
+            const data = await response.json()
+
+            if (data.success && data.data.url) {
+                // Update block content with S3 URL
+                handleBlockContentChange(blockId, data.data.url)
+                dismiss(loadingToastId)
+                success('Image uploaded successfully!')
+            } else {
+                throw new Error('Invalid response from server')
+            }
+
+        } catch (error) {
+            console.error('Error uploading image:', error)
+            showError(error instanceof Error ? error.message : 'Failed to upload image')
+        }
+
+        // Reset input
+        event.target.value = ''
+    }
+
     const closeModal = () => {
         setShowModal(false)
         setSelectedTemplate(null)
@@ -972,23 +1031,65 @@ export default function Templates() {
                                                                             placeholder="Enter your text here..."
                                                                         />
                                                                     ) : (
-                                                                        <div className="space-y-2">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={block.content}
-                                                                                onChange={(e) => handleBlockContentChange(block.id, e.target.value)}
-                                                                                className="w-full p-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                                                                                placeholder="Image URL or upload..."
-                                                                            />
-                                                                            {block.content && (
-                                                                                <img
-                                                                                    src={block.content}
-                                                                                    alt="Preview"
-                                                                                    className="max-w-full h-auto rounded-md"
-                                                                                    onError={(e) => {
-                                                                                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Invalid+Image+URL'
-                                                                                    }}
-                                                                                />
+                                                                        <div className="space-y-3">
+                                                                            {!block.content ? (
+                                                                                <label className="cursor-pointer block">
+                                                                                    <input
+                                                                                        type="file"
+                                                                                        accept="image/*"
+                                                                                        className="hidden"
+                                                                                        onChange={(e) => handleImageUpload(e, block.id)}
+                                                                                    />
+                                                                                    <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary hover:bg-primary/5 transition-colors">
+                                                                                        <div className="flex flex-col items-center gap-2">
+                                                                                            <svg className="w-12 h-12 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                                            </svg>
+                                                                                            <div>
+                                                                                                <p className="text-sm font-medium text-foreground">Click to upload image</p>
+                                                                                                <p className="text-xs text-muted-foreground mt-1">JPEG, PNG, or WEBP (max 5MB)</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </label>
+                                                                            ) : (
+                                                                                <div className="relative group">
+                                                                                    <img
+                                                                                        src={block.content}
+                                                                                        alt="Uploaded"
+                                                                                        className="w-full h-auto rounded-lg border border-border"
+                                                                                    />
+                                                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+                                                                                        <label className="cursor-pointer">
+                                                                                            <input
+                                                                                                type="file"
+                                                                                                accept="image/*"
+                                                                                                className="hidden"
+                                                                                                onChange={(e) => handleImageUpload(e, block.id)}
+                                                                                            />
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant="secondary"
+                                                                                                size="sm"
+                                                                                                onClick={(e) => {
+                                                                                                    e.preventDefault()
+                                                                                                    const input = e.currentTarget.previousElementSibling as HTMLInputElement
+                                                                                                    input?.click()
+                                                                                                }}
+                                                                                            >
+                                                                                                Change Image
+                                                                                            </Button>
+                                                                                        </label>
+                                                                                        <Button
+                                                                                            type="button"
+                                                                                            variant="destructive"
+                                                                                            size="sm"
+                                                                                            onClick={() => handleBlockContentChange(block.id, '')}
+                                                                                        >
+                                                                                            Remove
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </div>
                                                                             )}
                                                                         </div>
                                                                     )}

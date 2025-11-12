@@ -98,8 +98,18 @@ const replaceTemplateVariables = (text: string, context: Record<string, string>)
   })
 }
 
-// Parse template body - handles both JSON blocks and plain text
-const parseTemplateBody = (body: string): string => {
+// Escape HTML to prevent injection
+const escapeHtml = (text: string): string => {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+// Parse template body for SMS (text only, no images)
+const parseTemplateBodyForSMS = (body: string): string => {
   if (!body) return ''
 
   try {
@@ -107,7 +117,7 @@ const parseTemplateBody = (body: string): string => {
     const parsed = JSON.parse(body)
     
     if (Array.isArray(parsed)) {
-      // Extract text content from blocks
+      // Extract only text content from blocks (images are ignored for SMS)
       return parsed
         .filter((block: any) => block && block.type === 'text' && block.content)
         .map((block: any) => block.content)
@@ -119,6 +129,52 @@ const parseTemplateBody = (body: string): string => {
 
   // Return as-is if it's plain text
   return body
+}
+
+// Parse template body for EMAIL (converts to HTML with images)
+const parseTemplateBodyForEmail = (body: string): string => {
+  if (!body) return ''
+
+  try {
+    // Try to parse as JSON (array of blocks from the template editor)
+    const parsed = JSON.parse(body)
+    
+    if (Array.isArray(parsed)) {
+      // Convert blocks to HTML
+      const htmlParts = parsed.map((block: any) => {
+        if (!block || !block.content) return ''
+        
+        if (block.type === 'text') {
+          // Escape HTML and convert text block to HTML paragraphs
+          const safeContent = escapeHtml(block.content).replace(/\n/g, '<br>')
+          return `<p style="margin: 16px 0; font-size: 16px; line-height: 1.5; color: #333333;">${safeContent}</p>`
+        } else if (block.type === 'image') {
+          // Escape URL for security and convert image block to HTML img tag
+          const safeUrl = escapeHtml(block.content)
+          return `<div style="margin: 24px 0; text-align: center;">
+            <img src="${safeUrl}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px; display: inline-block;" />
+          </div>`
+        }
+        
+        return ''
+      })
+      
+      // Wrap in a container with basic styling
+      return `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
+          ${htmlParts.join('')}
+        </div>
+      `
+    }
+  } catch {
+    // Not JSON, treat as plain text and wrap in basic HTML
+    const safeBody = escapeHtml(body).replace(/\n/g, '<br>')
+    return `<div style="font-family: sans-serif; padding: 20px;"><p>${safeBody}</p></div>`
+  }
+
+  // Return wrapped in basic HTML if it's plain text
+  const safeBody = escapeHtml(body).replace(/\n/g, '<br>')
+  return `<div style="font-family: sans-serif; padding: 20px;"><p>${safeBody}</p></div>`
 }
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY
@@ -252,20 +308,18 @@ export default class SequenceMessageDispatcher {
     const mergeFields = Array.isArray(template.mergeFields) ? template.mergeFields : []
     const context = buildTemplateContext(run, sequence, mergeFields)
     
-    // Parse template body (handles JSON blocks or plain text)
-    const parsedBody = parseTemplateBody(template.body)
-    
     // Debug log
     console.log(`🔍 Template context for run ${run.id}:`, {
       mergeFields: template.mergeFields,
       availableFields: Object.keys(context),
       contextValues: context
     })
-    
-    // Replace merge field variables
-    const renderedBody = replaceTemplateVariables(parsedBody, context)
 
     if (stepType === 'sms') {
+      // Parse template body for SMS (text only, no images)
+      const parsedBody = parseTemplateBodyForSMS(template.body)
+      const renderedBody = replaceTemplateVariables(parsedBody, context)
+      
       // Get phone from userDetails in payload
       const payload = (run.payload ?? {}) as RunPayload
       const userDetails = payload?.userDetails ?? {}
@@ -286,6 +340,10 @@ export default class SequenceMessageDispatcher {
       return
     }
 
+    // Parse template body for EMAIL (converts to HTML with images)
+    const parsedBody = parseTemplateBodyForEmail(template.body)
+    const renderedBody = replaceTemplateVariables(parsedBody, context)
+    
     // Get email from userDetails in payload
     const payload = (run.payload ?? {}) as RunPayload
     const userDetails = payload?.userDetails ?? {}
@@ -296,8 +354,8 @@ export default class SequenceMessageDispatcher {
       return
     }
 
-    // Parse subject (in case it's also stored as JSON)
-    const parsedSubject = template.subject ? parseTemplateBody(template.subject) : sequence.name || 'Sequence Message'
+    // Parse subject (text only for subject line)
+    const parsedSubject = template.subject ? parseTemplateBodyForSMS(template.subject) : sequence.name || 'Sequence Message'
     const subject = replaceTemplateVariables(parsedSubject, context)
 
     // Send email with tracking pixel
