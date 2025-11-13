@@ -1635,6 +1635,44 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   };
 
+  const triggerCheckoutSequenceRun = React.useCallback(async () => {
+    if (!domainClinic?.id) {
+      console.warn('⚠️ Clinic ID not available, skipping sequence trigger');
+      return;
+    }
+
+    try {
+      const payload = {
+        paymentIntentId,
+        orderId,
+        selectedPlan,
+        userDetails: {
+          firstName: answers['firstName'],
+          lastName: answers['lastName'],
+          email: answers['email'],
+          phoneNumber: answers['mobile']
+        },
+        shippingInfo,
+        selectedProducts
+      };
+
+      await apiCall('/sequence-triggers/checkout', {
+        method: 'POST',
+        body: JSON.stringify({
+          clinicId: domainClinic.id,
+          payload
+        })
+      });
+
+      console.log('✅ Checkout sequence trigger created', {
+        clinicId: domainClinic.id,
+        sequencePayload: payload
+      });
+    } catch (error) {
+      console.error('❌ Failed to trigger checkout sequence:', error);
+    }
+  }, [domainClinic?.id, paymentIntentId, orderId, selectedPlan, answers, shippingInfo, selectedProducts]);
+
   // Handle payment success (for subscription payments)
   const handlePaymentSuccess = async () => {
     try {
@@ -1647,6 +1685,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setPaymentStatus('succeeded');
       console.log('💳 Payment authorized successfully:', paymentIntentId);
       console.log('💳 Subscription will be created after manual payment capture');
+
+      await triggerCheckoutSequenceRun();
 
       // Don't close modal, allow user to continue with questionnaire steps
     } catch (error) {

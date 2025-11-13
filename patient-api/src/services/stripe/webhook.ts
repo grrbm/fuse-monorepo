@@ -17,7 +17,80 @@ import ShippingOrder from '../../models/ShippingOrder';
 import Product from '../../models/Product';
 import Sale from '../../models/Sale';
 import StripeConnectService from './connect.service';
+import Sequence from '../../models/Sequence';
+import SequenceRun from '../../models/SequenceRun';
 
+// Helper function to trigger checkout sequence
+async function triggerCheckoutSequence(order: Order): Promise<void> {
+    try {
+        // Find active sequence with checkout trigger
+        const activeSequences = await Sequence.findAll({
+            where: {
+                clinicId: order.clinicId,
+                status: 'active',
+                isActive: true
+            }
+        });
+
+        const matchingSequence = activeSequences.find(sequence => {
+            if (!sequence?.trigger || typeof sequence.trigger !== 'object') {
+                return false;
+            }
+            const triggerData = sequence.trigger as Record<string, unknown>;
+            const triggerEvent = (triggerData.event || triggerData.eventKey || triggerData.type) as string | undefined;
+            return triggerEvent === 'checkout_completed';
+        });
+
+        if (!matchingSequence) {
+            console.log('ℹ️ No active checkout sequence found for clinic:', order.clinicId);
+            return;
+        }
+
+        // Get user details for the sequence
+        const user = await User.findByPk(order.userId);
+        
+        // Build payload with user and order data
+        const payload = {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            userDetails: user ? {
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                phoneNumber: user.phoneNumber
+            } : undefined,
+            patientFirstName: user?.firstName,
+            patientName: user ? `${user.firstName} ${user.lastName}`.trim() : undefined,
+            totalAmount: order.totalAmount,
+            orderDate: order.createdAt
+        };
+
+        // Create sequence run
+        const sequenceRun = await SequenceRun.create({
+            sequenceId: matchingSequence.id,
+            clinicId: order.clinicId,
+            triggerEvent: 'checkout_completed',
+            status: 'pending',
+            payload
+        });
+
+        console.log('🎯 Checkout sequence triggered:', {
+            sequenceId: matchingSequence.id,
+            sequenceName: matchingSequence.name,
+            runId: sequenceRun.id,
+            orderNumber: order.orderNumber
+        });
+
+        // Import the worker dynamically to avoid circular dependencies
+        const { default: SequenceRunWorker } = await import('../sequence/SequenceRunWorker');
+        const worker = new SequenceRunWorker();
+        await worker.enqueueRun(sequenceRun.id);
+        
+    } catch (error) {
+        console.error('❌ Error triggering checkout sequence:', error);
+        // Don't fail the payment webhook if sequence fails
+    }
+}
 
 export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
     console.log('💳 Payment succeeded:', paymentIntent.id);
@@ -77,6 +150,10 @@ export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.Payment
     if (payment.orderId && payment.order) {
         await payment.order.updateStatus(OrderStatus.PAID);
         console.log('✅ Order updated to paid status:', payment.order.orderNumber);
+        
+        // Trigger checkout sequence
+        await triggerCheckoutSequence(payment.order);
+        
         return;
     }
 

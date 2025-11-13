@@ -14,7 +14,7 @@ type ToastProps = {
 }
 
 type ToastManagerProps = {
-  toasts: Array<{ id: string; type: ToastType; message: string }>
+  toasts: Array<{ id: string; type: ToastType; message: string; title?: string }>
   onDismiss: (id: string) => void
 }
 
@@ -82,6 +82,7 @@ export function ToastManager({ toasts, onDismiss }: ToastManagerProps) {
           <Toast
             key={toast.id}
             type={toast.type}
+            title={toast.title}
             message={toast.message}
             onClose={() => onDismiss(toast.id)}
           />
