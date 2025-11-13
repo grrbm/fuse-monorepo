@@ -1,6 +1,7 @@
 import SequenceRun from '../../models/SequenceRun'
 import Sequence from '../../models/Sequence'
 import MessageTemplate from '../../models/MessageTemplate'
+import User from '../../models/User'
 import sgMail from '@sendgrid/mail'
 
 type StepPayload = {
@@ -304,6 +305,30 @@ export default class SequenceMessageDispatcher {
       return
     }
 
+    // Extract user details from payload (declared once and reused)
+    const payload = (run.payload ?? {}) as RunPayload
+    const userDetails = payload?.userDetails ?? {}
+    const email = userDetails.email || ''
+    const phone = userDetails.phoneNumber || ''
+    
+    // Check opt-out status before sending
+    if (email) {
+      const user = await User.findOne({ where: { email } })
+      
+      if (user) {
+        // Check if user has opted out from the specific channel
+        if (stepType === 'email' && user.emailOptedOut) {
+          console.log(`⛔ Skipping email send - user ${email} has opted out (run ${run.id})`)
+          return
+        }
+        
+        if (stepType === 'sms' && user.smsOptedOut) {
+          console.log(`⛔ Skipping SMS send - user ${email} has opted out (run ${run.id})`)
+          return
+        }
+      }
+    }
+
     // Build context using template's merge fields
     const mergeFields = Array.isArray(template.mergeFields) ? template.mergeFields : []
     const context = buildTemplateContext(run, sequence, mergeFields)
@@ -320,17 +345,15 @@ export default class SequenceMessageDispatcher {
       const parsedBody = parseTemplateBodyForSMS(template.body)
       const renderedBody = replaceTemplateVariables(parsedBody, context)
       
-      // Get phone from userDetails in payload
-      const payload = (run.payload ?? {}) as RunPayload
-      const userDetails = payload?.userDetails ?? {}
-      const phone = userDetails.phoneNumber || ''
+      // Add compliance footer for SMS
+      const smsWithFooter = `${renderedBody}\n\nReply STOP to unsubscribe`
 
       if (!phone) {
         console.warn(`⚠️ No phone number available for SMS run ${run.id}`)
         return
       }
 
-      await this.smsProvider.send(phone, renderedBody)
+      await this.smsProvider.send(phone, smsWithFooter)
       
       // Increment SMS counter
       run.smsSent = (run.smsSent || 0) + 1
@@ -343,11 +366,6 @@ export default class SequenceMessageDispatcher {
     // Parse template body for EMAIL (converts to HTML with images)
     const parsedBody = parseTemplateBodyForEmail(template.body)
     const renderedBody = replaceTemplateVariables(parsedBody, context)
-    
-    // Get email from userDetails in payload
-    const payload = (run.payload ?? {}) as RunPayload
-    const userDetails = payload?.userDetails ?? {}
-    const email = userDetails.email || ''
 
     if (!email) {
       console.warn(`⚠️ No email available for email run ${run.id}`)
@@ -358,8 +376,20 @@ export default class SequenceMessageDispatcher {
     const parsedSubject = template.subject ? parseTemplateBodyForSMS(template.subject) : sequence.name || 'Sequence Message'
     const subject = replaceTemplateVariables(parsedSubject, context)
 
+    // Add compliance unsubscribe footer
+    const webhookBaseUrl = process.env.SENDGRID_WEBHOOK || process.env.API_URL || 'http://localhost:3001'
+    const unsubscribeFooter = `
+      <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280;">
+        <p style="margin: 8px 0;">You're receiving this email because you completed a purchase with us.</p>
+        <p style="margin: 8px 0;">
+          <a href="${webhookBaseUrl}/unsubscribe/${run.id}" style="color: #6b7280; text-decoration: underline;">Unsubscribe from these emails</a>
+        </p>
+      </div>
+    `
+    const emailWithFooter = renderedBody + unsubscribeFooter
+
     // Send email with tracking pixel
-    await this.emailProvider.send(email, subject, renderedBody, run.id)
+    await this.emailProvider.send(email, subject, emailWithFooter, run.id)
     
     // Increment email counter
     run.emailsSent = (run.emailsSent || 0) + 1

@@ -198,6 +198,26 @@ export default class User extends Entity {
   declare consentGivenAt?: Date;
 
   @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare emailOptedOut: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare smsOptedOut: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare optOutDate?: Date;
+
+  @Column({
     type: DataType.STRING,
     allowNull: true,
   })
