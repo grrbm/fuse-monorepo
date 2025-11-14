@@ -883,7 +883,7 @@ export default function Products() {
                                         <div
                                             key={product.id}
                                             className={`flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors ${quickEditMode ? 'cursor-default' : 'cursor-pointer'} ${index !== 0 ? 'border-t border-gray-100' : ''}`}
-                                            onClick={() => !quickEditMode && router.push(`/products/${product.id}`)}
+                                            onClick={() => !quickEditMode && router.push(product.brandId ? `/custom-products/${product.id}` : `/products/${product.id}`)}
                                         >
                                             <div className="flex items-center gap-4 flex-1 min-w-0">
                                                 {/* Avatar/Image */}
