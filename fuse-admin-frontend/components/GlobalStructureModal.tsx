@@ -277,7 +277,7 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
                 <div className="flex gap-2">
                   <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-blue-700">
-                    Drag sections to reorder them. Toggle switches to enable/disable. Account and Checkout sections cannot be disabled.
+                    Drag sections to reorder them. Toggle switches to enable/disable. Product Questions, Account, and Checkout sections cannot be disabled.
                   </p>
                 </div>
               </div>
@@ -327,6 +327,11 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
                               <span className="text-xs text-purple-700">✨ Supports Variants (Variant 1, Variant 2)</span>
                             </div>
                           )}
+                          {section.type === 'product_questions' && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-lg">
+                              <span className="text-xs text-green-700">🔒 Required section</span>
+                            </div>
+                          )}
                           {(section.type === 'account_creation' || section.type === 'checkout') && (
                             <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-lg">
                               <span className="text-xs text-green-700">🔒 Auto-injected by system</span>
@@ -338,7 +343,7 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
                         <div className="flex-shrink-0">
                           <button
                             onClick={() => toggleSection(section.id)}
-                            disabled={section.type === 'account_creation' || section.type === 'checkout'}
+                            disabled={section.type === 'product_questions' || section.type === 'account_creation' || section.type === 'checkout'}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                               section.enabled ? 'bg-[#4FA59C]' : 'bg-gray-300'
                             }`}
