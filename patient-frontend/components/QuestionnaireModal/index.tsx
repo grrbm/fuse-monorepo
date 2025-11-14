@@ -327,22 +327,22 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
           if (globalFormStructure && globalFormStructure.sections && Array.isArray(globalFormStructure.sections)) {
             console.log('🎯 Applying Global Form Structure ordering:', globalFormStructure.name)
             const currentSteps = Array.isArray(questionnaireData.steps) ? questionnaireData.steps : []
-            
+
             // Categorize current steps by their actual category field
             const normalSteps = currentSteps.filter((s: any) => s.category === 'normal' || !s.category).sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
             const userProfileSteps = currentSteps.filter((s: any) => s.category === 'user_profile').sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
             const otherSteps = currentSteps.filter((s: any) => s.category && s.category !== 'normal' && s.category !== 'user_profile').sort((a: any, b: any) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
-            
+
             // Get enabled sections in order
             const enabledSections = globalFormStructure.sections
               .filter((s: any) => s.enabled)
               .sort((a: any, b: any) => a.order - b.order)
-            
+
             console.log('  Enabled sections:', enabledSections.map((s: any) => `${s.order}. ${s.label} (${s.type})`))
             console.log('  Available steps - normal:', normalSteps.length, 'userProfile:', userProfileSteps.length, 'category:', categoryQuestionSteps.length)
-            
+
             const orderedSteps: any[] = []
-            
+
             for (const section of enabledSections) {
               switch (section.type) {
                 case 'product_questions':
@@ -365,23 +365,23 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                   console.log(`  → Unknown section type: ${section.type}`)
               }
             }
-            
+
             // Add any other steps that weren't categorized
             if (otherSteps.length > 0) {
               console.log(`  → Adding ${otherSteps.length} other steps`)
               orderedSteps.push(...otherSteps)
             }
-            
+
             questionnaireData.steps = orderedSteps
             console.log(`✅ Global Form Structure applied: ${orderedSteps.length} total steps`)
-            
+
             // Update checkout step position based on Global Form Structure
             const checkoutSection = enabledSections.find((s: any) => s.type === 'checkout')
             if (checkoutSection) {
               // Calculate position: count how many section types come before checkout
               const sectionsBeforeCheckout = enabledSections.filter((s: any) => s.order < checkoutSection.order && s.enabled && s.type !== 'checkout')
               let checkoutPosition = 0
-              
+
               for (const section of sectionsBeforeCheckout) {
                 switch (section.type) {
                   case 'product_questions':
@@ -395,7 +395,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                     break
                 }
               }
-              
+
               questionnaireData.checkoutStepPosition = checkoutPosition
               console.log(`✅ Checkout position set to: ${checkoutPosition} (based on Global Form Structure)`)
             }
@@ -403,7 +403,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             // Fallback: No Global Form Structure - use default ordering
             console.log('ℹ️ No Global Form Structure - using default section ordering')
             const currentSteps = Array.isArray(questionnaireData.steps) ? questionnaireData.steps : []
-            
+
             if (productFormVariant === '2') {
               // Prepend standardized
               questionnaireData.steps = [...categoryQuestionSteps, ...currentSteps]
@@ -431,9 +431,14 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             let clinicSlug: string | null = null;
 
             if (process.env.NODE_ENV === 'production') {
-              // Production: clinicSlug.fuse.health
-              const parts = hostname.split('.fuse.health');
-              clinicSlug = parts.length > 1 ? parts[0] : null;
+              // Production: clinicSlug.fuse.health or clinicSlug.fusehealthstaging.xyz
+              if (hostname.endsWith('.fuse.health')) {
+                const parts = hostname.split('.fuse.health');
+                clinicSlug = parts.length > 1 ? parts[0] : null;
+              } else if (hostname.endsWith('.fusehealthstaging.xyz')) {
+                const parts = hostname.split('.fusehealthstaging.xyz');
+                clinicSlug = parts.length > 1 ? parts[0] : null;
+              }
             } else {
               // Development: clinicSlug.localhost
               const parts = hostname.split('.localhost');
@@ -1456,16 +1461,16 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Helper function to replace variables dynamically based on current state
   const replaceCurrentVariables = (text: string): string => {
     if (!text) return text;
-    
+
     const variables = {
       ...getVariablesFromClinic(domainClinic || {}),
       productName: productName || '',
       patientFirstName: patientFirstName || '', // Put patientFirstName BEFORE patientName to avoid partial matches
       patientName: patientName || ''
     };
-    
+
     const result = replaceVariables(text, variables);
-    
+
     // Debug logging
     if (text.includes('{{patient')) {
       console.log('🔄 Variable replacement:', {
@@ -1474,7 +1479,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         result
       });
     }
-    
+
     return result;
   };
 
@@ -1484,12 +1489,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     const firstName = answers['firstName'] || '';
     const lastName = answers['lastName'] || '';
     const fullName = `${firstName} ${lastName}`.trim();
-    
+
     setPatientFirstName(firstName);
     setPatientName(fullName);
-    
+
     console.log('👤 Set patient variables:', { firstName, fullName });
-    
+
     // Try to create user account in background (don't block if it fails)
     try {
       console.log('🔐 Creating user account with data:', {
@@ -1530,12 +1535,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const handleNext = async () => {
     if (validateCurrentStep() && questionnaire) {
       const currentStep = getCurrentQuestionnaireStep();
-      
+
       // If we just completed "Create Your Account" step and haven't created account yet, do it now
       if (currentStep?.title === 'Create Your Account' && !accountCreated) {
         await createUserAccount();
       }
-      
+
       const totalSteps = getTotalSteps();
       if (currentStepIndex < totalSteps - 1) {
         setCurrentStepIndex(prev => prev + 1);
@@ -2534,27 +2539,27 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                                 questionText: replaceCurrentVariables(question.questionText || ''),
                                 placeholder: replaceCurrentVariables(question.placeholder || '')
                               };
-                              
+
                               return (
-                              <QuestionRenderer
-                                key={question.id}
+                                <QuestionRenderer
+                                  key={question.id}
                                   question={questionWithReplacedVars}
-                                answers={answers}
-                                errors={errors}
-                                theme={theme}
+                                  answers={answers}
+                                  errors={errors}
+                                  theme={theme}
                                   stepRequired={currentStep.required}
-                                onAnswerChange={handleAnswerChange}
-                                onRadioChange={(questionId: string, value: any) => {
-                                  // Clear any existing error on first selection
-                                  setErrors(prev => {
-                                    const next = { ...prev };
-                                    delete next[questionId];
-                                    return next;
-                                  });
-                                  handleRadioChange(questionId, value);
-                                }}
-                                onCheckboxChange={handleCheckboxChange}
-                              />
+                                  onAnswerChange={handleAnswerChange}
+                                  onRadioChange={(questionId: string, value: any) => {
+                                    // Clear any existing error on first selection
+                                    setErrors(prev => {
+                                      const next = { ...prev };
+                                      delete next[questionId];
+                                      return next;
+                                    });
+                                    handleRadioChange(questionId, value);
+                                  }}
+                                  onCheckboxChange={handleCheckboxChange}
+                                />
                               );
                             })}
                         </div>

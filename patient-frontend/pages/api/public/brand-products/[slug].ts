@@ -34,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // First: try to resolve via custom domain (only when not a platform subdomain)
         let clinicSlug: string | null = null
-        if (!hostname.endsWith('.fuse.health') && !hostname.includes('.localhost')) {
+        if (!hostname.endsWith('.fuse.health') && !hostname.endsWith('.fusehealthstaging.xyz') && !hostname.includes('.localhost')) {
             try {
                 const customDomainResponse = await fetch(`${API_BASE}/clinic/by-custom-domain`, {
                     method: 'POST',
@@ -60,6 +60,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!clinicSlug) {
             if (process.env.NODE_ENV === 'production' && hostname.endsWith('.fuse.health')) {
                 const parts = hostname.split('.fuse.health')
+                clinicSlug = parts.length > 1 ? parts[0] : null
+            } else if (process.env.NODE_ENV === 'production' && hostname.endsWith('.fusehealthstaging.xyz')) {
+                const parts = hostname.split('.fusehealthstaging.xyz')
                 clinicSlug = parts.length > 1 ? parts[0] : null
             } else if (process.env.NODE_ENV !== 'production' && hostname.includes('.localhost')) {
                 const parts = hostname.split('.localhost')
