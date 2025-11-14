@@ -133,7 +133,7 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
 
   const handleSaveStructure = async () => {
     if (!token) return
-    
+
     setSaving(true)
     try {
       const newStructure: GlobalStructure = {
@@ -182,7 +182,7 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
 
     try {
       const updatedStructures = structures.filter(s => s.id !== id)
-      
+
       // Save to backend
       const response = await fetch(`${baseUrl}/global-form-structures`, {
         method: 'POST',
@@ -295,7 +295,7 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
               <div>
                 <h3 className="text-lg font-semibold text-[#1F2937] mb-3">Form Sections</h3>
 
-        <div className="p-6 space-y-3">
+                <div className="p-6 space-y-3">
                   {sections.map((section, index) => (
                     <div
                       key={section.id}
@@ -303,9 +303,8 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
                       onDragStart={() => handleDragStart(index)}
                       onDragOver={(e) => handleDragOver(e, index)}
                       onDragEnd={handleDragEnd}
-                      className={`bg-white border-2 rounded-xl p-5 transition-all cursor-move ${
-                        draggedIndex === index ? 'border-[#4FA59C] shadow-lg scale-105' : 'border-[#E5E7EB] hover:border-[#D1D5DB]'
-                      } ${!section.enabled ? 'opacity-60' : ''}`}
+                      className={`bg-white border-2 rounded-xl p-5 transition-all cursor-move ${draggedIndex === index ? 'border-[#4FA59C] shadow-lg scale-105' : 'border-[#E5E7EB] hover:border-[#D1D5DB]'
+                        } ${!section.enabled ? 'opacity-60' : ''}`}
                     >
                       <div className="flex items-start gap-4">
                         {/* Drag Handle */}
@@ -329,7 +328,7 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
                             </span>
                           </div>
                           <p className="text-sm text-[#6B7280]">{section.description}</p>
-                          
+
                           {/* Section-specific info */}
                           {section.type === 'category_questions' && (
                             <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-purple-50 border border-purple-200 rounded-lg">
@@ -353,14 +352,12 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
                           <button
                             onClick={() => toggleSection(section.id)}
                             disabled={section.type === 'product_questions' || section.type === 'account_creation' || section.type === 'checkout'}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              section.enabled ? 'bg-[#4FA59C]' : 'bg-gray-300'
-                            }`}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${section.enabled ? 'bg-[#4FA59C]' : 'bg-gray-300'
+                              }`}
                           >
                             <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                section.enabled ? 'translate-x-6' : 'translate-x-1'
-                              }`}
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${section.enabled ? 'translate-x-6' : 'translate-x-1'
+                                }`}
                             />
                           </button>
                         </div>
