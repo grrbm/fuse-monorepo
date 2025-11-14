@@ -332,7 +332,7 @@ export default function Products() {
             // Remove product from local state
             setAllProducts(prev => prev.filter(p => p.id !== productId))
             setProducts(prev => prev.filter(p => p.id !== productId))
-            
+
             setError('✅ Product deleted successfully!')
             setTimeout(() => setError(null), 3000)
         } catch (error: any) {
@@ -617,7 +617,7 @@ export default function Products() {
                                 const planType = subscription?.plan?.type?.toLowerCase()
                                 const isPremium = planType === 'professional' || planType === 'enterprise'
                                 const isDisabled = !isPremium
-                                
+
                                 return (
                                     <div className="relative group">
                                         <Button
@@ -647,7 +647,7 @@ export default function Products() {
                     {(() => {
                         const planType = subscription?.plan?.type?.toLowerCase()
                         const isPremium = planType === 'professional' || planType === 'enterprise'
-                        
+
                         if (!isPremium) {
                             return (
                                 <div className="mb-6 px-5 py-4 rounded-lg border-2 border-amber-200 bg-amber-50">
@@ -662,8 +662,8 @@ export default function Products() {
                                             <p className="text-sm text-amber-800 mb-3">
                                                 Creating custom products is available on Professional and Enterprise plans. Upgrade to add your own products to the catalog.
                                             </p>
-                                            <a 
-                                                href="/plans" 
+                                            <a
+                                                href="/plans"
                                                 className="inline-flex items-center text-sm font-medium text-amber-900 hover:text-amber-700 underline"
                                             >
                                                 View Plans & Upgrade
@@ -1012,7 +1012,7 @@ export default function Products() {
                                                             Activate
                                                         </Button>
                                                     )}
-                                                    
+
                                                     {/* Edit and Delete buttons for custom products created by current user */}
                                                     {product.brandId && product.brandId === userWithClinic?.id && (
                                                         <>
@@ -1041,7 +1041,7 @@ export default function Products() {
                                                             </Button>
                                                         </>
                                                     )}
-                                                    
+
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
