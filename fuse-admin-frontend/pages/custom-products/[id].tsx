@@ -2667,7 +2667,19 @@ export default function CustomProductEditor() {
 
                     {/* Product Forms Section */}
                     <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
-                        <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Forms</h3>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold text-[#1F2937]">Product Forms</h3>
+                            <button
+                                onClick={() => {
+                                    setStructureToEdit(null)
+                                    setShowStructureModal(true)
+                                }}
+                                className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#10B981] hover:bg-[#059669] text-white font-medium shadow-sm transition-all"
+                            >
+                                <Plus className="h-5 w-5" />
+                                Add New Structure
+                            </button>
+                        </div>
                         {templates.length === 0 ? (
                             <div className="p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl text-center bg-[#F9FAFB]/50">
                                 <FileText className="h-10 w-10 text-[#9CA3AF] mx-auto mb-3" />

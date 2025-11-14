@@ -77,12 +77,19 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
   const [loading, setLoading] = useState(false)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
-  // Load structure to edit when modal opens
+  // Load structure to edit when modal opens, or reset for new structure
   useEffect(() => {
-    if (isOpen && structureToEdit) {
-      setSections(structureToEdit.sections)
-      setStructureName(structureToEdit.name)
-      setStructureDescription(structureToEdit.description || '')
+    if (isOpen) {
+      if (structureToEdit) {
+        setSections(structureToEdit.sections)
+        setStructureName(structureToEdit.name)
+        setStructureDescription(structureToEdit.description || '')
+      } else {
+        // Creating new structure - reset to defaults
+        setSections(DEFAULT_SECTIONS)
+        setStructureName('')
+        setStructureDescription('')
+      }
     }
   }, [isOpen, structureToEdit])
 
@@ -227,7 +234,7 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-semibold text-[#1F2937]">
-                    Edit Form Structure
+                    {structureToEdit ? 'Edit' : 'Create'} Form Structure
                   </h2>
                   <p className="text-sm text-[#6B7280] mt-1">Define the order and flow of your form sections</p>
                 </div>
@@ -362,7 +369,7 @@ export function GlobalStructureModal({ isOpen, onClose, baseUrl, token, structur
                   disabled={!structureName.trim() || saving}
                   className="px-6 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {saving ? 'Saving...' : 'Update Structure'}
+                  {saving ? 'Saving...' : (structureToEdit ? 'Update' : 'Create')} Structure
                 </button>
               </div>
             </div>
