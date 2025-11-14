@@ -299,8 +299,8 @@ export default function Products() {
             }
 
             console.log('✅ Product created successfully:', data.data.id)
-            // Navigate to the product editor
-            router.push(`/products/editor/${data.data.id}`)
+            // Navigate to the custom product editor
+            router.push(`/custom-products/${data.data.id}`)
         } catch (error: any) {
             console.error("❌ Exception creating product:", error)
             setError(`Error: ${error.message || "Failed to create product"}`)
@@ -1021,7 +1021,7 @@ export default function Products() {
                                                                 variant="outline"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    router.push(`/products/editor/${product.id}`);
+                                                                    router.push(`/custom-products/${product.id}`);
                                                                 }}
                                                                 className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300"
                                                             >
