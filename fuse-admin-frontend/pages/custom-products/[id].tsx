@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
-import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle, Link2, Unlink, Package, FileText, Calculator, DollarSign, ShoppingCart, Users, Palette, CheckCircle, XCircle } from "lucide-react"
+import { Loader2, ArrowLeft, Save, Plus, Trash2, GripVertical, MessageSquare, Info, Edit, X, Code2, ChevronDown, ChevronUp, RefreshCw, GitBranch, Eye, StopCircle, Link2, Unlink, Package, FileText, Calculator, DollarSign, ShoppingCart, Users, Palette, CheckCircle, XCircle, Layers } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { QuestionEditor } from "../forms/QuestionEditor"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
 import { ProductDetailsEditor } from "@/components/products/ProductDetailsEditor"
 import { NoFormAttached } from "@/components/products/NoFormAttached"
 import { PharmacyStateManager } from "@/components/products/PharmacyStateManager"
+import { GlobalStructureModal } from "@/components/GlobalStructureModal"
 
 interface Step {
     id: string
@@ -118,6 +119,10 @@ export default function CustomProductEditor() {
     const [clinicCustomDomain, setClinicCustomDomain] = useState<string | null>(null)
     const [customizations, setCustomizations] = useState<Record<string, { customColor?: string | null; isActive: boolean }>>({})
     const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
+
+    // Modal state for Edit Form Structures
+    const [showStructureModal, setShowStructureModal] = useState(false)
+    const [structureToEdit, setStructureToEdit] = useState<any>(null)
 
     // Preset colors for form customization
     const presetColors = [
@@ -2691,16 +2696,28 @@ export default function CustomProductEditor() {
                                             {/* Structure Header with Inline Form Flow + Color Picker */}
                                             <div className="p-5 border-b border-[#E5E7EB] bg-gradient-to-r from-[#F9FAFB] to-white">
                                                 <div className="flex items-center justify-between gap-6">
-                                                    {/* Left: Name and Type */}
-                                                    <div className="flex-shrink-0">
-                                                        <h4 className="text-lg font-semibold text-[#1F2937] mb-1">
-                                                            {(t as any)._structureName || t.title}
-                                                        </h4>
-                                                        <p className="text-xs text-[#6B7280]">
-                                                            {t.formTemplateType === 'normal' ? '📦 Product-Specific Form' :
-                                                                t.formTemplateType === 'standardized_template' ? '📋 Standardized Category Template' :
-                                                                    'Standard Form'}
-                                                        </p>
+                                                    {/* Left: Name, Type, and Edit Button */}
+                                                    <div className="flex items-center gap-4 flex-shrink-0">
+                                                        <div>
+                                                            <h4 className="text-lg font-semibold text-[#1F2937] mb-1">
+                                                                {(t as any)._structureName || t.title}
+                                                            </h4>
+                                                            <p className="text-xs text-[#6B7280]">
+                                                                {t.formTemplateType === 'normal' ? '📦 Product-Specific Form' :
+                                                                    t.formTemplateType === 'standardized_template' ? '📋 Standardized Category Template' :
+                                                                        'Standard Form'}
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setStructureToEdit(structure)
+                                                                setShowStructureModal(true)
+                                                            }}
+                                                            className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#10B981] hover:bg-[#059669] text-white text-sm font-medium shadow-sm transition-all"
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                            Edit Form Structure
+                                                        </button>
                                                     </div>
 
                                                     {/* Center: Form Flow Preview (Inline) */}
@@ -4907,6 +4924,22 @@ export default function CustomProductEditor() {
                     </div>
                 )
             })()}
+
+            {/* Global Structure Modal */}
+            <GlobalStructureModal
+                isOpen={showStructureModal}
+                onClose={() => {
+                    setShowStructureModal(false)
+                    setStructureToEdit(null)
+                }}
+                baseUrl={baseUrl}
+                token={token}
+                structureToEdit={structureToEdit}
+                onStructuresSaved={() => {
+                    // Reload templates after structures are saved
+                    window.location.reload()
+                }}
+            />
         </div>
     )
 }
