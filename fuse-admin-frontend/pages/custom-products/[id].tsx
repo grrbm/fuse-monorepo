@@ -104,6 +104,7 @@ export default function CustomProductEditor() {
     const [activatingProduct, setActivatingProduct] = useState(false)
 
     // Product details view state (for pricing, forms, stats sections)
+    const [templates, setTemplates] = useState<any[]>([])
     const [tenantProduct, setTenantProduct] = useState<any>(null)
     const [editingPrice, setEditingPrice] = useState(false)
     const [newPrice, setNewPrice] = useState<string>('')
@@ -396,8 +397,15 @@ export default function CustomProductEditor() {
                 const userWithClinic: any = user
                 const clinicId = userWithClinic?.clinicId
 
-                // Fetch tenant products, global structures, enabled forms, and orders in parallel
-                const [tpRes, globalStructuresRes, tpfRes, ordersRes] = await Promise.all([
+                // Fetch product to get its category
+                const productRes = await fetch(`${baseUrl}/products/${productId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                const productData = await productRes.json()
+                const productCategory = productData?.data?.category || productData?.data?.categories?.[0] || null
+
+                // Fetch global structures, product forms, standardized forms, and tenant data
+                const [tpRes, globalStructuresRes, productFormsRes, standardizedFormsRes, tpfRes, ordersRes] = await Promise.all([
                     fetch(`${baseUrl}/tenant-products`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
@@ -405,11 +413,17 @@ export default function CustomProductEditor() {
                     fetch(`${baseUrl}/global-form-structures`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
-                    // Get enabled forms for this product
+                    // Get product-specific questionnaires
+                    fetch(`${baseUrl}/questionnaires/product/${productId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    // Get standardized templates for this product's category
+                    productCategory ? fetch(`${baseUrl}/questionnaires/standardized?category=${productCategory}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }) : Promise.resolve(null),
                     fetch(`${baseUrl}/admin/tenant-product-forms?productId=${productId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
-                    // Get orders for stats
                     clinicId ? fetch(`${baseUrl}/orders?clinicId=${clinicId}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }) : Promise.resolve(null)
@@ -422,34 +436,75 @@ export default function CustomProductEditor() {
                     setTenantProduct(tenantProd || null)
                 }
 
-                // Get global structures to attach to forms
-                let globalStructuresMap: Record<string, any> = {}
+                // Process global structures - show structures themselves, not underlying forms
+                let displayTemplates = []
+
                 if (globalStructuresRes.ok) {
                     const structuresData = await globalStructuresRes.json()
                     const globalStructures = Array.isArray(structuresData?.data) ? structuresData.data : []
-                    globalStructures.forEach((structure: any) => {
-                        globalStructuresMap[structure.id] = structure
-                    })
+
+                    // Get product and standardized forms for reference
+                    let productForms: any[] = []
+                    let standardizedForms: any[] = []
+
+                    if (productFormsRes.ok) {
+                        const data = await productFormsRes.json()
+                        productForms = Array.isArray(data?.data) ? data.data : []
+                    }
+
+                    if (standardizedFormsRes && standardizedFormsRes.ok) {
+                        const data = await standardizedFormsRes.json()
+                        standardizedForms = Array.isArray(data?.data) ? data.data : []
+                    }
+
+                    // Display ONE entry per global structure (consolidate product + category forms)
+                    for (const structure of globalStructures) {
+                        const enabledSections = structure.sections?.filter((s: any) => s.enabled) || []
+                        const hasProductSection = enabledSections.some((s: any) => s.type === 'product_questions')
+                        const hasCategorySection = enabledSections.some((s: any) => s.type === 'category_questions')
+
+                        // Use product form if available, otherwise create placeholder
+                        const baseForm = productForms[0] || standardizedForms[0] || {
+                            id: `structure-${structure.id}`,
+                            title: structure.name,
+                            formTemplateType: hasCategorySection ? 'standardized_template' : 'normal',
+                            isTemplate: hasCategorySection
+                        }
+
+                        // Add ONE entry per structure - use structure ID to ensure uniqueness
+                        displayTemplates.push({
+                            ...baseForm,
+                            id: `structure-${structure.id}`, // Override with structure ID for uniqueness
+                            title: structure.name,
+                            _structureName: structure.name,
+                            _structureId: structure.id,
+                            _structure: structure,
+                            _hasProductSection: hasProductSection,
+                            _hasCategorySection: hasCategorySection,
+                            _productForm: productForms[0] || null,
+                            _categoryForms: standardizedForms,
+                            _underlyingQuestionnaireId: baseForm.id, // Keep the original questionnaire ID
+                            _isStructurePlaceholder: !productForms[0] && !standardizedForms[0]
+                        })
+                    }
+                } else {
+                    // Fallback: show all forms if global structures not available
+                    if (productFormsRes.ok) {
+                        const data = await productFormsRes.json()
+                        displayTemplates.push(...(Array.isArray(data?.data) ? data.data : []))
+                    }
+                    if (standardizedFormsRes && standardizedFormsRes.ok) {
+                        const data = await standardizedFormsRes.json()
+                        displayTemplates.push(...(Array.isArray(data?.data) ? data.data : []))
+                    }
                 }
 
-                // Process enabled forms and attach global structures
+                setTemplates(displayTemplates)
+
+                // Process enabled forms
                 if (tpfRes.ok) {
                     const data = await tpfRes.json()
-                    const forms = Array.isArray(data?.data) ? data.data : []
-
-                    // Attach globalFormStructure to each form
-                    const formsWithStructures = forms.map((form: any) => {
-                        const structureId = form.globalFormStructureId
-                        if (structureId && globalStructuresMap[structureId]) {
-                            return {
-                                ...form,
-                                globalFormStructure: globalStructuresMap[structureId]
-                            }
-                        }
-                        return form
-                    })
-
-                    setEnabledForms(formsWithStructures)
+                    setEnabledForms(Array.isArray(data?.data) ? data.data : [])
                 }
 
                 // Process orders to get stats
@@ -2608,33 +2663,47 @@ export default function CustomProductEditor() {
                     {/* Product Forms Section */}
                     <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
                         <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Forms</h3>
-                        {enabledForms.length === 0 ? (
+                        {templates.length === 0 ? (
                             <div className="p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl text-center bg-[#F9FAFB]/50">
                                 <FileText className="h-10 w-10 text-[#9CA3AF] mx-auto mb-3" />
-                                <p className="text-sm text-[#6B7280] font-medium">No forms enabled for this product yet</p>
+                                <p className="text-sm text-[#6B7280] font-medium">No forms available for this product</p>
+                                <p className="text-xs text-[#9CA3AF] mt-1">Create a global structure in the tenant portal to get started</p>
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {enabledForms.map((form, index) => {
-                                    const urls = buildFormUrls(form)
-                                    const structure = form.globalFormStructure
+                                {/* Show all structures - each with exactly 1 form */}
+                                {templates.map((t, structureIndex) => {
+                                    const structure = (t as any)._structure
+                                    const structureId = (t as any)._structureId || 'default'
+
+                                    // Filter forms for THIS specific structure
+                                    // New global form structure system: match by globalFormStructureId and productId
+                                    // Forms created from global structures have questionnaireId: null
+                                    const formsForStructure = enabledForms.filter((f: any) => {
+                                        const matchesStructure = (f?.globalFormStructureId ?? 'default') === structureId
+                                        const matchesProduct = f?.productId === productId
+                                        return matchesStructure && matchesProduct
+                                    })
+                                    const form = formsForStructure[0] // Just get the single form for this structure
 
                                     return (
-                                        <div key={form.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
-                                            {/* Form Header with Name, Type, and Flow */}
+                                        <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                            {/* Structure Header with Inline Form Flow + Color Picker */}
                                             <div className="p-5 border-b border-[#E5E7EB] bg-gradient-to-r from-[#F9FAFB] to-white">
                                                 <div className="flex items-center justify-between gap-6">
                                                     {/* Left: Name and Type */}
                                                     <div className="flex-shrink-0">
                                                         <h4 className="text-lg font-semibold text-[#1F2937] mb-1">
-                                                            {form.currentFormVariant || 'Default - Short form'}
+                                                            {(t as any)._structureName || t.title}
                                                         </h4>
                                                         <p className="text-xs text-[#6B7280]">
-                                                            📦 Product-Specific Form
+                                                            {t.formTemplateType === 'normal' ? '📦 Product-Specific Form' :
+                                                                t.formTemplateType === 'standardized_template' ? '📋 Standardized Category Template' :
+                                                                    'Standard Form'}
                                                         </p>
                                                     </div>
 
-                                                    {/* Center: Form Flow Preview */}
+                                                    {/* Center: Form Flow Preview (Inline) */}
                                                     {structure?.sections && (
                                                         <div className="flex items-center gap-2 overflow-x-auto flex-1">
                                                             {structure.sections
@@ -2663,38 +2732,38 @@ export default function CustomProductEditor() {
                                                     {/* Right: Color Picker */}
                                                     <div className="relative color-picker-container flex-shrink-0">
                                                         <button
-                                                            onClick={() => setColorPickerOpen(colorPickerOpen === form.questionnaireId ? null : form.questionnaireId)}
+                                                            onClick={() => setColorPickerOpen(colorPickerOpen === t.id ? null : t.id)}
                                                             className="w-8 h-8 rounded border-2 border-border hover:border-muted-foreground transition-colors flex items-center justify-center"
                                                             style={{
-                                                                backgroundColor: customizations[form.questionnaireId || '']?.customColor || 'transparent',
-                                                                backgroundImage: !customizations[form.questionnaireId || '']?.customColor
+                                                                backgroundColor: customizations[t.id]?.customColor || 'transparent',
+                                                                backgroundImage: !customizations[t.id]?.customColor
                                                                     ? 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb)'
                                                                     : 'none',
                                                                 backgroundSize: '8px 8px',
                                                                 backgroundPosition: '0 0, 4px 4px'
                                                             }}
-                                                            title={customizations[form.questionnaireId || '']?.customColor ? 'Change form color' : 'Set custom color (currently using clinic default)'}
+                                                            title={customizations[t.id]?.customColor ? 'Change form color' : 'Set custom color (currently using clinic default)'}
                                                         >
                                                             <Palette className="h-4 w-4 text-muted-foreground" />
                                                         </button>
 
-                                                        {colorPickerOpen === form.questionnaireId && (
+                                                        {colorPickerOpen === t.id && (
                                                             <div className="absolute right-0 mt-2 p-3 bg-card border border-border rounded-lg shadow-lg z-10 w-48">
                                                                 <p className="text-xs font-medium text-foreground mb-2">Select Color</p>
                                                                 <div className="grid grid-cols-4 gap-2 mb-3">
                                                                     {presetColors.map((preset) => (
                                                                         <button
                                                                             key={preset.color}
-                                                                            onClick={() => updateFormColor(form.questionnaireId || '', preset.color)}
+                                                                            onClick={() => updateFormColor(t.id, preset.color)}
                                                                             className="w-10 h-10 rounded border-2 border-border hover:border-muted-foreground transition-colors"
                                                                             style={{ backgroundColor: preset.color }}
                                                                             title={preset.name}
                                                                         />
                                                                     ))}
                                                                 </div>
-                                                                {customizations[form.questionnaireId || '']?.customColor && (
+                                                                {customizations[t.id]?.customColor && (
                                                                     <button
-                                                                        onClick={() => updateFormColor(form.questionnaireId || '', '')}
+                                                                        onClick={() => updateFormColor(t.id, '')}
                                                                         className="w-full text-xs py-1.5 px-2 text-muted-foreground hover:text-foreground border border-border hover:border-muted-foreground rounded transition-colors"
                                                                     >
                                                                         Clear (use clinic default)
@@ -2706,66 +2775,71 @@ export default function CustomProductEditor() {
                                                 </div>
                                             </div>
 
-                                            {/* Form URLs */}
-                                            <div className="p-5">
-                                                <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
-                                                    <div className="text-sm font-medium text-[#1F2937] mb-3">
-                                                        Form #{index + 1}
-                                                    </div>
-
-                                                    {urls && (
-                                                        <div className="space-y-3">
-                                                            {/* Standard Subdomain URL */}
-                                                            <div>
-                                                                <div className="text-xs font-medium text-[#6B7280] mb-1">
-                                                                    Subdomain URL:
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="text-xs text-[#1F2937] truncate flex-1 font-mono bg-gray-50 px-2 py-1 rounded">
-                                                                        {urls.subdomainUrl}
-                                                                    </div>
-                                                                    <Button size="sm" variant="outline" onClick={() => window.open(urls.subdomainUrl, '_blank')}>
-                                                                        Preview
-                                                                    </Button>
-                                                                    <Button size="sm" variant="outline" onClick={async () => {
-                                                                        await navigator.clipboard.writeText(urls.subdomainUrl)
-                                                                    }}>
-                                                                        Copy
-                                                                    </Button>
-                                                                </div>
+                                            {/* Form URL - Show BOTH subdomain and custom domain URLs */}
+                                            {form && (() => {
+                                                const urls = buildFormUrls(form)
+                                                return (
+                                                    <div className="p-5">
+                                                        <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
+                                                            <div className="text-sm font-medium text-[#1F2937] mb-3">
+                                                                Form #{structureIndex + 1}
                                                             </div>
 
-                                                            {/* Custom Domain URL (if configured) */}
-                                                            {urls.customDomainUrl && (
-                                                                <div>
-                                                                    <div className="text-xs font-medium text-[#6B7280] mb-1">
-                                                                        Custom Domain URL:
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="text-xs text-[#1F2937] truncate flex-1 font-mono bg-gray-50 px-2 py-1 rounded">
-                                                                            {urls.customDomainUrl}
+                                                            {urls && (
+                                                                <div className="space-y-3">
+                                                                    {/* Standard Subdomain URL */}
+                                                                    <div>
+                                                                        <div className="text-xs font-medium text-[#6B7280] mb-1">
+                                                                            Subdomain URL:
                                                                         </div>
-                                                                        <Button size="sm" variant="outline" onClick={() => urls.customDomainUrl && window.open(urls.customDomainUrl, '_blank')}>
-                                                                            Preview
-                                                                        </Button>
-                                                                        <Button size="sm" variant="outline" onClick={async () => {
-                                                                            if (urls.customDomainUrl) await navigator.clipboard.writeText(urls.customDomainUrl)
-                                                                        }}>
-                                                                            Copy
-                                                                        </Button>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="text-xs text-[#1F2937] truncate flex-1 font-mono bg-gray-50 px-2 py-1 rounded">
+                                                                                {urls.subdomainUrl}
+                                                                            </div>
+                                                                            <Button size="sm" variant="outline" onClick={() => window.open(urls.subdomainUrl, '_blank')}>
+                                                                                Preview
+                                                                            </Button>
+                                                                            <Button size="sm" variant="outline" onClick={async () => {
+                                                                                await navigator.clipboard.writeText(urls.subdomainUrl)
+                                                                            }}>
+                                                                                Copy
+                                                                            </Button>
+                                                                        </div>
                                                                     </div>
+
+                                                                    {/* Custom Domain URL (if configured) */}
+                                                                    {urls.customDomainUrl && (
+                                                                        <div>
+                                                                            <div className="text-xs font-medium text-[#6B7280] mb-1">
+                                                                                Custom Domain URL:
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="text-xs text-[#1F2937] truncate flex-1 font-mono bg-gray-50 px-2 py-1 rounded">
+                                                                                    {urls.customDomainUrl}
+                                                                                </div>
+                                                                                <Button size="sm" variant="outline" onClick={() => urls.customDomainUrl && window.open(urls.customDomainUrl, '_blank')}>
+                                                                                    Preview
+                                                                                </Button>
+                                                                                <Button size="sm" variant="outline" onClick={async () => {
+                                                                                    if (urls.customDomainUrl) await navigator.clipboard.writeText(urls.customDomainUrl)
+                                                                                }}>
+                                                                                    Copy
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                            {!urls && (
+                                                                <div className="text-xs text-[#6B7280]">
+                                                                    Preview URL will generate after publishing
                                                                 </div>
                                                             )}
                                                         </div>
-                                                    )}
-
-                                                    {!urls && (
-                                                        <div className="text-xs text-[#6B7280]">
-                                                            Preview URL will generate after publishing
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
+                                                    </div>
+                                                )
+                                            })()}
                                         </div>
                                     )
                                 })}
