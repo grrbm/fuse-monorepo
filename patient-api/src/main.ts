@@ -99,6 +99,7 @@ import Sequence from "./models/Sequence";
 import SequenceRun from "./models/SequenceRun";
 import { sequenceRoutes, webhookRoutes } from "./features/sequences";
 import { templateRoutes } from "./features/templates";
+import { contactRoutes } from "./features/contacts";
 import { calculateSequenceAnalytics } from "./features/sequences/services/sequences.service";
 
 // Helper function to generate unique clinic slug
@@ -252,6 +253,7 @@ app.use((req, res, next) => {
 app.use('/', sequenceRoutes);
 app.use('/', webhookRoutes);
 app.use('/', templateRoutes);
+app.use('/', contactRoutes);
 
 // Clone 'doctor' steps from master_template into a target questionnaire (preserve order)
 app.post("/questionnaires/clone-doctor-from-master", authenticateJWT, async (req, res) => {
