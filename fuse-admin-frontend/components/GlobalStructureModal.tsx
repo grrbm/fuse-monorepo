@@ -3,7 +3,7 @@ import { Plus, X, Info, GripVertical, Edit, Trash2 } from 'lucide-react'
 
 interface FormSection {
   id: string
-  type: 'product_questions' | 'category_questions' | 'account_creation' | 'checkout'
+  type: 'product_questions' | 'category_questions' | 'brand_questions' | 'account_creation' | 'checkout'
   label: string
   description: string
   order: number
@@ -40,11 +40,20 @@ const DEFAULT_SECTIONS: FormSection[] = [
     icon: '📋'
   },
   {
+    id: 'brand',
+    type: 'brand_questions',
+    label: 'Brand Questions',
+    description: 'Custom questions specific to your brand',
+    order: 3,
+    enabled: false,
+    icon: '🏢'
+  },
+  {
     id: 'account',
     type: 'account_creation',
     label: 'Create Account',
     description: 'Patient information collection (name, email, phone)',
-    order: 3,
+    order: 4,
     enabled: true,
     icon: '👤'
   },
@@ -53,7 +62,7 @@ const DEFAULT_SECTIONS: FormSection[] = [
     type: 'checkout',
     label: 'Payment & Checkout',
     description: 'Billing information, shipping address, and payment processing',
-    order: 4,
+    order: 5,
     enabled: true,
     icon: '💳'
   }

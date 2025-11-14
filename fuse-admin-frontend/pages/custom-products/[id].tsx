@@ -59,7 +59,6 @@ interface Product {
     name: string
     description: string
     price: number
-    placeholderSig: string
     activeIngredients: string[]
     category?: string
     categories?: string[]
@@ -236,7 +235,7 @@ export default function CustomProductEditor() {
                 if (formsRes.ok) {
                     const formsData = await formsRes.json()
                     const forms = Array.isArray(formsData?.data) ? formsData.data : []
-                    const productForm = forms.find((f: any) => f.formTemplateType === 'normal')
+                    const productForm = forms.find((f: any) => f.formTemplateType === 'normal' || f.formTemplateType === 'brand_questions')
 
                     if (productForm) {
                         console.log('✅ Found existing form for product:', productForm.id)
@@ -275,10 +274,10 @@ export default function CustomProductEditor() {
                                     Authorization: `Bearer ${token}`,
                                 },
                                 body: JSON.stringify({
-                                    title: `${data.data.name} Form`,
+                                    title: `${data.data.name} Brand Questions Form`,
                                     description: `Questionnaire for ${data.data.name}`,
                                     category: primaryCategoryForTemplate,
-                                    formTemplateType: 'normal',
+                                    formTemplateType: 'brand_questions',
                                     productId: productId,
                                 }),
                             })
@@ -295,10 +294,10 @@ export default function CustomProductEditor() {
                                 console.error('Status:', createRes.status, createRes.statusText)
                                 console.error('Error data:', errorData)
                                 console.error('Request payload:', {
-                                    title: `${data.data.name} Form`,
+                                    title: `${data.data.name} Brand Questions Form`,
                                     description: `Questionnaire for ${data.data.name}`,
                                     category: primaryCategoryForTemplate || 'General',
-                                    formTemplateType: 'normal',
+                                    formTemplateType: 'brand_questions',
                                     productId: productId,
                                 })
                                 setError(errorData.message || `Failed to create form: ${createRes.status} ${createRes.statusText}`)
@@ -661,7 +660,6 @@ export default function CustomProductEditor() {
 
         const variables: Record<string, string> = {
             '{{productName}}': product.name || '',
-            '{{placeholderSig}}': product.placeholderSig || '',
             '{{medicationSize}}': product.medicationSize || '',
             '{{activeIngredients}}': product.activeIngredients?.join(', ') || '',
             '{{category}}': productCategories.join(', '),
@@ -801,10 +799,10 @@ export default function CustomProductEditor() {
                     Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    title: `${product?.name} Form`,
+                    title: `${product?.name} Brand Questions Form`,
                     description: `Questionnaire for ${product?.name}`,
                     category: product?.category || null,
-                    formTemplateType: 'normal',
+                    formTemplateType: 'brand_questions',
                     productId: productId,
                 }),
             })
@@ -2535,12 +2533,6 @@ export default function CustomProductEditor() {
                                     {product && getStatusBadge(product.isActive)}
                                 </div>
                                 <p className="text-[#6B7280] text-base leading-relaxed max-w-3xl">{product?.description}</p>
-                                {product?.placeholderSig && (
-                                    <div className="mt-4 pt-4 border-t border-[#E5E7EB] inline-block">
-                                        <span className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Placeholder Sig</span>
-                                        <p className="text-sm text-[#1F2937] mt-1 font-medium">{product.placeholderSig}</p>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </div>
@@ -2910,10 +2902,6 @@ export default function CustomProductEditor() {
                                 <span className="text-muted-foreground text-xs uppercase tracking-wide">Pharmacy Product ID</span>
                                 <p className="font-medium text-foreground mt-1">{product?.pharmacyProductId || 'Not assigned'}</p>
                             </div>
-                            <div>
-                                <span className="text-muted-foreground text-xs uppercase tracking-wide">Default Dosage</span>
-                                <p className="font-medium text-foreground mt-1">{product?.placeholderSig || 'N/A'}</p>
-                            </div>
                             {product?.activeIngredients && product.activeIngredients.length > 0 && (
                                 <div className="col-span-2">
                                     <span className="text-muted-foreground text-xs uppercase tracking-wide">Active Ingredients</span>
@@ -2963,9 +2951,9 @@ export default function CustomProductEditor() {
                             <div className="mb-8">
                                 <div className="flex items-center justify-between">
                                     <div className="flex-1">
-                                        <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Intake Form</h1>
+                                        <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Brand Questions</h1>
                                         <p className="text-[#6B7280] text-base">
-                                            {template.title || "Build your product intake form"}
+                                            {template.title || "New Brand Questions Form"}
                                         </p>
                                     </div>
 

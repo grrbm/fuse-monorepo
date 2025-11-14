@@ -7,7 +7,6 @@ interface Product {
     name: string
     description: string
     price: number
-    placeholderSig: string
     activeIngredients: string[]
     category?: string
     categories?: string[]
@@ -42,7 +41,6 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
     const [formData, setFormData] = useState({
         name: product.name,
         description: product.description,
-        placeholderSig: product.placeholderSig,
         categories: Array.isArray(product.categories) && product.categories.length > 0
             ? product.categories
             : product.category
@@ -58,7 +56,6 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
         setFormData({
             name: product.name,
             description: product.description,
-            placeholderSig: product.placeholderSig,
             categories: Array.isArray(product.categories) && product.categories.length > 0
                 ? product.categories
                 : product.category
@@ -88,10 +85,6 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             setError("Product description is required")
             return
         }
-        if (!formData.placeholderSig || formData.placeholderSig.trim() === "") {
-            setError("Placeholder Sig is required")
-            return
-        }
 
         const activeIngredientsArray = formData.activeIngredients.split(",").map(i => i.trim()).filter(Boolean)
         if (activeIngredientsArray.length === 0) {
@@ -113,7 +106,6 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             await onUpdate({
                 name: formData.name,
                 description: formData.description,
-                placeholderSig: formData.placeholderSig,
                 categories: formData.categories,
                 category: formData.categories[0] || undefined,
                 medicationSize: formData.medicationSize || undefined,
@@ -134,7 +126,6 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
         setFormData({
             name: product.name,
             description: product.description,
-            placeholderSig: product.placeholderSig,
             categories: Array.isArray(product.categories) && product.categories.length > 0
                 ? product.categories
                 : product.category
@@ -335,21 +326,6 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                                     })
                                 })()}
                             </div>
-                        )}
-                    </div>
-
-                    {/* Placeholder Sig */}
-                    <div>
-                        <label className="text-sm font-medium text-[#4B5563] mb-2 block">Placeholder Sig *</label>
-                        {editing ? (
-                            <input
-                                value={formData.placeholderSig}
-                                onChange={(e) => setFormData({ ...formData, placeholderSig: e.target.value })}
-                                placeholder="e.g., 2.5mg/0.5ml"
-                                className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                            />
-                        ) : (
-                            <p className="text-[#1F2937]">{product.placeholderSig || "——"}</p>
                         )}
                     </div>
 

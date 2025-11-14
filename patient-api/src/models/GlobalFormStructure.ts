@@ -27,13 +27,19 @@ export default class GlobalFormStructure extends Entity {
   declare description?: string
 
   @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  declare userId?: string
+
+  @Column({
     type: DataType.JSONB,
     allowNull: false,
     defaultValue: [],
   })
   declare sections: Array<{
     id: string
-    type: 'product_questions' | 'category_questions' | 'account_creation' | 'checkout'
+    type: 'product_questions' | 'category_questions' | 'brand_questions' | 'account_creation' | 'checkout'
     label: string
     description: string
     order: number
