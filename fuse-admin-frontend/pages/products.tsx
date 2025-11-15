@@ -343,6 +343,87 @@ export default function Products() {
         }
     }
 
+    const handleImportFromIronSail = async () => {
+        if (!confirm('This will import all products from the IronSail spreadsheet. Products with the same name will be skipped. Continue?')) {
+            return
+        }
+
+        try {
+            setLoading(true)
+            setError('📥 Importing products from IronSail spreadsheet...')
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/pharmacies/ironsail/import-products`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(`❌ ${data.message || 'Failed to import products'}`)
+                return
+            }
+
+            // Show success message with summary
+            const summary = data.data.summary
+            setError(`✅ Import completed! Imported: ${summary.imported}, Skipped: ${summary.skipped}, Errors: ${summary.errors}`)
+
+            // Refresh products list
+            await fetchProducts()
+
+            setTimeout(() => setError(null), 5000)
+        } catch (error: any) {
+            console.error('Error importing products:', error)
+            setError(`❌ ${error.message || 'Failed to import products'}`)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDeleteAllFromIronSail = async () => {
+        if (!confirm('⚠️ WARNING: This will permanently delete ALL auto-imported products from IronSail (products with [Auto-Imported] prefix). This action CANNOT be undone. Continue?')) {
+            return
+        }
+
+        try {
+            setLoading(true)
+            setError('🗑️ Deleting all auto-imported products...')
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/pharmacies/ironsail/delete-all-imported`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(`❌ ${data.message || 'Failed to delete products'}`)
+                return
+            }
+
+            // Show success message
+            const deletedCount = data.data.deleted
+            const coverageCount = data.data.deletedCoverage
+            setError(`✅ Deleted ${deletedCount} products and ${coverageCount} pharmacy coverage records`)
+
+            // Refresh products list
+            await fetchProducts()
+
+            setTimeout(() => setError(null), 5000)
+        } catch (error: any) {
+            console.error('Error deleting products:', error)
+            setError(`❌ ${error.message || 'Failed to delete products'}`)
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const formatPrice = (price: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -612,6 +693,24 @@ export default function Products() {
                             >
                                 <Package className="h-4 w-4 mr-1.5" />
                                 Refresh
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-9 px-3 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white"
+                                onClick={handleImportFromIronSail}
+                                disabled={loading}
+                            >
+                                <Package className="h-4 w-4 mr-1.5" />
+                                Import from IronSail
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-9 px-3 text-sm font-medium bg-red-600 hover:bg-red-700 text-white"
+                                onClick={handleDeleteAllFromIronSail}
+                                disabled={loading}
+                            >
+                                <X className="h-4 w-4 mr-1.5" />
+                                Delete All from IronSail
                             </Button>
                             {(() => {
                                 const planType = subscription?.plan?.type?.toLowerCase()
