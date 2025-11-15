@@ -34,6 +34,10 @@ export const listSequences = async (req: Request, res: Response) => {
 
     if (status && typeof status === 'string') {
       whereClause.status = status;
+      // If filtering by 'active' status, also filter by isActive flag
+      if (status === 'active') {
+        whereClause.isActive = true;
+      }
     }
 
     const sequences = await Sequence.findAll({
@@ -468,6 +472,115 @@ export const updateSequence = async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: "Failed to update sequence"
+    });
+  }
+};
+
+/**
+ * POST /sequence-triggers/manual
+ * Manually trigger a sequence for a specific user
+ */
+export const triggerManual = async (req: Request, res: Response) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const { userId, sequenceId } = req.body ?? {};
+
+    if (!userId || typeof userId !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "userId is required"
+      });
+    }
+
+    if (!sequenceId || typeof sequenceId !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "sequenceId is required"
+      });
+    }
+
+    // Verify user exists and belongs to the same clinic
+    const { default: User } = await import('../../../models/User');
+    const targetUser = await User.findOne({
+      where: {
+        id: userId,
+        clinicId: currentUser.clinicId
+      }
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found or doesn't belong to your clinic"
+      });
+    }
+
+    // Verify sequence exists, is active, and belongs to the same clinic
+    const sequence = await Sequence.findOne({
+      where: {
+        id: sequenceId,
+        clinicId: currentUser.clinicId,
+        status: 'active',
+        isActive: true
+      }
+    });
+
+    if (!sequence) {
+      return res.status(404).json({
+        success: false,
+        message: "Active sequence not found"
+      });
+    }
+
+    // Build payload with user information
+    const payload = {
+      userId: targetUser.id,
+      userEmail: targetUser.email,
+      firstName: targetUser.firstName,
+      lastName: targetUser.lastName,
+      phoneNumber: targetUser.phoneNumber,
+      triggeredBy: currentUser.id,
+      triggeredAt: new Date().toISOString()
+    };
+
+    // Create sequence run
+    const sequenceRun = await SequenceRun.create({
+      sequenceId: sequence.id,
+      clinicId: currentUser.clinicId,
+      triggerEvent: "manual",
+      status: "pending",
+      payload
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        sequenceRunId: sequenceRun.id,
+        sequenceId: sequence.id,
+        sequenceName: sequence.name,
+        userId: targetUser.id,
+        userName: `${targetUser.firstName} ${targetUser.lastName}`
+      }
+    });
+
+    // Enqueue the run
+    if (sequenceRunWorker) {
+      await sequenceRunWorker.enqueueRun(sequenceRun.id);
+    } else {
+      console.warn('⚠️ Sequence run worker not initialized');
+    }
+  } catch (error) {
+    console.error("❌ Error triggering manual sequence:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to trigger sequence manually"
     });
   }
 };

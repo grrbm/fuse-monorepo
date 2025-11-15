@@ -37,8 +37,9 @@ const buildTemplateContext = (
   sequence: Sequence, 
   mergeFields: string[]
 ): Record<string, string> => {
-  const payload = (run.payload ?? {}) as RunPayload
-  const userDetails = payload?.userDetails ?? {}
+  const payload = (run.payload ?? {}) as Record<string, any>
+  // Support both payload.userDetails (checkout trigger) and direct payload (manual trigger)
+  const userDetails = payload?.userDetails ?? payload ?? {}
   
   const context: Record<string, string> = {}
 
@@ -60,7 +61,7 @@ const buildTemplateContext = (
     if (userDetails && dbField in userDetails) {
       value = String(userDetails[dbField] ?? '')
     }
-    // Try payload directly
+    // Try payload directly (for fields not in userDetails)
     else if (payload && dbField in payload) {
       value = String(payload[dbField] ?? '')
     }
@@ -306,10 +307,18 @@ export default class SequenceMessageDispatcher {
     }
 
     // Extract user details from payload (declared once and reused)
-    const payload = (run.payload ?? {}) as RunPayload
-    const userDetails = payload?.userDetails ?? {}
-    const email = userDetails.email || ''
-    const phone = userDetails.phoneNumber || ''
+    // Support both payload.userDetails (checkout trigger) and direct payload (manual trigger)
+    const payload = (run.payload ?? {}) as Record<string, any>
+    const userDetails = payload?.userDetails ?? payload ?? {}
+    const email = (userDetails?.email || userDetails?.userEmail || payload?.userEmail || '') as string
+    const phone = (userDetails?.phoneNumber || payload?.phoneNumber || '') as string
+    
+    console.log(`📧 Extracted contact info for run ${run.id}:`, {
+      email,
+      phone,
+      hasUserDetails: !!payload?.userDetails,
+      payloadKeys: payload ? Object.keys(payload) : []
+    })
     
     // Check opt-out status before sending
     if (email) {
@@ -348,12 +357,12 @@ export default class SequenceMessageDispatcher {
       // Add compliance footer for SMS
       const smsWithFooter = `${renderedBody}\n\nReply STOP to unsubscribe`
 
-      if (!phone) {
+      if (!phone || typeof phone !== 'string') {
         console.warn(`⚠️ No phone number available for SMS run ${run.id}`)
         return
       }
 
-      await this.smsProvider.send(phone, smsWithFooter)
+      await this.smsProvider.send(phone as string, smsWithFooter)
       
       // Increment SMS counter
       run.smsSent = (run.smsSent || 0) + 1
@@ -367,7 +376,7 @@ export default class SequenceMessageDispatcher {
     const parsedBody = parseTemplateBodyForEmail(template.body)
     const renderedBody = replaceTemplateVariables(parsedBody, context)
 
-    if (!email) {
+    if (!email || typeof email !== 'string') {
       console.warn(`⚠️ No email available for email run ${run.id}`)
       return
     }
@@ -389,7 +398,7 @@ export default class SequenceMessageDispatcher {
     const emailWithFooter = renderedBody + unsubscribeFooter
 
     // Send email with tracking pixel
-    await this.emailProvider.send(email, subject, emailWithFooter, run.id)
+    await this.emailProvider.send(email as string, subject, emailWithFooter, run.id)
     
     // Increment email counter
     run.emailsSent = (run.emailsSent || 0) + 1

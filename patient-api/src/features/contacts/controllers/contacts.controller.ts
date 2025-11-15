@@ -194,6 +194,110 @@ export const getContact = async (req: Request, res: Response) => {
 };
 
 /**
+ * PUT /contacts/:id
+ * Update a contact's information
+ */
+export const updateContact = async (req: Request, res: Response) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication required"
+      });
+    }
+
+    const { id } = req.params;
+    const { firstName, lastName, email, phoneNumber } = req.body;
+
+    // Verify contact exists and belongs to clinic
+    const contact = await User.findOne({
+      where: {
+        id,
+        clinicId: currentUser.clinicId,
+        role: 'patient'
+      }
+    });
+
+    if (!contact) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact not found"
+      });
+    }
+
+    // Validate required fields
+    if (!firstName || !firstName.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "First name is required"
+      });
+    }
+
+    if (!lastName || !lastName.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Last name is required"
+      });
+    }
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required"
+      });
+    }
+
+    // Check if email is already taken by another user
+    if (email !== contact.email) {
+      const existingUser = await User.findOne({
+        where: {
+          email: email.trim().toLowerCase(),
+          clinicId: currentUser.clinicId
+        }
+      });
+
+      if (existingUser && existingUser.id !== contact.id) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is already in use by another contact"
+        });
+      }
+    }
+
+    // Update contact
+    contact.firstName = firstName.trim();
+    contact.lastName = lastName.trim();
+    contact.email = email.trim().toLowerCase();
+    
+    if (phoneNumber !== undefined) {
+      contact.phoneNumber = phoneNumber?.trim() || null;
+    }
+
+    await contact.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: contact.id,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email,
+        phoneNumber: contact.phoneNumber
+      },
+      message: "Contact updated successfully"
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating contact:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update contact"
+    });
+  }
+};
+
+/**
  * GET /contacts/:id/history
  * Get sequence history for a contact
  */

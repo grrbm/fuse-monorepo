@@ -20,7 +20,10 @@ import {
     Calendar,
     TrendingUp,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    X,
+    Loader2,
+    Workflow
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
@@ -46,6 +49,13 @@ interface ContactsData {
   offset: number
 }
 
+interface Sequence {
+  id: string
+  name: string
+  description?: string
+  status: 'draft' | 'active' | 'paused' | 'archived'
+}
+
 export default function ContactsPage() {
   const { user, token } = useAuth()
   const { toasts, dismiss, success: showSuccess, error: showError } = useToast()
@@ -58,6 +68,54 @@ export default function ContactsPage() {
   const [optOutFilter, setOptOutFilter] = useState<'all' | 'active' | 'email_opted_out' | 'sms_opted_out'>('all')
   const [page, setPage] = useState(1)
   const [limit] = useState(50)
+  
+  // Modal state - Send Sequence
+  const [showSequenceModal, setShowSequenceModal] = useState(false)
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null)
+  const [sequences, setSequences] = useState<Sequence[]>([])
+  const [selectedSequenceId, setSelectedSequenceId] = useState<string>('')
+  const [sendingSequence, setSendingSequence] = useState(false)
+
+  // Modal state - Edit Contact
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingContact, setEditingContact] = useState<Contact | null>(null)
+  const [editFormData, setEditFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phoneNumber: ''
+  })
+  const [savingContact, setSavingContact] = useState(false)
+
+  // Fetch active sequences
+  const fetchSequences = async () => {
+    if (!token) return
+
+    try {
+      // Skip analytics refresh for faster loading
+      const response = await fetch(`${API_URL}/sequences?status=active&refreshAnalytics=false`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Backend returns sequences directly in data, not nested
+          const sequenceList = Array.isArray(data.data) ? data.data : []
+          console.log('✅ Active sequences loaded:', sequenceList.length)
+          console.log('Sequences:', sequenceList.map((s: Sequence) => ({ id: s.id, name: s.name, status: s.status })))
+          setSequences(sequenceList)
+        }
+      } else {
+        console.error('❌ Failed to fetch sequences:', response.status)
+      }
+    } catch (error) {
+      console.error('❌ Error fetching sequences:', error)
+    }
+  }
 
   // Fetch contacts
   const fetchContacts = async () => {
@@ -107,6 +165,120 @@ export default function ContactsPage() {
       showError(`Failed to fetch contacts: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Send sequence to contact
+  const handleSendSequence = async () => {
+    if (!selectedContact || !selectedSequenceId) {
+      showError('Please select a sequence')
+      return
+    }
+
+    try {
+      setSendingSequence(true)
+
+      const response = await fetch(`${API_URL}/sequence-triggers/manual`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: selectedContact.id,
+          sequenceId: selectedSequenceId
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showSuccess(`Sequence "${data.data.sequenceName}" sent to ${data.data.userName}!`)
+        setShowSequenceModal(false)
+        setSelectedContact(null)
+        setSelectedSequenceId('')
+        // Refresh contacts to update last contact date
+        fetchContacts()
+      } else {
+        showError(data.message || 'Failed to send sequence')
+      }
+    } catch (error) {
+      console.error('Error sending sequence:', error)
+      showError('Failed to send sequence')
+    } finally {
+      setSendingSequence(false)
+    }
+  }
+
+  // Open modal to select sequence
+  const openSendSequenceModal = (contact: Contact) => {
+    setSelectedContact(contact)
+    setSelectedSequenceId('')
+    setShowSequenceModal(true)
+    fetchSequences()
+  }
+
+  // Close modal
+  const closeSendSequenceModal = () => {
+    setShowSequenceModal(false)
+    setSelectedContact(null)
+    setSelectedSequenceId('')
+  }
+
+  // Open edit contact modal
+  const openEditModal = (contact: Contact) => {
+    setEditingContact(contact)
+    setEditFormData({
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      email: contact.email,
+      phoneNumber: contact.phoneNumber || ''
+    })
+    setShowEditModal(true)
+  }
+
+  // Close edit contact modal
+  const closeEditModal = () => {
+    setShowEditModal(false)
+    setEditingContact(null)
+    setEditFormData({
+      firstName: '',
+      lastName: '',
+      email: '',
+      phoneNumber: ''
+    })
+  }
+
+  // Save contact changes
+  const handleSaveContact = async () => {
+    if (!editingContact) return
+
+    try {
+      setSavingContact(true)
+
+      const response = await fetch(`${API_URL}/contacts/${editingContact.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editFormData)
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showSuccess('Contact updated successfully!')
+        closeEditModal()
+        fetchContacts() // Refresh the list
+      } else {
+        showError(data.message || 'Failed to update contact')
+      }
+    } catch (error) {
+      console.error('Error updating contact:', error)
+      showError('Failed to update contact')
+    } finally {
+      setSavingContact(false)
     }
   }
 
@@ -334,7 +506,11 @@ export default function ContactsPage() {
                     </thead>
                     <tbody>
                       {contacts.map((contact) => (
-                        <tr key={contact.id} className="border-b hover:bg-muted/50 transition-colors">
+                        <tr 
+                          key={contact.id} 
+                          className="border-b hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => openEditModal(contact)}
+                        >
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
                               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
@@ -365,8 +541,10 @@ export default function ContactsPage() {
                               size="sm"
                               variant="outline"
                               className="gap-2"
-                              disabled // Will enable in Phase 2
-                              title="Coming soon"
+                              onClick={(e) => {
+                                e.stopPropagation() // Prevent row click
+                                openSendSequenceModal(contact)
+                              }}
                             >
                               <Send className="h-4 w-4" />
                               Send Sequence
@@ -411,6 +589,224 @@ export default function ContactsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Send Sequence Modal */}
+      {showSequenceModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg shadow-xl max-w-md w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center gap-2">
+                <Workflow className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-semibold">Send Sequence</h2>
+              </div>
+              <button
+                onClick={closeSendSequenceModal}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                disabled={sendingSequence}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Contact Info */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <p className="text-sm text-muted-foreground mb-1">Sending to:</p>
+                <p className="font-semibold">
+                  {selectedContact?.firstName} {selectedContact?.lastName}
+                </p>
+                <p className="text-sm text-muted-foreground">{selectedContact?.email}</p>
+              </div>
+
+              {/* Sequence Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Select a sequence <span className="text-red-500">*</span>
+                </label>
+                {sequences.length === 0 ? (
+                  <div className="text-center py-8 bg-muted/50 rounded-lg">
+                    <Workflow className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">No active sequences found</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Create and activate a sequence first
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedSequenceId}
+                    onChange={(e) => setSelectedSequenceId(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    disabled={sendingSequence}
+                  >
+                    <option value="">-- Select a sequence --</option>
+                    {sequences.map((seq) => (
+                      <option key={seq.id} value={seq.id}>
+                        {seq.name}
+                        {seq.description ? ` - ${seq.description}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t bg-muted/30">
+              <Button
+                variant="outline"
+                onClick={closeSendSequenceModal}
+                disabled={sendingSequence}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendSequence}
+                disabled={!selectedSequenceId || sendingSequence || sequences.length === 0}
+                className="gap-2"
+              >
+                {sendingSequence ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Send Sequence
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Contact Modal */}
+      {showEditModal && editingContact && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg shadow-xl max-w-md w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-semibold">Edit Contact</h2>
+              </div>
+              <button
+                onClick={closeEditModal}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                disabled={savingContact}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* First Name */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  First Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={editFormData.firstName}
+                  onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
+                  placeholder="John"
+                  disabled={savingContact}
+                />
+              </div>
+
+              {/* Last Name */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Last Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={editFormData.lastName}
+                  onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
+                  placeholder="Doe"
+                  disabled={savingContact}
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="email"
+                  value={editFormData.email}
+                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                  placeholder="john.doe@example.com"
+                  disabled={savingContact}
+                />
+              </div>
+
+              {/* Phone Number */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Phone Number
+                </label>
+                <Input
+                  type="tel"
+                  value={editFormData.phoneNumber}
+                  onChange={(e) => setEditFormData({ ...editFormData, phoneNumber: e.target.value })}
+                  placeholder="+1 (555) 123-4567"
+                  disabled={savingContact}
+                />
+              </div>
+
+              {/* Opt-out Status Info (read-only) */}
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <p className="text-sm font-medium">Communication Status:</p>
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-1">
+                    <Mail className="h-4 w-4" />
+                    <span className={editingContact.emailOptedOut ? 'text-red-600' : 'text-green-600'}>
+                      Email: {editingContact.emailOptedOut ? 'Opted Out' : 'Active'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Phone className="h-4 w-4" />
+                    <span className={editingContact.smsOptedOut ? 'text-red-600' : 'text-green-600'}>
+                      SMS: {editingContact.smsOptedOut ? 'Opted Out' : 'Active'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t bg-muted/30">
+              <Button
+                variant="outline"
+                onClick={closeEditModal}
+                disabled={savingContact}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveContact}
+                disabled={savingContact || !editFormData.firstName || !editFormData.lastName || !editFormData.email}
+                className="gap-2"
+              >
+                {savingContact ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

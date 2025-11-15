@@ -12,6 +12,7 @@ router.put('/sequences/:id', authenticateJWT, SequenceController.updateSequence)
 router.put('/sequences/:id/steps', authenticateJWT, SequenceController.updateSequenceSteps);
 
 // Sequence triggers
+router.post('/sequence-triggers/manual', authenticateJWT, SequenceController.triggerManual);
 router.post('/sequence-triggers/checkout', SequenceController.triggerCheckout);
 
 // Analytics
