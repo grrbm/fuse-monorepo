@@ -980,7 +980,7 @@ export default function Flows() {
 
             if (stepsWithoutTemplates.length > 0) {
                 const stepTypes = stepsWithoutTemplates.map(s => s.stepType?.toUpperCase() || 'STEP').join(', ')
-                showError(`Cannot activate flow: ${stepsWithoutTemplates.length} ${stepTypes} step(s) missing templates. Please assign templates to all email and SMS steps.`)
+                showError(`Cannot activate sequence: ${stepsWithoutTemplates.length} ${stepTypes} step(s) missing templates. Please assign templates to all email and SMS steps.`)
                 return
             }
         }
@@ -1029,7 +1029,7 @@ export default function Flows() {
 
             if (stepsWithoutTemplates.length > 0) {
                 const stepTypes = stepsWithoutTemplates.map(s => s.stepType?.toUpperCase() || 'STEP').join(', ')
-                showError(`Cannot activate flow: ${stepsWithoutTemplates.length} ${stepTypes} step(s) missing templates. Please assign templates to all email and SMS steps.`)
+                showError(`Cannot activate sequence: ${stepsWithoutTemplates.length} ${stepTypes} step(s) missing templates. Please assign templates to all email and SMS steps.`)
                 return
             }
         }
@@ -1206,7 +1206,7 @@ export default function Flows() {
         return (
             <>
                 <Head>
-                    <title>Flows - Admin Portal</title>
+                    <title>Sequences - Admin Portal</title>
                 </Head>
                 <Layout>
                     <ToastManager toasts={toasts} onDismiss={dismiss} />
@@ -1216,7 +1216,7 @@ export default function Flows() {
                             <div>
                                 <h1 className="text-3xl font-semibold text-foreground flex items-center gap-3">
                                     <Workflow className="h-8 w-8 text-primary" />
-                                    Messaging Flows
+                                    Messaging Sequences
                                 </h1>
                                 <p className="text-muted-foreground mt-1">
                                     Automated email and SMS sequences for patient engagement
@@ -1224,7 +1224,7 @@ export default function Flows() {
                             </div>
                             <Button className="gap-2" onClick={handleOpenCreateModal}>
                                 <Plus className="h-4 w-4" />
-                                Create Flow
+                                Create Sequence
                             </Button>
                         </div>
 
@@ -1232,7 +1232,7 @@ export default function Flows() {
                             <Card>
                                 <CardContent className="py-12 text-center space-y-3">
                                     <Workflow className="h-12 w-12 text-muted-foreground mx-auto animate-pulse" />
-                                    <p className="text-muted-foreground">Loading flows...</p>
+                                    <p className="text-muted-foreground">Loading sequences...</p>
                                 </CardContent>
                             </Card>
                         ) : error ? (
@@ -1240,7 +1240,7 @@ export default function Flows() {
                                 <CardContent className="py-12 text-center space-y-4">
                                     <Workflow className="h-12 w-12 text-destructive mx-auto" />
                                     <div>
-                                        <h3 className="text-lg font-semibold mb-1">We couldn't load your flows</h3>
+                                        <h3 className="text-lg font-semibold mb-1">We couldn't load your sequences</h3>
                                         <p className="text-muted-foreground">{error}</p>
                                     </div>
                                     <Button variant="default" onClick={handleRetry} className="gap-2">
@@ -1257,7 +1257,7 @@ export default function Flows() {
                                         <CardContent className="pt-6">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="text-sm font-medium text-muted-foreground">Total Flows</p>
+                                                    <p className="text-sm font-medium text-muted-foreground">Total Sequences</p>
                                                     <h3 className="text-2xl font-bold mt-1">{totalSequences}</h3>
                                                 </div>
                                                 <Workflow className="h-8 w-8 text-muted-foreground" />
@@ -1317,7 +1317,7 @@ export default function Flows() {
                                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                                                     <input
                                                         type="text"
-                                                        placeholder="Search flows..."
+                                                        placeholder="Search sequences..."
                                                         value={searchTerm}
                                                         onChange={(e) => setSearchTerm(e.target.value)}
                                                         className="w-full pl-10 pr-4 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
@@ -1429,16 +1429,16 @@ export default function Flows() {
                                     <Card>
                                         <CardContent className="pt-12 pb-12 text-center">
                                             <Workflow className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                                            <h3 className="text-lg font-medium mb-2">No flows found</h3>
+                                            <h3 className="text-lg font-medium mb-2">No sequences found</h3>
                                             <p className="text-muted-foreground mb-6">
-                                                {searchTerm || statusFilter !== 'all' 
+                                                {searchTerm || statusFilter !== 'all'
                                                     ? 'Try adjusting your filters'
-                                                    : 'Create your first automated messaging flow'}
+                                                    : 'Create your first automated messaging sequence'}
                                             </p>
                                             {!searchTerm && statusFilter === 'all' && (
                                                 <Button onClick={handleOpenCreateModal}>
                                                     <Plus className="h-4 w-4 mr-2" />
-                                                    Create Flow
+                                                    Create Sequence
                                                 </Button>
                                             )}
                                         </CardContent>
@@ -1453,8 +1453,8 @@ export default function Flows() {
                         <div className="bg-background w-full max-w-lg rounded-xl shadow-xl overflow-hidden">
                             <div className="flex items-start justify-between border-b border-border p-5">
                                 <div>
-                                    <h2 className="text-xl font-semibold">Create Flow</h2>
-                                    <p className="text-sm text-muted-foreground mt-1">Name your flow and choose when it should start.</p>
+                                    <h2 className="text-xl font-semibold">Create Sequence</h2>
+                                    <p className="text-sm text-muted-foreground mt-1">Name your sequence and choose when it should start.</p>
                                 </div>
                                 <Button variant="ghost" size="icon" onClick={handleCloseCreateModal} disabled={creatingFlow}>
                                     <X className="h-5 w-5" />
@@ -1463,7 +1463,7 @@ export default function Flows() {
 
                             <div className="p-6 space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-foreground mb-1">Flow name</label>
+                                    <label className="block text-sm font-medium text-foreground mb-1">Sequence name</label>
                                     <input
                                         type="text"
                                         value={newFlowName}
@@ -1488,7 +1488,7 @@ export default function Flows() {
                                         ))}
                                     </select>
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        Draft flows can be activated later once steps are configured.
+                                        Draft sequences can be activated later once steps are configured.
                                     </p>
                                 </div>
 
@@ -1508,7 +1508,7 @@ export default function Flows() {
                                     disabled={creatingFlow || !newFlowName.trim() || !newFlowTrigger}
                                     className="min-w-[110px]"
                                 >
-                                    {creatingFlow ? 'Creating...' : 'Create Flow'}
+                                    {creatingFlow ? 'Creating...' : 'Create Sequence'}
                                 </Button>
                             </div>
                         </div>
@@ -1541,7 +1541,7 @@ export default function Flows() {
         return (
         <>
             <Head>
-                <title>{selectedSequence.name} - Flows</title>
+                <title>{selectedSequence.name} - Sequences</title>
             </Head>
             <Layout>
                 <ToastManager toasts={toasts} onDismiss={dismiss} />

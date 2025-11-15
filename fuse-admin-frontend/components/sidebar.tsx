@@ -33,7 +33,7 @@ const operations = [
   // { name: "Offerings", icon: Gift, current: false, href: "/offerings" },
   { name: "Products", icon: Package, current: false, href: "/products", id: "tutorial-step-3" },
   { name: "Orders", icon: ShoppingCart, current: false, href: "/orders", hasSubmenu: true },
-  { name: "Flows", icon: Workflow, current: false, href: "/flows" },
+  { name: "Sequences", icon: Workflow, current: false, href: "/sequences" },
   { name: "Templates", icon: FileText, current: false, href: "/templates" },
   { name: "Contacts", icon: UserCircle, current: false, href: "/contacts" },
 ]
