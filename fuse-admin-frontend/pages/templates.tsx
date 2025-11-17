@@ -473,6 +473,14 @@ export default function Templates() {
                     setIsCreatingNew(false)
                     setShowModal(false)
                     success('Template created successfully!')
+                    
+                    // Show HIPAA warnings if present
+                    if (data.warnings && data.warnings.length > 0) {
+                        console.warn('🔒 HIPAA Warnings:', data.warnings)
+                        setTimeout(() => {
+                            showError(`⚠️ HIPAA Warning: ${data.warnings.join(', ')}`)
+                        }, 500)
+                    }
                 } else {
                     throw new Error(data.message || 'Failed to create template')
                 }
@@ -518,6 +526,14 @@ export default function Templates() {
                     await fetchTemplates()
                     setIsEditMode(false)
                     success('Template saved successfully!')
+                    
+                    // Show HIPAA warnings if present
+                    if (data.warnings && data.warnings.length > 0) {
+                        console.warn('🔒 HIPAA Warnings:', data.warnings)
+                        setTimeout(() => {
+                            showError(`⚠️ HIPAA Warning: ${data.warnings.join(', ')}`)
+                        }, 500)
+                    }
                 } else {
                     throw new Error(data.message || 'Failed to update template')
                 }
@@ -1576,7 +1592,7 @@ export default function Templates() {
                 {/* Merge Field Modal */}
                 {showMergeFieldModal && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-                        <div className="bg-background rounded-lg shadow-xl max-w-md w-full p-6">
+                        <div className="bg-background rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
                             <div className="flex items-start gap-4 mb-6">
                                 <div className="p-3 rounded-full bg-primary/10">
                                     <User className="h-6 w-6 text-primary" />
@@ -1587,6 +1603,57 @@ export default function Templates() {
                                         Create a custom field to insert patient data into your template
                                     </p>
                                 </div>
+                            </div>
+
+                            {/* HIPAA-Safe Merge Tags Section */}
+                            <div className="mb-6 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                                <h3 className="font-semibold text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
+                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                    </svg>
+                                    🔒 HIPAA-Safe Merge Tags (Recommended)
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
+                                            {'{{phone_last4}}'}
+                                        </code>
+                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: XXX-XXX-4567</p>
+                                    </div>
+                                    <div>
+                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
+                                            {'{{phone_masked}}'}
+                                        </code>
+                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: XXX-XXX-4567</p>
+                                    </div>
+                                    <div>
+                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
+                                            {'{{email_masked}}'}
+                                        </code>
+                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: j***@example.com</p>
+                                    </div>
+                                    <div>
+                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
+                                            {'{{age}}'}
+                                        </code>
+                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: 34 (calculated from DOB)</p>
+                                    </div>
+                                    <div>
+                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
+                                            {'{{dob_year}}'}
+                                        </code>
+                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: 1990</p>
+                                    </div>
+                                    <div>
+                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
+                                            {'{{name_masked}}'}
+                                        </code>
+                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: John D.</p>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-green-800 dark:text-green-200 mt-3">
+                                    ℹ️ These fields automatically mask sensitive PHI data to comply with HIPAA regulations.
+                                </p>
                             </div>
 
                             <div className="space-y-4 mb-6">

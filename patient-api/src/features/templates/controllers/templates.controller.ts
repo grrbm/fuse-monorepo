@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import MessageTemplate from '../../../models/MessageTemplate';
 import { getCurrentUser } from '../../../config/jwt';
 import { uploadToS3, isValidFileSize } from '../../../config/s3';
+import { detectUnmaskedPHI } from '../../../utils/hipaa-masking';
 
 /**
  * GET /message-templates
@@ -152,6 +153,12 @@ export const createTemplate = async (req: Request, res: Response) => {
       extractedMergeFields = Array.from(fields);
     }
 
+    // 🔒 HIPAA COMPLIANCE: Detect unmasked PHI in template
+    const phiWarnings = detectUnmaskedPHI(body + (subject || ''));
+    if (phiWarnings.length > 0) {
+      console.warn('⚠️ Template contains unmasked PHI:', phiWarnings);
+    }
+
     const template = await MessageTemplate.create({
       clinicId: currentUser.clinicId,
       name,
@@ -169,12 +176,14 @@ export const createTemplate = async (req: Request, res: Response) => {
     console.log('✅ Message template created:', {
       templateId: template.id,
       name: template.name,
-      type: template.type
+      type: template.type,
+      phiWarnings: phiWarnings.length > 0 ? phiWarnings : undefined
     });
 
     res.status(201).json({
       success: true,
-      data: template
+      data: template,
+      warnings: phiWarnings.length > 0 ? phiWarnings : undefined
     });
 
   } catch (error) {
@@ -272,6 +281,12 @@ export const updateTemplate = async (req: Request, res: Response) => {
     if (extractedMergeFields !== undefined) template.mergeFields = extractedMergeFields;
     if (isActive !== undefined) template.isActive = isActive;
 
+    // 🔒 HIPAA COMPLIANCE: Detect unmasked PHI in updated template
+    const phiWarnings = detectUnmaskedPHI(template.body + (template.subject || ''));
+    if (phiWarnings.length > 0) {
+      console.warn('⚠️ Template contains unmasked PHI:', phiWarnings);
+    }
+
     // Increment version
     template.version += 1;
 
@@ -279,12 +294,14 @@ export const updateTemplate = async (req: Request, res: Response) => {
 
     console.log('✅ Message template updated:', {
       templateId: template.id,
-      version: template.version
+      version: template.version,
+      phiWarnings: phiWarnings.length > 0 ? phiWarnings : undefined
     });
 
     res.status(200).json({
       success: true,
-      data: template
+      data: template,
+      warnings: phiWarnings.length > 0 ? phiWarnings : undefined
     });
 
   } catch (error) {

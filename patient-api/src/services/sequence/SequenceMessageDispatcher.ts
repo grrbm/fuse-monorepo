@@ -3,6 +3,7 @@ import Sequence from '../../models/Sequence'
 import MessageTemplate from '../../models/MessageTemplate'
 import User from '../../models/User'
 import sgMail from '@sendgrid/mail'
+import { createSafePHIContext } from '../../utils/hipaa-masking'
 
 type StepPayload = {
   id?: string
@@ -87,6 +88,42 @@ const buildTemplateContext = (
   if (payload?.totalAmount !== undefined) {
     context.total_amount = String(payload.totalAmount)
   }
+
+  // 🔒 HIPAA COMPLIANCE: Add masked PHI fields
+  // Create safe context with masked versions of sensitive data
+  const safePHI = createSafePHIContext({
+    firstName: userDetails?.firstName || userDetails?.patientFirstName || null,
+    lastName: userDetails?.lastName || userDetails?.patientLastName || null,
+    email: userDetails?.email || userDetails?.userEmail || payload?.userEmail || null,
+    phoneNumber: userDetails?.phoneNumber || userDetails?.phone || payload?.phoneNumber || null,
+    dob: userDetails?.dob || userDetails?.dateOfBirth || null,
+    city: userDetails?.city || null,
+    state: userDetails?.state || null,
+    address: userDetails?.address || null,
+    zipCode: userDetails?.zipCode || userDetails?.zip || null
+  })
+
+  // Add HIPAA-safe merge tags (these are always available)
+  context.email_masked = safePHI.email_masked
+  context.phone_masked = safePHI.phone_masked
+  context.phone_last4 = safePHI.phone_last4
+  context.dob_masked = safePHI.dob_masked
+  context.dob_year = safePHI.dob_year
+  context.age = safePHI.age !== null ? String(safePHI.age) : ''
+  context.name_masked = safePHI.name_masked
+  context.address_masked = safePHI.address_masked || ''
+  context.zip_masked = safePHI.zip_masked || ''
+  
+  // Keep original unsafe fields for backward compatibility (but these should be phased out)
+  // Templates should migrate to using the _masked versions
+  if (safePHI.firstName) context.firstName = safePHI.firstName
+  if (safePHI.lastName) context.lastName = safePHI.lastName
+
+  console.log('🔒 Template context built with HIPAA-safe fields:', {
+    hasMaskedEmail: !!context.email_masked,
+    hasMaskedPhone: !!context.phone_masked,
+    hasAge: !!context.age
+  })
 
   return context
 }
