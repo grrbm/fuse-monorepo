@@ -23,7 +23,12 @@ import {
     ChevronRight,
     X,
     Loader2,
-    Workflow
+    Workflow,
+    Plus,
+    Upload,
+    UserPlus,
+    FileSpreadsheet,
+    Download
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
@@ -86,6 +91,25 @@ export default function ContactsPage() {
     phoneNumber: ''
   })
   const [savingContact, setSavingContact] = useState(false)
+
+  // Modal state - Create Contact
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createFormData, setCreateFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phoneNumber: ''
+  })
+  const [creatingContact, setCreatingContact] = useState(false)
+
+  // Modal state - Upload CSV
+  const [showUploadCSVModal, setShowUploadCSVModal] = useState(false)
+  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [csvPreview, setCsvPreview] = useState<any[]>([])
+  const [uploadingCSV, setUploadingCSV] = useState(false)
+  
+  // Dropdown state for Add Contact button
+  const [showAddDropdown, setShowAddDropdown] = useState(false)
 
   // Fetch active sequences
   const fetchSequences = async () => {
@@ -282,6 +306,176 @@ export default function ContactsPage() {
     }
   }
 
+  // Create new contact
+  const handleCreateContact = async () => {
+    // Validation
+    if (!createFormData.firstName.trim() || !createFormData.lastName.trim()) {
+      showError('First name and last name are required')
+      return
+    }
+    if (!createFormData.email.trim()) {
+      showError('Email is required')
+      return
+    }
+
+    try {
+      setCreatingContact(true)
+
+      const response = await fetch(`${API_URL}/contacts`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(createFormData)
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showSuccess('Contact created successfully!')
+        setShowCreateModal(false)
+        setCreateFormData({
+          firstName: '',
+          lastName: '',
+          email: '',
+          phoneNumber: ''
+        })
+        fetchContacts() // Refresh the list
+      } else {
+        showError(data.message || 'Failed to create contact')
+      }
+    } catch (error) {
+      console.error('Error creating contact:', error)
+      showError('Failed to create contact')
+    } finally {
+      setCreatingContact(false)
+    }
+  }
+
+  // Handle CSV file selection and preview
+  const handleCSVFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.endsWith('.csv')) {
+      showError('Please select a valid CSV file')
+      return
+    }
+
+    setCsvFile(file)
+
+    // Read and preview CSV
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const text = event.target?.result as string
+      const lines = text.split('\n').filter(line => line.trim())
+      
+      if (lines.length < 2) {
+        showError('CSV file must contain at least a header row and one data row')
+        return
+      }
+
+      // Parse CSV (simple implementation)
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+      const preview = lines.slice(1, 6).map(line => {
+        const values = line.split(',').map(v => v.trim())
+        const row: any = {}
+        headers.forEach((header, index) => {
+          row[header] = values[index] || ''
+        })
+        return row
+      })
+
+      setCsvPreview(preview)
+    }
+    reader.readAsText(file)
+  }
+
+  // Upload CSV
+  const handleUploadCSV = async () => {
+    if (!csvFile) {
+      showError('Please select a CSV file')
+      return
+    }
+
+    try {
+      setUploadingCSV(true)
+
+      const formData = new FormData()
+      formData.append('csv', csvFile)
+
+      const response = await fetch(`${API_URL}/contacts/upload-csv`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      })
+
+      console.log('📡 CSV Upload Response:', response.status, response.statusText)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Response not OK:', errorText)
+        throw new Error(`Server error: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      console.log('📦 CSV Upload Data:', data)
+
+      if (data.success) {
+        const imported = data.data.imported
+        const skipped = data.data.skipped || 0
+        
+        if (skipped > 0 && data.data.errors) {
+          console.warn('⚠️ CSV Import warnings:', data.data.errors)
+          showSuccess(`Imported ${imported} contacts successfully! ${skipped} contacts were skipped. Check console for details.`)
+        } else {
+          showSuccess(`Successfully imported ${imported} contacts!`)
+        }
+        
+        setShowUploadCSVModal(false)
+        setCsvFile(null)
+        setCsvPreview([])
+        fetchContacts() // Refresh the list
+      } else {
+        // Show detailed error message
+        const errorMsg = data.message || 'Failed to upload CSV'
+        const errors = data.errors || []
+        
+        if (errors.length > 0) {
+          console.error('❌ CSV Import errors:', errors)
+          // Show first few errors in toast
+          const firstErrors = errors.slice(0, 3).join('; ')
+          showError(`${errorMsg}: ${firstErrors}${errors.length > 3 ? ` (and ${errors.length - 3} more - check console)` : ''}`)
+        } else {
+          showError(errorMsg)
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error uploading CSV:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      showError(`Failed to upload CSV: ${errorMessage}`)
+    } finally {
+      setUploadingCSV(false)
+    }
+  }
+
+  // Download CSV template
+  const downloadCSVTemplate = () => {
+    const template = 'firstName,lastName,email,phoneNumber\nJohn,Doe,john.doe@example.com,+15551234567\nJane,Smith,jane.smith@example.com,0987654321\nCarlos,Lopez,carlos.lopez@example.com,5551234567'
+    const blob = new Blob([template], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'contacts_template.csv'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   // Effects
   useEffect(() => {
     if (token) {
@@ -363,6 +557,55 @@ export default function ContactsPage() {
             <p className="text-muted-foreground mt-1">
               Manage your patients and their communication preferences
             </p>
+          </div>
+          
+          {/* Add Contact Button with Dropdown */}
+          <div className="relative">
+            <Button
+              onClick={() => setShowAddDropdown(!showAddDropdown)}
+              className="flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Contact
+            </Button>
+            
+            {showAddDropdown && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setShowAddDropdown(false)}
+                />
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-md shadow-lg z-20 border border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => {
+                      setShowCreateModal(true)
+                      setShowAddDropdown(false)
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                  >
+                    <UserPlus className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <div className="font-medium">Create Single Contact</div>
+                      <div className="text-xs text-muted-foreground">Add one patient manually</div>
+                    </div>
+                  </button>
+                  <div className="border-t border-gray-200 dark:border-gray-700" />
+                  <button
+                    onClick={() => {
+                      setShowUploadCSVModal(true)
+                      setShowAddDropdown(false)
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors rounded-b-md"
+                  >
+                    <FileSpreadsheet className="h-5 w-5 text-green-600" />
+                    <div>
+                      <div className="font-medium">Upload CSV</div>
+                      <div className="text-xs text-muted-foreground">Import multiple patients</div>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -801,6 +1044,242 @@ export default function ContactsPage() {
                   </>
                 ) : (
                   'Save Changes'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Contact Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg shadow-xl max-w-md w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-semibold">Create New Contact</h2>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                disabled={creatingContact}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* First Name */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  First Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={createFormData.firstName}
+                  onChange={(e) => setCreateFormData({ ...createFormData, firstName: e.target.value })}
+                  placeholder="John"
+                  disabled={creatingContact}
+                />
+              </div>
+
+              {/* Last Name */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Last Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={createFormData.lastName}
+                  onChange={(e) => setCreateFormData({ ...createFormData, lastName: e.target.value })}
+                  placeholder="Doe"
+                  disabled={creatingContact}
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="email"
+                  value={createFormData.email}
+                  onChange={(e) => setCreateFormData({ ...createFormData, email: e.target.value })}
+                  placeholder="john.doe@example.com"
+                  disabled={creatingContact}
+                />
+              </div>
+
+              {/* Phone Number */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Phone Number (Optional)
+                </label>
+                <Input
+                  type="tel"
+                  value={createFormData.phoneNumber}
+                  onChange={(e) => setCreateFormData({ ...createFormData, phoneNumber: e.target.value })}
+                  placeholder="+1 (555) 123-4567"
+                  disabled={creatingContact}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t bg-muted/30">
+              <Button
+                variant="outline"
+                onClick={() => setShowCreateModal(false)}
+                disabled={creatingContact}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateContact}
+                disabled={creatingContact || !createFormData.firstName || !createFormData.lastName || !createFormData.email}
+                className="gap-2"
+              >
+                {creatingContact ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-4 w-4" />
+                    Create Contact
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload CSV Modal */}
+      {showUploadCSVModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg shadow-xl max-w-2xl w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-semibold">Upload CSV</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowUploadCSVModal(false)
+                  setCsvFile(null)
+                  setCsvPreview([])
+                }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                disabled={uploadingCSV}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Instructions */}
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">CSV Format Requirements:</h3>
+                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 ml-4 list-disc">
+                  <li>Required columns: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">firstName</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">lastName</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">email</code></li>
+                  <li>Optional column: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">phoneNumber</code> (accepts +15551234567 or 0987654321)</li>
+                  <li>First row must be headers</li>
+                  <li>Phone numbers must be 7-15 digits (international or local format)</li>
+                </ul>
+              </div>
+
+              {/* Download Template Button */}
+              <Button
+                variant="outline"
+                onClick={downloadCSVTemplate}
+                className="w-full gap-2"
+                disabled={uploadingCSV}
+              >
+                <Download className="h-4 w-4" />
+                Download CSV Template
+              </Button>
+
+              {/* File Upload */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Select CSV File <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleCSVFileSelect}
+                  disabled={uploadingCSV}
+                />
+              </div>
+
+              {/* Preview */}
+              {csvPreview.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Preview (first 5 rows):</h3>
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto max-h-64">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted">
+                          <tr>
+                            <th className="px-4 py-2 text-left font-medium">First Name</th>
+                            <th className="px-4 py-2 text-left font-medium">Last Name</th>
+                            <th className="px-4 py-2 text-left font-medium">Email</th>
+                            <th className="px-4 py-2 text-left font-medium">Phone</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {csvPreview.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-muted/50">
+                              <td className="px-4 py-2">{row.firstname || row.firstName || '-'}</td>
+                              <td className="px-4 py-2">{row.lastname || row.lastName || '-'}</td>
+                              <td className="px-4 py-2">{row.email || '-'}</td>
+                              <td className="px-4 py-2">{row.phonenumber || row.phoneNumber || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t bg-muted/30">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowUploadCSVModal(false)
+                  setCsvFile(null)
+                  setCsvPreview([])
+                }}
+                disabled={uploadingCSV}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUploadCSV}
+                disabled={uploadingCSV || !csvFile}
+                className="gap-2"
+              >
+                {uploadingCSV ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Upload CSV
+                  </>
                 )}
               </Button>
             </div>
