@@ -3779,6 +3779,68 @@ app.post("/payments/product/sub", async (req, res) => {
     const unitPrice = (tenantProduct as any).price;
     const totalAmount = unitPrice;
 
+    // If no stripePriceId is provided or exists on the tenant product, create one
+    let finalStripePriceId = stripePriceId || (tenantProduct as any).stripePriceId;
+
+    if (!finalStripePriceId) {
+      console.log('💰 No Stripe price found, creating one for tenant product:', tenantProductId);
+
+      const product = (tenantProduct as any).product;
+
+      // Step 1: Create or get Stripe product
+      let stripeProductId = (tenantProduct as any).stripeProductId;
+      if (!stripeProductId) {
+        console.log('📦 Creating Stripe product for tenant product:', tenantProductId);
+
+        const productParams: any = {
+          name: `${product.name} - ${(tenantProduct as any).clinic?.name || 'Subscription'}`,
+          metadata: {
+            productId: product.id,
+            tenantProductId: (tenantProduct as any).id,
+            clinicId: (tenantProduct as any).clinicId
+          }
+        };
+
+        // Only include description if it's not empty
+        if (product.description && product.description.trim() !== '') {
+          productParams.description = product.description;
+        }
+
+        const stripeProduct = await stripe.products.create(productParams);
+
+        stripeProductId = stripeProduct.id;
+        await tenantProduct.update({ stripeProductId });
+
+        console.log('✅ Stripe product created:', stripeProductId);
+      } else {
+        console.log('✅ Using existing Stripe product:', stripeProductId);
+      }
+
+      // Step 2: Create new Stripe price
+      console.log('💰 Creating Stripe price for tenant product:', tenantProductId);
+
+      const stripePrice = await stripe.prices.create({
+        product: stripeProductId,
+        currency: 'usd',
+        unit_amount: Math.round(unitPrice * 100), // Convert to cents
+        recurring: {
+          interval: 'month',
+          interval_count: 1
+        },
+        metadata: {
+          productId: product.id,
+          tenantProductId: (tenantProduct as any).id,
+          clinicId: (tenantProduct as any).clinicId,
+          priceType: 'base_price'
+        }
+      });
+
+      finalStripePriceId = stripePrice.id;
+      await tenantProduct.update({ stripePriceId: finalStripePriceId });
+
+      console.log('✅ Stripe price created and saved:', finalStripePriceId);
+    }
+
     // Ensure Stripe customer
     const user = await User.findByPk(currentUser.id);
     if (!user) {
@@ -3802,7 +3864,7 @@ app.post("/payments/product/sub", async (req, res) => {
       shippingAmount: 0,
       totalAmount: totalAmount,
       questionnaireAnswers,
-      stripePriceId: stripePriceId || (tenantProduct as any).stripePriceId || null,
+      stripePriceId: finalStripePriceId,
       tenantProductId: (tenantProduct as any).id,
     });
 
@@ -3909,7 +3971,7 @@ app.post("/payments/product/sub", async (req, res) => {
 
     // Store stripePriceId on order for subscription creation after capture
     await order.update({
-      stripePriceId: stripePriceId || (tenantProduct as any).stripePriceId || null
+      stripePriceId: finalStripePriceId
     });
 
     // Create Payment record - this is the single source of truth for payment intent ID
