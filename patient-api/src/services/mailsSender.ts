@@ -233,4 +233,111 @@ export class MailsSender {
       return false
     }
   }
+
+  /**
+   * Send patient welcome email with temporary password
+   */
+  static async sendPatientWelcomeEmail(
+    email: string, 
+    firstName: string, 
+    temporaryPassword: string,
+    clinicName?: string
+  ): Promise<boolean> {
+    const getFrontendUrl = () => {
+      if (process.env.PATIENT_PORTAL_URL) {
+        return process.env.PATIENT_PORTAL_URL
+      }
+
+      if (process.env.NODE_ENV === 'production') {
+        return 'https://patient.fuse.health'
+      }
+
+      return 'http://localhost:3002'
+    }
+
+    const loginUrl = `${getFrontendUrl()}/login`
+    const clinic = clinicName || 'Your Healthcare Provider'
+
+    const msg: any = {
+      to: email,
+      from: this.FROM_EMAIL,
+      subject: `Welcome to ${clinic} Patient Portal`,
+      text: `Hello ${firstName},\n\nYour patient account has been created. You can now access your patient portal using the following credentials:\n\nEmail: ${email}\nTemporary Password: ${temporaryPassword}\n\nLogin at: ${loginUrl}\n\nFor your security, we recommend changing your password after your first login.\n\nBest regards,\n${clinic}`,
+      // Disable click tracking
+      trackingSettings: {
+        clickTracking: {
+          enable: false
+        },
+        openTracking: {
+          enable: true // Track opens for patient engagement
+        }
+      },
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">Welcome to Your Patient Portal!</h1>
+          </div>
+          
+          <div style="padding: 40px 30px; background-color: #f8f9fa;">
+            <h2 style="color: #333; margin-top: 0;">Hello ${firstName},</h2>
+            
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              Your patient account with <strong>${clinic}</strong> has been created. You can now access your patient portal to view your health information, manage appointments, and communicate with your care team.
+            </p>
+            
+            <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #e5e7eb;">
+              <h3 style="margin-top: 0; color: #333;">Your Login Credentials</h3>
+              <p style="margin: 10px 0; color: #666;">
+                <strong>Email:</strong> ${email}
+              </p>
+              <p style="margin: 10px 0; color: #666;">
+                <strong>Temporary Password:</strong> 
+                <span style="background-color: #fef3c7; padding: 4px 8px; border-radius: 4px; font-family: monospace; color: #92400e;">
+                  ${temporaryPassword}
+                </span>
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${loginUrl}" 
+                 style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+                        color: white; 
+                        padding: 15px 30px; 
+                        text-decoration: none; 
+                        border-radius: 8px; 
+                        font-weight: bold; 
+                        display: inline-block;">
+                Access Patient Portal
+              </a>
+            </div>
+            
+            <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+              <p style="color: #92400e; font-size: 14px; margin: 0;">
+                <strong>🔒 Security Tip:</strong> For your security, we recommend changing your password after your first login.
+              </p>
+            </div>
+          </div>
+          
+          <div style="background-color: #333; padding: 20px; text-align: center;">
+            <p style="color: #ccc; margin: 0; font-size: 14px;">
+              Best regards,<br>
+              ${clinic}
+            </p>
+            <p style="color: #999; margin: 10px 0 0 0; font-size: 12px;">
+              If you didn't expect this email, please contact your healthcare provider.
+            </p>
+          </div>
+        </div>
+      `
+    }
+
+    try {
+      await sgMail.send(msg)
+      console.log(`✅ Patient welcome email sent to: ${email}`)
+      return true
+    } catch (error) {
+      console.error('❌ Failed to send patient welcome email:', error)
+      return false
+    }
+  }
 }
