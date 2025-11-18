@@ -112,8 +112,8 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="flex items-center gap-2">
-        <Calendar className="h-4 w-4 text-gray-500" />
-        <span className="text-sm font-medium text-gray-700">Date Range:</span>
+        <Calendar className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium text-foreground">Date Range:</span>
       </div>
 
       {/* Preset Buttons */}
@@ -122,8 +122,8 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
           onClick={() => handlePresetClick('7days')}
           className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
             activePreset === '7days'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'
           }`}
         >
           Last 7 Days
@@ -132,8 +132,8 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
           onClick={() => handlePresetClick('lastmonth')}
           className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
             activePreset === 'lastmonth'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'
           }`}
         >
           Last Month
@@ -142,8 +142,8 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
           onClick={() => handlePresetClick('month')}
           className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
             activePreset === 'month'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/80'
           }`}
         >
           This Month
@@ -157,20 +157,20 @@ const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
           value={customStart}
           onChange={(e) => setCustomStart(e.target.value)}
           onBlur={handleCustomDateChange}
-          className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-3 py-1.5 text-sm border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
         />
-        <span className="text-gray-500">to</span>
+        <span className="text-muted-foreground">to</span>
         <input
           type="date"
           value={customEnd}
           onChange={(e) => setCustomEnd(e.target.value)}
           onBlur={handleCustomDateChange}
-          className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-3 py-1.5 text-sm border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
         />
         {activePreset === 'custom' && (
           <button
             onClick={handleCustomDateChange}
-            className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >
             Apply
           </button>
