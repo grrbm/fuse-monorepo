@@ -333,8 +333,8 @@ export default function Plans() {
                 <Card
                   key={key}
                   className={`relative group cursor-pointer transition-all duration-300 flex flex-col ${isPopular
-                      ? 'shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80'
-                      : 'hover:shadow-xl hover:scale-105 hover:border-primary border-muted'
+                    ? 'shadow-xl scale-105 border-primary hover:shadow-2xl hover:scale-110 hover:border-primary/80'
+                    : 'hover:shadow-xl hover:scale-105 hover:border-primary border-muted'
                     }`}
                 >
                   {isPopular && (
@@ -372,7 +372,7 @@ export default function Plans() {
                           <li className="flex items-start gap-2 text-sm">
                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
                             <span>
-                              Up to 3 products
+                              Up to 25 products
                             </span>
                           </li>
                           <li className="flex items-start gap-2 text-sm">
@@ -444,8 +444,8 @@ export default function Plans() {
 
                     <Button
                       className={`w-full transition-colors mt-auto ${isPopular
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                          : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
                         }`}
                       onClick={() => handleSelectPlan(plan.planType || key)}
                       disabled={!!creatingCheckout || isCurrentPlan}

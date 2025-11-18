@@ -713,7 +713,7 @@ export default function Settings({
         const authToken = token || (typeof window !== "undefined" ? localStorage.getItem("admin_token") : null);
         xhr.open('POST', `${API_URL}/upload/logo`);
         xhr.setRequestHeader('Authorization', `Bearer ${authToken}`);
-        
+
         // No establecer Content-Type header, dejar que el navegador lo establezca con el boundary correcto
         xhr.withCredentials = true;
         xhr.send(formData);
@@ -1490,11 +1490,10 @@ export default function Settings({
                                 onClick={() => {
                                   setOrganizationData((prev) => ({ ...prev, defaultFormColor: preset.color }));
                                 }}
-                                className={`relative group h-16 rounded-lg transition-all ${
-                                  organizationData.defaultFormColor === preset.color
+                                className={`relative group h-16 rounded-lg transition-all ${organizationData.defaultFormColor === preset.color
                                     ? "ring-2 ring-offset-2 ring-primary scale-105"
                                     : "hover:scale-105 hover:shadow-lg"
-                                }`}
+                                  }`}
                                 style={{ backgroundColor: preset.color }}
                                 title={preset.name}
                               >
@@ -1960,7 +1959,7 @@ export default function Settings({
                                         <>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                            <span>Up to 3 products</span>
+                                            <span>Up to 25 products</span>
                                           </li>
                                           <li className="flex items-start gap-2 text-sm">
                                             <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
