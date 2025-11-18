@@ -6,6 +6,7 @@ import ShippingAddress from './ShippingAddress';
 import { PatientAllergy, PatientDisease, PatientMedication } from '../services/pharmacy/patient';
 import BrandTreatment from './BrandTreatment';
 import UserPatient from './UserPatient';
+import UserTag from './UserTag';
 
 @Table({
   freezeTableName: true,
@@ -293,6 +294,9 @@ export default class User extends Entity {
 
   @HasMany(() => UserPatient)
   declare userPatients: UserPatient[];
+
+  @HasMany(() => UserTag)
+  declare userTags: UserTag[];
 
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {

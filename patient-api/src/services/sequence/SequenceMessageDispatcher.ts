@@ -41,7 +41,7 @@ const buildTemplateContext = (
   const payload = (run.payload ?? {}) as Record<string, any>
   // Support both payload.userDetails (checkout trigger) and direct payload (manual trigger)
   const userDetails = payload?.userDetails ?? payload ?? {}
-  
+
   const context: Record<string, string> = {}
 
   // Process each merge field from the template

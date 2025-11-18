@@ -37,6 +37,8 @@ import PharmacyProduct from '../models/PharmacyProduct';
 import MessageTemplate from '../models/MessageTemplate';
 import Sequence from '../models/Sequence';
 import SequenceRun from '../models/SequenceRun';
+import Tag from '../models/Tag';
+import UserTag from '../models/UserTag';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -92,7 +94,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
     TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
-    MessageTemplate, Sequence, SequenceRun
+    MessageTemplate, Sequence, SequenceRun, Tag, UserTag
   ],
 });
 

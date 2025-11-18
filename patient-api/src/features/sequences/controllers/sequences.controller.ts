@@ -490,12 +490,20 @@ export const triggerManual = async (req: Request, res: Response) => {
       });
     }
 
-    const { userId, sequenceId } = req.body ?? {};
+    const { userId, tagId, sequenceId } = req.body ?? {};
 
-    if (!userId || typeof userId !== "string") {
+    // Must provide either userId or tagId, but not both
+    if (!userId && !tagId) {
       return res.status(400).json({
         success: false,
-        message: "userId is required"
+        message: "Either userId or tagId is required"
+      });
+    }
+
+    if (userId && tagId) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot specify both userId and tagId. Please choose one."
       });
     }
 
@@ -503,22 +511,6 @@ export const triggerManual = async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: "sequenceId is required"
-      });
-    }
-
-    // Verify user exists and belongs to the same clinic
-    const { default: User } = await import('../../../models/User');
-    const targetUser = await User.findOne({
-      where: {
-        id: userId,
-        clinicId: currentUser.clinicId
-      }
-    });
-
-    if (!targetUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found or doesn't belong to your clinic"
       });
     }
 
@@ -539,43 +531,140 @@ export const triggerManual = async (req: Request, res: Response) => {
       });
     }
 
-    // Build payload with user information
-    const payload = {
-      userId: targetUser.id,
-      userEmail: targetUser.email,
-      firstName: targetUser.firstName,
-      lastName: targetUser.lastName,
-      phoneNumber: targetUser.phoneNumber,
-      triggeredBy: currentUser.id,
-      triggeredAt: new Date().toISOString()
-    };
+    const { default: User } = await import('../../../models/User');
+    let targetUsers: any[] = [];
 
-    // Create sequence run
-    const sequenceRun = await SequenceRun.create({
-      sequenceId: sequence.id,
-      clinicId: currentUser.clinicId,
-      triggerEvent: "manual",
-      status: "pending",
-      payload
-    });
+    // Get target users based on userId or tagId
+    if (userId) {
+      // Single user trigger
+      const targetUser = await User.findOne({
+        where: {
+          id: userId,
+          clinicId: currentUser.clinicId
+        }
+      });
 
-    res.status(201).json({
-      success: true,
-      data: {
-        sequenceRunId: sequenceRun.id,
-        sequenceId: sequence.id,
-        sequenceName: sequence.name,
-        userId: targetUser.id,
-        userName: `${targetUser.firstName} ${targetUser.lastName}`
+      if (!targetUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found or doesn't belong to your clinic"
+        });
       }
-    });
 
-    // Enqueue the run
-    if (sequenceRunWorker) {
-      await sequenceRunWorker.enqueueRun(sequenceRun.id);
-    } else {
+      targetUsers = [targetUser];
+    } else if (tagId) {
+      // Tag-based trigger: get all users with this tag
+      const { default: Tag } = await import('../../../models/Tag');
+      const { default: UserTag } = await import('../../../models/UserTag');
+
+      // Verify tag exists and belongs to clinic
+      const tag = await Tag.findOne({
+        where: {
+          id: tagId,
+          clinicId: currentUser.clinicId
+        }
+      });
+
+      if (!tag) {
+        return res.status(404).json({
+          success: false,
+          message: "Tag not found or doesn't belong to your clinic"
+        });
+      }
+
+      // Get all users with this tag
+      const userTags = await UserTag.findAll({
+        where: { tagId },
+        include: [
+          {
+            model: User,
+            as: 'user',
+            where: { 
+              clinicId: currentUser.clinicId,
+              role: 'patient'
+            }
+          }
+        ]
+      });
+
+      targetUsers = userTags.map(ut => ut.user);
+
+      if (targetUsers.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "No users found with this tag"
+        });
+      }
+
+      console.log(`🏷️ Triggering sequence "${sequence.name}" for ${targetUsers.length} users with tag "${tag.name}"`);
+    }
+
+    // Create sequence runs for all target users
+    const sequenceRuns = await Promise.all(
+      targetUsers.map(async (targetUser) => {
+        // Build payload with user information
+        const payload = {
+          userId: targetUser.id,
+          userEmail: targetUser.email,
+          firstName: targetUser.firstName,
+          lastName: targetUser.lastName,
+          phoneNumber: targetUser.phoneNumber,
+          triggeredBy: currentUser.id,
+          triggeredAt: new Date().toISOString(),
+          tagId: tagId || undefined // Include tagId if triggered by tag
+        };
+
+        // Create sequence run
+        const sequenceRun = await SequenceRun.create({
+          sequenceId: sequence.id,
+          clinicId: currentUser.clinicId,
+          triggerEvent: "manual",
+          status: "pending",
+          payload
+        });
+
+        // Enqueue the run
+        if (sequenceRunWorker) {
+          await sequenceRunWorker.enqueueRun(sequenceRun.id);
+        }
+
+        return sequenceRun;
+      })
+    );
+
+    if (!sequenceRunWorker) {
       console.warn('⚠️ Sequence run worker not initialized');
     }
+
+    // Return appropriate response based on trigger type
+    if (userId) {
+      // Single user response
+      const targetUser = targetUsers[0];
+      res.status(201).json({
+        success: true,
+        data: {
+          sequenceRunId: sequenceRuns[0].id,
+          sequenceId: sequence.id,
+          sequenceName: sequence.name,
+          userId: targetUser.id,
+          userName: `${targetUser.firstName} ${targetUser.lastName}`
+        }
+      });
+    } else {
+      // Tag-based response
+      res.status(201).json({
+        success: true,
+        data: {
+          sequenceId: sequence.id,
+          sequenceName: sequence.name,
+          tagId,
+          usersTriggered: targetUsers.length,
+          sequenceRunIds: sequenceRuns.map(sr => sr.id)
+        },
+        message: `Sequence triggered for ${targetUsers.length} users`
+      });
+    }
+
   } catch (error) {
     console.error("❌ Error triggering manual sequence:", error);
     res.status(500).json({

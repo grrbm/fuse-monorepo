@@ -6,6 +6,8 @@ import { Sequelize } from 'sequelize-typescript';
 import { getLastContactDate, getUserEngagementStats } from '../services/contacts.service';
 import { MailsSender } from '../../../services/mailsSender';
 import Clinic from '../../../models/Clinic';
+import UserTag from '../../../models/UserTag';
+import Tag from '../../../models/Tag';
 
 /**
  * GET /contacts
@@ -32,6 +34,7 @@ export const listContacts = async (req: Request, res: Response) => {
     const { 
       search, 
       optOutStatus, // 'all', 'active', 'email_opted_out', 'sms_opted_out'
+      tagId, // Filter by specific tag
       limit = '50', 
       offset = '0',
       sortBy = 'createdAt',
@@ -76,7 +79,8 @@ export const listContacts = async (req: Request, res: Response) => {
     const validSortFields = ['createdAt', 'firstName', 'lastName', 'email'];
     const sortField = validSortFields.includes(sortBy as string) ? sortBy as string : 'createdAt';
 
-    const { count, rows: contacts } = await User.findAndCountAll({
+    // Build query with optional tag filter
+    const queryOptions: any = {
       where: whereClause,
       attributes: [
         'id',
@@ -90,18 +94,48 @@ export const listContacts = async (req: Request, res: Response) => {
         'createdAt',
         'lastLoginAt'
       ],
+      include: [
+        {
+          model: UserTag,
+          as: 'userTags',
+          required: false, // LEFT JOIN to include users without tags
+          attributes: ['id', 'tagId', 'assignedAt'],
+          include: [
+            {
+              model: Tag,
+              as: 'tag',
+              attributes: ['id', 'name', 'color', 'category']
+            }
+          ]
+        }
+      ],
       order: [[sortField, sortOrder as string]],
       limit: Number.isFinite(parsedLimit) ? parsedLimit : 50,
-      offset: Number.isFinite(parsedOffset) ? parsedOffset : 0
-    });
+      offset: Number.isFinite(parsedOffset) ? parsedOffset : 0,
+      distinct: true // For correct count with includes
+    };
 
-    // Enrich contacts with last contact date (can be optimized later)
+    // Filter by tag if provided
+    if (tagId && typeof tagId === 'string') {
+      queryOptions.include[0].required = true; // INNER JOIN for tag filter
+      queryOptions.include[0].where = { tagId };
+    }
+
+    const { count, rows: contacts } = await User.findAndCountAll(queryOptions);
+
+    // Enrich contacts with last contact date and tags
     const enrichedContacts = await Promise.all(
       contacts.map(async (contact) => {
         const lastContactDate = await getLastContactDate(contact.id);
+        const contactJSON = contact.toJSON() as any;
+        
+        // Extract tags from userTags
+        const tags = contactJSON.userTags?.map((ut: any) => ut.tag).filter((tag: any) => tag) || [];
+        
         return {
-          ...contact.toJSON(),
-          lastContactDate
+          ...contactJSON,
+          lastContactDate,
+          tags // Clean tags array
         };
       })
     );

@@ -78,7 +78,7 @@ export function ToastManager({ toasts, onDismiss }: ToastManagerProps) {
   return (
     <div className="pointer-events-none fixed inset-0 flex items-end px-4 py-6 sm:items-end sm:p-6 z-[9999]">
       <div className="flex w-full flex-col items-end space-y-3">
-        {toasts.map((toast) => (
+        {toasts?.map((toast) => (
           <Toast
             key={toast.id}
             type={toast.type}

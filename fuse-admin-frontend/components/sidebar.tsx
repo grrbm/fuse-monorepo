@@ -19,6 +19,7 @@ import {
   Workflow,
   FileText,
   UserCircle,
+  Tag,
 } from "lucide-react"
 import Tutorial from "./ui/tutorial"
 
@@ -36,6 +37,7 @@ const operations = [
   { name: "Sequences", icon: Workflow, current: false, href: "/sequences" },
   { name: "Templates", icon: FileText, current: false, href: "/templates" },
   { name: "Contacts", icon: UserCircle, current: false, href: "/contacts" },
+  { name: "Tags", icon: Tag, current: false, href: "/tags" },
 ]
 
 const services: { name: string; icon: any; current: boolean; href?: string; hasSubmenu?: boolean; comingSoon?: boolean }[] = [

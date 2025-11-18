@@ -28,10 +28,19 @@ import {
     Upload,
     UserPlus,
     FileSpreadsheet,
-    Download
+    Download,
+    Tag as TagIcon,
+    UserCog
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+
+interface Tag {
+  id: string
+  name: string
+  color?: string
+  category?: string
+}
 
 interface Contact {
   id: string
@@ -45,6 +54,7 @@ interface Contact {
   createdAt: string
   lastLoginAt?: string
   lastContactDate?: string
+  tags?: Tag[]
 }
 
 interface ContactsData {
@@ -73,6 +83,10 @@ export default function ContactsPage() {
   const [optOutFilter, setOptOutFilter] = useState<'all' | 'active' | 'email_opted_out' | 'sms_opted_out'>('all')
   const [page, setPage] = useState(1)
   const [limit] = useState(50)
+  
+  // Tags state
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>('')
   
   // Modal state - Send Sequence
   const [showSequenceModal, setShowSequenceModal] = useState(false)
@@ -110,6 +124,17 @@ export default function ContactsPage() {
   
   // Dropdown state for Add Contact button
   const [showAddDropdown, setShowAddDropdown] = useState(false)
+  
+  // Modal state - Send Sequence by Tag
+  const [showSendByTagModal, setShowSendByTagModal] = useState(false)
+  const [selectedTagForSend, setSelectedTagForSend] = useState<string>('')
+  const [sendingByTag, setSendingByTag] = useState(false)
+  
+  // Modal state - Manage Contact Tags
+  const [showManageTagsModal, setShowManageTagsModal] = useState(false)
+  const [managingTagsContact, setManagingTagsContact] = useState<Contact | null>(null)
+  const [selectedTagsForContact, setSelectedTagsForContact] = useState<string[]>([])
+  const [savingTags, setSavingTags] = useState(false)
 
   // Fetch active sequences
   const fetchSequences = async () => {
@@ -141,6 +166,29 @@ export default function ContactsPage() {
     }
   }
 
+  // Fetch all tags
+  const fetchTags = async () => {
+    if (!token) return
+
+    try {
+      const response = await fetch(`${API_URL}/tags`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setAllTags(data.data || [])
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching tags:', error)
+    }
+  }
+
   // Fetch contacts
   const fetchContacts = async () => {
     if (!token) {
@@ -160,6 +208,10 @@ export default function ContactsPage() {
 
       if (searchQuery.trim()) {
         params.append('search', searchQuery.trim())
+      }
+
+      if (selectedTagFilter) {
+        params.append('tagId', selectedTagFilter)
       }
 
       const response = await fetch(`${API_URL}/contacts?${params}`, {
@@ -247,6 +299,143 @@ export default function ContactsPage() {
     setShowSequenceModal(false)
     setSelectedContact(null)
     setSelectedSequenceId('')
+  }
+
+  // Send sequence to all contacts with a tag
+  const handleSendSequenceByTag = async () => {
+    if (!selectedTagForSend || !selectedSequenceId) {
+      showError('Please select both a tag and a sequence')
+      return
+    }
+
+    const selectedTag = allTags.find(t => t.id === selectedTagForSend)
+    if (!selectedTag) return
+
+    const confirmMessage = `This will send the selected sequence to ALL contacts with the "${selectedTag.name}" tag. Continue?`
+    if (!confirm(confirmMessage)) return
+
+    try {
+      setSendingByTag(true)
+
+      const response = await fetch(`${API_URL}/sequence-triggers/manual`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          tagId: selectedTagForSend,
+          sequenceId: selectedSequenceId
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showSuccess(data.message || `Sequence sent to ${data.data.usersTriggered} contacts!`)
+        setShowSendByTagModal(false)
+        setSelectedTagForSend('')
+        setSelectedSequenceId('')
+        fetchContacts()
+      } else {
+        showError(data.message || 'Failed to send sequence by tag')
+      }
+    } catch (error) {
+      console.error('Error sending sequence by tag:', error)
+      showError('Failed to send sequence by tag')
+    } finally {
+      setSendingByTag(false)
+    }
+  }
+
+  // Open modal to send sequence by tag
+  const openSendByTagModal = () => {
+    setSelectedTagForSend('')
+    setSelectedSequenceId('')
+    setShowSendByTagModal(true)
+    fetchSequences()
+  }
+
+  // Close send by tag modal
+  const closeSendByTagModal = () => {
+    setShowSendByTagModal(false)
+    setSelectedTagForSend('')
+    setSelectedSequenceId('')
+  }
+
+  // Open modal to manage tags for a contact
+  const openManageTagsModal = (contact: Contact) => {
+    setManagingTagsContact(contact)
+    setSelectedTagsForContact(contact.tags?.map(t => t.id) || [])
+    setShowManageTagsModal(true)
+  }
+
+  // Close manage tags modal
+  const closeManageTagsModal = () => {
+    setShowManageTagsModal(false)
+    setManagingTagsContact(null)
+    setSelectedTagsForContact([])
+  }
+
+  // Toggle tag selection
+  const toggleTagSelection = (tagId: string) => {
+    setSelectedTagsForContact(prev =>
+      prev.includes(tagId)
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId]
+    )
+  }
+
+  // Save contact tags
+  const handleSaveContactTags = async () => {
+    if (!managingTagsContact) return
+
+    try {
+      setSavingTags(true)
+
+      const currentTagIds = managingTagsContact.tags?.map(t => t.id) || []
+      const toAdd = selectedTagsForContact.filter(id => !currentTagIds.includes(id))
+      const toRemove = currentTagIds.filter(id => !selectedTagsForContact.includes(id))
+
+      // Add new tags
+      for (const tagId of toAdd) {
+        const response = await fetch(`${API_URL}/tags/${tagId}/assign`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ userId: managingTagsContact.id })
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to assign tag')
+        }
+      }
+
+      // Remove tags
+      for (const tagId of toRemove) {
+        const response = await fetch(`${API_URL}/tags/${tagId}/assign/${managingTagsContact.id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to remove tag')
+        }
+      }
+
+      showSuccess('Tags updated successfully')
+      closeManageTagsModal()
+      fetchContacts()
+    } catch (error) {
+      console.error('Error saving tags:', error)
+      showError('Failed to update tags')
+    } finally {
+      setSavingTags(false)
+    }
   }
 
   // Open edit contact modal
@@ -480,10 +669,11 @@ export default function ContactsPage() {
   useEffect(() => {
     if (token) {
       fetchContacts()
+      fetchTags()
     } else {
       setLoading(false)
     }
-  }, [token, page, optOutFilter])
+  }, [token, page, optOutFilter, selectedTagFilter])
 
   // Debounced search
   useEffect(() => {
@@ -669,20 +859,46 @@ export default function ContactsPage() {
         {/* Filters */}
         <Card className="mb-6">
           <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              {/* Search */}
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Search */}
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
+                {/* Tag Filter */}
+                <select
+                  value={selectedTagFilter}
+                  onChange={(e) => setSelectedTagFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Tags</option>
+                  {allTags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Send Sequence by Tag Button */}
+                <Button
+                  onClick={openSendByTagModal}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <TagIcon className="h-4 w-4" />
+                  Send by Tag
+                </Button>
               </div>
 
               {/* Status Filter */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button
                   variant={optOutFilter === 'all' ? 'default' : 'outline'}
                   onClick={() => setOptOutFilter('all')}
@@ -740,6 +956,7 @@ export default function ContactsPage() {
                     <thead>
                       <tr className="border-b">
                         <th className="text-left py-3 px-4 font-medium">Name</th>
+                        <th className="text-left py-3 px-4 font-medium">Tags</th>
                         <th className="text-left py-3 px-4 font-medium">Email</th>
                         <th className="text-left py-3 px-4 font-medium">Phone</th>
                         <th className="text-left py-3 px-4 font-medium">Status</th>
@@ -763,6 +980,33 @@ export default function ContactsPage() {
                                 <p className="font-medium">{contact.firstName} {contact.lastName}</p>
                               </div>
                             </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            {contact.tags && contact.tags.length > 0 ? (
+                              <div className="flex gap-1 flex-wrap">
+                                {contact.tags.slice(0, 3).map((tag) => (
+                                  <Badge
+                                    key={tag.id}
+                                    variant="secondary"
+                                    className="text-xs"
+                                    style={{
+                                      backgroundColor: tag.color ? `${tag.color}20` : undefined,
+                                      borderColor: tag.color || undefined,
+                                      color: tag.color || undefined
+                                    }}
+                                  >
+                                    {tag.name}
+                                  </Badge>
+                                ))}
+                                {contact.tags.length > 3 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    +{contact.tags.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
                           </td>
                           <td className="py-3 px-4 text-sm text-muted-foreground">
                             {contact.email}
@@ -1021,6 +1265,25 @@ export default function ContactsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Tags Management Button */}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  closeEditModal()
+                  openManageTagsModal(editingContact)
+                }}
+                className="w-full flex items-center justify-center gap-2"
+                disabled={savingContact}
+              >
+                <TagIcon className="h-4 w-4" />
+                Manage Tags
+                {editingContact.tags && editingContact.tags.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {editingContact.tags.length}
+                  </Badge>
+                )}
+              </Button>
             </div>
 
             {/* Footer */}
@@ -1280,6 +1543,218 @@ export default function ContactsPage() {
                     <Upload className="h-4 w-4" />
                     Upload CSV
                   </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Sequence by Tag Modal */}
+      {showSendByTagModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg shadow-xl max-w-md w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center gap-2">
+                <TagIcon className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-semibold">Send Sequence by Tag</h2>
+              </div>
+              <button
+                onClick={closeSendByTagModal}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                disabled={sendingByTag}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Tag Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Select a tag <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedTagForSend}
+                  onChange={(e) => setSelectedTagForSend(e.target.value)}
+                  className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  disabled={sendingByTag}
+                >
+                  <option value="">-- Select a tag --</option>
+                  {allTags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sequence Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Select a sequence <span className="text-red-500">*</span>
+                </label>
+                {sequences.length === 0 ? (
+                  <div className="text-center py-8 bg-muted/50 rounded-lg">
+                    <Workflow className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">No active sequences found</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Create and activate a sequence first
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedSequenceId}
+                    onChange={(e) => setSelectedSequenceId(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                    disabled={sendingByTag}
+                  >
+                    <option value="">-- Select a sequence --</option>
+                    {sequences.map((seq) => (
+                      <option key={seq.id} value={seq.id}>
+                        {seq.name}
+                        {seq.description ? ` - ${seq.description}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Warning */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800">
+                  ⚠️ This will send the selected sequence to ALL contacts with the selected tag.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t bg-muted/30">
+              <Button
+                variant="outline"
+                onClick={closeSendByTagModal}
+                disabled={sendingByTag}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendSequenceByTag}
+                disabled={sendingByTag || !selectedTagForSend || !selectedSequenceId}
+                className="gap-2"
+              >
+                {sendingByTag ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Send to All
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Tags Modal */}
+      {showManageTagsModal && managingTagsContact && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg shadow-xl max-w-md w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center gap-2">
+                <TagIcon className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-semibold">Manage Tags</h2>
+              </div>
+              <button
+                onClick={closeManageTagsModal}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                disabled={savingTags}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Contact Info */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <p className="text-sm text-muted-foreground mb-1">Contact:</p>
+                <p className="font-semibold">
+                  {managingTagsContact.firstName} {managingTagsContact.lastName}
+                </p>
+              </div>
+
+              {/* Tags Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Select Tags
+                </label>
+                {allTags.length === 0 ? (
+                  <div className="text-center py-8 bg-muted/50 rounded-lg">
+                    <TagIcon className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">No tags available</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Create tags in the Tags page first
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {allTags.map((tag) => (
+                      <label
+                        key={tag.id}
+                        className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors border"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTagsForContact.includes(tag.id)}
+                          onChange={() => toggleTagSelection(tag.id)}
+                          disabled={savingTags}
+                          className="h-4 w-4"
+                        />
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: tag.color || '#3B82F6' }}
+                        />
+                        <span className="flex-1">{tag.name}</span>
+                        {tag.category && (
+                          <Badge variant="secondary" className="text-xs">
+                            {tag.category}
+                          </Badge>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t bg-muted/30">
+              <Button
+                variant="outline"
+                onClick={closeManageTagsModal}
+                disabled={savingTags}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveContactTags}
+                disabled={savingTags}
+                className="gap-2"
+              >
+                {savingTags ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Tags'
                 )}
               </Button>
             </div>
