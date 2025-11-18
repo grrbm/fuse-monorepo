@@ -79,7 +79,7 @@ export default function SignUp() {
   const validateForm = (): string | null => {
     // Required fields validation
     const requiredFields = ['firstName', 'lastName', 'email', 'password', 'confirmPassword', 'companyName', 'businessType', 'phoneNumber']
-    
+
     for (const field of requiredFields) {
       if (!formData[field as keyof FormData]) {
         return `${field.replace(/([A-Z])/g, ' $1').toLowerCase().replace(/^./, str => str.toUpperCase())} is required`
@@ -144,7 +144,7 @@ export default function SignUp() {
       })
 
       const data = await response.json()
-      
+
       console.log('Signup response:', { status: response.status, data })
 
       if (response.ok && data.success) {
@@ -153,13 +153,13 @@ export default function SignUp() {
       } else {
         // Handle different types of errors
         let errorMessage = 'Signup failed'
-        
+
         if (response.status === 409) {
           errorMessage = 'An account with this email already exists. Please use a different email or try signing in.'
         } else if (data.message) {
           errorMessage = data.message
         }
-        
+
         console.log('Setting error:', errorMessage)
         setError(errorMessage)
       }
@@ -192,7 +192,7 @@ export default function SignUp() {
         <title>Brand Sign Up - Fuse</title>
         <meta name="description" content="Create your brand partner account" />
       </Head>
-      
+
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-2xl space-y-6">
           {/* Logo/Header */}
@@ -317,14 +317,14 @@ export default function SignUp() {
                     </label>
                     <div className="relative">
                       <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <input
-                      id="website"
-                      type="text"
-                      value={formData.website}
-                      onChange={(e) => handleInputChange('website', e.target.value)}
-                      className="w-full pl-10 pr-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                      placeholder="company.com"
-                    />
+                      <input
+                        id="website"
+                        type="text"
+                        value={formData.website}
+                        onChange={(e) => handleInputChange('website', e.target.value)}
+                        className="w-full pl-10 pr-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        placeholder="company.com"
+                      />
                     </div>
                   </div>
                 </div>
@@ -462,9 +462,8 @@ export default function SignUp() {
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={formData.confirmPassword}
                       onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                      className={`w-full px-3 py-2 pr-10 border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring ${
-                        passwordsMatch ? 'border-input' : 'border-red-500'
-                      }`}
+                      className={`w-full px-3 py-2 pr-10 border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring ${passwordsMatch ? 'border-input' : 'border-red-500'
+                        }`}
                       placeholder="Confirm your password"
                       required
                     />

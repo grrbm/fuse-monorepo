@@ -716,30 +716,30 @@ export default function ProductDetail() {
                 <title>{product?.name || 'Product'} - Fuse Admin</title>
             </Head>
 
-            <div className="min-h-screen bg-[#F9FAFB] p-8" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+            <div className="min-h-screen bg-background text-foreground p-8" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
                 <div className="max-w-7xl mx-auto">
                     {/* Back Button */}
                     <button
                         onClick={() => router.push('/products')}
-                        className="mb-6 flex items-center gap-2 px-4 py-2 rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F3F4F6] text-[#4B5563] text-sm font-medium transition-all shadow-sm"
+                        className="mb-6 flex items-center gap-2 px-4 py-2 rounded-full border border-border bg-card hover:bg-muted text-sm font-medium transition-all shadow-sm"
                     >
                         <ArrowLeft className="h-4 w-4" />
                         Back to Products
                     </button>
 
                     {/* Product Header Card */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
+                    <div className="bg-card rounded-2xl shadow-sm border border-border p-6 mb-6">
                         <div className="flex items-start justify-between">
                             <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-3">
-                                    <h1 className="text-3xl font-semibold text-[#1F2937]">{product?.name}</h1>
+                                    <h1 className="text-3xl font-semibold">{product?.name}</h1>
                                     {product && getStatusBadge(product.active)}
                                 </div>
-                                <p className="text-[#6B7280] text-base leading-relaxed max-w-3xl">{product?.description}</p>
+                                <p className="text-muted-foreground text-base leading-relaxed max-w-3xl">{product?.description}</p>
                                 {product?.placeholderSig && (
-                                    <div className="mt-4 pt-4 border-t border-[#E5E7EB] inline-block">
-                                        <span className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Placeholder Sig</span>
-                                        <p className="text-sm text-[#1F2937] mt-1 font-medium">{product.placeholderSig}</p>
+                                    <div className="mt-4 pt-4 border-t border-border inline-block">
+                                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Placeholder Sig</span>
+                                        <p className="text-sm mt-1 font-medium">{product.placeholderSig}</p>
                                     </div>
                                 )}
                             </div>
@@ -748,8 +748,13 @@ export default function ProductDetail() {
 
                     {/* Success/Error Messages */}
                     {error && (
-                        <div className={`mb-6 p-4 border rounded-md ${error.includes('✅') ? 'bg-background border-border' : 'bg-background border-red-200'}`}>
-                            <p className={error.includes('✅') ? 'text-foreground' : 'text-red-600 text-sm'}>{error}</p>
+                        <div
+                            className={`mb-6 p-4 border rounded-md ${error.includes('✅')
+                                    ? 'bg-background border-border text-foreground'
+                                    : 'bg-destructive/10 border-destructive/30 text-destructive text-sm'
+                                }`}
+                        >
+                            <p>{error}</p>
                         </div>
                     )}
 
@@ -757,17 +762,17 @@ export default function ProductDetail() {
                     <div className="grid grid-cols-12 gap-6 mb-6">
                         {/* Pharmacy Wholesale Cost */}
                         <div className="col-span-6">
-                            <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all">
+                            <div className="bg-card rounded-2xl shadow-sm border border-border p-6 hover:shadow-md transition-all">
                                 <div className="flex items-center gap-2 mb-3">
-                                    <div className="w-10 h-10 bg-[#F3F4F6] rounded-xl flex items-center justify-center">
+                                    <div className="w-10 h-10 bg-muted rounded-xl flex items-center justify-center">
                                         <DollarSign className="h-5 w-5 text-[#4FA59C]" />
                                     </div>
                                     <div>
-                                        <p className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Pharmacy Wholesale Cost</p>
-                                        <p className="text-[10px] text-[#9CA3AF]">What you pay</p>
+                                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pharmacy Wholesale Cost</p>
+                                        <p className="text-[10px] text-muted-foreground">What you pay</p>
                                     </div>
                                 </div>
-                                <p className="text-3xl font-semibold text-[#1F2937]">
+                                <p className="text-3xl font-semibold">
                                     {product ? formatPrice(wholesaleCost) : '$0.00'}
                                 </p>
                             </div>
@@ -776,7 +781,7 @@ export default function ProductDetail() {
                         {/* Retail Price */}
                         <div className="col-span-6">
                             {tenantProduct ? (
-                                <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all h-full">
+                                <div className="bg-card rounded-2xl shadow-sm border border-border p-6 hover:shadow-md transition-all h-full">
                                     <div className="flex items-center justify-between mb-1">
                                         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Your Retail Price</div>
                                         {!editingPrice && (
@@ -851,8 +856,8 @@ export default function ProductDetail() {
                                     )}
                                 </div>
                             ) : (
-                                <div className="bg-white rounded-2xl shadow-sm border-2 border-dashed border-[#E5E7EB] p-6 flex items-center justify-center h-full">
-                                    <p className="text-sm text-[#6B7280] text-center">
+                                <div className="bg-card rounded-2xl shadow-sm border-2 border-dashed border-border p-6 flex items-center justify-center h-full">
+                                    <p className="text-sm text-muted-foreground text-center">
                                         Enable this product to set custom pricing
                                     </p>
                                 </div>
@@ -861,14 +866,14 @@ export default function ProductDetail() {
                     </div>
 
                     {/* Forms Section */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
+                    <div className="bg-card rounded-2xl shadow-sm border border-border p-6 mb-6">
                         <div>
-                            <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Forms</h3>
+                            <h3 className="text-sm font-semibold mb-4">Product Forms</h3>
                             {templates.length === 0 ? (
-                                <div className="p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl text-center bg-[#F9FAFB]/50">
-                                    <FileText className="h-10 w-10 text-[#9CA3AF] mx-auto mb-3" />
-                                    <p className="text-sm text-[#6B7280] font-medium">No forms available for this product</p>
-                                    <p className="text-xs text-[#9CA3AF] mt-1">Create a global structure in the tenant portal to get started</p>
+                                <div className="p-8 border-2 border-dashed border-border rounded-2xl text-center bg-muted/40">
+                                    <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                                    <p className="text-sm text-muted-foreground font-medium">No forms available for this product</p>
+                                    <p className="text-xs text-muted-foreground mt-1">Create a global structure in the tenant portal to get started</p>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
@@ -888,16 +893,16 @@ export default function ProductDetail() {
                                         const form = formsForStructure[0] // Just get the single form for this structure
 
                                         return (
-                                            <div key={t.id} className="bg-white border border-[#E5E7EB] rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                            <div key={t.id} className="bg-card border border-border rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden">
                                                 {/* Structure Header with Inline Form Flow + Color Picker */}
-                                                <div className="p-5 border-b border-[#E5E7EB] bg-gradient-to-r from-[#F9FAFB] to-white">
+                                                <div className="p-5 border-b border-border bg-gradient-to-r from-background/80 to-card">
                                                     <div className="flex items-center justify-between gap-6">
                                                         {/* Left: Name and Type */}
                                                         <div className="flex-shrink-0">
-                                                            <h4 className="text-lg font-semibold text-[#1F2937] mb-1">
+                                                            <h4 className="text-lg font-semibold mb-1">
                                                                 {(t as any)._structureName || t.title}
                                                             </h4>
-                                                            <p className="text-xs text-[#6B7280]">
+                                                            <p className="text-xs text-muted-foreground">
                                                                 {t.formTemplateType === 'normal' ? '📦 Product-Specific Form' :
                                                                     t.formTemplateType === 'standardized_template' ? '📋 Standardized Category Template' :
                                                                         'Standard Form'}
@@ -913,7 +918,7 @@ export default function ProductDetail() {
                                                                     .map((section: any, idx: number, arr: any[]) => (
                                                                         <div key={section.id} className="flex items-center gap-2 flex-shrink-0">
                                                                             <div className="flex items-center gap-1.5">
-                                                                                <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-lg border border-[#E5E7EB]">
+                                                                                <div className="w-8 h-8 bg-card rounded-lg flex items-center justify-center text-lg border border-border">
                                                                                     {section.icon}
                                                                                 </div>
                                                                                 <span className="text-[10px] font-medium text-[#6B7280] max-w-[60px] leading-tight">
@@ -921,7 +926,7 @@ export default function ProductDetail() {
                                                                                 </span>
                                                                             </div>
                                                                             {idx < arr.length - 1 && (
-                                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-[#D1D5DB] flex-shrink-0">
+                                                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="text-muted-foreground/40 flex-shrink-0">
                                                                                     <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                                                                                 </svg>
                                                                             )}
@@ -981,8 +986,8 @@ export default function ProductDetail() {
                                                     const urls = buildFormUrls(form)
                                                     return (
                                                         <div className="p-5">
-                                                            <div className="bg-white border border-[#E5E7EB] rounded-lg p-3">
-                                                                <div className="text-sm font-medium text-[#1F2937] mb-3">
+                                                            <div className="bg-card border border-border rounded-lg p-3">
+                                                                <div className="text-sm font-medium mb-3">
                                                                     Form #{structureIndex + 1}
                                                                 </div>
 
@@ -990,11 +995,11 @@ export default function ProductDetail() {
                                                                     <div className="space-y-3">
                                                                         {/* Standard Subdomain URL */}
                                                                         <div>
-                                                                            <div className="text-xs font-medium text-[#6B7280] mb-1">
+                                                                            <div className="text-xs font-medium text-muted-foreground mb-1">
                                                                                 Subdomain URL:
                                                                             </div>
                                                                             <div className="flex items-center gap-2">
-                                                                                <div className="text-xs text-[#1F2937] truncate flex-1 font-mono bg-gray-50 px-2 py-1 rounded">
+                                                                                <div className="text-xs truncate flex-1 font-mono bg-muted px-2 py-1 rounded">
                                                                                     {urls.subdomainUrl}
                                                                                 </div>
                                                                                 <Button size="sm" variant="outline" onClick={() => window.open(urls.subdomainUrl, '_blank')}>
@@ -1011,11 +1016,11 @@ export default function ProductDetail() {
                                                                         {/* Custom Domain URL (if configured) */}
                                                                         {urls.customDomainUrl && (
                                                                             <div>
-                                                                                <div className="text-xs font-medium text-[#6B7280] mb-1">
+                                                                                <div className="text-xs font-medium text-muted-foreground mb-1">
                                                                                     Custom Domain URL:
                                                                                 </div>
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <div className="text-xs text-[#1F2937] truncate flex-1 font-mono bg-gray-50 px-2 py-1 rounded">
+                                                                                    <div className="text-xs truncate flex-1 font-mono bg-muted px-2 py-1 rounded">
                                                                                         {urls.customDomainUrl}
                                                                                     </div>
                                                                                     <Button size="sm" variant="outline" onClick={() => urls.customDomainUrl && window.open(urls.customDomainUrl, '_blank')}>
@@ -1033,7 +1038,7 @@ export default function ProductDetail() {
                                                                 )}
 
                                                                 {!urls && (
-                                                                    <div className="text-xs text-[#6B7280]">
+                                                                    <div className="text-xs text-muted-foreground">
                                                                         Preview URL will generate after publishing
                                                                     </div>
                                                                 )}
@@ -1050,8 +1055,8 @@ export default function ProductDetail() {
                     </div>
 
                     {/* Product Performance */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-6">
-                        <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Performance</h3>
+                    <div className="bg-card rounded-2xl shadow-sm border border-border p-6 mb-6">
+                        <h3 className="text-sm font-semibold mb-4">Product Performance</h3>
                         <div className="grid grid-cols-2 gap-6">
 
                             {/* Total Orders */}
@@ -1077,8 +1082,8 @@ export default function ProductDetail() {
                     </div>
 
                     {/* Product Details */}
-                    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6">
-                        <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Product Details</h3>
+                    <div className="bg-card rounded-2xl shadow-sm border border-border p-6">
+                        <h3 className="text-sm font-semibold mb-4">Product Details</h3>
                         <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
                             <div>
                                 <span className="text-muted-foreground text-xs uppercase tracking-wide">Pharmacy Product ID</span>

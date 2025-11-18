@@ -31,7 +31,7 @@ export default function SignIn() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!email || !password) {
       return
     }
@@ -48,7 +48,7 @@ export default function SignIn() {
         <title>Sign In - Admin Dashboard</title>
         <meta name="description" content="Sign in to admin dashboard" />
       </Head>
-      
+
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-6">
           {/* Logo/Header */}
@@ -80,7 +80,7 @@ export default function SignIn() {
                     {successMessage}
                   </div>
                 )}
-                
+
                 <div className="space-y-2">
                   <label htmlFor="email" className="text-sm font-medium text-foreground">
                     Email

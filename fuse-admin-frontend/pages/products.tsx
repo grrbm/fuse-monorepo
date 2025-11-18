@@ -257,21 +257,21 @@ export default function Products() {
     const getCategoryBadgeColors = (category?: string) => {
         switch (category) {
             case 'weight_loss':
-                return 'bg-orange-50 text-orange-700 border-orange-200'
+                return 'bg-orange-500/15 text-orange-300 border-orange-500/40'
             case 'hair_growth':
-                return 'bg-purple-50 text-purple-700 border-purple-200'
+                return 'bg-purple-500/15 text-purple-300 border-purple-500/40'
             case 'performance':
-                return 'bg-blue-50 text-blue-700 border-blue-200'
+                return 'bg-blue-500/15 text-blue-300 border-blue-500/40'
             case 'sexual_health':
-                return 'bg-pink-50 text-pink-700 border-pink-200'
+                return 'bg-pink-500/15 text-pink-300 border-pink-500/40'
             case 'skincare':
-                return 'bg-teal-50 text-teal-700 border-teal-200'
+                return 'bg-teal-500/15 text-teal-300 border-teal-500/40'
             case 'wellness':
-                return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
             case 'other':
-                return 'bg-gray-50 text-gray-700 border-gray-200'
+                return 'bg-muted text-muted-foreground border-border'
             default:
-                return 'bg-gray-50 text-gray-700 border-gray-200'
+                return 'bg-muted text-muted-foreground border-border'
         }
     }
 
@@ -496,13 +496,13 @@ export default function Products() {
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
             </Head>
-            <div className="min-h-screen bg-gray-50" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="max-w-7xl mx-auto px-6 py-8">
                     {/* Header */}
                     <div className="flex justify-between items-start mb-8">
                         <div>
-                            <h1 className="text-2xl font-semibold text-gray-900 mb-1">Products</h1>
-                            <p className="text-sm text-gray-500">Enable or disable products for your clinic</p>
+                            <h1 className="text-2xl font-semibold mb-1">Products</h1>
+                            <p className="text-sm text-muted-foreground">Enable or disable products for your clinic</p>
                         </div>
                         <div className="flex gap-3">
                             <Button
@@ -521,11 +521,11 @@ export default function Products() {
                     </div>
 
                     {/* Subscription/product limit summary - Compact */}
-                    <div className="mb-6 px-4 py-3 rounded-lg border border-gray-200 bg-white">
+                    <div className="mb-6 px-4 py-3 rounded-lg border border-border bg-card">
                         <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
-                                <span className="text-gray-600">Product Slots:</span>
-                                <span className="font-medium text-gray-900">
+                                <span className="text-muted-foreground">Product Slots:</span>
+                                <span className="font-medium">
                                     {subscription?.productsChangedAmountOnCurrentCycle ?? 0} / {subscription?.plan?.maxProducts === -1 || subscription?.plan?.maxProducts === undefined ? 'Unlimited' : subscription?.plan?.maxProducts}
                                 </span>
                             </div>
@@ -580,18 +580,18 @@ export default function Products() {
                     </div>
 
                     {/* Tabs */}
-                    <div className="mb-6 border-b border-gray-200">
+                            <div className="mb-6 border-b border-border">
                         <div className="flex gap-8">
                             <button
                                 id="my-products-btn"
-                                className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'my' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                                className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'my' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                                 onClick={() => setActiveTab('my')}
                             >
                                 My Products
                             </button>
                             <button
                                 id="select-products-btn"
-                                className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'select' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                                className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'select' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                                 onClick={() => setActiveTab('select')}
                             >
                                 Select Products
@@ -601,16 +601,16 @@ export default function Products() {
 
                     {/* Category Filters */}
                     <div className="mb-6">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Filter className="h-4 w-4" />
                                 <span className="font-medium">Filter:</span>
                             </div>
                             <button
                                 onClick={() => setSelectedCategory(null)}
                                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedCategory === null
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
                                     }`}
                             >
                                 All
@@ -620,8 +620,8 @@ export default function Products() {
                                     key={category.value}
                                     onClick={() => setSelectedCategory(category.value)}
                                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedCategory === category.value
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                                         }`}
                                 >
                                     {category.label}
@@ -630,7 +630,7 @@ export default function Products() {
                             {selectedCategory && (
                                 <button
                                     onClick={() => setSelectedCategory(null)}
-                                    className="ml-2 p-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                                    className="ml-2 p-1.5 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
                                     title="Clear filter"
                                 >
                                     <X className="h-3 w-3" />
@@ -641,11 +641,11 @@ export default function Products() {
 
                     {/* Error Message - Only show actual errors, not success messages */}
                     {error && !error.includes('✅') && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg">
+                                <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
                             <div className="flex">
                                 <XCircle className="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" />
                                 <div className="flex-1">
-                                    <p className="text-sm text-red-800">{error}</p>
+                                    <p className="text-sm text-destructive">{error}</p>
                                 </div>
                             </div>
                         </div>
@@ -653,8 +653,8 @@ export default function Products() {
 
                     {/* Quick Edit Mode Controls - Only show on My Products tab */}
                     {activeTab === 'my' && displayedProducts.length > 0 && (
-                        <div className="mb-4 flex items-center justify-between">
-                            <div className="text-sm text-gray-600">
+                            <div className="mb-4 flex items-center justify-between">
+                            <div className="text-sm text-muted-foreground">
                                 {quickEditMode ? (
                                     <span className="font-medium">Quick edit mode active - Update prices below</span>
                                 ) : (
@@ -709,7 +709,7 @@ export default function Products() {
                     {/* Products List */}
                     {displayedProducts.length > 0 ? (
                         <>
-                            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden product-card">
+                            <div className="bg-card rounded-lg border border-border overflow-hidden product-card">
                                 {displayedProducts.map((product, index) => {
                                     const isEnabled = enabledProductIds.has(product.id)
                                     const categoryValues = Array.isArray(product.categories) && product.categories.length > 0
@@ -724,9 +724,9 @@ export default function Products() {
                                     const additionalCount = Math.max(categoryValues.length - 1, 0)
                                     const badgeLabel = additionalCount > 0 ? `${primaryLabel} +${additionalCount}` : primaryLabel
                                     return (
-                                        <div
+                                            <div
                                             key={product.id}
-                                            className={`flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors ${quickEditMode ? 'cursor-default' : 'cursor-pointer'} ${index !== 0 ? 'border-t border-gray-100' : ''}`}
+                                            className={`flex items-center justify-between px-6 py-4 hover:bg-muted/40 transition-colors ${quickEditMode ? 'cursor-default' : 'cursor-pointer'} ${index !== 0 ? 'border-t border-border/60' : ''}`}
                                             onClick={() => !quickEditMode && router.push(`/products/${product.id}`)}
                                         >
                                             <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -750,18 +750,18 @@ export default function Products() {
                                                             }}
                                                         />
                                                     ) : (
-                                                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-                                                            <Package className="h-5 w-5 text-gray-400" />
+                                                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                                                            <Package className="h-5 w-5 text-muted-foreground" />
                                                         </div>
                                                     )}
                                                 </div>
 
                                                 {/* Name & Info */}
-                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-0.5">
-                                                        <h3 className="text-sm font-medium text-gray-900 truncate">{product.name}</h3>
+                                                        <h3 className="text-sm font-medium truncate">{product.name}</h3>
                                                     </div>
-                                                    <p className="text-sm text-gray-500 truncate">
+                                                    <p className="text-sm text-muted-foreground truncate">
                                                         {product.placeholderSig || 'No Placeholder Sig specified'}
                                                     </p>
                                                 </div>
@@ -775,13 +775,13 @@ export default function Products() {
 
                                                 {/* Pharmacy Wholesale Price */}
                                                 <div className="flex-shrink-0 w-28">
-                                                    <div className="text-xs text-gray-500 mb-0.5">Pharmacy</div>
-                                                    <span className="text-sm font-medium text-gray-900">{formatPrice(product.pharmacyWholesaleCost ?? product.price)}</span>
+                                                    <div className="text-xs text-muted-foreground mb-0.5">Pharmacy</div>
+                                                    <span className="text-sm font-medium">{formatPrice(product.pharmacyWholesaleCost ?? product.price)}</span>
                                                 </div>
 
                                                 {/* Clinic Retail Price */}
                                                 <div className="flex-shrink-0 w-28" onClick={(e) => quickEditMode && e.stopPropagation()}>
-                                                    <div className="text-xs text-gray-500 mb-0.5">Your Price</div>
+                                                    <div className="text-xs text-muted-foreground mb-0.5">Your Price</div>
                                                     {(() => {
                                                         const tenantProduct = tenantProducts.find(tp => tp.productId === product.id)
 
@@ -789,7 +789,7 @@ export default function Products() {
                                                             const currentValue = editingPrices.get(product.id) ?? (tenantProduct?.price || '')
                                                             return (
                                                                 <div className="relative">
-                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/70">$</span>
                                                                     <input
                                                                         type="number"
                                                                         step="0.01"
@@ -801,16 +801,16 @@ export default function Products() {
                                                                             setEditingPrices(newPrices)
                                                                         }}
                                                                         placeholder="0.00"
-                                                                        className="w-24 pl-5 pr-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                                        className="w-24 pl-5 pr-2 py-1 text-sm border border-input rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                                                                     />
                                                                 </div>
                                                             )
                                                         }
 
                                                         return tenantProduct && tenantProduct.price > 0 ? (
-                                                            <span className="text-sm font-medium text-gray-900">{formatPrice(tenantProduct.price)}</span>
+                                                            <span className="text-sm font-medium">{formatPrice(tenantProduct.price)}</span>
                                                         ) : (
-                                                            <span className="text-sm text-gray-400">Not set</span>
+                                                            <span className="text-sm text-muted-foreground">Not set</span>
                                                         )
                                                     })()}
                                                 </div>
@@ -857,7 +857,7 @@ export default function Products() {
                                                         }}
                                                         className="p-2 transition-all duration-300 ease-in-out group-hover:translate-x-4"
                                                     >
-                                                        <ChevronRight className="h-4 w-4 text-gray-400" />
+                                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                                     </button>
                                                 </div>
                                             </div>
@@ -872,7 +872,7 @@ export default function Products() {
                                     <Button
                                         variant="outline"
                                         size="default"
-                                        className="w-full h-12 text-sm font-medium border-2 border-dashed border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 transition-all"
+                                        className="w-full h-12 text-sm font-medium border-2 border-dashed border-border hover:border-primary/60"
                                         onClick={() => setActiveTab('select')}
                                     >
                                         <Plus className="h-4 w-4 mr-2" />
@@ -882,14 +882,14 @@ export default function Products() {
                             )}
                         </>
                     ) : (
-                        <div className="bg-white rounded-lg border border-gray-200 p-16 text-center">
+                        <div className="bg-card rounded-lg border border-border p-16 text-center">
                             <div className="flex flex-col items-center gap-4">
-                                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
-                                    <Package className="h-6 w-6 text-gray-400" />
+                                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                                    <Package className="h-6 w-6 text-muted-foreground" />
                                 </div>
                                 <div>
-                                    <h3 className="text-base font-medium text-gray-900 mb-1">No products found</h3>
-                                    <p className="text-sm text-gray-500 mb-4">
+                                    <h3 className="text-base font-medium mb-1">No products found</h3>
+                                    <p className="text-sm text-muted-foreground mb-4">
                                         {activeTab === 'my'
                                             ? 'Enable products from the "Select Products" tab to get started.'
                                             : 'No products available. Contact your administrator.'}

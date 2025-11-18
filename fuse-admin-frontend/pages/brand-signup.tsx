@@ -31,7 +31,7 @@ export default function BrandSignUp() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!companyName || !contactName || !email || !phone || !password || !confirmPassword) {
       setError('All fields except website are required')
       return
@@ -44,7 +44,7 @@ export default function BrandSignUp() {
 
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
       console.log('API URL:', apiUrl)
@@ -53,10 +53,10 @@ export default function BrandSignUp() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           firstName: contactName.split(' ')[0] || contactName,
           lastName: contactName.split(' ').slice(1).join(' ') || '',
-          email, 
+          email,
           password,
           role: 'brand',
           phoneNumber: phone,
@@ -86,7 +86,7 @@ export default function BrandSignUp() {
         <title>Brand Sign Up - Admin Portal</title>
         <meta name="description" content="Create a brand partner account" />
       </Head>
-      
+
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-6">
           {/* Logo/Header */}
@@ -112,7 +112,7 @@ export default function BrandSignUp() {
                     {error}
                   </div>
                 )}
-                
+
                 <div className="space-y-2">
                   <label htmlFor="companyName" className="text-sm font-medium text-foreground">
                     Company Name *
@@ -225,9 +225,8 @@ export default function BrandSignUp() {
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`w-full px-3 py-2 pr-10 border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring ${
-                        passwordsMatch ? 'border-input' : 'border-red-500'
-                      }`}
+                      className={`w-full px-3 py-2 pr-10 border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring ${passwordsMatch ? 'border-input' : 'border-red-500'
+                        }`}
                       placeholder="Confirm your password"
                       required
                     />

@@ -11,7 +11,7 @@ export default function PrivacyPolicy() {
         <title>Privacy Policy - Fuse</title>
         <meta name="description" content="Privacy Policy for Fuse Health" />
       </Head>
-      
+
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-4xl space-y-6">
           <Card className="bg-card border-border">
