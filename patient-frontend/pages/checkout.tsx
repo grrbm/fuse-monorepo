@@ -87,17 +87,32 @@ export default function CheckoutPage() {
     securityCode: "",
     country: "brazil"
   });
-  const [timeRemaining] = useState("14:39");
+  const [timeRemainingSeconds, setTimeRemainingSeconds] = useState(15 * 60); // 15 minutes in seconds
 
   const selectedPlanData = plans.find(plan => plan.id === selectedPlan);
 
   React.useEffect(() => {
-    // Countdown timer for reservation
+    // 15-minute countdown timer for reservation
     const timer = setInterval(() => {
-      // This would be connected to actual reservation timer logic
+      setTimeRemainingSeconds((prev) => {
+        if (prev <= 0) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Format time as MM:SS
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const timeRemaining = formatTime(timeRemainingSeconds);
 
   const handleCompletePayment = () => {
     // Handle payment completion
@@ -421,7 +436,7 @@ export default function CheckoutPage() {
                     <div className="text-sm font-medium text-success-800">Your medication is reserved</div>
                     <div className="text-xs text-success-600">Complete checkout to secure your prescription</div>
                   </div>
-                  <div className="text-sm font-mono text-success-700">{timeRemaining}</div>
+                  <div className={`text-sm font-mono ${timeRemainingSeconds <= 60 ? 'text-danger-700' : 'text-success-700'}`}>{timeRemaining}</div>
                 </div>
 
                 <h3 className="font-medium text-gray-900 mb-4">Order Summary</h3>
