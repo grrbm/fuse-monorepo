@@ -755,8 +755,12 @@ app.get("/auth/verify-email", async (req, res) => {
     await user.activate();
     console.log('✅ User activated successfully:', user.email);
 
+    // Get the frontend origin from the request (same logic as verification email)
+    const frontendOrigin = req.get('origin') || req.get('referer')?.split('/').slice(0, 3).join('/');
+    console.log('🌐 Frontend origin detected for welcome email:', frontendOrigin);
+
     // Send welcome email
-    await MailsSender.sendWelcomeEmail(user.email, user.firstName);
+    await MailsSender.sendWelcomeEmail(user.email, user.firstName, frontendOrigin);
 
     // Create JWT token for automatic login
     const authToken = createJWTToken(user);

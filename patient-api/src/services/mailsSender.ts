@@ -29,7 +29,7 @@ export class MailsSender {
       if (frontendOrigin) {
         return frontendOrigin
       }
-      
+
       if (process.env.FRONTEND_URL) {
         return process.env.FRONTEND_URL
       }
@@ -148,9 +148,14 @@ export class MailsSender {
   /**
    * Send welcome email after successful activation
    */
-  static async sendWelcomeEmail(email: string, firstName: string): Promise<boolean> {
+  static async sendWelcomeEmail(email: string, firstName: string, frontendOrigin?: string): Promise<boolean> {
     // Use same URL logic as verification email
     const getFrontendUrl = () => {
+      // Use provided origin from the request (same as verification email)
+      if (frontendOrigin) {
+        return frontendOrigin
+      }
+
       if (process.env.FRONTEND_URL) {
         return process.env.FRONTEND_URL
       }
