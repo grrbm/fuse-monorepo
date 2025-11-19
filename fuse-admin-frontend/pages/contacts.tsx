@@ -41,6 +41,7 @@ interface Tag {
   name: string
   color?: string
   category?: string
+  userCount?: number
 }
 
 interface Contact {
