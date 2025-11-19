@@ -714,7 +714,7 @@ export default function Products() {
                             </Button>
                             {(() => {
                                 const planType = subscription?.plan?.type?.toLowerCase()
-                                const isPremium = planType === 'professional' || planType === 'enterprise'
+                                const isPremium = planType === 'premium' || planType === 'enterprise'
                                 const isDisabled = !isPremium
 
                                 return (
@@ -745,7 +745,7 @@ export default function Products() {
                     {/* Premium Plan Notice for Starter users */}
                     {(() => {
                         const planType = subscription?.plan?.type?.toLowerCase()
-                        const isPremium = planType === 'professional' || planType === 'enterprise'
+                        const isPremium = planType === 'premium' || planType === 'enterprise'
 
                         if (!isPremium) {
                             return (

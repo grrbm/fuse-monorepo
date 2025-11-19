@@ -308,6 +308,17 @@ export async function initializeDatabase() {
       // ignore
     }
 
+    // Ensure customMaxProducts column exists on BrandSubscription
+    try {
+      await sequelize.query(`
+        ALTER TABLE "BrandSubscription"
+        ADD COLUMN IF NOT EXISTS "customMaxProducts" INTEGER;
+      `);
+      console.log('✅ Ensured customMaxProducts column exists on BrandSubscription');
+    } catch (e) {
+      console.log('⚠️  customMaxProducts column may already exist or error:', e instanceof Error ? e.message : e);
+    }
+
     // Reset retry flag at the start of a new billing cycle
     try {
       await sequelize.query(`

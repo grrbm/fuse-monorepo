@@ -1,6 +1,7 @@
 import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import Entity from './Entity';
 import User from './User';
+import BrandSubscriptionPlans from './BrandSubscriptionPlans';
 
 export enum BrandSubscriptionStatus {
   PENDING = 'pending',
@@ -59,6 +60,12 @@ export default class BrandSubscription extends Entity {
     allowNull: true,
   })
   declare planCategory?: string;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare customMaxProducts?: number;
 
   @Column({
     type: DataType.STRING,
@@ -170,7 +177,22 @@ export default class BrandSubscription extends Entity {
   @BelongsTo(() => User)
   declare user?: User;
 
+  // Virtual association with BrandSubscriptionPlans (based on planType)
+  declare plan?: BrandSubscriptionPlans;
+
   // Instance methods
+  public getMaxProducts(): number {
+    // If customMaxProducts is set, use that
+    if (this.customMaxProducts !== null && this.customMaxProducts !== undefined) {
+      return this.customMaxProducts;
+    }
+    // Otherwise, use the plan's maxProducts if available
+    if (this.plan?.maxProducts !== undefined) {
+      return this.plan.maxProducts;
+    }
+    // Default to -1 (unlimited)
+    return -1;
+  }
   public async activate(stripeData: {
     subscriptionId: string;
     customerId: string;

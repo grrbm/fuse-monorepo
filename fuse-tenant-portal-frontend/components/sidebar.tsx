@@ -7,12 +7,14 @@ import {
   LogOut,
   Building2,
   Package,
+  Users,
 } from "lucide-react"
 
 const navigation = [
   { name: "Overview", icon: BarChart3, href: "/" },
   { name: "Products", icon: Package, href: "/products" },
   { name: "Forms", icon: FileText, href: "/forms" },
+  { name: "Client Management", icon: Users, href: "/client-management" },
 ]
 
 export function Sidebar() {

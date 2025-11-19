@@ -226,7 +226,7 @@ app.use(cors({
     }
   },
   credentials: true, // Essential for cookies
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
   exposedHeaders: ['Set-Cookie'],
 }));
@@ -8608,56 +8608,7 @@ app.post("/upload/logo", authenticateJWT, upload.single('logo'), async (req, res
   }
 });
 
-// Get current subscription
-app.get("/subscriptions/current", authenticateJWT, async (req, res) => {
-  try {
-    const currentUser = getCurrentUser(req);
-    if (!currentUser) {
-      return res.status(401).json({ success: false, message: "Not authenticated" });
-    }
-
-    const subscription = await BrandSubscription.findOne({
-      where: { userId: currentUser.id, status: BrandSubscriptionStatus.ACTIVE },
-      order: [['createdAt', 'DESC']]
-    });
-
-    if (!subscription) {
-      return res.json(null);
-    }
-
-    // Get plan details separately
-    const plan = await BrandSubscriptionPlans.findOne({
-      where: { planType: subscription.planType }
-    });
-
-    res.json({
-      id: subscription.id,
-      planId: plan?.id || null,
-      status: subscription.status,
-      stripeSubscriptionId: subscription.stripeSubscriptionId,
-      stripePriceId: subscription.stripePriceId,
-      plan: plan ? {
-        name: plan.name,
-        price: Number(plan.monthlyPrice),
-        type: plan.planType,
-        maxProducts: typeof (plan as any).maxProducts === 'number' ? (plan as any).maxProducts : undefined
-      } : subscription.stripePriceId ? {
-        name: subscription.planType,
-        price: subscription.monthlyPrice ? Number(subscription.monthlyPrice) : 0,
-        type: subscription.planType,
-        priceId: subscription.stripePriceId,
-        maxProducts: subscription.features && typeof (subscription.features as any).maxProducts === 'number' ? (subscription.features as any).maxProducts : undefined
-      } : null,
-      nextBillingDate: subscription.currentPeriodEnd || null,
-      lastProductChangeAt: subscription.lastProductChangeAt || null,
-      productsChangedAmountOnCurrentCycle: subscription.productsChangedAmountOnCurrentCycle || 0,
-      retriedProductSelectionForCurrentCycle: !!(subscription as any).retriedProductSelectionForCurrentCycle
-    });
-  } catch (error) {
-    console.error('Error fetching subscription:', error);
-    res.status(500).json({ success: false, message: "Internal server error" });
-  }
-});
+// Subscription endpoints moved to endpoints/subscription.ts
 
 
 // Update user profile
@@ -9081,6 +9032,14 @@ async function startServer() {
   // ============= PHARMACY MANAGEMENT ENDPOINTS =============
   const { registerPharmacyEndpoints } = await import('./endpoints/pharmacy');
   registerPharmacyEndpoints(app, authenticateJWT, getCurrentUser);
+
+  // ============= CLIENT MANAGEMENT ENDPOINTS =============
+  const { registerClientManagementEndpoints } = await import('./endpoints/client-management');
+  registerClientManagementEndpoints(app, authenticateJWT, getCurrentUser);
+
+  // ============= SUBSCRIPTION ENDPOINTS =============
+  const { registerSubscriptionEndpoints } = await import('./endpoints/subscription');
+  registerSubscriptionEndpoints(app, authenticateJWT, getCurrentUser);
 
   // ============================================
   // DOCTOR-PATIENT CHAT ENDPOINTS
