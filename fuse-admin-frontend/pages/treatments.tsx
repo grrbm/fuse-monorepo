@@ -302,7 +302,7 @@ export default function Treatments() {
                                 } else {
                                     const isLocalhost = process.env.NODE_ENV !== 'production'
                                     const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true'
-                                    const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fuse.health'
+                                    const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fusehealth.com'
                                     const devUrl = `http://${clinicSlug}.localhost:3000/my-treatments/${slug}`
                                     const prodDisplay = `${clinicSlug}.${baseDomain}/my-treatments/${slug}`
                                     previewDisplay = isLocalhost ? devUrl : prodDisplay

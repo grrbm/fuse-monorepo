@@ -447,9 +447,14 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             let clinicSlug: string | null = null;
 
             if (process.env.NODE_ENV === 'production') {
-              // Production: clinicSlug.fuse.health
-              const parts = hostname.split('.fuse.health');
-              clinicSlug = parts.length > 1 ? parts[0] : null;
+              // Production: clinicSlug.fusehealth.com (also support legacy .fuse.health)
+              if (hostname.endsWith('.fusehealth.com')) {
+                const parts = hostname.split('.fusehealth.com');
+                clinicSlug = parts.length > 1 ? parts[0] : null;
+              } else if (hostname.endsWith('.fuse.health')) {
+                const parts = hostname.split('.fuse.health');
+                clinicSlug = parts.length > 1 ? parts[0] : null;
+              }
             } else {
               // Development: clinicSlug.localhost
               const parts = hostname.split('.localhost');

@@ -619,7 +619,7 @@ export default function ProductDetail() {
         if (!clinicSlug) return null
 
         const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true'
-        const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fuse.health'
+        const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fusehealth.com'
         const baseUrl = isLocalhost
             ? `http://${clinicSlug}.localhost:3000`
             : `https://${clinicSlug}.${baseDomain}`
@@ -640,7 +640,7 @@ export default function ProductDetail() {
 
         // Standard subdomain URL (always available)
         const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true'
-        const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fuse.health'
+        const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fusehealth.com'
         const subdomainBase = isLocalhost
             ? `http://${clinicSlug}.localhost:3000`
             : `https://${clinicSlug}.${baseDomain}`

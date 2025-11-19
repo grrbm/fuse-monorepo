@@ -19,9 +19,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         let clinicSlug: string | null = null
 
         if (process.env.NODE_ENV === 'production') {
-            // Expect host like "{clinicSlug}.fuse.health"
-            const parts = hostname.split('.fuse.health')
-            clinicSlug = parts.length > 1 ? parts[0] : null
+            // Expect host like "{clinicSlug}.fusehealth.com" or "{clinicSlug}.fuse.health"
+            if (hostname.endsWith('.fusehealth.com')) {
+                const parts = hostname.split('.fusehealth.com')
+                clinicSlug = parts.length > 1 ? parts[0] : null
+            } else if (hostname.endsWith('.fuse.health')) {
+                const parts = hostname.split('.fuse.health')
+                clinicSlug = parts.length > 1 ? parts[0] : null
+            }
         } else {
             // Expect host like "limitless.health.localhost:3000"
             const parts = hostname.split('.localhost')

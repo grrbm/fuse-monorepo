@@ -1202,7 +1202,7 @@ export default function Settings({
                                 <div>
                                   <CardTitle className="text-base">Subdomain</CardTitle>
                                   <CardDescription className="text-xs">
-                                    Use a subdomain like {organizationData.slug || 'clinic-slug'}.fuse.health
+                                    Use a subdomain like {organizationData.slug || 'clinic-slug'}.fusehealth.com
                                   </CardDescription>
                                 </div>
                               </div>
@@ -1220,8 +1220,8 @@ export default function Settings({
                                   </div>
                                   <span className="text-xs font-medium">
                                     {organizationData.slug ?
-                                      `${organizationData.slug}.fuse.health` :
-                                      'clinic-slug.fuse.health'
+                                      `${organizationData.slug}.fusehealth.com` :
+                                      'clinic-slug.fusehealth.com'
                                     }
                                   </span>
                                 </div>
@@ -1418,7 +1418,7 @@ export default function Settings({
                                     e.preventDefault();
                                     e.stopPropagation();
                                     const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true';
-                                    const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fuse.health';
+                                    const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fusehealth.com';
                                     const cnameValue = organizationData.slug ? `${organizationData.slug}.${baseDomain}` : `your-subdomain.${baseDomain}`;
                                     navigator.clipboard.writeText(cnameValue);
                                     showToast("success", "Copied to clipboard!");
@@ -1432,7 +1432,7 @@ export default function Settings({
                               <code className="text-sm font-mono font-semibold text-blue-900 bg-blue-50 px-3 py-2 rounded-md block break-all text-center">
                                 {(() => {
                                   const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true';
-                                  const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fuse.health';
+                                  const baseDomain = isStaging ? 'fusehealthstaging.xyz' : 'fusehealth.com';
                                   return organizationData.slug ? `${organizationData.slug}.${baseDomain}` : `your-subdomain.${baseDomain}`;
                                 })()}
                               </code>
