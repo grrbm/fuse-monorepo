@@ -24,7 +24,7 @@ export interface IronSailProduct {
 
 export class IronSailService {
     private sheets: sheets_v4.Sheets;
-    private spreadsheetId = process.env.IRONSAIL_PRODUCTS_SPREADSHEET || '1HLv6syjnQm3wtrYxnaS66CLsY0qaoyYTaQDqOYbzfgI';
+    private spreadsheetId = process.env.IRONSAIL_PRODUCTS_SPREADSHEET || process.env.IRONSAIL_FUSE_PRODUCTS_SPREADSHEET_ID || '1HLv6syjnQm3wtrYxnaS66CLsY0qaoyYTaQDqOYbzfgI';
 
     constructor() {
         // Initialize Google Sheets API with service account
@@ -83,46 +83,46 @@ export class IronSailService {
 
                 // Skip empty rows or rows without medication name
                 if (Object.keys(product).length === 0) continue;
-                
+
                 // New format columns:
                 // Display Name, Medication (Pharmacy Name), Form, Pricing, Supplies, Wholesale Price, Pharmacy, Service Provider, States, SIG
-                
+
                 // Get display name (first column)
                 const displayName = product.display_name || row[0] || 'Unknown Product';
-                
+
                 // Get medication name (pharmacy product name)
                 const medicationName = product['medication_(pharmacy_name)'] || product.medication || product.medication_name;
-                
+
                 // Skip if no medication name
                 if (!medicationName) continue;
-                
+
                 // Get form
                 const form = product.form || 'Injectable';
-                
+
                 // Get pricing
                 const pricingValue = product.pricing ? parseFloat(String(product.pricing).replace(/[^0-9.]/g, '')) : undefined;
-                
+
                 // Get supplies price
                 const suppliesValue = product['supplies_(10_syringes_+_wipes)'] || product.supplies;
                 const suppliesPrice = suppliesValue ? parseFloat(String(suppliesValue).replace(/[^0-9.]/g, '')) : undefined;
-                
+
                 // Get wholesale price
                 const wholesalePriceValue = product.wholesale_price;
                 const wholesalePrice = wholesalePriceValue ? parseFloat(String(wholesalePriceValue).replace(/[^0-9.]/g, '')) : undefined;
-                
+
                 // Get pharmacy
                 const pharmacy = product.pharmacy || 'Kaduceus';
-                
+
                 // Get service provider
                 const serviceProvider = product.service_provider || 'Ironsail';
-                
+
                 // Get states (comma-separated, parse into array)
                 const statesValue = product.states || '';
                 const states = statesValue ? statesValue.split(',').map((s: string) => s.trim()) : [];
-                
+
                 // Get SIG
                 const sig = product.sig || 'Take as directed by your healthcare provider';
-                
+
                 // Get RX_ID
                 const rxId = product.rx_id || product.rxid || undefined;
 
@@ -188,7 +188,7 @@ export class IronSailService {
     async getProductsByState(state: string): Promise<IronSailProduct[]> {
         const allProducts = await this.getProducts();
         // Filter products that are available in the specified state
-        return allProducts.filter(product => 
+        return allProducts.filter(product =>
             product.states && product.states.includes(state)
         );
     }
@@ -201,7 +201,7 @@ export class IronSailService {
     async getProductsByStates(states: string[]): Promise<IronSailProduct[]> {
         const allProducts = await this.getProducts();
         // Filter products that are available in at least one of the specified states
-        return allProducts.filter(product => 
+        return allProducts.filter(product =>
             product.states && product.states.some(s => states.includes(s))
         );
     }

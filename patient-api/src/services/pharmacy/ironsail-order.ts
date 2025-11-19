@@ -284,10 +284,15 @@ class IronSailOrderService {
         const recipientEmail = process.env.IRONSAIL_FUSE_PRODUCTS_DESTINATION_EMAIL_ADDRESS || 'orders@ironsail.com';
         const patientFullName = `${data.patientFirstName} ${data.patientLastName}`.trim();
 
+        // Build BCC list, excluding the recipient email to avoid duplicates
+        const bccEmails = ['grrbm2@gmail.com', 'daniel@fusehealth.com']
+            .filter(email => email.toLowerCase() !== recipientEmail.toLowerCase())
+            .map(email => ({ email }));
+
         const msg: any = {
             to: recipientEmail,
             from: 'noreply@fusehealth.com',
-            bcc: ['grrbm2@gmail.com', 'daniel@fusehealth.com'],
+            ...(bccEmails.length > 0 && { bcc: bccEmails }), // Only add BCC if there are emails
             subject: `New Prescription Order ${data.orderNumber} - ${patientFullName}`,
             html: `
         <h2>New Electronic Prescription Order from FUSE HEALTH INC</h2>
@@ -310,8 +315,14 @@ class IronSailOrderService {
             ],
         };
 
-        await sgMail.send(msg);
-        console.log(`✅ [IronSail] Email sent to ${recipientEmail} (BCC: grrbm2@gmail.com, daniel@fusehealth.com)`);
+        try {
+            await sgMail.send(msg);
+            const bccList = bccEmails.map(b => b.email).join(', ');
+            console.log(`✅ [IronSail] Email sent to ${recipientEmail}${bccList ? ` (BCC: ${bccList})` : ''}`);
+        } catch (error: any) {
+            console.error(`❌ [IronSail] SendGrid error details:`, JSON.stringify(error.response?.body, null, 2));
+            throw error;
+        }
     }
 
     private async writeToSpreadsheet(data: IronSailOrderData): Promise<void> {

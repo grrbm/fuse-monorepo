@@ -75,7 +75,7 @@ export default class Questionnaire extends Entity {
     declare treatment?: Treatment | null;
 
     @Column({
-        type: DataType.ENUM('normal', 'user_profile', 'master_template', 'standardized_template'),
+        type: DataType.ENUM('normal', 'user_profile', 'master_template', 'standardized_template', 'brand_questions'),
         allowNull: true,
         defaultValue: null,
     })
@@ -83,7 +83,7 @@ export default class Questionnaire extends Entity {
     //NOTE: user_profile = Global "Create Account" template
     //NOTE: standardized_template = Category-wide questions (weight_loss, hair_growth, etc.) - can have variants
     //NOTE: master_template = System master template (not editable)
-    declare formTemplateType: 'normal' | 'user_profile' | 'master_template' | 'standardized_template' | null;
+    declare formTemplateType: 'normal' | 'user_profile' | 'master_template' | 'standardized_template' | 'brand_questions' | null;
 
     @Column({
         // Use explicit literals to avoid runtime import/init issues

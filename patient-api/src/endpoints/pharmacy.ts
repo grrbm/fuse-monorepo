@@ -3,6 +3,7 @@ import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
 import Product from '../models/Product';
 import { PharmacyIntegrationService } from '../services/pharmacyIntegration';
+import { IronSailService } from '../services/pharmacyIntegration/ironsail.service';
 
 export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
 
@@ -275,6 +276,234 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
         } catch (error) {
             console.error('Error deleting pharmacy assignments:', error);
             res.status(500).json({ success: false, message: "Failed to delete pharmacy assignments" });
+        }
+    });
+
+    // Delete all auto-imported products from IronSail
+    app.delete("/pharmacies/ironsail/delete-all-imported", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            console.log('🗑️ Starting deletion of all auto-imported IronSail products...');
+
+            // Find all products with [Auto-Imported] prefix
+            const autoImportedProducts = await Product.findAll({
+                where: {
+                    name: {
+                        [require('sequelize').Op.like]: '[Auto-Imported]%'
+                    }
+                }
+            });
+
+            console.log(`📋 Found ${autoImportedProducts.length} auto-imported products to delete`);
+
+            if (autoImportedProducts.length === 0) {
+                return res.json({
+                    success: true,
+                    message: 'No auto-imported products found to delete',
+                    data: {
+                        deleted: 0,
+                        productIds: []
+                    }
+                });
+            }
+
+            const productIds = autoImportedProducts.map(p => p.id);
+            const productNames = autoImportedProducts.map(p => p.name);
+
+            // Delete all pharmacy coverage records for these products
+            const deletedCoverageCount = await PharmacyProduct.destroy({
+                where: {
+                    productId: productIds
+                }
+            });
+
+            console.log(`✅ Deleted ${deletedCoverageCount} pharmacy coverage records`);
+
+            // Delete all products
+            const deletedProductCount = await Product.destroy({
+                where: {
+                    id: productIds
+                },
+                force: true // Hard delete
+            });
+
+            console.log(`✅ Deleted ${deletedProductCount} products`);
+
+            res.json({
+                success: true,
+                message: `Deleted ${deletedProductCount} auto-imported products`,
+                data: {
+                    deleted: deletedProductCount,
+                    deletedCoverage: deletedCoverageCount,
+                    productIds: productIds,
+                    productNames: productNames
+                }
+            });
+
+        } catch (error: any) {
+            console.error('❌ Error deleting auto-imported products:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || "Failed to delete products"
+            });
+        }
+    });
+
+    // Import products from IronSail spreadsheet
+    app.post("/pharmacies/ironsail/import-products", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            console.log('📦 Starting IronSail product import...');
+
+            // Find IronSail pharmacy
+            const ironsailPharmacy = await Pharmacy.findOne({
+                where: { slug: 'ironsail' }
+            });
+
+            if (!ironsailPharmacy) {
+                return res.status(404).json({
+                    success: false,
+                    message: "IronSail pharmacy not found. Please create it first."
+                });
+            }
+
+            // Fetch products from spreadsheet
+            const ironSailService = new IronSailService();
+            const spreadsheetProducts = await ironSailService.getProducts();
+
+            console.log(`📋 Found ${spreadsheetProducts.length} products in spreadsheet`);
+
+            const imported: Array<{ id: string; name: string; states: number; wholesalePrice?: number; rxId?: string }> = [];
+            const skipped: Array<{ name: string; reason: string }> = [];
+            const errors: Array<{ name: string; error: string }> = [];
+
+            // Process each product
+            for (const sheetProduct of spreadsheetProducts) {
+                try {
+                    // Skip if no medication name
+                    if (!sheetProduct.medicationName) {
+                        skipped.push({
+                            name: sheetProduct.name || 'Unknown',
+                            reason: 'No medication name'
+                        });
+                        continue;
+                    }
+
+                    // Check if product already exists (by pharmacy product ID or name)
+                    const existingProduct = await Product.findOne({
+                        where: {
+                            name: `[Auto-Imported] ${sheetProduct.medicationName}`
+                        }
+                    });
+
+                    if (existingProduct) {
+                        skipped.push({
+                            name: sheetProduct.medicationName,
+                            reason: 'Product already exists'
+                        });
+                        continue;
+                    }
+
+                    // Determine category based on display name
+                    let category = 'wellness'; // Default category
+                    const displayNameLower = (sheetProduct.displayName || '').toLowerCase();
+
+                    if (displayNameLower.includes('semaglutide') || displayNameLower.includes('tirzepatide') || displayNameLower.includes('retatrutide')) {
+                        category = 'weight_loss';
+                    } else if (displayNameLower.includes('nad') || displayNameLower.includes('glutathione') || displayNameLower.includes('sermorelin') || displayNameLower.includes('bpc')) {
+                        category = 'performance';
+                    }
+
+                    // Create the product
+                    const product = await Product.create({
+                        name: `[Auto-Imported] ${sheetProduct.medicationName}`,
+                        description: `${sheetProduct.medicationName} - ${sheetProduct.form || 'Injectable'}`,
+                        price: sheetProduct.wholesalePrice || sheetProduct.price || 0,
+                        activeIngredients: [sheetProduct.displayName || sheetProduct.medicationName],
+                        placeholderSig: sheetProduct.sig || 'Take as directed by your healthcare provider',
+                        pharmacyProductId: sheetProduct.rxId,
+                        pharmacyWholesaleCost: sheetProduct.wholesalePrice,
+                        isActive: true,
+                        categories: [category],
+                    });
+
+                    console.log(`✅ Created product: ${product.name} (ID: ${product.id})`);
+
+                    // Parse states and create pharmacy coverage
+                    const states = sheetProduct.states || [];
+
+                    if (states.length > 0) {
+                        const coverageRecords = await Promise.all(
+                            states.map(state =>
+                                PharmacyProduct.create({
+                                    productId: product.id,
+                                    pharmacyId: ironsailPharmacy.id,
+                                    state: state,
+                                    pharmacyProductId: sheetProduct.rxId,
+                                    pharmacyProductName: sheetProduct.medicationName,
+                                    pharmacyWholesaleCost: sheetProduct.wholesalePrice,
+                                    sig: sheetProduct.sig,
+                                    form: sheetProduct.form,
+                                    rxId: sheetProduct.rxId
+                                })
+                            )
+                        );
+
+                        console.log(`✅ Created ${coverageRecords.length} pharmacy coverage records for ${states.length} states`);
+                    }
+
+                    imported.push({
+                        id: product.id,
+                        name: product.name,
+                        states: states.length,
+                        wholesalePrice: sheetProduct.wholesalePrice,
+                        rxId: sheetProduct.rxId
+                    });
+
+                } catch (error: any) {
+                    console.error(`❌ Error importing product ${sheetProduct.medicationName}:`, error);
+                    errors.push({
+                        name: sheetProduct.medicationName || 'Unknown',
+                        error: error.message
+                    });
+                }
+            }
+
+            console.log(`\n📊 Import Summary:`);
+            console.log(`  ✅ Imported: ${imported.length}`);
+            console.log(`  ⏭️  Skipped: ${skipped.length}`);
+            console.log(`  ❌ Errors: ${errors.length}`);
+
+            res.json({
+                success: true,
+                message: `Imported ${imported.length} products`,
+                data: {
+                    imported,
+                    skipped,
+                    errors,
+                    summary: {
+                        total: spreadsheetProducts.length,
+                        imported: imported.length,
+                        skipped: skipped.length,
+                        errors: errors.length
+                    }
+                }
+            });
+
+        } catch (error: any) {
+            console.error('❌ Error importing IronSail products:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || "Failed to import products"
+            });
         }
     });
 

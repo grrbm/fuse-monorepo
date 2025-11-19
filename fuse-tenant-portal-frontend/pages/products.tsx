@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Loader2, Plus, Package, FileText } from "lucide-react"
+import { Loader2, Plus, Package, FileText, X } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
 import { toast } from "sonner"
@@ -404,6 +404,97 @@ export default function Products() {
     await handleUpdateCategories(product.id, Array.from(current))
   }
 
+  const handleImportFromIronSail = async () => {
+    if (!token) return
+
+    if (!confirm('This will import all products from the IronSail spreadsheet. Products with the same name will be skipped. Continue?')) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      setSaveMessage('📥 Importing products from IronSail spreadsheet...')
+
+      const response = await fetch(`${baseUrl}/pharmacies/ironsail/import-products`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setSaveMessage(`Error: ${data.message || 'Failed to import products'}`)
+        setTimeout(() => setSaveMessage(null), 5000)
+        return
+      }
+
+      // Show success message with summary
+      const summary = data.data.summary
+      setSaveMessage(`✅ Import completed! Imported: ${summary.imported}, Skipped: ${summary.skipped}, Errors: ${summary.errors}`)
+      toast.success(`Successfully imported ${summary.imported} products from IronSail!`)
+
+      // Refresh products list
+      await fetchProducts()
+
+      setTimeout(() => setSaveMessage(null), 5000)
+    } catch (error: any) {
+      console.error('Error importing products:', error)
+      setSaveMessage(`Error: ${error.message || 'Failed to import products'}`)
+      setTimeout(() => setSaveMessage(null), 5000)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteAllFromIronSail = async () => {
+    if (!token) return
+
+    if (!confirm('⚠️ WARNING: This will permanently delete ALL auto-imported products from IronSail (products with [Auto-Imported] prefix). This action CANNOT be undone. Continue?')) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      setSaveMessage('🗑️ Deleting all auto-imported products...')
+
+      const response = await fetch(`${baseUrl}/pharmacies/ironsail/delete-all-imported`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setSaveMessage(`Error: ${data.message || 'Failed to delete products'}`)
+        setTimeout(() => setSaveMessage(null), 5000)
+        return
+      }
+
+      // Show success message
+      const deletedCount = data.data.deleted
+      const coverageCount = data.data.deletedCoverage
+      setSaveMessage(`✅ Deleted ${deletedCount} products and ${coverageCount} pharmacy coverage records`)
+      toast.success(`Successfully deleted ${deletedCount} auto-imported products!`)
+
+      // Refresh products list
+      await fetchProducts()
+
+      setTimeout(() => setSaveMessage(null), 5000)
+    } catch (error: any) {
+      console.error('Error deleting products:', error)
+      setSaveMessage(`Error: ${error.message || 'Failed to delete products'}`)
+      setTimeout(() => setSaveMessage(null), 5000)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleDeactivateAll = async () => {
     if (!token) return
     if (!confirm("Are you sure you want to deactivate ALL products? This will affect all products in the system.")) return
@@ -548,6 +639,20 @@ export default function Products() {
                 className="rounded-full px-6 border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all"
               >
                 Deactivate All
+              </Button>
+              <Button
+                onClick={handleImportFromIronSail}
+                disabled={loading}
+                className="rounded-full px-6 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all disabled:opacity-50"
+              >
+                <Package className="mr-2 h-5 w-5" /> Import from IronSail
+              </Button>
+              <Button
+                onClick={handleDeleteAllFromIronSail}
+                disabled={loading}
+                className="rounded-full px-6 bg-red-600 hover:bg-red-700 text-white shadow-sm transition-all disabled:opacity-50"
+              >
+                <X className="mr-2 h-5 w-5" /> Delete All from IronSail
               </Button>
               <Button
                 onClick={handleCreateProduct}

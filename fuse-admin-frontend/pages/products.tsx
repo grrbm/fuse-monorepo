@@ -16,7 +16,8 @@ import {
     Filter,
     X,
     Loader2,
-    Check
+    Check,
+    Edit
 } from 'lucide-react'
 
 interface Product {
@@ -33,6 +34,7 @@ interface Product {
     categories?: string[]
     createdAt: string
     updatedAt: string
+    brandId?: string | null
     treatments?: Array<{
         id: string
         name: string
@@ -246,6 +248,181 @@ export default function Products() {
         }
     }, [activeTab, fetchTenantProductCount])
 
+
+    const handleCreateProduct = async () => {
+        if (!token) return
+
+        const skeletonProduct = {
+            name: "New Product",
+            description: "Edit product details below",
+            price: 1, // Minimum positive price
+            placeholderSig: "TBD",
+            activeIngredients: ["TBD"], // At least one required
+            active: false, // Start as inactive
+        }
+
+        console.log('🔄 Creating skeleton product:', skeletonProduct)
+
+        try {
+            // Create a skeleton product with minimum required fields
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products-management`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(skeletonProduct),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                console.error('❌ Failed to create product')
+                console.error('Response status:', response.status, response.statusText)
+                console.error('Response data:', data)
+
+                // Show specific validation errors if available
+                let errorMessage = data.message || "Failed to create product"
+                if (data.errors && Array.isArray(data.errors)) {
+                    const errorMessages = data.errors.map((e: any) => {
+                        if (typeof e === 'string') return e
+                        if (e.message) return e.message
+                        return JSON.stringify(e)
+                    })
+                    errorMessage = errorMessages.join("; ")
+                } else if (data.errors && typeof data.errors === 'object') {
+                    errorMessage = Object.entries(data.errors).map(([key, val]) => `${key}: ${val}`).join("; ")
+                }
+
+                setError(`Error: ${errorMessage}`)
+                return
+            }
+
+            console.log('✅ Product created successfully:', data.data.id)
+            // Navigate to the custom product editor
+            router.push(`/custom-products/${data.data.id}`)
+        } catch (error: any) {
+            console.error("❌ Exception creating product:", error)
+            setError(`Error: ${error.message || "Failed to create product"}`)
+        }
+    }
+
+    const handleDeleteProduct = async (productId: string, productName: string) => {
+        if (!confirm(`Are you sure you want to delete "${productName}"? This action cannot be undone.`)) {
+            return
+        }
+
+        try {
+            setLoading(true)
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products-management/${productId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(data.message || 'Failed to delete product')
+                return
+            }
+
+            // Remove product from local state
+            setAllProducts(prev => prev.filter(p => p.id !== productId))
+            setProducts(prev => prev.filter(p => p.id !== productId))
+
+            setError('✅ Product deleted successfully!')
+            setTimeout(() => setError(null), 3000)
+        } catch (error: any) {
+            console.error('Error deleting product:', error)
+            setError(error.message || 'Failed to delete product')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleImportFromIronSail = async () => {
+        if (!confirm('This will import all products from the IronSail spreadsheet. Products with the same name will be skipped. Continue?')) {
+            return
+        }
+
+        try {
+            setLoading(true)
+            setError('📥 Importing products from IronSail spreadsheet...')
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/pharmacies/ironsail/import-products`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(`❌ ${data.message || 'Failed to import products'}`)
+                return
+            }
+
+            // Show success message with summary
+            const summary = data.data.summary
+            setError(`✅ Import completed! Imported: ${summary.imported}, Skipped: ${summary.skipped}, Errors: ${summary.errors}`)
+
+            // Refresh products list
+            await fetchProducts()
+
+            setTimeout(() => setError(null), 5000)
+        } catch (error: any) {
+            console.error('Error importing products:', error)
+            setError(`❌ ${error.message || 'Failed to import products'}`)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDeleteAllFromIronSail = async () => {
+        if (!confirm('⚠️ WARNING: This will permanently delete ALL auto-imported products from IronSail (products with [Auto-Imported] prefix). This action CANNOT be undone. Continue?')) {
+            return
+        }
+
+        try {
+            setLoading(true)
+            setError('🗑️ Deleting all auto-imported products...')
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/pharmacies/ironsail/delete-all-imported`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(`❌ ${data.message || 'Failed to delete products'}`)
+                return
+            }
+
+            // Show success message
+            const deletedCount = data.data.deleted
+            const coverageCount = data.data.deletedCoverage
+            setError(`✅ Deleted ${deletedCount} products and ${coverageCount} pharmacy coverage records`)
+
+            // Refresh products list
+            await fetchProducts()
+
+            setTimeout(() => setError(null), 5000)
+        } catch (error: any) {
+            console.error('Error deleting products:', error)
+            setError(`❌ ${error.message || 'Failed to delete products'}`)
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const formatPrice = (price: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -517,8 +694,86 @@ export default function Products() {
                                 <Package className="h-4 w-4 mr-1.5" />
                                 Refresh
                             </Button>
+                            <Button
+                                size="sm"
+                                className="h-9 px-3 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white"
+                                onClick={handleImportFromIronSail}
+                                disabled={loading}
+                            >
+                                <Package className="h-4 w-4 mr-1.5" />
+                                Import from IronSail
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-9 px-3 text-sm font-medium bg-red-600 hover:bg-red-700 text-white"
+                                onClick={handleDeleteAllFromIronSail}
+                                disabled={loading}
+                            >
+                                <X className="h-4 w-4 mr-1.5" />
+                                Delete All from IronSail
+                            </Button>
+                            {(() => {
+                                const planType = subscription?.plan?.type?.toLowerCase()
+                                const isPremium = planType === 'professional' || planType === 'enterprise'
+                                const isDisabled = !isPremium
+
+                                return (
+                                    <div className="relative group">
+                                        <Button
+                                            size="sm"
+                                            className="h-9 px-3 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                            onClick={handleCreateProduct}
+                                            disabled={isDisabled}
+                                        >
+                                            <Plus className="h-4 w-4 mr-1.5" />
+                                            Add Product
+                                        </Button>
+                                        {isDisabled && (
+                                            <div className="invisible group-hover:visible absolute right-0 top-full mt-2 w-64 z-10">
+                                                <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg">
+                                                    <p className="font-semibold mb-1">Premium Feature</p>
+                                                    <p>Creating custom products is only available on Professional and Enterprise plans. <a href="/plans" className="underline hover:text-indigo-300">Upgrade now</a></p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })()}
                         </div>
                     </div>
+
+                    {/* Premium Plan Notice for Starter users */}
+                    {(() => {
+                        const planType = subscription?.plan?.type?.toLowerCase()
+                        const isPremium = planType === 'professional' || planType === 'enterprise'
+
+                        if (!isPremium) {
+                            return (
+                                <div className="mb-6 px-5 py-4 rounded-lg border-2 border-amber-200 bg-amber-50">
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                                            <Package className="h-5 w-5 text-amber-600" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                                                Unlock Custom Products with Premium Plans
+                                            </h3>
+                                            <p className="text-sm text-amber-800 mb-3">
+                                                Creating custom products is available on Professional and Enterprise plans. Upgrade to add your own products to the catalog.
+                                            </p>
+                                            <a
+                                                href="/plans"
+                                                className="inline-flex items-center text-sm font-medium text-amber-900 hover:text-amber-700 underline"
+                                            >
+                                                View Plans & Upgrade
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        }
+                        return null
+                    })()}
 
                     {/* Subscription/product limit summary - Compact */}
                     <div className="mb-6 px-4 py-3 rounded-lg border border-border bg-card">
@@ -580,7 +835,7 @@ export default function Products() {
                     </div>
 
                     {/* Tabs */}
-                            <div className="mb-6 border-b border-border">
+                    <div className="mb-6 border-b border-border">
                         <div className="flex gap-8">
                             <button
                                 id="my-products-btn"
@@ -601,7 +856,7 @@ export default function Products() {
 
                     {/* Category Filters */}
                     <div className="mb-6">
-                            <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Filter className="h-4 w-4" />
                                 <span className="font-medium">Filter:</span>
@@ -641,7 +896,7 @@ export default function Products() {
 
                     {/* Error Message - Only show actual errors, not success messages */}
                     {error && !error.includes('✅') && (
-                                <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
                             <div className="flex">
                                 <XCircle className="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" />
                                 <div className="flex-1">
@@ -653,7 +908,7 @@ export default function Products() {
 
                     {/* Quick Edit Mode Controls - Only show on My Products tab */}
                     {activeTab === 'my' && displayedProducts.length > 0 && (
-                            <div className="mb-4 flex items-center justify-between">
+                        <div className="mb-4 flex items-center justify-between">
                             <div className="text-sm text-muted-foreground">
                                 {quickEditMode ? (
                                     <span className="font-medium">Quick edit mode active - Update prices below</span>
@@ -724,10 +979,10 @@ export default function Products() {
                                     const additionalCount = Math.max(categoryValues.length - 1, 0)
                                     const badgeLabel = additionalCount > 0 ? `${primaryLabel} +${additionalCount}` : primaryLabel
                                     return (
-                                            <div
+                                        <div
                                             key={product.id}
-                                            className={`flex items-center justify-between px-6 py-4 hover:bg-muted/40 transition-colors ${quickEditMode ? 'cursor-default' : 'cursor-pointer'} ${index !== 0 ? 'border-t border-border/60' : ''}`}
-                                            onClick={() => !quickEditMode && router.push(`/products/${product.id}`)}
+                                            className={`flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors ${quickEditMode ? 'cursor-default' : 'cursor-pointer'} ${index !== 0 ? 'border-t border-gray-100' : ''}`}
+                                            onClick={() => !quickEditMode && router.push(product.brandId ? `/custom-products/${product.id}` : `/products/${product.id}`)}
                                         >
                                             <div className="flex items-center gap-4 flex-1 min-w-0">
                                                 {/* Avatar/Image */}
@@ -757,9 +1012,14 @@ export default function Products() {
                                                 </div>
 
                                                 {/* Name & Info */}
-                                                    <div className="flex-1 min-w-0">
+                                                <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-0.5">
-                                                        <h3 className="text-sm font-medium truncate">{product.name}</h3>
+                                                        <h3 className="text-sm font-medium text-gray-900 truncate">{product.name}</h3>
+                                                        {product.brandId && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                                                Custom Product
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <p className="text-sm text-muted-foreground truncate">
                                                         {product.placeholderSig || 'No Placeholder Sig specified'}
@@ -851,6 +1111,36 @@ export default function Products() {
                                                             Activate
                                                         </Button>
                                                     )}
+
+                                                    {/* Edit and Delete buttons for custom products created by current user */}
+                                                    {product.brandId && product.brandId === userWithClinic?.id && (
+                                                        <>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    router.push(`/custom-products/${product.id}`);
+                                                                }}
+                                                                className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300"
+                                                            >
+                                                                <Edit className="h-3 w-3 mr-1" />
+                                                                Edit
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteProduct(product.id, product.name);
+                                                                }}
+                                                                className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                                                            >
+                                                                Delete
+                                                            </Button>
+                                                        </>
+                                                    )}
+
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
