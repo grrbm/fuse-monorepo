@@ -614,55 +614,55 @@ export const triggerManual = async (req: Request, res: Response) => {
           tagId: tagId || undefined // Include tagId if triggered by tag
         };
 
-        // Create sequence run
-        const sequenceRun = await SequenceRun.create({
+        // Create sequence run (just DB insert, fast)
+        return await SequenceRun.create({
           sequenceId: sequence.id,
           clinicId: currentUser.clinicId,
           triggerEvent: "manual",
           status: "pending",
           payload
         });
-
-        // Enqueue the run
-        if (sequenceRunWorker) {
-          await sequenceRunWorker.enqueueRun(sequenceRun.id);
-        }
-
-        return sequenceRun;
       })
     );
 
-    if (!sequenceRunWorker) {
-      console.warn('⚠️ Sequence run worker not initialized');
-    }
-
-    // Return appropriate response based on trigger type
-    if (userId) {
+    // Return response immediately (don't block on enqueueing)
+    const responseData = userId ? {
       // Single user response
-      const targetUser = targetUsers[0];
-      res.status(201).json({
-        success: true,
-        data: {
-          sequenceRunId: sequenceRuns[0].id,
-          sequenceId: sequence.id,
-          sequenceName: sequence.name,
-          userId: targetUser.id,
-          userName: `${targetUser.firstName} ${targetUser.lastName}`
-        }
-      });
-    } else {
+      success: true,
+      data: {
+        sequenceRunId: sequenceRuns[0].id,
+        sequenceId: sequence.id,
+        sequenceName: sequence.name,
+        userId: targetUsers[0].id,
+        userName: `${targetUsers[0].firstName} ${targetUsers[0].lastName}`
+      }
+    } : {
       // Tag-based response
-      res.status(201).json({
-        success: true,
-        data: {
-          sequenceId: sequence.id,
-          sequenceName: sequence.name,
-          tagId,
-          usersTriggered: targetUsers.length,
-          sequenceRunIds: sequenceRuns.map(sr => sr.id)
-        },
-        message: `Sequence triggered for ${targetUsers.length} users`
+      success: true,
+      data: {
+        sequenceId: sequence.id,
+        sequenceName: sequence.name,
+        tagId,
+        usersTriggered: targetUsers.length,
+        sequenceRunIds: sequenceRuns.map(sr => sr.id)
+      },
+      message: `Sequence triggered for ${targetUsers.length} users`
+    };
+
+    res.status(201).json(responseData);
+
+    // Enqueue runs asynchronously in the background (fire-and-forget)
+    if (sequenceRunWorker) {
+      // Don't await - let it run in background
+      Promise.all(
+        sequenceRuns.map(run => sequenceRunWorker.enqueueRun(run.id))
+      ).catch(error => {
+        console.error('❌ Error enqueueing sequence runs:', error);
       });
+      
+      console.log(`✅ Enqueuing ${sequenceRuns.length} sequence runs in background`);
+    } else {
+      console.warn('⚠️ Sequence run worker not initialized');
     }
 
   } catch (error) {

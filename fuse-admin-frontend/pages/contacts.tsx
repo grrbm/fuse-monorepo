@@ -466,6 +466,16 @@ export default function ContactsPage() {
   const handleSaveContact = async () => {
     if (!editingContact) return
 
+    // Validate phone number (USA format: exactly 10 digits)
+    if (editFormData.phoneNumber && editFormData.phoneNumber.trim()) {
+      const cleanPhone = editFormData.phoneNumber.replace(/[\s\-\(\)\.]/g, '')
+      const phoneRegex = /^\d{10}$/
+      if (!phoneRegex.test(cleanPhone)) {
+        showError('Phone number must be exactly 10 digits (e.g., 5551234567)')
+        return
+      }
+    }
+
     try {
       setSavingContact(true)
 
@@ -505,6 +515,16 @@ export default function ContactsPage() {
     if (!createFormData.email.trim()) {
       showError('Email is required')
       return
+    }
+
+    // Validate phone number (USA format: exactly 10 digits)
+    if (createFormData.phoneNumber && createFormData.phoneNumber.trim()) {
+      const cleanPhone = createFormData.phoneNumber.replace(/[\s\-\(\)\.]/g, '')
+      const phoneRegex = /^\d{10}$/
+      if (!phoneRegex.test(cleanPhone)) {
+        showError('Phone number must be exactly 10 digits (e.g., 5551234567)')
+        return
+      }
     }
 
     try {
@@ -653,7 +673,7 @@ export default function ContactsPage() {
 
   // Download CSV template
   const downloadCSVTemplate = () => {
-    const template = 'firstName,lastName,email,phoneNumber\nJohn,Doe,john.doe@example.com,+15551234567\nJane,Smith,jane.smith@example.com,0987654321\nCarlos,Lopez,carlos.lopez@example.com,5551234567'
+    const template = 'firstName,lastName,email,phoneNumber\nJohn,Doe,john.doe@example.com,5551234567\nJane,Smith,jane.smith@example.com,5559876543\nCarlos,Lopez,carlos.lopez@example.com,2125551234'
     const blob = new Blob([template], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -1242,7 +1262,8 @@ export default function ContactsPage() {
                   type="tel"
                   value={editFormData.phoneNumber}
                   onChange={(e) => setEditFormData({ ...editFormData, phoneNumber: e.target.value })}
-                  placeholder="+1 (555) 123-4567"
+                  placeholder="5551234567 (10 digits)"
+                  maxLength={10}
                   disabled={savingContact}
                 />
               </div>
@@ -1386,7 +1407,8 @@ export default function ContactsPage() {
                   type="tel"
                   value={createFormData.phoneNumber}
                   onChange={(e) => setCreateFormData({ ...createFormData, phoneNumber: e.target.value })}
-                  placeholder="+1 (555) 123-4567"
+                  placeholder="5551234567 (10 digits)"
+                  maxLength={10}
                   disabled={creatingContact}
                 />
               </div>
@@ -1453,9 +1475,9 @@ export default function ContactsPage() {
                 <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">CSV Format Requirements:</h3>
                 <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 ml-4 list-disc">
                   <li>Required columns: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">firstName</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">lastName</code>, <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">email</code></li>
-                  <li>Optional column: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">phoneNumber</code> (accepts +15551234567 or 0987654321)</li>
+                  <li>Optional column: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">phoneNumber</code> (10 digits only, e.g., 5551234567)</li>
                   <li>First row must be headers</li>
-                  <li>Phone numbers must be 7-15 digits (international or local format)</li>
+                  <li>Phone numbers must be exactly 10 digits (no + or country code needed)</li>
                 </ul>
               </div>
 
