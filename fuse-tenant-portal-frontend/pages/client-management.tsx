@@ -276,18 +276,18 @@ export default function ClientManagement() {
                           key={user.id}
                           onClick={() => handleSelectUser(user)}
                           className={`w-full text-left p-3 rounded-lg transition-all ${selectedUser?.id === user.id
-                              ? 'bg-[#4FA59C] text-white'
-                              : 'bg-[#F9FAFB] hover:bg-[#E5E7EB] text-[#1F2937]'
+                            ? 'bg-[#4FA59C] text-white'
+                            : 'bg-[#F9FAFB] hover:bg-[#E5E7EB] text-[#1F2937]'
                             }`}
                         >
                           <div className="flex items-center space-x-3">
                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${selectedUser?.id === user.id
-                                ? 'bg-white/20'
-                                : 'bg-[#4FA59C]/10'
+                              ? 'bg-white/20'
+                              : 'bg-[#4FA59C]/10'
                               }`}>
                               <UserIcon className={`h-5 w-5 ${selectedUser?.id === user.id
-                                  ? 'text-white'
-                                  : 'text-[#4FA59C]'
+                                ? 'text-white'
+                                : 'text-[#4FA59C]'
                                 }`} />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -295,14 +295,14 @@ export default function ClientManagement() {
                                 {user.firstName} {user.lastName}
                               </p>
                               <p className={`text-xs truncate ${selectedUser?.id === user.id
-                                  ? 'text-white/80'
-                                  : 'text-[#9CA3AF]'
+                                ? 'text-white/80'
+                                : 'text-[#9CA3AF]'
                                 }`}>
                                 {user.email}
                               </p>
                               <p className={`text-xs mt-1 ${selectedUser?.id === user.id
-                                  ? 'text-white/70'
-                                  : 'text-[#6B7280]'
+                                ? 'text-white/70'
+                                : 'text-[#6B7280]'
                                 }`}>
                                 Role: {user.role}
                               </p>
