@@ -8851,6 +8851,12 @@ async function startServer() {
   WebSocketService.initialize(httpServer);
   console.log('🔌 WebSocket server initialized');
 
+  // Initialize Prescription Expiration Worker
+  const PrescriptionExpirationWorker = (await import('./services/sequence/PrescriptionExpirationWorker')).default;
+  const prescriptionWorker = new PrescriptionExpirationWorker();
+  prescriptionWorker.start();
+  console.log('💊 Prescription expiration worker initialized');
+
   // Start auto-approval service
   const AutoApprovalService = (await import('./services/autoApproval.service')).default;
   AutoApprovalService.start();
