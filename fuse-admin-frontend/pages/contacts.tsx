@@ -30,7 +30,8 @@ import {
     FileSpreadsheet,
     Download,
     Tag as TagIcon,
-    UserCog
+    UserCog,
+    AlertTriangle
 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
@@ -127,6 +128,7 @@ export default function ContactsPage() {
   
   // Modal state - Send Sequence by Tag
   const [showSendByTagModal, setShowSendByTagModal] = useState(false)
+  const [showConfirmSendModal, setShowConfirmSendModal] = useState(false)
   const [selectedTagForSend, setSelectedTagForSend] = useState<string>('')
   const [sendingByTag, setSendingByTag] = useState(false)
   
@@ -308,13 +310,13 @@ export default function ContactsPage() {
       return
     }
 
-    const selectedTag = allTags.find(t => t.id === selectedTagForSend)
-    if (!selectedTag) return
+    // Show confirmation modal
+    setShowConfirmSendModal(true)
+  }
 
-    const confirmMessage = `This will send the selected sequence to ALL contacts with the "${selectedTag.name}" tag. Continue?`
-    if (!confirm(confirmMessage)) return
-
+  const confirmSendSequenceByTag = async () => {
     try {
+      setShowConfirmSendModal(false)
       setSendingByTag(true)
 
       const response = await fetch(`${API_URL}/sequence-triggers/manual`, {
@@ -1777,6 +1779,94 @@ export default function ContactsPage() {
                   </>
                 ) : (
                   'Save Tags'
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Sending Sequence by Tag */}
+      {showConfirmSendModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg shadow-xl max-w-md w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <h2 className="text-xl font-semibold">Confirm Send Sequence</h2>
+              </div>
+              <button
+                onClick={() => setShowConfirmSendModal(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                disabled={sendingByTag}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                <p className="text-amber-900 dark:text-amber-100">
+                  <strong>Warning:</strong> This will send the selected sequence to <strong>ALL</strong> contacts with the 
+                  <strong className="mx-1">
+                    "{allTags.find(t => t.id === selectedTagForSend)?.name}"
+                  </strong>
+                  tag.
+                </p>
+              </div>
+
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Tag:</span>
+                  <span className="font-medium">
+                    {allTags.find(t => t.id === selectedTagForSend)?.name}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Sequence:</span>
+                  <span className="font-medium">
+                    {sequences.find(s => s.id === selectedSequenceId)?.name}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Estimated Recipients:</span>
+                  <span className="font-medium">
+                    {allTags.find(t => t.id === selectedTagForSend)?.userCount || 0} contacts
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to continue?
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t bg-muted/30">
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirmSendModal(false)}
+                disabled={sendingByTag}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmSendSequenceByTag}
+                disabled={sendingByTag}
+                className="gap-2 bg-amber-600 hover:bg-amber-700"
+              >
+                {sendingByTag ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Yes, Send to All
+                  </>
                 )}
               </Button>
             </div>
