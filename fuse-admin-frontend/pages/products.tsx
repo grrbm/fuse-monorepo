@@ -58,6 +58,9 @@ interface SubscriptionInfo {
     nextBillingDate?: string | null
     lastProductChangeAt?: string | null
     productsChangedAmountOnCurrentCycle?: number
+    customFeatures?: {
+        canAddCustomProducts?: boolean
+    } | null
 }
 
 export default function Products() {
@@ -721,7 +724,8 @@ export default function Products() {
                             {(() => {
                                 const planType = subscription?.plan?.type?.toLowerCase()
                                 const isPremium = planType === 'premium' || planType === 'enterprise'
-                                const isDisabled = !isPremium
+                                const hasCustomFeature = subscription?.customFeatures?.canAddCustomProducts === true
+                                const isDisabled = !isPremium && !hasCustomFeature
 
                                 return (
                                     <div className="relative group">
@@ -752,8 +756,9 @@ export default function Products() {
                     {(() => {
                         const planType = subscription?.plan?.type?.toLowerCase()
                         const isPremium = planType === 'premium' || planType === 'enterprise'
+                        const hasCustomFeature = subscription?.customFeatures?.canAddCustomProducts === true
 
-                        if (!isPremium) {
+                        if (!isPremium && !hasCustomFeature) {
                             return (
                                 <div className="mb-6 px-5 py-4 rounded-lg border-2 border-amber-200 bg-amber-50">
                                     <div className="flex items-start gap-3">

@@ -7,6 +7,7 @@ import { PatientAllergy, PatientDisease, PatientMedication } from '../services/p
 import BrandTreatment from './BrandTreatment';
 import UserPatient from './UserPatient';
 import BrandSubscription from './BrandSubscription';
+import TenantCustomFeatures from './TenantCustomFeatures';
 
 @Table({
   freezeTableName: true,
@@ -277,6 +278,9 @@ export default class User extends Entity {
 
   @HasMany(() => BrandSubscription)
   declare brandSubscriptions: BrandSubscription[];
+
+  @HasMany(() => TenantCustomFeatures)
+  declare tenantCustomFeatures: TenantCustomFeatures[];
 
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {

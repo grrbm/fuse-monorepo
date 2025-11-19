@@ -1,6 +1,7 @@
 import { Express } from 'express';
 import BrandSubscription, { BrandSubscriptionStatus } from '../models/BrandSubscription';
 import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
+import TenantCustomFeatures from '../models/TenantCustomFeatures';
 
 export function registerSubscriptionEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
   
@@ -14,15 +15,22 @@ export function registerSubscriptionEndpoints(app: Express, authenticateJWT: any
 
       console.log('🔍 [Subscription] Fetching for user:', currentUser.id);
 
-      const subscription = await BrandSubscription.findOne({
-        where: { userId: currentUser.id, status: BrandSubscriptionStatus.ACTIVE },
-        order: [['createdAt', 'DESC']]
-      });
+    const subscription = await BrandSubscription.findOne({
+      where: { userId: currentUser.id, status: BrandSubscriptionStatus.ACTIVE },
+      order: [['createdAt', 'DESC']]
+    });
 
-      if (!subscription) {
-        console.log('⚠️ [Subscription] No active subscription found');
-        return res.json(null);
-      }
+    if (!subscription) {
+      console.log('⚠️ [Subscription] No active subscription found');
+      return res.json(null);
+    }
+
+    // Get custom features
+    const customFeatures = await TenantCustomFeatures.findOne({
+      where: { userId: currentUser.id }
+    });
+    
+    console.log('🎨 [Subscription] Custom features:', customFeatures ? customFeatures.toJSON() : null);
 
       console.log('📋 [Subscription] Found subscription:', {
         id: subscription.id,
@@ -93,7 +101,8 @@ export function registerSubscriptionEndpoints(app: Express, authenticateJWT: any
       lastProductChangeAt: subscription.lastProductChangeAt || null,
       productsChangedAmountOnCurrentCycle: subscription.productsChangedAmountOnCurrentCycle || 0,
       retriedProductSelectionForCurrentCycle: !!(subscription as any).retriedProductSelectionForCurrentCycle,
-      customMaxProducts: subscription.customMaxProducts
+      customMaxProducts: subscription.customMaxProducts,
+      customFeatures: customFeatures ? customFeatures.toJSON() : null
     };
 
     console.log('📤 [Subscription] Sending response:', {

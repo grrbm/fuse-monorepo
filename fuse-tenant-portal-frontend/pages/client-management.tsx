@@ -16,6 +16,14 @@ interface BrandSubscriptionPlan {
   monthlyPrice: number
 }
 
+interface TenantCustomFeatures {
+  id: string
+  userId: string
+  canAddCustomProducts: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 interface BrandSubscription {
   id: string
   userId: string
@@ -44,19 +52,20 @@ interface User {
   createdAt: string
   updatedAt: string
   brandSubscriptions?: BrandSubscription[]
+  tenantCustomFeatures?: TenantCustomFeatures[]
 }
 
 export default function ClientManagement() {
   const { token } = useAuth()
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
-  
+
   const [loading, setLoading] = useState(false)
   const [users, setUsers] = useState<User[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [saving, setSaving] = useState(false)
   const [availablePlans, setAvailablePlans] = useState<BrandSubscriptionPlan[]>([])
-  
+
   // BrandSubscription form state
   const [formData, setFormData] = useState({
     productsChangedAmountOnCurrentCycle: 0,
@@ -64,6 +73,11 @@ export default function ClientManagement() {
     tutorialFinished: false,
     customMaxProducts: null as number | null,
     planType: '',
+  })
+
+  // Custom features form state
+  const [customFeaturesData, setCustomFeaturesData] = useState({
+    canAddCustomProducts: false,
   })
 
   useEffect(() => {
@@ -119,6 +133,7 @@ export default function ClientManagement() {
     console.log('👤 [Client Mgmt Frontend] Selected user:', user)
     console.log('📋 [Client Mgmt Frontend] User subscription:', user.brandSubscriptions?.[0])
     console.log('📦 [Client Mgmt Frontend] Subscription plan:', user.brandSubscriptions?.[0]?.plan)
+    console.log('🎨 [Client Mgmt Frontend] Custom features:', user.tenantCustomFeatures?.[0])
     setSelectedUser(user)
     const subscription = user.brandSubscriptions?.[0]
     if (subscription) {
@@ -138,6 +153,18 @@ export default function ClientManagement() {
         planType: '',
       })
     }
+
+    // Load custom features
+    const customFeatures = user.tenantCustomFeatures?.[0]
+    if (customFeatures) {
+      setCustomFeaturesData({
+        canAddCustomProducts: customFeatures.canAddCustomProducts,
+      })
+    } else {
+      setCustomFeaturesData({
+        canAddCustomProducts: false,
+      })
+    }
   }
 
   const handleSave = async () => {
@@ -145,7 +172,8 @@ export default function ClientManagement() {
 
     setSaving(true)
     try {
-      const response = await fetch(`${baseUrl}/admin/users/${selectedUser.id}/brand-subscription`, {
+      // Update subscription settings
+      const subscriptionResponse = await fetch(`${baseUrl}/admin/users/${selectedUser.id}/brand-subscription`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -154,36 +182,51 @@ export default function ClientManagement() {
         body: JSON.stringify(formData),
       })
 
-      if (!response.ok) {
+      if (!subscriptionResponse.ok) {
         throw new Error('Failed to update subscription')
       }
 
-      const result = await response.json()
-      console.log('✅ [Client Mgmt Frontend] Save response:', result)
+      const subscriptionResult = await subscriptionResponse.json()
+      console.log('✅ [Client Mgmt Frontend] Subscription save response:', subscriptionResult)
 
-      toast.success('Subscription settings updated successfully')
-      
-      // Update the selected user's subscription with the response data
-      if (result.data && selectedUser.brandSubscriptions?.[0]) {
-        const updatedSubscription = result.data
-        const updatedUser = {
-          ...selectedUser,
-          brandSubscriptions: [updatedSubscription]
-        }
-        setSelectedUser(updatedUser)
-        
-        // Also update in the users list
-        setUsers(prevUsers => 
-          prevUsers.map(u => 
-            u.id === selectedUser.id 
-              ? updatedUser 
-              : u
-          )
-        )
+      // Update custom features
+      const featuresResponse = await fetch(`${baseUrl}/admin/users/${selectedUser.id}/custom-features`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(customFeaturesData),
+      })
+
+      if (!featuresResponse.ok) {
+        throw new Error('Failed to update custom features')
       }
+
+      const featuresResult = await featuresResponse.json()
+      console.log('✅ [Client Mgmt Frontend] Features save response:', featuresResult)
+
+      toast.success('Settings updated successfully')
+
+      // Update the selected user with the response data
+      const updatedUser = {
+        ...selectedUser,
+        brandSubscriptions: subscriptionResult.data ? [subscriptionResult.data] : selectedUser.brandSubscriptions,
+        tenantCustomFeatures: featuresResult.data ? [featuresResult.data] : selectedUser.tenantCustomFeatures,
+      }
+      setSelectedUser(updatedUser)
+
+      // Also update in the users list
+      setUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === selectedUser.id
+            ? updatedUser
+            : u
+        )
+      )
     } catch (error) {
-      console.error('Error updating subscription:', error)
-      toast.error('Failed to update subscription settings')
+      console.error('Error updating settings:', error)
+      toast.error('Failed to update settings')
     } finally {
       setSaving(false)
     }
@@ -232,40 +275,35 @@ export default function ClientManagement() {
                         <button
                           key={user.id}
                           onClick={() => handleSelectUser(user)}
-                          className={`w-full text-left p-3 rounded-lg transition-all ${
-                            selectedUser?.id === user.id
+                          className={`w-full text-left p-3 rounded-lg transition-all ${selectedUser?.id === user.id
                               ? 'bg-[#4FA59C] text-white'
                               : 'bg-[#F9FAFB] hover:bg-[#E5E7EB] text-[#1F2937]'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center space-x-3">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                              selectedUser?.id === user.id
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${selectedUser?.id === user.id
                                 ? 'bg-white/20'
                                 : 'bg-[#4FA59C]/10'
-                            }`}>
-                              <UserIcon className={`h-5 w-5 ${
-                                selectedUser?.id === user.id
+                              }`}>
+                              <UserIcon className={`h-5 w-5 ${selectedUser?.id === user.id
                                   ? 'text-white'
                                   : 'text-[#4FA59C]'
-                              }`} />
+                                }`} />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-medium truncate">
                                 {user.firstName} {user.lastName}
                               </p>
-                              <p className={`text-xs truncate ${
-                                selectedUser?.id === user.id
+                              <p className={`text-xs truncate ${selectedUser?.id === user.id
                                   ? 'text-white/80'
                                   : 'text-[#9CA3AF]'
-                              }`}>
+                                }`}>
                                 {user.email}
                               </p>
-                              <p className={`text-xs mt-1 ${
-                                selectedUser?.id === user.id
+                              <p className={`text-xs mt-1 ${selectedUser?.id === user.id
                                   ? 'text-white/70'
                                   : 'text-[#6B7280]'
-                              }`}>
+                                }`}>
                                 Role: {user.role}
                               </p>
                             </div>
@@ -363,7 +401,7 @@ export default function ClientManagement() {
                           {/* Editable Settings */}
                           <div className="space-y-4">
                             <h3 className="font-semibold text-[#1F2937]">Subscription Settings</h3>
-                            
+
                             {/* Plan Type Selector */}
                             <div>
                               <label className="block text-sm font-medium text-[#374151] mb-2">
@@ -387,12 +425,12 @@ export default function ClientManagement() {
                               <p className="text-xs text-[#6B7280] mt-1">
                                 Change the subscription plan type. This determines the default limits and features.
                               </p>
-                              {selectedUser?.brandSubscriptions?.[0]?.planType && 
-                               !availablePlans.find(p => p.planType === selectedUser.brandSubscriptions![0].planType) && (
-                                <p className="text-xs text-red-600 mt-1">
-                                  ⚠️ Current plan type "{selectedUser.brandSubscriptions[0].planType}" does not exist in available plans!
-                                </p>
-                              )}
+                              {selectedUser?.brandSubscriptions?.[0]?.planType &&
+                                !availablePlans.find(p => p.planType === selectedUser.brandSubscriptions![0].planType) && (
+                                  <p className="text-xs text-red-600 mt-1">
+                                    ⚠️ Current plan type "{selectedUser.brandSubscriptions[0].planType}" does not exist in available plans!
+                                  </p>
+                                )}
                             </div>
 
                             {/* Products Changed Amount */}
@@ -494,6 +532,37 @@ export default function ClientManagement() {
                                   </p>
                                 </div>
                               </label>
+                            </div>
+
+                            {/* Custom Features Section */}
+                            <div className="space-y-4 pt-6 border-t border-[#E5E7EB]">
+                              <h3 className="font-semibold text-[#1F2937]">Custom Feature Overrides</h3>
+                              <p className="text-sm text-[#6B7280]">
+                                Enable or disable specific features for this user, regardless of their plan.
+                              </p>
+
+                              {/* Can Add Custom Products */}
+                              <div>
+                                <label className="flex items-center space-x-3 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={customFeaturesData.canAddCustomProducts}
+                                    onChange={(e) => setCustomFeaturesData({
+                                      ...customFeaturesData,
+                                      canAddCustomProducts: e.target.checked
+                                    })}
+                                    className="w-4 h-4 text-[#4FA59C] border-[#D1D5DB] rounded focus:ring-[#4FA59C]"
+                                  />
+                                  <div>
+                                    <span className="text-sm font-medium text-[#374151]">
+                                      Can Add Custom Products
+                                    </span>
+                                    <p className="text-xs text-[#6B7280]">
+                                      Allow this user to create custom products (normally restricted to Premium/Enterprise plans)
+                                    </p>
+                                  </div>
+                                </label>
+                              </div>
                             </div>
 
                             {/* Save Button */}

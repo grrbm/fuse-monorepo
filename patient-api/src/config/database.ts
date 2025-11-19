@@ -34,6 +34,7 @@ import Sale from '../models/Sale';
 import DoctorPatientChats from '../models/DoctorPatientChats';
 import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
+import TenantCustomFeatures from '../models/TenantCustomFeatures';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -88,7 +89,8 @@ export const sequelize = new Sequelize(databaseUrl, {
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
-    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct
+    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
+    TenantCustomFeatures
   ],
 });
 

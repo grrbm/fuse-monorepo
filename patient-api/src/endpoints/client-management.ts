@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import User from '../models/User';
 import BrandSubscription from '../models/BrandSubscription';
 import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
+import TenantCustomFeatures from '../models/TenantCustomFeatures';
 
 export function registerClientManagementEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
   
@@ -62,7 +63,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         whereClause.role = role;
       }
 
-      const { rows: users, count } = await User.findAndCountAll({
+      const { rows: users, count} = await User.findAndCountAll({
         where: whereClause,
         attributes: [
           'id',
@@ -75,11 +76,18 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
           'createdAt',
           'updatedAt',
         ],
-        include: [{
-          model: BrandSubscription,
-          as: 'brandSubscriptions',
-          required: false,
-        }],
+        include: [
+          {
+            model: BrandSubscription,
+            as: 'brandSubscriptions',
+            required: false,
+          },
+          {
+            model: TenantCustomFeatures,
+            as: 'tenantCustomFeatures',
+            required: false,
+          }
+        ],
         order: [['createdAt', 'DESC']],
         limit,
         offset,
@@ -153,11 +161,18 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
           'createdAt',
           'updatedAt',
         ],
-        include: [{
-          model: BrandSubscription,
-          as: 'brandSubscriptions',
-          required: false,
-        }],
+        include: [
+          {
+            model: BrandSubscription,
+            as: 'brandSubscriptions',
+            required: false,
+          },
+          {
+            model: TenantCustomFeatures,
+            as: 'tenantCustomFeatures',
+            required: false,
+          }
+        ],
       });
 
       if (!targetUser) {
@@ -288,6 +303,57 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
     } catch (error) {
       console.error('❌ Error updating BrandSubscription:', error);
       res.status(500).json({ success: false, message: 'Failed to update BrandSubscription' });
+    }
+  });
+
+  // Update Custom Features
+  app.patch("/admin/users/:userId/custom-features", authenticateJWT, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      const user = await User.findByPk(currentUser.id);
+      if (!user) {
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      }
+
+      const { userId } = req.params;
+      const { canAddCustomProducts } = req.body;
+
+      // Find or create custom features for this user
+      let customFeatures = await TenantCustomFeatures.findOne({
+        where: { userId }
+      });
+
+      if (!customFeatures) {
+        // Create new custom features record
+        customFeatures = await TenantCustomFeatures.create({
+          userId,
+          canAddCustomProducts: typeof canAddCustomProducts === 'boolean' ? canAddCustomProducts : false,
+        });
+        console.log('✅ [Client Mgmt] Created custom features for user:', userId);
+      } else {
+        // Update existing record
+        const updates: any = {};
+        
+        if (typeof canAddCustomProducts === 'boolean') {
+          updates.canAddCustomProducts = canAddCustomProducts;
+        }
+
+        await customFeatures.update(updates);
+        console.log('✅ [Client Mgmt] Updated custom features for user:', userId, updates);
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Custom features updated successfully',
+        data: customFeatures.toJSON()
+      });
+    } catch (error) {
+      console.error('❌ Error updating custom features:', error);
+      res.status(500).json({ success: false, message: 'Failed to update custom features' });
     }
   });
 }
