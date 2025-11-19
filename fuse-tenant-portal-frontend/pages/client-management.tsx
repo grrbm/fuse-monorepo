@@ -55,6 +55,7 @@ export default function ClientManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [saving, setSaving] = useState(false)
+  const [availablePlans, setAvailablePlans] = useState<BrandSubscriptionPlan[]>([])
   
   // BrandSubscription form state
   const [formData, setFormData] = useState({
@@ -62,11 +63,32 @@ export default function ClientManagement() {
     retriedProductSelectionForCurrentCycle: false,
     tutorialFinished: false,
     customMaxProducts: null as number | null,
+    planType: '',
   })
 
   useEffect(() => {
     fetchUsers()
+    fetchAvailablePlans()
   }, [])
+
+  const fetchAvailablePlans = async () => {
+    try {
+      const response = await fetch(`${baseUrl}/admin/subscription-plans`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch plans')
+      }
+
+      const result = await response.json()
+      setAvailablePlans(result.data || [])
+    } catch (error) {
+      console.error('Error fetching plans:', error)
+    }
+  }
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -82,6 +104,8 @@ export default function ClientManagement() {
       }
 
       const result = await response.json()
+      console.log('📦 [Client Mgmt Frontend] Fetched users:', result.data.users.length)
+      console.log('📦 [Client Mgmt Frontend] First user subscription:', result.data.users[0]?.brandSubscriptions?.[0])
       setUsers(result.data.users)
     } catch (error) {
       console.error('Error fetching users:', error)
@@ -92,6 +116,9 @@ export default function ClientManagement() {
   }
 
   const handleSelectUser = (user: User) => {
+    console.log('👤 [Client Mgmt Frontend] Selected user:', user)
+    console.log('📋 [Client Mgmt Frontend] User subscription:', user.brandSubscriptions?.[0])
+    console.log('📦 [Client Mgmt Frontend] Subscription plan:', user.brandSubscriptions?.[0]?.plan)
     setSelectedUser(user)
     const subscription = user.brandSubscriptions?.[0]
     if (subscription) {
@@ -100,6 +127,7 @@ export default function ClientManagement() {
         retriedProductSelectionForCurrentCycle: subscription.retriedProductSelectionForCurrentCycle,
         tutorialFinished: subscription.tutorialFinished,
         customMaxProducts: subscription.customMaxProducts ?? null,
+        planType: subscription.planType || '',
       })
     } else {
       setFormData({
@@ -107,6 +135,7 @@ export default function ClientManagement() {
         retriedProductSelectionForCurrentCycle: false,
         tutorialFinished: false,
         customMaxProducts: null,
+        planType: '',
       })
     }
   }
@@ -129,13 +158,28 @@ export default function ClientManagement() {
         throw new Error('Failed to update subscription')
       }
 
+      const result = await response.json()
+      console.log('✅ [Client Mgmt Frontend] Save response:', result)
+
       toast.success('Subscription settings updated successfully')
-      await fetchUsers() // Refresh the list
       
-      // Update selected user
-      const updatedUser = users.find(u => u.id === selectedUser.id)
-      if (updatedUser) {
-        handleSelectUser(updatedUser)
+      // Update the selected user's subscription with the response data
+      if (result.data && selectedUser.brandSubscriptions?.[0]) {
+        const updatedSubscription = result.data
+        const updatedUser = {
+          ...selectedUser,
+          brandSubscriptions: [updatedSubscription]
+        }
+        setSelectedUser(updatedUser)
+        
+        // Also update in the users list
+        setUsers(prevUsers => 
+          prevUsers.map(u => 
+            u.id === selectedUser.id 
+              ? updatedUser 
+              : u
+          )
+        )
       }
     } catch (error) {
       console.error('Error updating subscription:', error)
@@ -288,6 +332,9 @@ export default function ClientManagement() {
                                 <span className="text-[#6B7280]">Plan Type:</span>
                                 <span className="ml-2 text-[#1F2937] font-medium">
                                   {selectedUser.brandSubscriptions[0].planType}
+                                  {!selectedUser.brandSubscriptions[0].plan && (
+                                    <span className="ml-2 text-red-600 text-xs">⚠️ Plan not found</span>
+                                  )}
                                 </span>
                               </div>
                               <div>
@@ -302,6 +349,14 @@ export default function ClientManagement() {
                                   ${selectedUser.brandSubscriptions[0].monthlyPrice}
                                 </span>
                               </div>
+                              {selectedUser.brandSubscriptions[0].plan && (
+                                <div>
+                                  <span className="text-[#6B7280]">Plan Name:</span>
+                                  <span className="ml-2 text-[#1F2937] font-medium">
+                                    {selectedUser.brandSubscriptions[0].plan.name}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -309,6 +364,37 @@ export default function ClientManagement() {
                           <div className="space-y-4">
                             <h3 className="font-semibold text-[#1F2937]">Subscription Settings</h3>
                             
+                            {/* Plan Type Selector */}
+                            <div>
+                              <label className="block text-sm font-medium text-[#374151] mb-2">
+                                Subscription Plan Type
+                              </label>
+                              <select
+                                value={formData.planType}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  planType: e.target.value
+                                })}
+                                className="w-full max-w-md px-3 py-2 border border-[#D1D5DB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4FA59C] bg-white"
+                              >
+                                <option value="">Select a plan...</option>
+                                {availablePlans.map((plan) => (
+                                  <option key={plan.id} value={plan.planType}>
+                                    {plan.name} ({plan.planType}) - Max Products: {plan.maxProducts === -1 ? 'Unlimited' : plan.maxProducts}
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="text-xs text-[#6B7280] mt-1">
+                                Change the subscription plan type. This determines the default limits and features.
+                              </p>
+                              {selectedUser?.brandSubscriptions?.[0]?.planType && 
+                               !availablePlans.find(p => p.planType === selectedUser.brandSubscriptions![0].planType) && (
+                                <p className="text-xs text-red-600 mt-1">
+                                  ⚠️ Current plan type "{selectedUser.brandSubscriptions[0].planType}" does not exist in available plans!
+                                </p>
+                              )}
+                            </div>
+
                             {/* Products Changed Amount */}
                             <div>
                               <label className="block text-sm font-medium text-[#374151] mb-2">

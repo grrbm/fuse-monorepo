@@ -6,6 +6,26 @@ import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
 
 export function registerClientManagementEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
   
+  // Get all available subscription plans
+  app.get("/admin/subscription-plans", authenticateJWT, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      const plans = await BrandSubscriptionPlans.findAll({
+        attributes: ['id', 'planType', 'name', 'description', 'maxProducts', 'monthlyPrice', 'isActive'],
+        order: [['sortOrder', 'ASC'], ['name', 'ASC']]
+      });
+
+      res.status(200).json({ success: true, data: plans });
+    } catch (error) {
+      console.error('❌ Error fetching subscription plans:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch subscription plans' });
+    }
+  });
+
   // Get all users with their BrandSubscriptions
   app.get("/admin/users", authenticateJWT, async (req, res) => {
     try {
@@ -66,21 +86,31 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
       });
 
       // Manually attach plan data to each subscription
-      for (const user of users) {
-        if (user.brandSubscriptions) {
-          for (const subscription of user.brandSubscriptions) {
+      const usersWithPlans = await Promise.all(users.map(async (user) => {
+        const userJson = user.toJSON();
+        if (userJson.brandSubscriptions) {
+          userJson.brandSubscriptions = await Promise.all(userJson.brandSubscriptions.map(async (subscription: any) => {
             if (subscription.planType) {
+              console.log(`🔍 [Client Mgmt] Looking for plan with type: "${subscription.planType}"`);
               const plan = await BrandSubscriptionPlans.getPlanByType(subscription.planType);
-              (subscription as any).plan = plan;
+              if (plan) {
+                console.log(`✅ [Client Mgmt] Found plan:`, { id: plan.id, name: plan.name, maxProducts: plan.maxProducts });
+                subscription.plan = plan.toJSON();
+              } else {
+                console.log(`❌ [Client Mgmt] Plan not found for type: "${subscription.planType}"`);
+                subscription.plan = null;
+              }
             }
-          }
+            return subscription;
+          }));
         }
-      }
+        return userJson;
+      }));
 
       res.status(200).json({
         success: true,
         data: {
-          users,
+          users: usersWithPlans,
           pagination: {
             total: count,
             page,
@@ -135,16 +165,25 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
       }
 
       // Manually attach plan data to subscriptions
-      if (targetUser.brandSubscriptions) {
-        for (const subscription of targetUser.brandSubscriptions) {
+      const userJson = targetUser.toJSON();
+      if (userJson.brandSubscriptions) {
+        userJson.brandSubscriptions = await Promise.all(userJson.brandSubscriptions.map(async (subscription: any) => {
           if (subscription.planType) {
+            console.log(`🔍 [Client Mgmt] Looking for plan with type: "${subscription.planType}" for user ${userId}`);
             const plan = await BrandSubscriptionPlans.getPlanByType(subscription.planType);
-            (subscription as any).plan = plan;
+            if (plan) {
+              console.log(`✅ [Client Mgmt] Found plan:`, { id: plan.id, name: plan.name, maxProducts: plan.maxProducts });
+              subscription.plan = plan.toJSON();
+            } else {
+              console.log(`❌ [Client Mgmt] Plan not found for type: "${subscription.planType}"`);
+              subscription.plan = null;
+            }
           }
-        }
+          return subscription;
+        }));
       }
 
-      res.status(200).json({ success: true, data: targetUser });
+      res.status(200).json({ success: true, data: userJson });
     } catch (error) {
       console.error('❌ Error fetching user:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch user' });
@@ -170,6 +209,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         retriedProductSelectionForCurrentCycle,
         tutorialFinished,
         customMaxProducts,
+        planType,
       } = req.body;
 
       // Find the user's BrandSubscription
@@ -204,18 +244,46 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         updates.customMaxProducts = customMaxProducts === null || customMaxProducts === '' ? null : parseInt(customMaxProducts as string);
       }
 
+      // Allow changing planType
+      if (planType !== undefined && typeof planType === 'string' && planType.trim() !== '') {
+        // Verify the plan exists
+        const planExists = await BrandSubscriptionPlans.findOne({
+          where: { planType: planType }
+        });
+        
+        if (planExists) {
+          updates.planType = planType;
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: `Plan type '${planType}' does not exist`
+          });
+        }
+      }
+
+      console.log('💾 [Client Mgmt] Updating subscription with:', updates);
       await brandSubscription.update(updates);
+      console.log('✅ [Client Mgmt] Updated subscription values:', {
+        productsChangedAmountOnCurrentCycle: brandSubscription.productsChangedAmountOnCurrentCycle,
+        retriedProductSelectionForCurrentCycle: brandSubscription.retriedProductSelectionForCurrentCycle,
+        tutorialFinished: brandSubscription.tutorialFinished,
+        customMaxProducts: brandSubscription.customMaxProducts,
+        planType: brandSubscription.planType
+      });
 
       // Attach plan data for response
-      if (brandSubscription.planType) {
-        const plan = await BrandSubscriptionPlans.getPlanByType(brandSubscription.planType);
-        (brandSubscription as any).plan = plan;
+      const subscriptionJson = brandSubscription.toJSON();
+      if (subscriptionJson.planType) {
+        const plan = await BrandSubscriptionPlans.getPlanByType(subscriptionJson.planType);
+        if (plan) {
+          (subscriptionJson as any).plan = plan.toJSON();
+        }
       }
 
       res.status(200).json({
         success: true,
         message: 'BrandSubscription updated successfully',
-        data: brandSubscription
+        data: subscriptionJson
       });
     } catch (error) {
       console.error('❌ Error updating BrandSubscription:', error);

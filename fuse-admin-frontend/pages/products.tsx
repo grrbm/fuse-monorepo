@@ -182,6 +182,12 @@ export default function Products() {
             })
             if (!res.ok) return
             const data = await res.json().catch(() => null)
+            console.log('📦 [Products] Fetched subscription:', data)
+            console.log('📊 [Products] Subscription details:', {
+                productsChangedAmount: data?.productsChangedAmountOnCurrentCycle,
+                retriedSelection: data?.retriedProductSelectionForCurrentCycle,
+                maxProducts: data?.plan?.maxProducts
+            })
             setSubscription(data || null)
         } catch { }
     }, [token])

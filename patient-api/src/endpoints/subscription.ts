@@ -71,30 +71,38 @@ export function registerSubscriptionEndpoints(app: Express, authenticateJWT: any
 
       console.log('🎯 [Subscription] Effective maxProducts:', effectiveMaxProducts);
 
-      res.json({
-        id: subscription.id,
-        planId: plan?.id || null,
-        status: subscription.status,
-        stripeSubscriptionId: subscription.stripeSubscriptionId,
-        stripePriceId: subscription.stripePriceId,
-        plan: plan ? {
-          name: plan.name,
-          price: Number(plan.monthlyPrice),
-          type: plan.planType,
-          maxProducts: effectiveMaxProducts
-        } : subscription.stripePriceId ? {
-          name: subscription.planType,
-          price: subscription.monthlyPrice ? Number(subscription.monthlyPrice) : 0,
-          type: subscription.planType,
-          priceId: subscription.stripePriceId,
-          maxProducts: effectiveMaxProducts
-        } : null,
-        nextBillingDate: subscription.currentPeriodEnd || null,
-        lastProductChangeAt: subscription.lastProductChangeAt || null,
-        productsChangedAmountOnCurrentCycle: subscription.productsChangedAmountOnCurrentCycle || 0,
-        retriedProductSelectionForCurrentCycle: !!(subscription as any).retriedProductSelectionForCurrentCycle,
-        customMaxProducts: subscription.customMaxProducts
-      });
+    const responseData = {
+      id: subscription.id,
+      planId: plan?.id || null,
+      status: subscription.status,
+      stripeSubscriptionId: subscription.stripeSubscriptionId,
+      stripePriceId: subscription.stripePriceId,
+      plan: plan ? {
+        name: plan.name,
+        price: Number(plan.monthlyPrice),
+        type: plan.planType,
+        maxProducts: effectiveMaxProducts
+      } : subscription.stripePriceId ? {
+        name: subscription.planType,
+        price: subscription.monthlyPrice ? Number(subscription.monthlyPrice) : 0,
+        type: subscription.planType,
+        priceId: subscription.stripePriceId,
+        maxProducts: effectiveMaxProducts
+      } : null,
+      nextBillingDate: subscription.currentPeriodEnd || null,
+      lastProductChangeAt: subscription.lastProductChangeAt || null,
+      productsChangedAmountOnCurrentCycle: subscription.productsChangedAmountOnCurrentCycle || 0,
+      retriedProductSelectionForCurrentCycle: !!(subscription as any).retriedProductSelectionForCurrentCycle,
+      customMaxProducts: subscription.customMaxProducts
+    };
+
+    console.log('📤 [Subscription] Sending response:', {
+      productsChangedAmountOnCurrentCycle: responseData.productsChangedAmountOnCurrentCycle,
+      retriedProductSelectionForCurrentCycle: responseData.retriedProductSelectionForCurrentCycle,
+      maxProducts: responseData.plan?.maxProducts
+    });
+
+    res.json(responseData);
     } catch (error) {
       console.error('Error fetching subscription:', error);
       res.status(500).json({ success: false, message: "Internal server error" });
