@@ -195,9 +195,9 @@ export default function ClientManagement() {
       if (isLocal) {
         adminPortalUrl = 'http://localhost:3002'
       } else if (isStaging) {
-        adminPortalUrl = 'https://admin.fusehealthstaging.xyz'
+        adminPortalUrl = 'https://app.fusehealthstaging.xyz'
       } else {
-        adminPortalUrl = 'https://admin.fuse.health'
+        adminPortalUrl = 'https://app.fusehealth.com'
       }
 
       // Redirect to admin portal with the impersonation token
