@@ -36,6 +36,8 @@ import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
 import TenantCustomFeatures from '../models/TenantCustomFeatures';
 import TierConfiguration from '../models/TierConfiguration';
+import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
+import FormAnalyticsDaily from '../models/FormAnalyticsDaily';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -91,7 +93,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
     TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
-    TenantCustomFeatures, TierConfiguration
+    TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily
   ],
 });
 

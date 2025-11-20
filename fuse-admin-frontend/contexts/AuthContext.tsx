@@ -89,20 +89,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     input: RequestInfo | URL,
     init: RequestInit & { skipLogoutOn401?: boolean } = {}
   ): Promise<Response> => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+    console.log('🔐 [Auth] authenticatedFetch called for:', url)
+    
     const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null)
+    console.log('🔐 [Auth] Token present:', !!activeToken)
+    
     const headers = new Headers(init.headers || {})
 
     if (activeToken && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${activeToken}`)
     }
 
+    console.log('🔐 [Auth] Sending request...')
     const response = await fetch(input, {
       ...init,
       headers,
       credentials: init.credentials ?? 'include',
     })
 
+    console.log('🔐 [Auth] Response status:', response.status, 'for', url)
+
     if (response.status === 401 && !init.skipLogoutOn401) {
+      console.log('❌ [Auth] 401 Unauthorized - logging out user')
       handleUnauthorized()
       throw new Error('unauthorized')
     }

@@ -1,4 +1,4 @@
-import { Table, Column, DataType, ForeignKey, BelongsTo, HasMany } from 'sequelize-typescript';
+import { Table, Column, DataType, ForeignKey, BelongsTo, HasMany, HasOne } from 'sequelize-typescript';
 import bcrypt from 'bcrypt';
 import Entity from './Entity';
 import Clinic from './Clinic';
@@ -8,6 +8,7 @@ import BrandTreatment from './BrandTreatment';
 import UserPatient from './UserPatient';
 import BrandSubscription from './BrandSubscription';
 import TenantCustomFeatures from './TenantCustomFeatures';
+import TenantAnalyticsEvents from './TenantAnalyticsEvents';
 
 @Table({
   freezeTableName: true,
@@ -279,8 +280,11 @@ export default class User extends Entity {
   @HasMany(() => BrandSubscription)
   declare brandSubscriptions: BrandSubscription[];
 
-  @HasMany(() => TenantCustomFeatures)
-  declare tenantCustomFeatures: TenantCustomFeatures[];
+  @HasOne(() => TenantCustomFeatures)
+  declare tenantCustomFeatures?: TenantCustomFeatures;
+
+  @HasMany(() => TenantAnalyticsEvents)
+  declare analyticsEvents: TenantAnalyticsEvents[];
 
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {
