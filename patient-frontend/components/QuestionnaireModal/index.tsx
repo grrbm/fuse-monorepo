@@ -39,6 +39,7 @@ import { ProductSelection } from "./components/ProductSelection";
 import { BMICalculator } from "./components/BMICalculator";
 import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVariables";
 import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
+import { trackFormView, trackFormConversion } from "../../lib/analytics";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
@@ -639,6 +640,44 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       fetchCustomColor();
     }
   }, [questionnaireId, domainClinic?.id, isOpen]);
+
+  // Track form view when modal opens
+  React.useEffect(() => {
+    const handleTrackFormView = async () => {
+      console.log('🔍 [Analytics] Checking tracking conditions:', {
+        isOpen,
+        questionnaireId,
+        tenantProductId,
+        domainClinic: domainClinic ? { id: domainClinic.id, name: domainClinic.name, userId: (domainClinic as any).userId } : null
+      });
+
+      // Only track if modal is open and we have the required data
+      if (!isOpen || !questionnaireId || !tenantProductId || !domainClinic) {
+        console.log('⚠️ [Analytics] Skipping tracking - missing required data');
+        return;
+      }
+
+      // Get the user ID from the clinic (the brand owner)
+      const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
+      
+      if (!userId) {
+        console.warn('⚠️ [Analytics] Cannot track view: no userId found on clinic. Clinic data:', domainClinic);
+        return;
+      }
+
+      console.log('✅ [Analytics] All conditions met, calling trackFormView...');
+      await trackFormView({
+        userId,
+        productId: tenantProductId,
+        formId: questionnaireId,
+        clinicId: domainClinic.id,
+        clinicName: domainClinic.name,
+        productName: productName || undefined
+      });
+    };
+
+    handleTrackFormView();
+  }, [isOpen, questionnaireId, tenantProductId, domainClinic, productName]);
 
   // Reset state when modal closes
   React.useEffect(() => {
@@ -1666,6 +1705,24 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setPaymentStatus('succeeded');
       console.log('💳 Payment authorized successfully:', paymentIntentId);
       console.log('💳 Subscription will be created after manual payment capture');
+
+      // Track conversion in analytics
+      if (questionnaireId && tenantProductId && domainClinic) {
+        const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
+
+        if (userId) {
+          await trackFormConversion({
+            userId,
+            productId: tenantProductId,
+            formId: questionnaireId,
+            clinicId: domainClinic.id,
+            clinicName: domainClinic.name,
+            productName: productName || undefined,
+            paymentIntentId: paymentIntentId,
+            orderId: orderId || undefined
+          });
+        }
+      }
 
       // Don't close modal, allow user to continue with questionnaire steps
     } catch (error) {

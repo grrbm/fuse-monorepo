@@ -1,7 +1,7 @@
 import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import Entity from './Entity';
 import User from './User';
-import Product from './Product';
+import TenantProduct from './TenantProduct';
 
 @Table({
   freezeTableName: true,
@@ -15,12 +15,12 @@ export default class TenantAnalyticsEvents extends Entity {
   })
   declare userId: string;
 
-  @ForeignKey(() => Product)
+  @ForeignKey(() => TenantProduct)
   @Column({
     type: DataType.UUID,
     allowNull: false,
   })
-  declare productId: string;
+  declare productId: string; // This is actually a TenantProduct ID
 
   @Column({
     type: DataType.STRING,
@@ -49,7 +49,7 @@ export default class TenantAnalyticsEvents extends Entity {
   @BelongsTo(() => User)
   declare user?: User;
 
-  @BelongsTo(() => Product)
-  declare product?: Product;
+  @BelongsTo(() => TenantProduct)
+  declare tenantProduct?: TenantProduct;
 }
 

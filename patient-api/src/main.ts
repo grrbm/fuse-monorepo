@@ -940,9 +940,23 @@ app.get("/clinic/by-slug/:slug", async (req, res) => {
       });
     }
 
+    // Find the brand owner of this clinic for analytics tracking
+    const brandOwner = await User.findOne({
+      where: {
+        clinicId: clinic.id,
+        role: 'brand'
+      },
+      attributes: ['id'] // Only need the ID for analytics
+    });
+
+    const clinicData = clinic.toJSON();
+
     res.json({
       success: true,
-      data: clinic
+      data: {
+        ...clinicData,
+        userId: brandOwner?.id || null // Add userId for analytics tracking
+      }
     });
 
   } catch (error) {

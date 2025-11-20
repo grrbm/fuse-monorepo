@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
+import TenantProduct from '../models/TenantProduct';
 import Product from '../models/Product';
 import TenantProductForm from '../models/TenantProductForm';
 import FormAnalyticsDaily from '../models/FormAnalyticsDaily';
@@ -12,9 +13,13 @@ const router = Router();
 // Track analytics event (view or conversion)
 router.post('/analytics/track', async (req: Request, res: Response) => {
   try {
+    console.log('📊 [Analytics API] Received tracking request');
+    console.log('📊 [Analytics API] Request body:', req.body);
+    
     const { userId, productId, formId, eventType, sessionId, metadata } = req.body;
 
     if (!userId || !productId || !formId || !eventType) {
+      console.log('❌ [Analytics API] Missing required fields:', { userId, productId, formId, eventType });
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: userId, productId, formId, eventType',
@@ -22,12 +27,14 @@ router.post('/analytics/track', async (req: Request, res: Response) => {
     }
 
     if (!['view', 'conversion'].includes(eventType)) {
+      console.log('❌ [Analytics API] Invalid eventType:', eventType);
       return res.status(400).json({
         success: false,
         error: 'eventType must be either "view" or "conversion"',
       });
     }
 
+    console.log('📊 [Analytics API] Creating analytics event...');
     const analyticsEvent = await TenantAnalyticsEvents.create({
       userId,
       productId,
@@ -37,12 +44,17 @@ router.post('/analytics/track', async (req: Request, res: Response) => {
       metadata,
     });
 
+    console.log('✅ [Analytics API] Analytics event created successfully:', analyticsEvent.id);
     return res.json({
       success: true,
       data: analyticsEvent.toJSON(),
     });
   } catch (error) {
-    console.error('Error tracking analytics:', error);
+    console.error('❌ [Analytics API] Error tracking analytics:', error);
+    if (error instanceof Error) {
+      console.error('❌ [Analytics API] Error message:', error.message);
+      console.error('❌ [Analytics API] Error stack:', error.stack);
+    }
     return res.status(500).json({
       success: false,
       error: 'Failed to track analytics event',
@@ -76,15 +88,18 @@ router.get('/analytics/products/:productId', authenticateJWT, async (req: Reques
     await AnalyticsService.ensureDataAggregated();
     console.log('✅ [Product Analytics] ensureDataAggregated completed');
 
-    // Verify the product belongs to the user
-    const product = await Product.findOne({
+    // Verify the tenant product belongs to the user
+    const tenantProduct = await TenantProduct.findOne({
       where: {
         id: productId,
-        userId,
       },
+      include: [{
+        model: Product,
+        required: true
+      }]
     });
 
-    if (!product) {
+    if (!tenantProduct) {
       return res.status(404).json({
         success: false,
         error: 'Product not found',
@@ -264,9 +279,13 @@ router.get('/analytics/overview', authenticateJWT, async (req: Request, res: Res
       },
       include: [
         {
-          model: Product,
-          as: 'product',
-          attributes: ['id', 'name'],
+          model: TenantProduct,
+          as: 'tenantProduct',
+          attributes: ['id'], // TenantProduct doesn't have a name field
+          include: [{
+            model: Product,
+            attributes: ['id', 'name'],
+          }]
         },
       ],
       order: [['createdAt', 'ASC']],
@@ -284,7 +303,7 @@ router.get('/analytics/overview', authenticateJWT, async (req: Request, res: Res
     analytics.forEach((event) => {
       const eventData = event.toJSON() as any;
       const productId = eventData.productId;
-      const productName = eventData.product?.name || 'Unknown Product';
+      const productName = eventData.tenantProduct?.product?.name || 'Unknown Product';
 
       if (!productAnalytics[productId]) {
         productAnalytics[productId] = {
