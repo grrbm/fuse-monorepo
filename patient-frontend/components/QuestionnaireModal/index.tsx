@@ -54,7 +54,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   productPrice,
   productStripePriceId,
   productStripeProductId,
-  tenantProductId
+  tenantProductId,
+  tenantProductFormId
 }) => {
   console.log('🔍 QuestionnaireModal received globalFormStructure:', globalFormStructure)
   const { clinic: domainClinic, isLoading: isLoadingClinic } = useClinicFromDomain();
@@ -94,6 +95,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     securityCode: "",
     country: "brazil"
   });
+
+  // Track if we've already sent analytics for this modal session
+  const hasTrackedViewRef = React.useRef(false);
 
   // Calculate BMI width for animation
   const bmiWidth = React.useMemo(() => {
@@ -644,32 +648,48 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Track form view when modal opens
   React.useEffect(() => {
     const handleTrackFormView = async () => {
+      // Use tenantProductFormId if available, otherwise fall back to questionnaireId
+      const formIdForTracking = tenantProductFormId || questionnaireId;
+
       console.log('🔍 [Analytics] Checking tracking conditions:', {
         isOpen,
         questionnaireId,
+        tenantProductFormId,
+        formIdForTracking,
         tenantProductId,
+        hasTrackedView: hasTrackedViewRef.current,
         domainClinic: domainClinic ? { id: domainClinic.id, name: domainClinic.name, userId: (domainClinic as any).userId } : null
       });
 
       // Only track if modal is open and we have the required data
-      if (!isOpen || !questionnaireId || !tenantProductId || !domainClinic) {
+      if (!isOpen || !formIdForTracking || !tenantProductId || !domainClinic) {
         console.log('⚠️ [Analytics] Skipping tracking - missing required data');
+        return;
+      }
+
+      // Skip if we've already tracked this modal session
+      if (hasTrackedViewRef.current) {
+        console.log('⚠️ [Analytics] Skipping tracking - already tracked for this modal session');
         return;
       }
 
       // Get the user ID from the clinic (the brand owner)
       const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
-      
+
       if (!userId) {
         console.warn('⚠️ [Analytics] Cannot track view: no userId found on clinic. Clinic data:', domainClinic);
         return;
       }
 
       console.log('✅ [Analytics] All conditions met, calling trackFormView...');
+
+      // Mark as tracked IMMEDIATELY to prevent duplicate calls
+      hasTrackedViewRef.current = true;
+
       await trackFormView({
         userId,
         productId: tenantProductId,
-        formId: questionnaireId,
+        formId: formIdForTracking,
         clinicId: domainClinic.id,
         clinicName: domainClinic.name,
         productName: productName || undefined
@@ -677,7 +697,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     };
 
     handleTrackFormView();
-  }, [isOpen, questionnaireId, tenantProductId, domainClinic, productName]);
+  }, [isOpen, questionnaireId, tenantProductFormId, tenantProductId, domainClinic, productName]);
 
   // Reset state when modal closes
   React.useEffect(() => {
@@ -692,6 +712,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setPaymentIntentId(null);
       setPaymentStatus('idle');
       setSelectedPlan("monthly");
+      // Reset analytics tracking flag
+      hasTrackedViewRef.current = false;
       setShippingInfo({
         address: "",
         apartment: "",
@@ -1707,14 +1729,15 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       console.log('💳 Subscription will be created after manual payment capture');
 
       // Track conversion in analytics
-      if (questionnaireId && tenantProductId && domainClinic) {
+      const formIdForTracking = tenantProductFormId || questionnaireId;
+      if (formIdForTracking && tenantProductId && domainClinic) {
         const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
 
         if (userId) {
           await trackFormConversion({
             userId,
             productId: tenantProductId,
-            formId: questionnaireId,
+            formId: formIdForTracking,
             clinicId: domainClinic.id,
             clinicName: domainClinic.name,
             productName: productName || undefined,

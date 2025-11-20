@@ -2,7 +2,6 @@ import { Router, Request, Response } from 'express';
 import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
 import TenantProduct from '../models/TenantProduct';
 import Product from '../models/Product';
-import TenantProductForm from '../models/TenantProductForm';
 import FormAnalyticsDaily from '../models/FormAnalyticsDaily';
 import { authenticateJWT, getCurrentUser } from '../config/jwt';
 import { Op } from 'sequelize';
@@ -146,33 +145,31 @@ router.get('/analytics/products/:productId', authenticateJWT, async (req: Reques
       order: [['createdAt', 'ASC']],
     });
 
-    // Get all forms for the product
-    const forms = await TenantProductForm.findAll({
-      where: {
-        tenantProductId: productId,
-      },
-    });
-
     // Group analytics by form and event type
     const formAnalytics: Record<string, { views: number; conversions: number; formUrl: string }> = {};
 
-    forms.forEach((form) => {
-      const formData = form.toJSON();
-      formAnalytics[formData.id] = {
-        views: 0,
-        conversions: 0,
-        formUrl: formData.slug || '',
-      };
-    });
-
+    // Process analytics events
     analytics.forEach((event) => {
       const eventData = event.toJSON();
-      if (formAnalytics[eventData.formId]) {
-        if (eventData.eventType === 'view') {
-          formAnalytics[eventData.formId].views++;
-        } else if (eventData.eventType === 'conversion') {
-          formAnalytics[eventData.formId].conversions++;
-        }
+      const formId = eventData.formId;
+      
+      // If this form doesn't exist in formAnalytics yet, create it
+      if (!formAnalytics[formId]) {
+        // Try to get a friendly name from metadata
+        const clinicName = eventData.metadata?.clinicName || '';
+        const productName = eventData.metadata?.productName || '';
+        formAnalytics[formId] = {
+          views: 0,
+          conversions: 0,
+          formUrl: productName ? `${productName} Form (${formId.slice(0, 8)}...)` : `Form ${formId.slice(0, 8)}...`,
+        };
+      }
+      
+      // Count the event
+      if (eventData.eventType === 'view') {
+        formAnalytics[formId].views++;
+      } else if (eventData.eventType === 'conversion') {
+        formAnalytics[formId].conversions++;
       }
     });
 

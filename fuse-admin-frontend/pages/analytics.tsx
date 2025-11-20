@@ -268,6 +268,9 @@ export default function Analytics() {
             <Card>
               <CardHeader>
                 <CardTitle>Product Performance</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Click on a product to see form-level breakdowns
+                </p>
               </CardHeader>
               <CardContent>
                 {overview.products.length === 0 ? (
