@@ -474,18 +474,19 @@ export const createContact = async (req: Request, res: Response) => {
       });
     }
 
-    // Validate phone number format if provided (flexible: accepts local or E.164 format)
+    // Validate phone number format if provided (USA format: 10 digits)
     if (phoneNumber && phoneNumber.trim()) {
       const cleanPhone = phoneNumber.trim().replace(/[\s\-\(\)\.]/g, '');
       
-      // Accept either E.164 format (+15551234567) or local format (0991234567, 5551234567)
-      // Must be at least 7 digits and at most 15 digits (including country code)
-      const phoneRegex = /^\+?\d{7,15}$/;
+      // Accept USA format:
+      // - Local: 5551234567 (10 digits only)
+      // - International: +15551234567 (backward compatibility)
+      const phoneRegex = /^(\+1)?\d{10}$/;
       
       if (!phoneRegex.test(cleanPhone)) {
         return res.status(400).json({
           success: false,
-          message: "Phone number must contain 7-15 digits (e.g., +15551234567 or 0991234567)"
+          message: "Phone number must be exactly 10 digits (e.g., 5551234567)"
         });
       }
     }
@@ -649,8 +650,8 @@ export const uploadCSV = async (req: Request, res: Response) => {
     const contacts: any[] = [];
     const errors: string[] = [];
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    // Flexible phone validation: accepts E.164 (+15551234567) or local (0991234567)
-    const phoneRegex = /^\+?\d{7,15}$/;
+    // Phone validation: USA format (10 digits, +1 prefix optional for backward compatibility)
+    const phoneRegex = /^(\+1)?\d{10}$/;
 
     for (let i = 1; i < lines.length; i++) {
       const values = parseCSVLine(lines[i]);
@@ -678,7 +679,7 @@ export const uploadCSV = async (req: Request, res: Response) => {
       if (phoneNumber) {
         const cleanPhone = phoneNumber.replace(/[\s\-\(\)\.]/g, '');
         if (!phoneRegex.test(cleanPhone)) {
-          errors.push(`Row ${rowNum}: Invalid phone format - must be 7-15 digits (${phoneNumber})`);
+          errors.push(`Row ${rowNum}: Invalid phone format - must be exactly 10 digits (${phoneNumber})`);
           continue;
         }
       }

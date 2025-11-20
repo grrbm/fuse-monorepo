@@ -46,11 +46,11 @@ export async function extractClinicSlugFromDomain(): Promise<ClinicDomainInfo> {
   console.log('🔍 Domain analysis:', { hostname, parts });
 
   // FIRST: Try to detect custom domain (vanity domain)
-  // Check if hostname is NOT a .fuse.health subdomain and NOT localhost and NOT bare localhost
+  // Check if hostname is NOT a .fuse.health subdomain, NOT a .fusehealthstaging.xyz subdomain, NOT localhost and NOT bare localhost
   // Skip custom domain check for localhost and localhost with port (e.g., localhost:3000)
   const isLocalhost = hostname === 'localhost' || hostname.startsWith('127.0.0.1');
 
-  if (!hostname.endsWith('.fuse.health') && !hostname.includes('.localhost') && !isLocalhost) {
+  if (!hostname.endsWith('.fuse.health') && !hostname.endsWith('.fusehealth.com') && !hostname.endsWith('.fusehealthstaging.xyz') && !hostname.includes('.localhost') && !isLocalhost) {
     try {
       console.log('🔍 Checking for custom domain:', hostname);
       const customDomainResult = await apiCall('/clinic/by-custom-domain', {
@@ -104,10 +104,16 @@ export async function extractClinicSlugFromDomain(): Promise<ClinicDomainInfo> {
     // Production clinic subdomain: <clinic>.fuse.health
     clinicSlug = parts[0];
     hasClinicSubdomain = true;
+  } else if (hostname.endsWith('.fusehealth.com') && parts.length >= 3 && parts[0] !== 'app' && parts[0] !== 'www') {
+    // Production clinic subdomain: <clinic>.fusehealth.com
+  } else if (hostname.endsWith('.fusehealthstaging.xyz') && parts.length >= 3 && parts[0] !== 'app' && parts[0] !== 'www') {
+    // Staging clinic subdomain: <clinic>.fusehealthstaging.xyz
+    clinicSlug = parts[0];
+    hasClinicSubdomain = true;
   }
 
   // Special case: limitless.health should act as the normal website (no clinic)
-  if (clinicSlug === 'fuse.health') {
+  if (clinicSlug === 'fuse.health' || clinicSlug === 'fusehealth.com') {
     clinicSlug = null;
     hasClinicSubdomain = false;
   }

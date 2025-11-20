@@ -152,6 +152,12 @@ export default class Product extends Entity {
     })
     declare mdCaseId?: string;
 
+    @Column({
+        type: DataType.UUID,
+        allowNull: true,
+    })
+    declare brandId?: string;
+
     @BelongsToMany(() => Prescription, () => PrescriptionProducts)
     declare prescriptions: Prescription[];
 

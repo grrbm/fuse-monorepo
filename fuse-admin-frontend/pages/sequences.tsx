@@ -172,6 +172,9 @@ interface SequenceStep {
         value: string
     }
     stepType?: 'delay' | 'sms' | 'email'
+    useCustomText?: boolean
+    customText?: string
+    customSubject?: string
 }
 
 interface SequenceStats {
@@ -302,7 +305,10 @@ const mapSequenceFromApi = (sequence: ApiSequence): Sequence => {
             templateSubject: step.templateSubject || step.template_subject,
             templateBody: step.templateBody || step.template_body,
             conditionalLogic: step.conditionalLogic || step.conditional_logic,
-            stepType
+            stepType,
+            useCustomText: step.useCustomText || step.use_custom_text || false,
+            customText: step.customText || step.custom_text,
+            customSubject: step.customSubject || step.custom_subject
         }
     })
 
@@ -750,6 +756,57 @@ export default function Flows() {
         schedulePersistSequenceSteps(sequenceId, updatedSteps)
     }
 
+    const handleToggleCustomText = (stepId: string, useCustom: boolean) => {
+        if (!selectedSequence) return
+
+        const sequenceId = selectedSequence.id
+
+        const applyToggle = (step: SequenceStep): SequenceStep => {
+            if (step.id !== stepId) return step
+            
+            return {
+                ...step,
+                useCustomText: useCustom,
+                // Clear template fields when switching to custom
+                ...(useCustom ? {
+                    templateId: undefined,
+                    templateName: undefined,
+                    templateSubject: undefined,
+                    templateBody: undefined
+                } : {}),
+                // Clear custom fields when switching to template
+                ...(!useCustom ? {
+                    customText: undefined,
+                    customSubject: undefined
+                } : {})
+            }
+        }
+
+        const updatedSteps = editableSteps.map(applyToggle)
+        applyStepsUpdate(sequenceId, updatedSteps)
+        schedulePersistSequenceSteps(sequenceId, updatedSteps)
+    }
+
+    const handleCustomTextChange = (stepId: string, text: string, subject?: string) => {
+        if (!selectedSequence) return
+
+        const sequenceId = selectedSequence.id
+
+        const applyCustomText = (step: SequenceStep): SequenceStep => {
+            if (step.id !== stepId) return step
+            
+            return {
+                ...step,
+                customText: text,
+                ...(subject !== undefined ? { customSubject: subject } : {})
+            }
+        }
+
+        const updatedSteps = editableSteps.map(applyCustomText)
+        applyStepsUpdate(sequenceId, updatedSteps)
+        schedulePersistSequenceSteps(sequenceId, updatedSteps)
+    }
+
     const getTotalDelaySeconds = (step: SequenceStep): number => {
         if (!step.stepType || step.stepType !== 'delay') return 0
         const unitSeconds: Record<string, number> = {
@@ -784,10 +841,23 @@ export default function Flows() {
 
             const stepPayload: Record<string, unknown> = {
                 id: step.id,
-                type
+                type,
+                useCustomText: !!step.useCustomText
             }
 
-            if (step.templateId) {
+            if (step.useCustomText) {
+                stepPayload.customText = step.customText || ''
+                if (step.customSubject) {
+                    stepPayload.customSubject = step.customSubject
+                }
+                // Add merge fields for custom text (default available fields)
+                stepPayload.customMergeFields = [
+                    'firstName|firstName',
+                    'lastName|lastName',
+                    'email|email',
+                    'phoneNumber|phoneNumber'
+                ]
+            } else if (step.templateId) {
                 stepPayload.templateId = step.templateId
             }
 
@@ -1781,24 +1851,90 @@ export default function Flows() {
                                                                         </Badge>
                                                                     </div>
                                                                     {(step.stepType === 'sms' || step.stepType === 'email') && (
-                                                                        <div className="mb-2" onClick={(e) => e.stopPropagation()}>
-                                                                            <label className="block text-xs font-medium text-muted-foreground mb-1">
-                                                                                {step.stepType === 'sms' ? 'SMS Template' : 'Email Template'}
-                                                                            </label>
-                                                                            <select
-                                                                                value={step.templateId || ''}
-                                                                                onChange={(e) => handleTemplateSelect(step.id, e.target.value)}
-                                                                                className="w-full px-2 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                                                                            >
-                                                                                <option value="">
-                                                                                    Select a {step.stepType === 'sms' ? 'SMS' : 'Email'} template...
-                                                                                </option>
-                                                                                {(step.stepType === 'sms' ? templates.sms : templates.email).map(template => (
-                                                                                    <option key={template.id} value={template.id}>
-                                                                                        {template.name}
-                                                                                    </option>
-                                                                                ))}
-                                                                            </select>
+                                                                        <div className="mb-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                                                                            {/* Toggle between Template and Custom Text */}
+                                                                            <div className="flex gap-2 text-xs">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleToggleCustomText(step.id, false)}
+                                                                                    className={`flex-1 px-2 py-1 rounded-md border transition-colors ${
+                                                                                        !step.useCustomText
+                                                                                            ? 'bg-primary text-primary-foreground border-primary'
+                                                                                            : 'bg-background border-border hover:bg-muted'
+                                                                                    }`}
+                                                                                >
+                                                                                    Use Template
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleToggleCustomText(step.id, true)}
+                                                                                    className={`flex-1 px-2 py-1 rounded-md border transition-colors ${
+                                                                                        step.useCustomText
+                                                                                            ? 'bg-primary text-primary-foreground border-primary'
+                                                                                            : 'bg-background border-border hover:bg-muted'
+                                                                                    }`}
+                                                                                >
+                                                                                    Write Custom
+                                                                                </button>
+                                                                            </div>
+
+                                                                            {/* Template Selector */}
+                                                                            {!step.useCustomText && (
+                                                                                <div>
+                                                                                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                                                                                        {step.stepType === 'sms' ? 'SMS Template' : 'Email Template'}
+                                                                                    </label>
+                                                                                    <select
+                                                                                        value={step.templateId || ''}
+                                                                                        onChange={(e) => handleTemplateSelect(step.id, e.target.value)}
+                                                                                        className="w-full px-2 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                                                                                    >
+                                                                                        <option value="">
+                                                                                            Select a {step.stepType === 'sms' ? 'SMS' : 'Email'} template...
+                                                                                        </option>
+                                                                                        {(step.stepType === 'sms' ? templates.sms : templates.email).map(template => (
+                                                                                            <option key={template.id} value={template.id}>
+                                                                                                {template.name}
+                                                                                            </option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                </div>
+                                                                            )}
+
+                                                                            {/* Custom Text Editor */}
+                                                                            {step.useCustomText && (
+                                                                                <div className="space-y-2">
+                                                                                    {step.stepType === 'email' && (
+                                                                                        <div>
+                                                                                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                                                                                                Subject Line
+                                                                                            </label>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                value={step.customSubject || ''}
+                                                                                                onChange={(e) => handleCustomTextChange(step.id, step.customText || '', e.target.value)}
+                                                                                                placeholder="Enter email subject..."
+                                                                                                className="w-full px-2 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div>
+                                                                                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                                                                                            Message Text
+                                                                                        </label>
+                                                                                        <textarea
+                                                                                            value={step.customText || ''}
+                                                                                            onChange={(e) => handleCustomTextChange(step.id, e.target.value, step.customSubject)}
+                                                                                            placeholder={`Write your ${step.stepType === 'sms' ? 'SMS' : 'email'} message here...\n\nUse variables like:\n{{firstName}}\n{{lastName}}\n{{email}}`}
+                                                                                            rows={6}
+                                                                                            className="w-full px-2 py-2 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background font-mono"
+                                                                                        />
+                                                                                        <div className="mt-1 text-xs text-muted-foreground">
+                                                                                            <span className="font-medium">Available variables:</span> {'{'}{'{'} firstName {'}'}{'}'}, {'{'}{'{'} lastName {'}'}{'}'}, {'{'}{'{'} email {'}'}{'}'}, {'{'}{'{'} phoneNumber {'}'}{'}'}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                     {step.stepType === 'delay' && (
@@ -1884,12 +2020,19 @@ export default function Flows() {
                                         if (!step) return null
 
                                         const isDelayStep = step.stepType === 'delay' || !step.channel
-                                        const hasTemplateSelected = isDelayStep || !!step.templateId
-                                        const { blocks: templateBlocks, plainText: templatePlainText } = parseTemplateBody(step.templateBody)
-                                        const mergeFields = extractMergeFields(step.templateBody)
+                                        const hasCustomText = !!step.useCustomText && !!step.customText
+                                        const hasTemplateSelected = isDelayStep || hasCustomText || !!step.templateId
+                                        
+                                        // Use custom text if available, otherwise use template body
+                                        const contentToShow = hasCustomText ? step.customText : step.templateBody
+                                        const { blocks: templateBlocks, plainText: templatePlainText } = parseTemplateBody(contentToShow)
+                                        const mergeFields = extractMergeFields(contentToShow)
 
                                         const smsPreviewText = (() => {
                                             if (step.channel !== 'sms') return ''
+                                            if (hasCustomText) {
+                                                return applySampleValues(step.customText || '')
+                                            }
                                             const rawText = templateBlocks
                                                 ? templateBlocks
                                                     .filter(block => block.type === 'text')
@@ -1899,8 +2042,8 @@ export default function Flows() {
                                             return applySampleValues(rawText || '')
                                         })()
 
-                                        const emailBlocks = step.channel === 'email' ? templateBlocks : null
-                                        const emailPlainText = step.channel === 'email' ? templatePlainText : ''
+                                        const emailBlocks = step.channel === 'email' && !hasCustomText ? templateBlocks : null
+                                        const emailPlainText = step.channel === 'email' ? (hasCustomText ? (step.customText || '') : templatePlainText) : ''
 
                                         return (
                                             <div className="space-y-4">

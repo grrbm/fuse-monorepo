@@ -405,7 +405,7 @@ export default function Plans() {
                             <li className="flex items-start gap-2 text-sm">
                               <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
                               <span>
-                                Template forms (our branding)
+                                Template forms (default structure, custom branding)
                               </span>
                             </li>
                             <li className="flex items-start gap-2 text-sm">
@@ -422,13 +422,19 @@ export default function Plans() {
                             <li className="flex items-start gap-2 text-sm">
                               <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
                               <span>
-                                Everything in Standard
+                                Everything in Starter
                               </span>
                             </li>
                             <li className="flex items-start gap-2 text-sm">
                               <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
                               <span>
                                 Template forms with customer branding
+                              </span>
+                            </li>
+                            <li className="flex items-start gap-2 text-sm">
+                              <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                              <span>
+                                Customize forms structure
                               </span>
                             </li>
                             <li className="flex items-start gap-2 text-sm">

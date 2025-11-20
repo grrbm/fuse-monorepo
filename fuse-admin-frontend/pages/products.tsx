@@ -16,7 +16,8 @@ import {
     Filter,
     X,
     Loader2,
-    Check
+    Check,
+    Edit
 } from 'lucide-react'
 
 interface Product {
@@ -33,6 +34,7 @@ interface Product {
     categories?: string[]
     createdAt: string
     updatedAt: string
+    brandId?: string | null
     treatments?: Array<{
         id: string
         name: string
@@ -247,6 +249,181 @@ export default function Products() {
     }, [activeTab, fetchTenantProductCount])
 
 
+    const handleCreateProduct = async () => {
+        if (!token) return
+
+        const skeletonProduct = {
+            name: "New Product",
+            description: "Edit product details below",
+            price: 1, // Minimum positive price
+            placeholderSig: "TBD",
+            activeIngredients: ["TBD"], // At least one required
+            active: false, // Start as inactive
+        }
+
+        console.log('🔄 Creating skeleton product:', skeletonProduct)
+
+        try {
+            // Create a skeleton product with minimum required fields
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products-management`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(skeletonProduct),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                console.error('❌ Failed to create product')
+                console.error('Response status:', response.status, response.statusText)
+                console.error('Response data:', data)
+
+                // Show specific validation errors if available
+                let errorMessage = data.message || "Failed to create product"
+                if (data.errors && Array.isArray(data.errors)) {
+                    const errorMessages = data.errors.map((e: any) => {
+                        if (typeof e === 'string') return e
+                        if (e.message) return e.message
+                        return JSON.stringify(e)
+                    })
+                    errorMessage = errorMessages.join("; ")
+                } else if (data.errors && typeof data.errors === 'object') {
+                    errorMessage = Object.entries(data.errors).map(([key, val]) => `${key}: ${val}`).join("; ")
+                }
+
+                setError(`Error: ${errorMessage}`)
+                return
+            }
+
+            console.log('✅ Product created successfully:', data.data.id)
+            // Navigate to the custom product editor
+            router.push(`/custom-products/${data.data.id}`)
+        } catch (error: any) {
+            console.error("❌ Exception creating product:", error)
+            setError(`Error: ${error.message || "Failed to create product"}`)
+        }
+    }
+
+    const handleDeleteProduct = async (productId: string, productName: string) => {
+        if (!confirm(`Are you sure you want to delete "${productName}"? This action cannot be undone.`)) {
+            return
+        }
+
+        try {
+            setLoading(true)
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/products-management/${productId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(data.message || 'Failed to delete product')
+                return
+            }
+
+            // Remove product from local state
+            setAllProducts(prev => prev.filter(p => p.id !== productId))
+            setProducts(prev => prev.filter(p => p.id !== productId))
+
+            setError('✅ Product deleted successfully!')
+            setTimeout(() => setError(null), 3000)
+        } catch (error: any) {
+            console.error('Error deleting product:', error)
+            setError(error.message || 'Failed to delete product')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleImportFromIronSail = async () => {
+        if (!confirm('This will import all products from the IronSail spreadsheet. Products with the same name will be skipped. Continue?')) {
+            return
+        }
+
+        try {
+            setLoading(true)
+            setError('📥 Importing products from IronSail spreadsheet...')
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/pharmacies/ironsail/import-products`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(`❌ ${data.message || 'Failed to import products'}`)
+                return
+            }
+
+            // Show success message with summary
+            const summary = data.data.summary
+            setError(`✅ Import completed! Imported: ${summary.imported}, Skipped: ${summary.skipped}, Errors: ${summary.errors}`)
+
+            // Refresh products list
+            await fetchProducts()
+
+            setTimeout(() => setError(null), 5000)
+        } catch (error: any) {
+            console.error('Error importing products:', error)
+            setError(`❌ ${error.message || 'Failed to import products'}`)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleDeleteAllFromIronSail = async () => {
+        if (!confirm('⚠️ WARNING: This will permanently delete ALL auto-imported products from IronSail (products with [Auto-Imported] prefix). This action CANNOT be undone. Continue?')) {
+            return
+        }
+
+        try {
+            setLoading(true)
+            setError('🗑️ Deleting all auto-imported products...')
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/pharmacies/ironsail/delete-all-imported`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                setError(`❌ ${data.message || 'Failed to delete products'}`)
+                return
+            }
+
+            // Show success message
+            const deletedCount = data.data.deleted
+            const coverageCount = data.data.deletedCoverage
+            setError(`✅ Deleted ${deletedCount} products and ${coverageCount} pharmacy coverage records`)
+
+            // Refresh products list
+            await fetchProducts()
+
+            setTimeout(() => setError(null), 5000)
+        } catch (error: any) {
+            console.error('Error deleting products:', error)
+            setError(`❌ ${error.message || 'Failed to delete products'}`)
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const formatPrice = (price: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -257,21 +434,21 @@ export default function Products() {
     const getCategoryBadgeColors = (category?: string) => {
         switch (category) {
             case 'weight_loss':
-                return 'bg-orange-50 text-orange-700 border-orange-200'
+                return 'bg-orange-500/15 text-orange-300 border-orange-500/40'
             case 'hair_growth':
-                return 'bg-purple-50 text-purple-700 border-purple-200'
+                return 'bg-purple-500/15 text-purple-300 border-purple-500/40'
             case 'performance':
-                return 'bg-blue-50 text-blue-700 border-blue-200'
+                return 'bg-blue-500/15 text-blue-300 border-blue-500/40'
             case 'sexual_health':
-                return 'bg-pink-50 text-pink-700 border-pink-200'
+                return 'bg-pink-500/15 text-pink-300 border-pink-500/40'
             case 'skincare':
-                return 'bg-teal-50 text-teal-700 border-teal-200'
+                return 'bg-teal-500/15 text-teal-300 border-teal-500/40'
             case 'wellness':
-                return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
             case 'other':
-                return 'bg-gray-50 text-gray-700 border-gray-200'
+                return 'bg-muted text-muted-foreground border-border'
             default:
-                return 'bg-gray-50 text-gray-700 border-gray-200'
+                return 'bg-muted text-muted-foreground border-border'
         }
     }
 
@@ -496,13 +673,13 @@ export default function Products() {
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
             </Head>
-            <div className="min-h-screen bg-gray-50" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="max-w-7xl mx-auto px-6 py-8">
                     {/* Header */}
                     <div className="flex justify-between items-start mb-8">
                         <div>
-                            <h1 className="text-2xl font-semibold text-gray-900 mb-1">Products</h1>
-                            <p className="text-sm text-gray-500">Enable or disable products for your clinic</p>
+                            <h1 className="text-2xl font-semibold mb-1">Products</h1>
+                            <p className="text-sm text-muted-foreground">Enable or disable products for your clinic</p>
                         </div>
                         <div className="flex gap-3">
                             <Button
@@ -517,15 +694,93 @@ export default function Products() {
                                 <Package className="h-4 w-4 mr-1.5" />
                                 Refresh
                             </Button>
+                            <Button
+                                size="sm"
+                                className="h-9 px-3 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white"
+                                onClick={handleImportFromIronSail}
+                                disabled={loading}
+                            >
+                                <Package className="h-4 w-4 mr-1.5" />
+                                Import from IronSail
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="h-9 px-3 text-sm font-medium bg-red-600 hover:bg-red-700 text-white"
+                                onClick={handleDeleteAllFromIronSail}
+                                disabled={loading}
+                            >
+                                <X className="h-4 w-4 mr-1.5" />
+                                Delete All from IronSail
+                            </Button>
+                            {(() => {
+                                const planType = subscription?.plan?.type?.toLowerCase()
+                                const isPremium = planType === 'professional' || planType === 'enterprise'
+                                const isDisabled = !isPremium
+
+                                return (
+                                    <div className="relative group">
+                                        <Button
+                                            size="sm"
+                                            className="h-9 px-3 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                            onClick={handleCreateProduct}
+                                            disabled={isDisabled}
+                                        >
+                                            <Plus className="h-4 w-4 mr-1.5" />
+                                            Add Product
+                                        </Button>
+                                        {isDisabled && (
+                                            <div className="invisible group-hover:visible absolute right-0 top-full mt-2 w-64 z-10">
+                                                <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg">
+                                                    <p className="font-semibold mb-1">Premium Feature</p>
+                                                    <p>Creating custom products is only available on Professional and Enterprise plans. <a href="/plans" className="underline hover:text-indigo-300">Upgrade now</a></p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })()}
                         </div>
                     </div>
 
+                    {/* Premium Plan Notice for Starter users */}
+                    {(() => {
+                        const planType = subscription?.plan?.type?.toLowerCase()
+                        const isPremium = planType === 'professional' || planType === 'enterprise'
+
+                        if (!isPremium) {
+                            return (
+                                <div className="mb-6 px-5 py-4 rounded-lg border-2 border-amber-200 bg-amber-50">
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                                            <Package className="h-5 w-5 text-amber-600" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                                                Unlock Custom Products with Premium Plans
+                                            </h3>
+                                            <p className="text-sm text-amber-800 mb-3">
+                                                Creating custom products is available on Professional and Enterprise plans. Upgrade to add your own products to the catalog.
+                                            </p>
+                                            <a
+                                                href="/plans"
+                                                className="inline-flex items-center text-sm font-medium text-amber-900 hover:text-amber-700 underline"
+                                            >
+                                                View Plans & Upgrade
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        }
+                        return null
+                    })()}
+
                     {/* Subscription/product limit summary - Compact */}
-                    <div className="mb-6 px-4 py-3 rounded-lg border border-gray-200 bg-white">
+                    <div className="mb-6 px-4 py-3 rounded-lg border border-border bg-card">
                         <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
-                                <span className="text-gray-600">Product Slots:</span>
-                                <span className="font-medium text-gray-900">
+                                <span className="text-muted-foreground">Product Slots:</span>
+                                <span className="font-medium">
                                     {subscription?.productsChangedAmountOnCurrentCycle ?? 0} / {subscription?.plan?.maxProducts === -1 || subscription?.plan?.maxProducts === undefined ? 'Unlimited' : subscription?.plan?.maxProducts}
                                 </span>
                             </div>
@@ -580,18 +835,18 @@ export default function Products() {
                     </div>
 
                     {/* Tabs */}
-                    <div className="mb-6 border-b border-gray-200">
+                    <div className="mb-6 border-b border-border">
                         <div className="flex gap-8">
                             <button
                                 id="my-products-btn"
-                                className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'my' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                                className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'my' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                                 onClick={() => setActiveTab('my')}
                             >
                                 My Products
                             </button>
                             <button
                                 id="select-products-btn"
-                                className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'select' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                                className={`pb-3 border-b-2 transition-colors text-sm font-medium ${activeTab === 'select' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                                 onClick={() => setActiveTab('select')}
                             >
                                 Select Products
@@ -602,15 +857,15 @@ export default function Products() {
                     {/* Category Filters */}
                     <div className="mb-6">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Filter className="h-4 w-4" />
                                 <span className="font-medium">Filter:</span>
                             </div>
                             <button
                                 onClick={() => setSelectedCategory(null)}
                                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedCategory === null
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
                                     }`}
                             >
                                 All
@@ -620,8 +875,8 @@ export default function Products() {
                                     key={category.value}
                                     onClick={() => setSelectedCategory(category.value)}
                                     className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedCategory === category.value
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                                         }`}
                                 >
                                     {category.label}
@@ -630,7 +885,7 @@ export default function Products() {
                             {selectedCategory && (
                                 <button
                                     onClick={() => setSelectedCategory(null)}
-                                    className="ml-2 p-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                                    className="ml-2 p-1.5 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
                                     title="Clear filter"
                                 >
                                     <X className="h-3 w-3" />
@@ -641,11 +896,11 @@ export default function Products() {
 
                     {/* Error Message - Only show actual errors, not success messages */}
                     {error && !error.includes('✅') && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-lg">
+                        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
                             <div className="flex">
                                 <XCircle className="h-5 w-5 text-red-400 mr-3 flex-shrink-0 mt-0.5" />
                                 <div className="flex-1">
-                                    <p className="text-sm text-red-800">{error}</p>
+                                    <p className="text-sm text-destructive">{error}</p>
                                 </div>
                             </div>
                         </div>
@@ -654,7 +909,7 @@ export default function Products() {
                     {/* Quick Edit Mode Controls - Only show on My Products tab */}
                     {activeTab === 'my' && displayedProducts.length > 0 && (
                         <div className="mb-4 flex items-center justify-between">
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-muted-foreground">
                                 {quickEditMode ? (
                                     <span className="font-medium">Quick edit mode active - Update prices below</span>
                                 ) : (
@@ -709,7 +964,7 @@ export default function Products() {
                     {/* Products List */}
                     {displayedProducts.length > 0 ? (
                         <>
-                            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden product-card">
+                            <div className="bg-card rounded-lg border border-border overflow-hidden product-card">
                                 {displayedProducts.map((product, index) => {
                                     const isEnabled = enabledProductIds.has(product.id)
                                     const categoryValues = Array.isArray(product.categories) && product.categories.length > 0
@@ -727,7 +982,7 @@ export default function Products() {
                                         <div
                                             key={product.id}
                                             className={`flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors ${quickEditMode ? 'cursor-default' : 'cursor-pointer'} ${index !== 0 ? 'border-t border-gray-100' : ''}`}
-                                            onClick={() => !quickEditMode && router.push(`/products/${product.id}`)}
+                                            onClick={() => !quickEditMode && router.push(product.brandId ? `/custom-products/${product.id}` : `/products/${product.id}`)}
                                         >
                                             <div className="flex items-center gap-4 flex-1 min-w-0">
                                                 {/* Avatar/Image */}
@@ -750,8 +1005,8 @@ export default function Products() {
                                                             }}
                                                         />
                                                     ) : (
-                                                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-                                                            <Package className="h-5 w-5 text-gray-400" />
+                                                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                                                            <Package className="h-5 w-5 text-muted-foreground" />
                                                         </div>
                                                     )}
                                                 </div>
@@ -760,8 +1015,13 @@ export default function Products() {
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-0.5">
                                                         <h3 className="text-sm font-medium text-gray-900 truncate">{product.name}</h3>
+                                                        {product.brandId && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                                                Custom Product
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    <p className="text-sm text-gray-500 truncate">
+                                                    <p className="text-sm text-muted-foreground truncate">
                                                         {product.placeholderSig || 'No Placeholder Sig specified'}
                                                     </p>
                                                 </div>
@@ -775,13 +1035,13 @@ export default function Products() {
 
                                                 {/* Pharmacy Wholesale Price */}
                                                 <div className="flex-shrink-0 w-28">
-                                                    <div className="text-xs text-gray-500 mb-0.5">Pharmacy</div>
-                                                    <span className="text-sm font-medium text-gray-900">{formatPrice(product.pharmacyWholesaleCost ?? product.price)}</span>
+                                                    <div className="text-xs text-muted-foreground mb-0.5">Pharmacy</div>
+                                                    <span className="text-sm font-medium">{formatPrice(product.pharmacyWholesaleCost ?? product.price)}</span>
                                                 </div>
 
                                                 {/* Clinic Retail Price */}
                                                 <div className="flex-shrink-0 w-28" onClick={(e) => quickEditMode && e.stopPropagation()}>
-                                                    <div className="text-xs text-gray-500 mb-0.5">Your Price</div>
+                                                    <div className="text-xs text-muted-foreground mb-0.5">Your Price</div>
                                                     {(() => {
                                                         const tenantProduct = tenantProducts.find(tp => tp.productId === product.id)
 
@@ -789,7 +1049,7 @@ export default function Products() {
                                                             const currentValue = editingPrices.get(product.id) ?? (tenantProduct?.price || '')
                                                             return (
                                                                 <div className="relative">
-                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/70">$</span>
                                                                     <input
                                                                         type="number"
                                                                         step="0.01"
@@ -801,16 +1061,16 @@ export default function Products() {
                                                                             setEditingPrices(newPrices)
                                                                         }}
                                                                         placeholder="0.00"
-                                                                        className="w-24 pl-5 pr-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                                        className="w-24 pl-5 pr-2 py-1 text-sm border border-input rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                                                                     />
                                                                 </div>
                                                             )
                                                         }
 
                                                         return tenantProduct && tenantProduct.price > 0 ? (
-                                                            <span className="text-sm font-medium text-gray-900">{formatPrice(tenantProduct.price)}</span>
+                                                            <span className="text-sm font-medium">{formatPrice(tenantProduct.price)}</span>
                                                         ) : (
-                                                            <span className="text-sm text-gray-400">Not set</span>
+                                                            <span className="text-sm text-muted-foreground">Not set</span>
                                                         )
                                                     })()}
                                                 </div>
@@ -851,13 +1111,43 @@ export default function Products() {
                                                             Activate
                                                         </Button>
                                                     )}
+
+                                                    {/* Edit and Delete buttons for custom products created by current user */}
+                                                    {product.brandId && product.brandId === userWithClinic?.id && (
+                                                        <>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    router.push(`/custom-products/${product.id}`);
+                                                                }}
+                                                                className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300"
+                                                            >
+                                                                <Edit className="h-3 w-3 mr-1" />
+                                                                Edit
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteProduct(product.id, product.name);
+                                                                }}
+                                                                className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                                                            >
+                                                                Delete
+                                                            </Button>
+                                                        </>
+                                                    )}
+
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                         }}
                                                         className="p-2 transition-all duration-300 ease-in-out group-hover:translate-x-4"
                                                     >
-                                                        <ChevronRight className="h-4 w-4 text-gray-400" />
+                                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                                     </button>
                                                 </div>
                                             </div>
@@ -872,7 +1162,7 @@ export default function Products() {
                                     <Button
                                         variant="outline"
                                         size="default"
-                                        className="w-full h-12 text-sm font-medium border-2 border-dashed border-gray-300 hover:border-indigo-400 hover:bg-indigo-50 transition-all"
+                                        className="w-full h-12 text-sm font-medium border-2 border-dashed border-border hover:border-primary/60"
                                         onClick={() => setActiveTab('select')}
                                     >
                                         <Plus className="h-4 w-4 mr-2" />
@@ -882,14 +1172,14 @@ export default function Products() {
                             )}
                         </>
                     ) : (
-                        <div className="bg-white rounded-lg border border-gray-200 p-16 text-center">
+                        <div className="bg-card rounded-lg border border-border p-16 text-center">
                             <div className="flex flex-col items-center gap-4">
-                                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
-                                    <Package className="h-6 w-6 text-gray-400" />
+                                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                                    <Package className="h-6 w-6 text-muted-foreground" />
                                 </div>
                                 <div>
-                                    <h3 className="text-base font-medium text-gray-900 mb-1">No products found</h3>
-                                    <p className="text-sm text-gray-500 mb-4">
+                                    <h3 className="text-base font-medium mb-1">No products found</h3>
+                                    <p className="text-sm text-muted-foreground mb-4">
                                         {activeTab === 'my'
                                             ? 'Enable products from the "Select Products" tab to get started.'
                                             : 'No products available. Contact your administrator.'}

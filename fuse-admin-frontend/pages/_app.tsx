@@ -11,7 +11,7 @@ import Script from 'next/script'
 import "../styles/globals.css"
 
 // Pages that don't require authentication
-const publicPages = ['/signin', '/signup', '/verify-email']
+const publicPages = ['/signin', '/signup', '/verify-email', '/terms', '/privacy', '/privacy-notice']
 
 export default function App({ Component, pageProps }: AppProps & { showToast?: (type: 'success' | 'error', message: string) => void }) {
   const router = useRouter()

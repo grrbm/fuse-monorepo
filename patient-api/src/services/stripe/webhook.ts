@@ -19,6 +19,7 @@ import Sale from '../../models/Sale';
 import StripeConnectService from './connect.service';
 import Sequence from '../../models/Sequence';
 import SequenceRun from '../../models/SequenceRun';
+import SequenceTriggerService from '../sequence/SequenceTriggerService';
 
 // Helper function to trigger checkout sequence
 async function triggerCheckoutSequence(order: Order): Promise<void> {
@@ -153,6 +154,36 @@ export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.Payment
         
         // Trigger checkout sequence
         await triggerCheckoutSequence(payment.order);
+        
+        // Trigger protocol_start sequence if order has a treatment
+        if (payment.order.treatmentId && payment.order.clinicId) {
+            try {
+                const sequenceTrigger = new SequenceTriggerService();
+                const treatment = await Treatment.findByPk(payment.order.treatmentId);
+                const user = await User.findByPk(payment.order.userId);
+                
+                if (treatment && user) {
+                    console.log('🎯 Triggering protocol_start for treatment:', treatment.name);
+                    
+                    const triggeredCount = await sequenceTrigger.triggerProtocolStart(
+                        user.id,
+                        payment.order.clinicId,
+                        treatment.id,
+                        treatment.name,
+                        payment.order.orderNumber
+                    );
+                    
+                    if (triggeredCount > 0) {
+                        console.log(`✅ Protocol start triggered: ${triggeredCount} sequence(s) for treatment "${treatment.name}"`);
+                    } else {
+                        console.log('ℹ️ No active sequences found for protocol_start trigger');
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error triggering protocol_start sequence:', error);
+                // Don't fail the webhook if sequence trigger fails
+            }
+        }
         
         return;
     }

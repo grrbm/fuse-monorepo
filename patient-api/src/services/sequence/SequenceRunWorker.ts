@@ -8,6 +8,10 @@ type StepPayload = {
   type?: string
   templateId?: string
   timeSeconds?: number
+  useCustomText?: boolean
+  customText?: string
+  customSubject?: string
+  customMergeFields?: string[]
   [key: string]: unknown
 }
 

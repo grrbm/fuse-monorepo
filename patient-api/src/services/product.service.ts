@@ -39,7 +39,18 @@ class ProductService {
         const { page = 1, limit = 50, category, isActive, pharmacyProvider } = options
         const offset = (page - 1) * limit
 
+        // Get user to check if they're a brand user
+        const user = await getUser(userId);
+
         const where: any = {}
+
+        // If user is a brand, only show their own custom products and standard products (null brandId)
+        if (user?.role === 'brand') {
+            where[Op.or] = [
+                { brandId: userId },      // Their own custom products
+                { brandId: null }         // Standard platform products
+            ]
+        }
 
         if (category) {
             const categoriesFilter = Array.isArray(category) ? category : String(category).split(',').map((c) => c.trim()).filter(Boolean)
@@ -131,6 +142,7 @@ class ProductService {
                 ...restInput,
                 categories,
                 isActive: input.isActive ?? true,
+                brandId: user.role === 'brand' ? userId : undefined,
             })
 
             // If there are requiredDoctorQuestions, create a FormSectionTemplate
@@ -323,12 +335,36 @@ class ProductService {
                 }
             }
 
-            // Soft delete by setting isActive to false
-            await product.update({ isActive: false })
+            // Get user to verify permissions
+            const user = await getUser(userId);
+            if (!user) {
+                return {
+                    success: false,
+                    message: "User not found",
+                };
+            }
+
+            // Only allow brand users to delete their own products, or admins to delete any
+            if (user.role === 'brand') {
+                if (product.brandId !== userId) {
+                    return {
+                        success: false,
+                        message: 'You can only delete products that you created',
+                    }
+                }
+            } else if (user.role !== 'admin') {
+                return {
+                    success: false,
+                    message: 'Only brand users can delete their own products, or admins can delete any product',
+                }
+            }
+
+            // Hard delete the product since it's a custom brand product
+            await product.destroy()
 
             return {
                 success: true,
-                message: 'Product deactivated successfully',
+                message: 'Product deleted successfully',
             }
         } catch (error: any) {
             console.error('❌ Error deleting product:', error)

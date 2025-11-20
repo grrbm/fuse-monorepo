@@ -10,6 +10,10 @@ type StepPayload = {
   type?: string
   templateId?: string
   timeSeconds?: number
+  useCustomText?: boolean
+  customText?: string
+  customSubject?: string
+  customMergeFields?: string[]
   [key: string]: unknown
 }
 
@@ -329,18 +333,38 @@ export default class SequenceMessageDispatcher {
       return
     }
 
+    // Check if using custom text or template
+    const useCustomText = !!rawStep.customText
     const templateId = rawStep.templateId
 
-    if (!templateId || typeof templateId !== 'string') {
-      console.warn(`⚠️ Missing templateId for step ${rawStep.id ?? 'unknown'} in run ${run.id}`)
+    if (!useCustomText && (!templateId || typeof templateId !== 'string')) {
+      console.warn(`⚠️ Missing both templateId and customText for step ${rawStep.id ?? 'unknown'} in run ${run.id}`)
       return
     }
 
-    const template = await MessageTemplate.findByPk(templateId)
-
-    if (!template) {
-      console.warn(`⚠️ Template ${templateId} not found for run ${run.id}`)
-      return
+    // Get template data (either from DB or custom)
+    let template: { body: string; subject?: string; mergeFields?: string[] } | null = null
+    
+    if (useCustomText) {
+      // Use custom text provided in the step
+      template = {
+        body: rawStep.customText || '',
+        subject: rawStep.customSubject,
+        mergeFields: rawStep.customMergeFields || []
+      }
+      console.log(`📝 Using custom text for step in run ${run.id}`)
+    } else {
+      // Use existing template from database
+      const dbTemplate = await MessageTemplate.findByPk(templateId!)
+      if (!dbTemplate) {
+        console.warn(`⚠️ Template ${templateId} not found for run ${run.id}`)
+        return
+      }
+      template = {
+        body: dbTemplate.body,
+        subject: dbTemplate.subject,
+        mergeFields: Array.isArray(dbTemplate.mergeFields) ? dbTemplate.mergeFields : []
+      }
     }
 
     // Extract user details from payload (declared once and reused)
@@ -376,14 +400,15 @@ export default class SequenceMessageDispatcher {
     }
 
     // Build context using template's merge fields
-    const mergeFields = Array.isArray(template.mergeFields) ? template.mergeFields : []
+    const mergeFields = template.mergeFields || []
     const context = buildTemplateContext(run, sequence, mergeFields)
     
     // Debug log
     console.log(`🔍 Template context for run ${run.id}:`, {
       mergeFields: template.mergeFields,
       availableFields: Object.keys(context),
-      contextValues: context
+      contextValues: context,
+      useCustomText
     })
 
     if (stepType === 'sms') {

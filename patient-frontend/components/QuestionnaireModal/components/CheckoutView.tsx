@@ -38,6 +38,30 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 }) => {
     const selectedPlanData = plans.find((plan) => plan.id === selectedPlan);
 
+    // 15-minute countdown timer
+    const [timeRemaining, setTimeRemaining] = React.useState<number>(15 * 60); // 15 minutes in seconds
+
+    React.useEffect(() => {
+        const timer = setInterval(() => {
+            setTimeRemaining((prev) => {
+                if (prev <= 0) {
+                    clearInterval(timer);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
+
+    // Format time as MM:SS
+    const formatTime = (seconds: number): string => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
     // Require shipping fields before enabling payment setup
     const canContinue = Boolean(
         selectedPlan &&
@@ -366,8 +390,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                                     Complete checkout to secure your prescription
                                 </div>
                             </div>
-                            <div className="text-sm font-mono" style={{ color: theme.primary }}>
-                                14:39
+                            <div className="text-sm font-mono" style={{ color: timeRemaining <= 60 ? '#EF4444' : theme.primary }}>
+                                {formatTime(timeRemaining)}
                             </div>
                         </div>
 
