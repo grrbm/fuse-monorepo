@@ -324,8 +324,45 @@ export const updateSequenceSteps = async (req: Request, res: Response) => {
           type: stepType
         };
 
-        if (templateIdRaw !== undefined) {
-          sanitizedStep.templateId = templateIdRaw;
+        // Check if using custom text
+        const useCustomText = 
+          typeof (rawStep as any).useCustomText === "boolean"
+            ? (rawStep as any).useCustomText
+            : false;
+
+        // Save the mode (template vs custom)
+        sanitizedStep.useCustomText = useCustomText;
+
+        // Handle custom text steps
+        if (useCustomText) {
+          const customText = typeof (rawStep as any).customText === "string"
+            ? (rawStep as any).customText
+            : "";
+
+          sanitizedStep.customText = customText;
+
+          // For email, also save custom subject
+          const customSubject = typeof (rawStep as any).customSubject === "string"
+            ? (rawStep as any).customSubject
+            : undefined;
+
+          if (customSubject !== undefined) {
+            sanitizedStep.customSubject = customSubject;
+          }
+
+          // Save merge fields for custom text
+          const customMergeFields = Array.isArray((rawStep as any).customMergeFields)
+            ? (rawStep as any).customMergeFields
+            : undefined;
+
+          if (customMergeFields !== undefined) {
+            sanitizedStep.customMergeFields = customMergeFields;
+          }
+        } else {
+          // Handle template-based steps
+          if (templateIdRaw !== undefined) {
+            sanitizedStep.templateId = templateIdRaw;
+          }
         }
 
         sanitizedSteps.push({
