@@ -188,10 +188,17 @@ export default function ClientManagement() {
       const result = await response.json()
 
       // Determine the admin portal URL based on environment
-      const isProduction = window.location.hostname !== 'localhost'
-      const adminPortalUrl = isProduction
-        ? 'https://admin.fuse.health'
-        : 'http://localhost:3002'
+      const isStaging = process.env.NEXT_PUBLIC_IS_STAGING === 'true'
+      const isLocal = window.location.hostname === 'localhost'
+
+      let adminPortalUrl: string
+      if (isLocal) {
+        adminPortalUrl = 'http://localhost:3002'
+      } else if (isStaging) {
+        adminPortalUrl = 'https://admin.fusehealthstaging.xyz'
+      } else {
+        adminPortalUrl = 'https://admin.fuse.health'
+      }
 
       // Redirect to admin portal with the impersonation token
       const previewUrl = `${adminPortalUrl}?impersonateToken=${result.token}`
