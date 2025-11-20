@@ -61,6 +61,9 @@ interface SubscriptionInfo {
     customFeatures?: {
         canAddCustomProducts?: boolean
     } | null
+    tierConfig?: {
+        canAddCustomProducts?: boolean
+    } | null
 }
 
 export default function Products() {
@@ -722,10 +725,11 @@ export default function Products() {
                                 Delete All from IronSail
                             </Button>
                             {(() => {
-                                const planType = subscription?.plan?.type?.toLowerCase()
-                                const isPremium = planType === 'premium' || planType === 'enterprise'
+                                // Check tier configuration first, then custom features, then default to false
+                                const tierConfigAllows = subscription?.tierConfig?.canAddCustomProducts === true
                                 const hasCustomFeature = subscription?.customFeatures?.canAddCustomProducts === true
-                                const isDisabled = !isPremium && !hasCustomFeature
+                                const canAddProducts = tierConfigAllows || hasCustomFeature
+                                const isDisabled = !canAddProducts
 
                                 return (
                                     <div className="relative group">
@@ -741,8 +745,8 @@ export default function Products() {
                                         {isDisabled && (
                                             <div className="invisible group-hover:visible absolute right-0 top-full mt-2 w-64 z-10">
                                                 <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg">
-                                                    <p className="font-semibold mb-1">Premium Feature</p>
-                                                    <p>Creating custom products is only available on Professional and Enterprise plans. <a href="/plans" className="underline hover:text-indigo-300">Upgrade now</a></p>
+                                                    <p className="font-semibold mb-1">Feature Not Available</p>
+                                                    <p>Creating custom products is not available on your current plan. Contact support or <a href="/plans" className="underline hover:text-indigo-300">upgrade now</a></p>
                                                 </div>
                                             </div>
                                         )}
@@ -752,13 +756,14 @@ export default function Products() {
                         </div>
                     </div>
 
-                    {/* Premium Plan Notice for Starter users */}
+                    {/* Custom Products Feature Notice */}
                     {(() => {
-                        const planType = subscription?.plan?.type?.toLowerCase()
-                        const isPremium = planType === 'premium' || planType === 'enterprise'
+                        // Check tier configuration first, then custom features
+                        const tierConfigAllows = subscription?.tierConfig?.canAddCustomProducts === true
                         const hasCustomFeature = subscription?.customFeatures?.canAddCustomProducts === true
+                        const canAddProducts = tierConfigAllows || hasCustomFeature
 
-                        if (!isPremium && !hasCustomFeature) {
+                        if (!canAddProducts) {
                             return (
                                 <div className="mb-6 px-5 py-4 rounded-lg border-2 border-amber-200 bg-amber-50">
                                     <div className="flex items-start gap-3">
@@ -767,10 +772,10 @@ export default function Products() {
                                         </div>
                                         <div className="flex-1">
                                             <h3 className="text-sm font-semibold text-amber-900 mb-1">
-                                                Unlock Custom Products with Premium Plans
+                                                Unlock Custom Products
                                             </h3>
                                             <p className="text-sm text-amber-800 mb-3">
-                                                Creating custom products is available on Professional and Enterprise plans. Upgrade to add your own products to the catalog.
+                                                Creating custom products is not available on your current plan. Contact support or upgrade to add your own products to the catalog.
                                             </p>
                                             <a
                                                 href="/plans"

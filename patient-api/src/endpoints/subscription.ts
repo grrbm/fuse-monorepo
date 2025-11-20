@@ -2,6 +2,7 @@ import { Express } from 'express';
 import BrandSubscription, { BrandSubscriptionStatus } from '../models/BrandSubscription';
 import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
 import TenantCustomFeatures from '../models/TenantCustomFeatures';
+import TierConfiguration from '../models/TierConfiguration';
 
 export function registerSubscriptionEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
   
@@ -43,6 +44,15 @@ export function registerSubscriptionEndpoints(app: Express, authenticateJWT: any
       const plan = await BrandSubscriptionPlans.findOne({
         where: { planType: subscription.planType }
       });
+
+      // Get tier configuration if plan exists
+      let tierConfig: TierConfiguration | null = null;
+      if (plan) {
+        tierConfig = await TierConfiguration.findOne({
+          where: { brandSubscriptionPlanId: plan.id }
+        });
+        console.log('🎯 [Subscription] Tier config:', tierConfig ? tierConfig.toJSON() : null);
+      }
 
       if (!plan) {
         console.log('❌ [Subscription] No plan found with planType:', subscription.planType);
@@ -102,7 +112,8 @@ export function registerSubscriptionEndpoints(app: Express, authenticateJWT: any
       productsChangedAmountOnCurrentCycle: subscription.productsChangedAmountOnCurrentCycle || 0,
       retriedProductSelectionForCurrentCycle: !!(subscription as any).retriedProductSelectionForCurrentCycle,
       customMaxProducts: subscription.customMaxProducts,
-      customFeatures: customFeatures ? customFeatures.toJSON() : null
+      customFeatures: customFeatures ? customFeatures.toJSON() : null,
+      tierConfig: tierConfig ? tierConfig.toJSON() : null
     };
 
     console.log('📤 [Subscription] Sending response:', {

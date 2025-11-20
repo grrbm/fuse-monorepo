@@ -9041,6 +9041,10 @@ async function startServer() {
   const { registerSubscriptionEndpoints } = await import('./endpoints/subscription');
   registerSubscriptionEndpoints(app, authenticateJWT, getCurrentUser);
 
+  // ============= TIER MANAGEMENT ENDPOINTS =============
+  const { registerTierManagementEndpoints } = await import('./endpoints/tier-management');
+  registerTierManagementEndpoints(app, authenticateJWT, getCurrentUser);
+
   // ============================================
   // DOCTOR-PATIENT CHAT ENDPOINTS
   // ============================================

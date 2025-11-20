@@ -35,6 +35,7 @@ import DoctorPatientChats from '../models/DoctorPatientChats';
 import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
 import TenantCustomFeatures from '../models/TenantCustomFeatures';
+import TierConfiguration from '../models/TierConfiguration';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -90,7 +91,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
     TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
-    TenantCustomFeatures
+    TenantCustomFeatures, TierConfiguration
   ],
 });
 
@@ -254,6 +255,37 @@ export async function initializeDatabase() {
     // Sync all models to database (safer sync mode)
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
+
+    // Ensure TierConfiguration exists for all active BrandSubscriptionPlans
+    try {
+      console.log('🔍 Checking TierConfiguration for active plans...');
+      const activePlans = await BrandSubscriptionPlans.findAll({
+        where: { isActive: true }
+      });
+
+      for (const plan of activePlans) {
+        const existingConfig = await TierConfiguration.findOne({
+          where: { brandSubscriptionPlanId: plan.id }
+        });
+
+        if (!existingConfig) {
+          // Determine default canAddCustomProducts based on plan type
+          const isPremiumTier = plan.planType.toLowerCase() === 'premium' ||
+            plan.planType.toLowerCase() === 'enterprise';
+
+          await TierConfiguration.create({
+            brandSubscriptionPlanId: plan.id,
+            canAddCustomProducts: isPremiumTier,
+          });
+          console.log(`✅ Created TierConfiguration for plan: ${plan.name} (${plan.planType}) - canAddCustomProducts: ${isPremiumTier}`);
+        } else {
+          console.log(`✓ TierConfiguration already exists for plan: ${plan.name}`);
+        }
+      }
+      console.log('✅ TierConfiguration check complete');
+    } catch (error) {
+      console.error('❌ Error ensuring TierConfiguration:', error);
+    }
 
     // Force recreate GlobalFormStructure table (drop and recreate)
     try {
