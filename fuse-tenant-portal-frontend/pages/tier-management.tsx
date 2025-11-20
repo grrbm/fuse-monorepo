@@ -43,7 +43,7 @@ export default function TierManagement() {
     try {
       console.log('🔐 [Tier Frontend] Token exists:', !!token);
       
-      const response = await fetch('http://localhost:3001/admin/tiers', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/tiers`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ export default function TierManagement() {
     
     setSaving(planId);
     try {
-      const response = await fetch(`http://localhost:3001/admin/tiers/${planId}/config`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/tiers/${planId}/config`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
