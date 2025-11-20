@@ -4,6 +4,7 @@ import User from '../models/User';
 import BrandSubscription from '../models/BrandSubscription';
 import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
 import TenantCustomFeatures from '../models/TenantCustomFeatures';
+import { createJWTToken } from '../config/jwt';
 
 export function registerClientManagementEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
   
@@ -354,6 +355,34 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
     } catch (error) {
       console.error('❌ Error updating custom features:', error);
       res.status(500).json({ success: false, message: 'Failed to update custom features' });
+    }
+  });
+
+  // Impersonate user (generate token for preview)
+  app.post("/admin/users/:userId/impersonate", authenticateJWT, async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      // Find the user to impersonate
+      const targetUser = await User.findByPk(userId);
+      if (!targetUser) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      // Generate a JWT token for the target user
+      const impersonationToken = createJWTToken(targetUser);
+
+      console.log(`👤 [Impersonation] Admin impersonating user: ${targetUser.email}`);
+
+      res.status(200).json({
+        success: true,
+        message: 'Impersonation token generated successfully',
+        token: impersonationToken,
+        user: targetUser.toSafeJSON()
+      });
+    } catch (error) {
+      console.error('❌ Error generating impersonation token:', error);
+      res.status(500).json({ success: false, message: 'Failed to generate impersonation token' });
     }
   });
 }

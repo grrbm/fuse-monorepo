@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/contexts/AuthContext"
-import { Search, Loader2, User as UserIcon, Save } from "lucide-react"
+import { Search, Loader2, User as UserIcon, Save, Eye } from "lucide-react"
 import { toast } from "sonner"
 
 interface BrandSubscriptionPlan {
@@ -64,6 +64,7 @@ export default function ClientManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [saving, setSaving] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [availablePlans, setAvailablePlans] = useState<BrandSubscriptionPlan[]>([])
 
   // BrandSubscription form state
@@ -164,6 +165,44 @@ export default function ClientManagement() {
       setCustomFeaturesData({
         canAddCustomProducts: false,
       })
+    }
+  }
+
+  const handlePreview = async () => {
+    if (!selectedUser) return
+
+    setPreviewing(true)
+    try {
+      const response = await fetch(`${baseUrl}/admin/users/${selectedUser.id}/impersonate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate impersonation token')
+      }
+
+      const result = await response.json()
+
+      // Determine the admin portal URL based on environment
+      const isProduction = window.location.hostname !== 'localhost'
+      const adminPortalUrl = isProduction
+        ? 'https://admin.fuse.health'
+        : 'http://localhost:3002'
+
+      // Redirect to admin portal with the impersonation token
+      const previewUrl = `${adminPortalUrl}?impersonateToken=${result.token}`
+      window.open(previewUrl, '_blank')
+
+      toast.success(`Opening preview for ${selectedUser.firstName} ${selectedUser.lastName}`)
+    } catch (error) {
+      console.error('Error generating preview:', error)
+      toast.error('Failed to generate preview')
+    } finally {
+      setPreviewing(false)
     }
   }
 
@@ -357,6 +396,30 @@ export default function ClientManagement() {
                               {selectedUser.businessType || 'N/A'}
                             </span>
                           </div>
+                        </div>
+
+                        {/* Preview Button */}
+                        <div className="space-y-2">
+                          <Button
+                            onClick={handlePreview}
+                            disabled={previewing}
+                            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium shadow-md hover:shadow-lg transition-all"
+                          >
+                            {previewing ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Generating Preview...
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="mr-2 h-4 w-4" />
+                                Preview User Portal
+                              </>
+                            )}
+                          </Button>
+                          <p className="text-xs text-[#6B7280] text-center">
+                            Opens a new tab to view the portal as this user
+                          </p>
                         </div>
                       </div>
 
