@@ -2628,11 +2628,78 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             </div>
                           </div>
 
-                          <div className="bg-gray-100 rounded-xl p-4 mt-6">
-                            <p className="text-sm text-gray-600 leading-relaxed">
-                              <span className="font-medium">Your privacy matters.</span> Your information is encrypted and securely
-                              stored. We never share your data without your consent.
+                          {/* OAuth Section */}
+                          <div className="space-y-4 pt-4">
+                            {/* Already have an account */}
+                            <div className="text-center">
+                              <span className="text-gray-600">Already have an account? </span>
+                              <button
+                                onClick={() => {
+                                  // TODO: Implement sign in flow
+                                  alert('Sign in functionality coming soon!');
+                                }}
+                                className="text-gray-900 font-medium hover:underline"
+                              >
+                                Sign In
+                              </button>
+                            </div>
+
+                            {/* Divider with "or" */}
+                            <div className="relative flex items-center">
+                              <div className="flex-grow border-t border-gray-300"></div>
+                              <span className="flex-shrink mx-4 text-gray-500 font-medium">or</span>
+                              <div className="flex-grow border-t border-gray-300"></div>
+                            </div>
+
+                            {/* OAuth Buttons */}
+                            <div className="space-y-3">
+                              {/* Continue with Google */}
+                              <button
+                                onClick={() => {
+                                  // TODO: Implement Google OAuth
+                                  alert('Google sign-in coming soon!');
+                                }}
+                                className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                              >
+                                <Icon icon="flat-color-icons:google" className="text-xl" />
+                                <span>Continue with Google</span>
+                              </button>
+
+                              {/* Continue with Apple */}
+                              <button
+                                onClick={() => {
+                                  // TODO: Implement Apple OAuth
+                                  alert('Apple sign-in coming soon!');
+                                }}
+                                className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                              >
+                                <Icon icon="ic:baseline-apple" className="text-2xl" />
+                                <span>Continue with Apple</span>
+                              </button>
+                            </div>
+
+                            {/* Terms and Privacy */}
+                            <p className="text-center text-xs text-gray-500 leading-relaxed px-4">
+                              By creating an account using email, Google or Apple, I agree to the{' '}
+                              <a href="#" className="text-gray-700 underline hover:text-gray-900">
+                                Terms & Conditions
+                              </a>
+                              {' '}and acknowledge the{' '}
+                              <a href="#" className="text-gray-700 underline hover:text-gray-900">
+                                Privacy Policy
+                              </a>
+                              .
                             </p>
+                          </div>
+
+                          {/* Privacy Notice */}
+                          <div className="bg-gray-100 rounded-xl p-4 mt-6">
+                            <div className="flex items-start gap-3">
+                              <Icon icon="lucide:lock" className="text-gray-600 text-lg flex-shrink-0 mt-0.5" />
+                              <p className="text-sm text-gray-600 leading-relaxed">
+                                {domainClinic?.name || 'Hims'} takes your privacy seriously with industry leading encryption.
+                              </p>
+                            </div>
                           </div>
                         </div>
                       ) : currentStep?.questions && currentStep.questions.length > 0 ? (
