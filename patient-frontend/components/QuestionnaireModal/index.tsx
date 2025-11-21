@@ -648,8 +648,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Track form view when modal opens
   React.useEffect(() => {
     const handleTrackFormView = async () => {
-      // Use tenantProductFormId if available, otherwise fall back to questionnaireId
-      const formIdForTracking = tenantProductFormId || questionnaireId;
+      // Use tenantProductFormId - this should always be available from the URL
+      const formIdForTracking = tenantProductFormId;
 
       console.log('🔍 [Analytics] Checking tracking conditions:', {
         isOpen,
@@ -1728,16 +1728,15 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       console.log('💳 Payment authorized successfully:', paymentIntentId);
       console.log('💳 Subscription will be created after manual payment capture');
 
-      // Track conversion in analytics
-      const formIdForTracking = tenantProductFormId || questionnaireId;
-      if (formIdForTracking && tenantProductId && domainClinic) {
+      // Track conversion in analytics - use tenantProductFormId which is always available from URL
+      if (tenantProductFormId && tenantProductId && domainClinic) {
         const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
 
         if (userId) {
           await trackFormConversion({
             userId,
             productId: tenantProductId,
-            formId: formIdForTracking,
+            formId: tenantProductFormId,
             clinicId: domainClinic.id,
             clinicName: domainClinic.name,
             productName: productName || undefined,

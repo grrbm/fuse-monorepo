@@ -3,6 +3,8 @@ import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
 import TenantProduct from '../models/TenantProduct';
 import Product from '../models/Product';
 import FormAnalyticsDaily from '../models/FormAnalyticsDaily';
+import TenantProductForm from '../models/TenantProductForm';
+import GlobalFormStructure from '../models/GlobalFormStructure';
 import { authenticateJWT, getCurrentUser } from '../config/jwt';
 import { Op } from 'sequelize';
 import AnalyticsService from '../services/analytics.service';
@@ -145,6 +147,36 @@ router.get('/analytics/products/:productId', authenticateJWT, async (req: Reques
       order: [['createdAt', 'ASC']],
     });
 
+    // Get unique form IDs
+    const formIds = [...new Set(analytics.map(event => event.formId))];
+    
+    // Fetch all form details in one query
+    const forms = await TenantProductForm.findAll({
+      where: {
+        id: {
+          [Op.in]: formIds,
+        },
+      },
+      include: [
+        {
+          model: GlobalFormStructure,
+          as: 'globalFormStructure',
+          attributes: ['structureId', 'name'],
+        },
+      ],
+    });
+
+    // Create a map of formId -> form details
+    const formDetailsMap = new Map(
+      forms.map(form => [
+        form.id,
+        {
+          structureName: form.globalFormStructure?.name || 'Unknown Structure',
+          structureId: form.globalFormStructureId || 'unknown',
+        },
+      ])
+    );
+
     // Group analytics by form and event type
     const formAnalytics: Record<string, { views: number; conversions: number; formUrl: string }> = {};
 
@@ -155,13 +187,20 @@ router.get('/analytics/products/:productId', authenticateJWT, async (req: Reques
       
       // If this form doesn't exist in formAnalytics yet, create it
       if (!formAnalytics[formId]) {
-        // Try to get a friendly name from metadata
-        const clinicName = eventData.metadata?.clinicName || '';
+        const formDetails = formDetailsMap.get(formId);
         const productName = eventData.metadata?.productName || '';
+        
+        // Use structure name if available, otherwise fall back to product name + form ID
+        const formLabel = formDetails 
+          ? `${productName} - ${formDetails.structureName}`
+          : productName 
+            ? `${productName} Form (${formId.slice(0, 8)}...)` 
+            : `Form ${formId.slice(0, 8)}...`;
+        
         formAnalytics[formId] = {
           views: 0,
           conversions: 0,
-          formUrl: productName ? `${productName} Form (${formId.slice(0, 8)}...)` : `Form ${formId.slice(0, 8)}...`,
+          formUrl: formLabel,
         };
       }
       
