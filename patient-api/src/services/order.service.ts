@@ -324,13 +324,25 @@ class OrderService {
             // Handle payment capture and pharmacy order creation based on order status
             if (order.status === OrderStatus.PAID) {
                 // Order is already paid, send to pharmacy
-                console.log(`📦 Order already paid, sending to pharmacy: ${order.orderNumber}`);
+                console.log(`📦 [Approve] Order already paid, sending to pharmacy: ${order.orderNumber}`);
+                console.log(`🏥 [Approve] Pharmacy details:`, {
+                    pharmacy: coverage.pharmacy.name,
+                    slug: coverage.pharmacy.slug,
+                    state: patientState
+                });
                 try {
                     const pharmacyService = new PharmacyService()
-                    await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
-                    console.log(`✅ Pharmacy order creation completed for order ${orderId}`);
+                    console.log(`🚀 [Approve] Calling createPharmacyOrder...`);
+                    const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
+                    console.log(`✅ [Approve] Pharmacy order creation result:`, result);
+                    if (result.success) {
+                        console.log(`✅ [Approve] Pharmacy order created successfully for order ${orderId}`);
+                    } else {
+                        console.error(`⚠️ [Approve] Pharmacy order creation returned failure:`, result);
+                    }
                 } catch (pharmacyError) {
-                    console.error(`❌ Failed to create pharmacy order for ${orderId}:`, pharmacyError);
+                    console.error(`❌ [Approve] Failed to create pharmacy order for ${orderId}:`, pharmacyError);
+                    console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                     // Don't fail the approval - order is already paid
                 }
             } else if ((order.status === OrderStatus.PENDING || order.status === OrderStatus.PROCESSING) && order.payment?.stripePaymentIntentId) {
@@ -347,13 +359,14 @@ class OrderService {
                 }
 
                 // Order has pending payment that needs to be captured
-                console.log(`💳 Capturing payment for order ${orderId} with payment intent ${paymentIntentId}`);
+                console.log(`💳 [Approve] Capturing payment for order ${orderId} with payment intent ${paymentIntentId}`);
 
                 try {
                     // Capture the payment
+                    console.log(`🔄 [Approve] Calling Stripe capturePaymentIntent...`);
                     const capturedPayment = await this.stripeService.capturePaymentIntent(paymentIntentId);
 
-                    console.log(" capturedPayment ", capturedPayment)
+                    console.log("✅ [Approve] capturedPayment ", capturedPayment)
 
                     // Get stripePriceId from either treatmentPlan or order directly (for product subscriptions)
                     const stripePriceId = order?.treatmentPlan?.stripePriceId || order?.stripePriceId
@@ -390,26 +403,47 @@ class OrderService {
                         console.warn(`⚠️ Missing required data for subscription creation: payment_method=${!!capturedPayment.payment_method}, customer=${!!capturedPayment.customer}, stripePriceId=${!!stripePriceId}`);
                     }
 
-                    console.log(`✅ Payment captured successfully for order ${orderId}`);
+                    console.log(`✅ [Approve] Payment captured successfully for order ${orderId}`);
 
                     // Update order status to paid
+                    console.log(`📝 [Approve] Updating order status to PAID...`);
                     await order.updateStatus(OrderStatus.PAID);
 
                     // Reload order to get updated status after payment capture
                     await order.reload();
+                    console.log(`✅ [Approve] Order status updated to: ${order.status}`);
 
                     // Send to pharmacy after payment is captured
+                    console.log(`🏥 [Approve] Sending to pharmacy after payment capture...`);
+                    console.log(`🏥 [Approve] Pharmacy details:`, {
+                        pharmacy: coverage.pharmacy.name,
+                        slug: coverage.pharmacy.slug,
+                        state: patientState
+                    });
                     try {
                         const pharmacyService = new PharmacyService()
-                        await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
-                        console.log(`✅ Pharmacy order creation completed for order ${orderId}`);
+                        console.log(`🚀 [Approve] Calling createPharmacyOrder after payment capture...`);
+                        const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
+                        console.log(`✅ [Approve] Pharmacy order creation result:`, result);
+                        if (result.success) {
+                            console.log(`✅ [Approve] Pharmacy order created successfully for order ${orderId}`);
+                        } else {
+                            console.error(`⚠️ [Approve] Pharmacy order creation returned failure:`, result);
+                        }
                     } catch (pharmacyError) {
-                        console.error(`❌ Failed to create pharmacy order for ${orderId}:`, pharmacyError);
+                        console.error(`❌ [Approve] Failed to create pharmacy order for ${orderId}:`, pharmacyError);
+                        console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                         // Don't fail the approval - order is paid and approved
                         // Pharmacy order can be retried manually if needed
                     }
                 } catch (error: any) {
-                    console.error(`❌ Failed to capture payment for order ${orderId}:`, error);
+                    console.error(`❌ [Approve] Failed to capture payment for order ${orderId}:`, error);
+                    console.error(`❌ [Approve] Payment capture error details:`, {
+                        message: error?.message,
+                        code: error?.code,
+                        type: error?.type,
+                        raw: error?.raw
+                    });
 
                     // Check if payment was already captured (common during testing)
                     const isAlreadyCaptured = error?.raw?.message?.includes('has already been captured') ||
@@ -417,7 +451,7 @@ class OrderService {
                         error?.code === 'charge_already_captured';
 
                     if (isAlreadyCaptured) {
-                        console.log(`ℹ️ Payment was already captured for order ${orderId}. Continuing with pharmacy order creation...`);
+                        console.log(`ℹ️ [Approve] Payment was already captured for order ${orderId}. Continuing with pharmacy order creation...`);
 
                         // Fetch the payment intent to get details for subscription
                         try {
@@ -457,30 +491,53 @@ class OrderService {
                             }
 
                             // Update order to PAID
+                            console.log(`📝 [Approve] Updating order status to PAID (already captured)...`);
                             await order.updateStatus(OrderStatus.PAID);
                             await order.reload();
+                            console.log(`✅ [Approve] Order status updated to: ${order.status}`);
 
                             // Send to pharmacy
+                            console.log(`🏥 [Approve] Sending to pharmacy (payment already captured)...`);
+                            console.log(`🏥 [Approve] Pharmacy details:`, {
+                                pharmacy: coverage.pharmacy.name,
+                                slug: coverage.pharmacy.slug,
+                                state: patientState
+                            });
                             try {
                                 const pharmacyService = new PharmacyService();
-                                await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage);
-                                console.log(`✅ Pharmacy order creation completed for order ${orderId}`);
+                                console.log(`🚀 [Approve] Calling createPharmacyOrder (payment already captured)...`);
+                                const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage);
+                                console.log(`✅ [Approve] Pharmacy order creation result:`, result);
+                                if (result.success) {
+                                    console.log(`✅ [Approve] Pharmacy order created successfully for order ${orderId}`);
+                                } else {
+                                    console.error(`⚠️ [Approve] Pharmacy order creation returned failure:`, result);
+                                }
                             } catch (pharmacyError) {
-                                console.error(`❌ Failed to create pharmacy order for ${orderId}:`, pharmacyError);
+                                console.error(`❌ [Approve] Failed to create pharmacy order for ${orderId}:`, pharmacyError);
+                                console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                                 // Don't fail the approval - order is paid
                             }
 
                         } catch (retryError) {
-                            console.error(`❌ Failed to handle already-captured payment:`, retryError);
+                            console.error(`❌ [Approve] Failed to handle already-captured payment:`, retryError);
+                            console.error(`❌ [Approve] Retry error stack:`, retryError instanceof Error ? retryError.stack : 'No stack trace');
                         }
                     } else {
                         // Different error - don't fail the approval but log it
-                        console.log(`⚠️ Order approved by doctor but payment capture failed. Will retry when payment is completed.`);
+                        console.log(`⚠️ [Approve] Order approved by doctor but payment capture failed. Will retry when payment is completed.`);
+                        console.log(`⚠️ [Approve] Error type: ${error?.type}, Code: ${error?.code}`);
                     }
                 }
             } else {
                 // Order is not paid yet - doctor approval is recorded but pharmacy order not created
-                console.log(`⚠️ Order approved by doctor but not paid yet. Status: ${order.status}. Pharmacy order will be created when payment is completed.`);
+                console.log(`⚠️ [Approve] Order approved by doctor but not paid yet. Status: ${order.status}. Pharmacy order will be created when payment is completed.`);
+                console.log(`ℹ️ [Approve] Order details:`, {
+                    orderNumber: order.orderNumber,
+                    status: order.status,
+                    hasPayment: !!order.payment,
+                    paymentIntentId: order.payment?.stripePaymentIntentId
+                });
             }
 
             // Emit WebSocket event for order approval

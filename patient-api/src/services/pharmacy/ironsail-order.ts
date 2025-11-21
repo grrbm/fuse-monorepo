@@ -48,14 +48,27 @@ class IronSailOrderService {
             // 1. Generate PDF
             console.log(`📄 [IronSail] Generating PDF for order ${order.orderNumber}`);
             const pdfBuffer = await this.generatePDF(orderData);
+            console.log(`✅ [IronSail] PDF generated successfully (${pdfBuffer.length} bytes)`);
 
             // 2. Send email with PDF attachment
             console.log(`📧 [IronSail] Sending email for order ${order.orderNumber}`);
-            await this.sendEmail(orderData, pdfBuffer);
+            try {
+                await this.sendEmail(orderData, pdfBuffer);
+                console.log(`✅ [IronSail] Email sent successfully`);
+            } catch (emailError) {
+                console.error(`❌ [IronSail] Email send failed:`, emailError);
+                throw new Error(`Email send failed: ${emailError instanceof Error ? emailError.message : 'Unknown error'}`);
+            }
 
             // 3. Write to Google Spreadsheet
             console.log(`📊 [IronSail] Writing to spreadsheet for order ${order.orderNumber}`);
-            await this.writeToSpreadsheet(orderData);
+            try {
+                await this.writeToSpreadsheet(orderData);
+                console.log(`✅ [IronSail] Spreadsheet updated successfully`);
+            } catch (spreadsheetError) {
+                console.error(`❌ [IronSail] Spreadsheet write failed:`, spreadsheetError);
+                throw new Error(`Spreadsheet write failed: ${spreadsheetError instanceof Error ? spreadsheetError.message : 'Unknown error'}`);
+            }
 
             // 4. Create ShippingOrder record
             console.log(`📋 [IronSail] Creating ShippingOrder record`);
@@ -65,6 +78,7 @@ class IronSailOrderService {
                 status: OrderShippingStatus.PROCESSING,
                 pharmacyOrderId: `IRONSAIL-${order.orderNumber}`
             });
+            console.log(`✅ [IronSail] ShippingOrder record created`);
 
             console.log(`✅ [IronSail] Order ${order.orderNumber} processed successfully`);
 
@@ -82,6 +96,55 @@ class IronSailOrderService {
             return {
                 success: false,
                 message: "Failed to process IronSail order",
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+
+    // Public method to retry email send for an order
+    async retrySendEmail(order: Order, coverage?: PharmacyProduct) {
+        try {
+            console.log(`📧 [IronSail] Retrying email send for order ${order.orderNumber}`);
+
+            const orderData = this.extractOrderData(order, coverage);
+            const pdfBuffer = await this.generatePDF(orderData);
+
+            await this.sendEmail(orderData, pdfBuffer);
+            console.log(`✅ [IronSail] Email retry successful for ${order.orderNumber}`);
+
+            return {
+                success: true,
+                message: "Email sent successfully"
+            };
+        } catch (error) {
+            console.error(`❌ [IronSail] Email retry failed for ${order.orderNumber}:`, error);
+            return {
+                success: false,
+                message: "Failed to send email",
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+
+    // Public method to retry spreadsheet write for an order
+    async retryWriteToSpreadsheet(order: Order, coverage?: PharmacyProduct) {
+        try {
+            console.log(`📊 [IronSail] Retrying spreadsheet write for order ${order.orderNumber}`);
+
+            const orderData = this.extractOrderData(order, coverage);
+            await this.writeToSpreadsheet(orderData);
+
+            console.log(`✅ [IronSail] Spreadsheet retry successful for ${order.orderNumber}`);
+
+            return {
+                success: true,
+                message: "Spreadsheet updated successfully"
+            };
+        } catch (error) {
+            console.error(`❌ [IronSail] Spreadsheet retry failed for ${order.orderNumber}:`, error);
+            return {
+                success: false,
+                message: "Failed to write to spreadsheet",
                 error: error instanceof Error ? error.message : 'Unknown error'
             };
         }
