@@ -169,6 +169,7 @@ export const trackFormDropOff = async (params: {
   clinicId?: string;
   clinicName?: string;
   productName?: string;
+  useBeacon?: boolean; // Use sendBeacon for page unload scenarios
 }): Promise<void> => {
   try {
     // Check for duplicate event
@@ -186,33 +187,44 @@ export const trackFormDropOff = async (params: {
       productId: params.productId,
       formId: params.formId,
       dropOffStage: params.dropOffStage,
+      useBeacon: params.useBeacon,
     });
 
-    await apiCall('/analytics/track', {
-      method: 'POST',
-      body: JSON.stringify({
-        userId: params.userId,
-        productId: params.productId,
-        formId: params.formId,
-        eventType: 'dropoff',
-        dropOffStage: params.dropOffStage,
-        sessionId: generateSessionId(),
-        metadata: {
-          clinicId: params.clinicId,
-          clinicName: params.clinicName,
-          productName: params.productName || 'Unknown Product',
-          timestamp: new Date().toISOString()
-        }
-      })
-    });
+    const payload = {
+      userId: params.userId,
+      productId: params.productId,
+      formId: params.formId,
+      eventType: 'dropoff',
+      dropOffStage: params.dropOffStage,
+      sessionId: generateSessionId(),
+      metadata: {
+        clinicId: params.clinicId,
+        clinicName: params.clinicName,
+        productName: params.productName || 'Unknown Product',
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    // Use sendBeacon for page unload (more reliable)
+    if (params.useBeacon && typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      navigator.sendBeacon(`${apiUrl}/analytics/track`, blob);
+      console.log('✅ [Analytics] Drop-off tracked via sendBeacon');
+    } else {
+      // Use regular fetch for explicit modal closes
+      await apiCall('/analytics/track', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      console.log('✅ [Analytics] Drop-off tracked via fetch');
+    }
 
     // Mark as tracked
     recentEvents.set(eventKey, now);
 
     // Clean up old entries
     setTimeout(() => recentEvents.delete(eventKey), DEDUP_WINDOW_MS);
-
-    console.log('✅ [Analytics] Drop-off tracked successfully');
   } catch (error) {
     console.error('❌ [Analytics] Failed to track drop-off:', error);
     // Don't throw - analytics should not block user experience

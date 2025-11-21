@@ -485,6 +485,18 @@ export default function Analytics() {
                           <th className="text-right py-3 px-4 font-medium text-foreground">
                             Conversion Rate
                           </th>
+                          <th className="text-right py-3 px-4 font-medium text-foreground">
+                            <div>Product</div>
+                            <div className="text-xs font-normal text-muted-foreground">Drop-offs</div>
+                          </th>
+                          <th className="text-right py-3 px-4 font-medium text-foreground">
+                            <div>Payment</div>
+                            <div className="text-xs font-normal text-muted-foreground">Drop-offs</div>
+                          </th>
+                          <th className="text-right py-3 px-4 font-medium text-foreground">
+                            <div>Account</div>
+                            <div className="text-xs font-normal text-muted-foreground">Drop-offs</div>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -504,6 +516,30 @@ export default function Analytics() {
                             </td>
                             <td className="text-right py-3 px-4 text-muted-foreground">
                               {formatPercentage(form.conversionRate)}
+                            </td>
+                            <td className="text-right py-3 px-4">
+                              <div className="text-muted-foreground">
+                                {formatNumber(form.dropOffs?.product || 0)}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                ({formatPercentage(form.dropOffRates?.product || 0)})
+                              </div>
+                            </td>
+                            <td className="text-right py-3 px-4">
+                              <div className="text-muted-foreground">
+                                {formatNumber(form.dropOffs?.payment || 0)}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                ({formatPercentage(form.dropOffRates?.payment || 0)})
+                              </div>
+                            </td>
+                            <td className="text-right py-3 px-4">
+                              <div className="text-muted-foreground">
+                                {formatNumber(form.dropOffs?.account || 0)}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                ({formatPercentage(form.dropOffRates?.account || 0)})
+                              </div>
                             </td>
                           </tr>
                         ))}
