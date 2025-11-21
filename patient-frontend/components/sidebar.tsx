@@ -266,11 +266,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
               {user?.role || "User"}
             </p>
           </div>
-          <Badge content="3" color="primary" size="sm" placement="top-right">
-            <Button isIconOnly variant="light" size="sm">
-              <Icon icon="lucide:bell" className="text-foreground-500" width={18} height={18} />
-            </Button>
-          </Badge>
         </div>
       </div>
 
