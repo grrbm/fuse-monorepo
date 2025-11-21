@@ -239,7 +239,7 @@ export class MailsSender {
    */
   static async sendVerificationCode(email: string, code: string, firstName?: string): Promise<boolean> {
     const greeting = firstName ? `Hello ${firstName}` : 'Hello';
-    
+
     const msg: any = {
       to: email,
       from: this.FROM_EMAIL,

@@ -41,7 +41,7 @@ import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVari
 import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
 import { trackFormView, trackFormConversion, trackFormDropOff } from "../../lib/analytics";
 import { signInUser, createUserAccount as createUserAccountAPI } from "./auth";
-import { AccountCreationStep, EmailVerificationStep } from "./AccountCreationStep";
+import { AccountCreationStep, EmailVerificationStep, EmailInputModal } from "./AccountCreationStep";
 import { createEmailVerificationHandlers } from "./emailVerification";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
@@ -91,6 +91,11 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [verificationCode, setVerificationCode] = React.useState('');
   const [verificationError, setVerificationError] = React.useState('');
   const [isVerifying, setIsVerifying] = React.useState(false);
+
+  // Email modal state
+  const [showEmailModal, setShowEmailModal] = React.useState(false);
+  const [emailModalLoading, setEmailModalLoading] = React.useState(false);
+  const [emailModalError, setEmailModalError] = React.useState('');
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -1827,7 +1832,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     setUserId,
     setAccountCreated,
     setCurrentStepIndex,
-    getTotalSteps
+    getTotalSteps,
+    setShowEmailModal,
+    setEmailModalLoading,
+    setEmailModalError
   });
 
   const handleNext = async () => {
@@ -2102,866 +2110,898 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   }
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      size="full"
-      classNames={{
-        base: "m-0 sm:m-0 max-w-full max-h-full",
-        wrapper: "w-full h-full",
-        backdrop: "bg-overlay/50"
-      }}
-      hideCloseButton
-    >
-      <ModalContent className="h-full bg-gray-50 questionnaire-theme" style={themeVars}>
-        <ModalBody className="p-0 h-full flex flex-col">
-          {/* Header with close button */}
-          <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
-            <Button
-              isIconOnly
-              variant="light"
-              onPress={onClose}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <Icon icon="lucide:x" className="text-xl" />
-            </Button>
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        onOpenChange={(open) => {
+          // Prevent closing if email modal is open
+          if (!open && showEmailModal) {
+            return;
+          }
+        }}
+        isDismissable={!showEmailModal}
+        isKeyboardDismissDisabled={showEmailModal}
+        size="full"
+        classNames={{
+          base: "m-0 sm:m-0 max-w-full max-h-full",
+          wrapper: "w-full h-full !z-40",
+          backdrop: showEmailModal ? "!hidden" : "bg-overlay/50 !z-40"
+        }}
+        hideCloseButton
+      >
+        <ModalContent
+          className="h-full bg-gray-50 questionnaire-theme"
+          style={themeVars}
+        >
+          <ModalBody
+            className="p-0 h-full flex flex-col"
+            {...(showEmailModal ? { inert: '' as any } : {})}
+          >
+            {/* Header with close button */}
+            <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
+              <Button
+                isIconOnly
+                variant="light"
+                onPress={onClose}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <Icon icon="lucide:x" className="text-xl" />
+              </Button>
 
-            <div className="text-center">
-              <p className="text-sm text-gray-600">
-                Step {currentStepIndex + 1} of {totalSteps}
-              </p>
+              <div className="text-center">
+                <p className="text-sm text-gray-600">
+                  Step {currentStepIndex + 1} of {totalSteps}
+                </p>
+              </div>
+
+              <div className="w-10" /> {/* Spacer for centering */}
             </div>
 
-            <div className="w-10" /> {/* Spacer for centering */}
-          </div>
+            {/* Step Content */}
+            <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
+              <div className={`w-full ${isCheckoutStep() ? 'max-w-5xl' : 'max-w-md'} mx-auto min-h-full flex flex-col justify-center`}>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentStepIndex}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-8"
+                  >
+                    {isCheckoutStep() ? (
+                      // Checkout step with custom layout
+                      <>
+                        {/* Progress Bar */}
+                        <ProgressBar progressPercent={progressPercent} color={theme.primary} />
 
-          {/* Step Content */}
-          <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
-            <div className={`w-full ${isCheckoutStep() ? 'max-w-5xl' : 'max-w-md'} mx-auto min-h-full flex flex-col justify-center`}>
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentStepIndex}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.2 }}
-                  className="space-y-8"
-                >
-                  {isCheckoutStep() ? (
-                    // Checkout step with custom layout
-                    <>
-                      {/* Progress Bar */}
-                      <ProgressBar progressPercent={progressPercent} color={theme.primary} />
-
-                      {/* Brand and Previous button for checkout */}
-                      <StepHeader
-                        onPrevious={handlePrevious}
-                        canGoBack={currentStepIndex > 0}
-                        clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
-                        isLoadingClinic={isLoadingClinic}
-                      />
-
-                      <div className="bg-white rounded-2xl p-6 space-y-6">
-                        <CheckoutView
-                          plans={plans}
-                          selectedPlan={selectedPlan}
-                          onPlanChange={handlePlanSelection}
-                          paymentStatus={paymentStatus}
-                          clientSecret={clientSecret}
-                          shippingInfo={shippingInfo}
-                          onShippingInfoChange={(field, value) =>
-                            setShippingInfo((prev) => ({ ...prev, [field]: value }))
-                          }
-                          onRetryPaymentSetup={() => {
-                            setPaymentStatus('idle');
-                            setClientSecret(null);
-                            setPaymentIntentId(null);
-                          }}
-                          onCreateSubscription={createSubscriptionForPlan}
-                          onPaymentSuccess={handlePaymentSuccess}
-                          onPaymentError={handlePaymentError}
-                          stripePromise={stripePromise}
-                          theme={theme}
-                          questionnaireProducts={questionnaire.treatment?.products}
-                          selectedProducts={selectedProducts}
-                          treatmentName={treatmentName ?? productName ?? ''}
+                        {/* Brand and Previous button for checkout */}
+                        <StepHeader
+                          onPrevious={handlePrevious}
+                          canGoBack={currentStepIndex > 0}
+                          clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
+                          isLoadingClinic={isLoadingClinic}
                         />
 
-                        {paymentStatus === 'succeeded' && (
-                          <div className="pt-2">
-                            <Button
-                              color="primary"
-                              className="w-full"
-                              onPress={handleNext}
-                            >
-                              Continue
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  ) : isProductSelectionStep() ? (
-                    // Product selection step
-                    <>
-                      {/* Progress Bar */}
-                      <ProgressBar progressPercent={progressPercent} color={theme.primary} />
-
-                      <div className="bg-white rounded-2xl p-6 space-y-6">
-                        <ProductSelection
-                          products={questionnaire.treatment?.products}
-                          selectedProducts={selectedProducts}
-                          onChange={handleProductQuantityChange}
-                        />
-
-                        {/* Continue button for product selection */}
-                        {!(isCheckoutStep() && paymentStatus !== 'succeeded') && (
-                          <button
-                            onClick={handleNext}
-                            disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
-                            className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            style={{
-                              backgroundColor: theme.primary,
-                              ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
+                        <div className="bg-white rounded-2xl p-6 space-y-6">
+                          <CheckoutView
+                            plans={plans}
+                            selectedPlan={selectedPlan}
+                            onPlanChange={handlePlanSelection}
+                            paymentStatus={paymentStatus}
+                            clientSecret={clientSecret}
+                            shippingInfo={shippingInfo}
+                            onShippingInfoChange={(field, value) =>
+                              setShippingInfo((prev) => ({ ...prev, [field]: value }))
+                            }
+                            onRetryPaymentSetup={() => {
+                              setPaymentStatus('idle');
+                              setClientSecret(null);
+                              setPaymentIntentId(null);
                             }}
-                          >
-                            {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
-                              (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
-                                isProductSelectionStep() ? 'Continue to Checkout' :
-                                  isCheckoutStep() ? 'Complete Order' : 'Continue'}
-                            <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    // Regular questionnaire steps with v0 styling
-                    <>
-                      {/* Progress Bar */}
-                      <ProgressBar progressPercent={progressPercent} color={theme.primary} backgroundColor="#E5E7EB" />
+                            onCreateSubscription={createSubscriptionForPlan}
+                            onPaymentSuccess={handlePaymentSuccess}
+                            onPaymentError={handlePaymentError}
+                            stripePromise={stripePromise}
+                            theme={theme}
+                            questionnaireProducts={questionnaire.treatment?.products}
+                            selectedProducts={selectedProducts}
+                            treatmentName={treatmentName ?? productName ?? ''}
+                          />
 
-                      {/* Brand and Previous button */}
-                      <StepHeader
-                        onPrevious={handlePrevious}
-                        canGoBack={currentStepIndex > 0}
-                        clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
-                        isLoadingClinic={isLoadingClinic}
-                      />
+                          {paymentStatus === 'succeeded' && (
+                            <div className="pt-2">
+                              <Button
+                                color="primary"
+                                className="w-full"
+                                onPress={handleNext}
+                              >
+                                Continue
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : isProductSelectionStep() ? (
+                      // Product selection step
+                      <>
+                        {/* Progress Bar */}
+                        <ProgressBar progressPercent={progressPercent} color={theme.primary} />
 
-                      {/* Questions */}
-                      {currentStep?.title === 'Recommended Treatment' ? (
-                        // Custom treatment recommendation page
-                        (() => {
-                          const medications = [
-                            {
-                              id: "compounded-semaglutide",
-                              name: "Compounded Semaglutide",
-                              type: "Injectable",
-                              badge: "Most Popular",
-                              badgeColor: "bg-emerald-100 text-emerald-700",
-                              subtitle: "Weekly Injectable",
-                              description: "Most commonly prescribed for consistent weight management",
-                              benefits: ["16% average weight loss", "Once-weekly injection"],
-                              icon: "💉",
-                            },
-                            {
-                              id: "semaglutide-orals",
-                              name: "Semaglutide Orals",
-                              type: "Oral",
-                              badge: "Oral",
-                              badgeColor: "bg-gray-100 text-gray-700",
-                              subtitle: "Daily Oral Option",
-                              description: "Needle-free alternative with flexible dosing",
-                              benefits: ["Oral dissolvable tablet", "Same active ingredient as Rybelsus®"],
-                              icon: "heyfeels",
-                              isSelected: true,
-                            },
-                            {
-                              id: "compounded-tirzepatide",
-                              name: "Compounded Tirzepatide",
-                              type: "Injectable",
-                              badge: null,
-                              subtitle: "Dual-Action Injectable",
-                              description: "Works on two hormone pathways for enhanced results",
-                              benefits: ["22% average weight loss", "GLP-1 and GIP receptor activation"],
-                              icon: "💉",
-                            },
-                            {
-                              id: "tirzepatide-orals",
-                              name: "Tirzepatide Orals",
-                              type: "Oral",
-                              badge: "Oral",
-                              badgeColor: "bg-gray-100 text-gray-700",
-                              subtitle: "Dual-Action Oral",
-                              description: "Advanced two-pathway approach in oral form",
-                              benefits: ["Oral dissolvable tablet", "GLP-1 and GIP receptor activation"],
-                              icon: "heyfeels",
-                            },
-                          ];
+                        <div className="bg-white rounded-2xl p-6 space-y-6">
+                          <ProductSelection
+                            products={questionnaire.treatment?.products}
+                            selectedProducts={selectedProducts}
+                            onChange={handleProductQuantityChange}
+                          />
 
-                          return (
-                            <>
-                              <div className="space-y-4">
-                                <div>
-                                  <h3 className="text-2xl font-medium text-gray-900 mb-3">Recommended Treatment</h3>
-                                  <p className="text-gray-600 text-base">Based on your assessment, our providers recommend this treatment</p>
-                                </div>
+                          {/* Continue button for product selection */}
+                          {!(isCheckoutStep() && paymentStatus !== 'succeeded') && (
+                            <button
+                              onClick={handleNext}
+                              disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
+                              className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                              style={{
+                                backgroundColor: theme.primary,
+                                ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
+                              }}
+                            >
+                              {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
+                                (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
+                                  isProductSelectionStep() ? 'Continue to Checkout' :
+                                    isCheckoutStep() ? 'Complete Order' : 'Continue'}
+                              <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      // Regular questionnaire steps with v0 styling
+                      <>
+                        {/* Progress Bar */}
+                        <ProgressBar progressPercent={progressPercent} color={theme.primary} backgroundColor="#E5E7EB" />
 
-                                <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-                                  <div className="flex items-center gap-2 text-emerald-600 mb-4">
-                                    <Icon icon="lucide:check" className="w-4 h-4" />
-                                    <span className="text-sm font-medium">Provider Recommended</span>
+                        {/* Brand and Previous button */}
+                        <StepHeader
+                          onPrevious={handlePrevious}
+                          canGoBack={currentStepIndex > 0}
+                          clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
+                          isLoadingClinic={isLoadingClinic}
+                        />
+
+                        {/* Questions */}
+                        {currentStep?.title === 'Recommended Treatment' ? (
+                          // Custom treatment recommendation page
+                          (() => {
+                            const medications = [
+                              {
+                                id: "compounded-semaglutide",
+                                name: "Compounded Semaglutide",
+                                type: "Injectable",
+                                badge: "Most Popular",
+                                badgeColor: "bg-emerald-100 text-emerald-700",
+                                subtitle: "Weekly Injectable",
+                                description: "Most commonly prescribed for consistent weight management",
+                                benefits: ["16% average weight loss", "Once-weekly injection"],
+                                icon: "💉",
+                              },
+                              {
+                                id: "semaglutide-orals",
+                                name: "Semaglutide Orals",
+                                type: "Oral",
+                                badge: "Oral",
+                                badgeColor: "bg-gray-100 text-gray-700",
+                                subtitle: "Daily Oral Option",
+                                description: "Needle-free alternative with flexible dosing",
+                                benefits: ["Oral dissolvable tablet", "Same active ingredient as Rybelsus®"],
+                                icon: "heyfeels",
+                                isSelected: true,
+                              },
+                              {
+                                id: "compounded-tirzepatide",
+                                name: "Compounded Tirzepatide",
+                                type: "Injectable",
+                                badge: null,
+                                subtitle: "Dual-Action Injectable",
+                                description: "Works on two hormone pathways for enhanced results",
+                                benefits: ["22% average weight loss", "GLP-1 and GIP receptor activation"],
+                                icon: "💉",
+                              },
+                              {
+                                id: "tirzepatide-orals",
+                                name: "Tirzepatide Orals",
+                                type: "Oral",
+                                badge: "Oral",
+                                badgeColor: "bg-gray-100 text-gray-700",
+                                subtitle: "Dual-Action Oral",
+                                description: "Advanced two-pathway approach in oral form",
+                                benefits: ["Oral dissolvable tablet", "GLP-1 and GIP receptor activation"],
+                                icon: "heyfeels",
+                              },
+                            ];
+
+                            return (
+                              <>
+                                <div className="space-y-4">
+                                  <div>
+                                    <h3 className="text-2xl font-medium text-gray-900 mb-3">Recommended Treatment</h3>
+                                    <p className="text-gray-600 text-base">Based on your assessment, our providers recommend this treatment</p>
                                   </div>
-                                  <div className="flex items-start gap-4 mb-4">
-                                    <div className="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
-                                      <div className="text-white text-xs font-bold">
-                                        <div>hey</div>
-                                        <div>feels</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <h3 className="text-xl font-medium text-gray-900">Semaglutide Orals</h3>
-                                      </div>
-                                      <div className="flex items-center gap-2 mb-3">
-                                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-medium">
-                                          Most Popular
-                                        </span>
-                                        <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">Oral</span>
-                                      </div>
-                                      <p className="text-gray-900 font-medium mb-1">Daily Oral Option</p>
-                                      <p className="text-gray-600 text-sm mb-4">Needle-free alternative with flexible dosing</p>
 
-                                      <div className="space-y-2 mb-6">
-                                        <div className="flex items-center gap-2">
-                                          <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                          <span className="text-gray-700 text-sm">Oral dissolvable tablet</span>
+                                  <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+                                    <div className="flex items-center gap-2 text-emerald-600 mb-4">
+                                      <Icon icon="lucide:check" className="w-4 h-4" />
+                                      <span className="text-sm font-medium">Provider Recommended</span>
+                                    </div>
+                                    <div className="flex items-start gap-4 mb-4">
+                                      <div className="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
+                                        <div className="text-white text-xs font-bold">
+                                          <div>hey</div>
+                                          <div>feels</div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                          <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                          <span className="text-gray-700 text-sm">Same active ingredient as Rybelsus®</span>
-                                        </div>
                                       </div>
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <h3 className="text-xl font-medium text-gray-900">Semaglutide Orals</h3>
+                                        </div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                          <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-medium">
+                                            Most Popular
+                                          </span>
+                                          <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">Oral</span>
+                                        </div>
+                                        <p className="text-gray-900 font-medium mb-1">Daily Oral Option</p>
+                                        <p className="text-gray-600 text-sm mb-4">Needle-free alternative with flexible dosing</p>
 
-                                      <button
-                                        onClick={() => {
-                                          // Handle treatment selection
-                                          handleAnswerChange('selectedTreatment', 'Semaglutide Orals');
-                                          handleNext();
-                                        }}
-                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-6 rounded-2xl text-base h-auto flex items-center justify-center gap-2 transition-colors"
-                                      >
-                                        Select This Treatment
-                                        <Icon icon="lucide:chevron-right" className="w-4 h-4" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
+                                        <div className="space-y-2 mb-6">
+                                          <div className="flex items-center gap-2">
+                                            <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                            <span className="text-gray-700 text-sm">Oral dissolvable tablet</span>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                            <span className="text-gray-700 text-sm">Same active ingredient as Rybelsus®</span>
+                                          </div>
+                                        </div>
 
-                                <button
-                                  onClick={() => setShowMedicationModal(true)}
-                                  className="w-full bg-white rounded-2xl border border-gray-200 p-4 mb-6 flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                  <Icon icon="lucide:plus" className="w-4 h-4" />
-                                  <span className="font-medium">View Other Treatment Options</span>
-                                </button>
-
-                                <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-                                  <div className="flex items-center gap-2 mb-4">
-                                    <Icon icon="lucide:lock" className="w-4 h-4 text-gray-600" />
-                                    <h3 className="font-medium text-gray-900">About Compounded Medications</h3>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-2">
-                                      <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                      <span className="text-gray-700 text-sm">Same active ingredients as brand-name medications</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                      <span className="text-gray-700 text-sm">Custom formulated by licensed US pharmacies</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
-                                      <span className="text-gray-700 text-sm">Physician oversight with personalized dosing</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center justify-center gap-2 text-gray-600 text-sm">
-                                  <Icon icon="lucide:dollar-sign" className="w-4 h-4" />
-                                  <span>Special pricing available • $0 due today • Only pay if prescribed</span>
-                                </div>
-                              </div>
-
-                              {/* Medication Selection Modal */}
-                              {showMedicationModal && (
-                                <div className="fixed inset-0 flex items-start justify-center p-4 z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', margin: 0 }}>
-                                  <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                                    <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl z-10">
-                                      <div className="flex items-center justify-between">
-                                        <h2 className="text-xl font-medium text-gray-900">Choose Preferred Medication</h2>
                                         <button
-                                          onClick={() => setShowMedicationModal(false)}
-                                          className="text-gray-400 hover:text-gray-600 transition-colors"
+                                          onClick={() => {
+                                            // Handle treatment selection
+                                            handleAnswerChange('selectedTreatment', 'Semaglutide Orals');
+                                            handleNext();
+                                          }}
+                                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-6 rounded-2xl text-base h-auto flex items-center justify-center gap-2 transition-colors"
                                         >
-                                          <Icon icon="lucide:x" className="w-5 h-5" />
+                                          Select This Treatment
+                                          <Icon icon="lucide:chevron-right" className="w-4 h-4" />
                                         </button>
                                       </div>
-                                      <p className="text-gray-600 text-sm mt-2">
-                                        Your provider will take this into consideration when creating your treatment plan.
-                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    onClick={() => setShowMedicationModal(true)}
+                                    className="w-full bg-white rounded-2xl border border-gray-200 p-4 mb-6 flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition-colors"
+                                  >
+                                    <Icon icon="lucide:plus" className="w-4 h-4" />
+                                    <span className="font-medium">View Other Treatment Options</span>
+                                  </button>
+
+                                  <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                      <Icon icon="lucide:lock" className="w-4 h-4 text-gray-600" />
+                                      <h3 className="font-medium text-gray-900">About Compounded Medications</h3>
                                     </div>
 
-                                    <div className="p-6 space-y-4">
-                                      {medications.map((medication) => (
-                                        <div
-                                          key={medication.id}
-                                          className={`relative border rounded-2xl p-4 cursor-pointer transition-all ${selectedMedication === medication.id
-                                            ? "border-emerald-500 bg-emerald-50"
-                                            : "border-gray-200 hover:border-gray-300"
-                                            }`}
-                                          onClick={() => setSelectedMedication(medication.id)}
-                                        >
-                                          {selectedMedication === medication.id && (
-                                            <div className="absolute top-4 right-4 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
-                                              <Icon icon="lucide:check" className="w-4 h-4 text-white" />
-                                            </div>
-                                          )}
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                        <span className="text-gray-700 text-sm">Same active ingredients as brand-name medications</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                        <span className="text-gray-700 text-sm">Custom formulated by licensed US pharmacies</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Icon icon="lucide:check" className="w-4 h-4 text-emerald-600" />
+                                        <span className="text-gray-700 text-sm">Physician oversight with personalized dosing</span>
+                                      </div>
+                                    </div>
+                                  </div>
 
-                                          <div className="flex items-start gap-4">
-                                            <div className="w-12 h-12 flex items-center justify-center">
-                                              {medication.icon === "heyfeels" ? (
-                                                <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
-                                                  <div className="text-white text-xs font-bold">
-                                                    <div>hey</div>
-                                                    <div>feels</div>
+                                  <div className="flex items-center justify-center gap-2 text-gray-600 text-sm">
+                                    <Icon icon="lucide:dollar-sign" className="w-4 h-4" />
+                                    <span>Special pricing available • $0 due today • Only pay if prescribed</span>
+                                  </div>
+                                </div>
+
+                                {/* Medication Selection Modal */}
+                                {showMedicationModal && (
+                                  <div className="fixed inset-0 flex items-start justify-center p-4 z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)', margin: 0 }}>
+                                    <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                                      <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl z-10">
+                                        <div className="flex items-center justify-between">
+                                          <h2 className="text-xl font-medium text-gray-900">Choose Preferred Medication</h2>
+                                          <button
+                                            onClick={() => setShowMedicationModal(false)}
+                                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                                          >
+                                            <Icon icon="lucide:x" className="w-5 h-5" />
+                                          </button>
+                                        </div>
+                                        <p className="text-gray-600 text-sm mt-2">
+                                          Your provider will take this into consideration when creating your treatment plan.
+                                        </p>
+                                      </div>
+
+                                      <div className="p-6 space-y-4">
+                                        {medications.map((medication) => (
+                                          <div
+                                            key={medication.id}
+                                            className={`relative border rounded-2xl p-4 cursor-pointer transition-all ${selectedMedication === medication.id
+                                              ? "border-emerald-500 bg-emerald-50"
+                                              : "border-gray-200 hover:border-gray-300"
+                                              }`}
+                                            onClick={() => setSelectedMedication(medication.id)}
+                                          >
+                                            {selectedMedication === medication.id && (
+                                              <div className="absolute top-4 right-4 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
+                                                <Icon icon="lucide:check" className="w-4 h-4 text-white" />
+                                              </div>
+                                            )}
+
+                                            <div className="flex items-start gap-4">
+                                              <div className="w-12 h-12 flex items-center justify-center">
+                                                {medication.icon === "heyfeels" ? (
+                                                  <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
+                                                    <div className="text-white text-xs font-bold">
+                                                      <div>hey</div>
+                                                      <div>feels</div>
+                                                    </div>
                                                   </div>
-                                                </div>
-                                              ) : (
-                                                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-lg">
-                                                  {medication.icon}
-                                                </div>
-                                              )}
-                                            </div>
-
-                                            <div className="flex-1">
-                                              <div className="flex items-center gap-2 mb-2">
-                                                <h3 className="font-medium text-gray-900">{medication.name}</h3>
-                                                {medication.badge && (
-                                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${medication.badgeColor}`}>
-                                                    {medication.badge}
-                                                  </span>
+                                                ) : (
+                                                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-lg">
+                                                    {medication.icon}
+                                                  </div>
                                                 )}
-                                                <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">
-                                                  {medication.type}
-                                                </span>
                                               </div>
 
-                                              <p className="text-emerald-600 font-medium text-sm mb-1">{medication.subtitle}</p>
-                                              <p className="text-gray-600 text-sm mb-3">{medication.description}</p>
+                                              <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <h3 className="font-medium text-gray-900">{medication.name}</h3>
+                                                  {medication.badge && (
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${medication.badgeColor}`}>
+                                                      {medication.badge}
+                                                    </span>
+                                                  )}
+                                                  <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">
+                                                    {medication.type}
+                                                  </span>
+                                                </div>
 
-                                              <div className="space-y-1">
-                                                {medication.benefits.map((benefit, index) => (
-                                                  <div key={index} className="flex items-center gap-2">
-                                                    <Icon icon="lucide:check" className="w-3 h-3 text-emerald-600" />
-                                                    <span className="text-gray-700 text-sm">{benefit}</span>
-                                                  </div>
-                                                ))}
+                                                <p className="text-emerald-600 font-medium text-sm mb-1">{medication.subtitle}</p>
+                                                <p className="text-gray-600 text-sm mb-3">{medication.description}</p>
+
+                                                <div className="space-y-1">
+                                                  {medication.benefits.map((benefit, index) => (
+                                                    <div key={index} className="flex items-center gap-2">
+                                                      <Icon icon="lucide:check" className="w-3 h-3 text-emerald-600" />
+                                                      <span className="text-gray-700 text-sm">{benefit}</span>
+                                                    </div>
+                                                  ))}
+                                                </div>
                                               </div>
                                             </div>
                                           </div>
-                                        </div>
-                                      ))}
+                                        ))}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()
-                      ) : (currentStep?.title === 'Body Measurements' || currentStep?.questions?.some(q => q.questionSubtype === 'bmi')) ? (
-                        // Custom BMI calculator
-                        <BMICalculator
-                          currentStep={currentStep}
-                          answers={answers}
-                          onAnswerChange={handleAnswerChange}
-                        />
-                      ) : currentStep?.title === 'Success Stories' ? (
-                        // Custom success stories page
-                        <div className="space-y-4">
-                          <div>
-                            <h3 className="text-xl font-medium text-gray-900 mb-3">But first, I want you to meet...</h3>
-                            <p className="text-gray-600 text-sm">Real customers who've achieved amazing results with HeyFeels</p>
-                          </div>
+                                )}
+                              </>
+                            );
+                          })()
+                        ) : (currentStep?.title === 'Body Measurements' || currentStep?.questions?.some(q => q.questionSubtype === 'bmi')) ? (
+                          // Custom BMI calculator
+                          <BMICalculator
+                            currentStep={currentStep}
+                            answers={answers}
+                            onAnswerChange={handleAnswerChange}
+                          />
+                        ) : currentStep?.title === 'Success Stories' ? (
+                          // Custom success stories page
+                          <div className="space-y-4">
+                            <div>
+                              <h3 className="text-xl font-medium text-gray-900 mb-3">But first, I want you to meet...</h3>
+                              <p className="text-gray-600 text-sm">Real customers who've achieved amazing results with HeyFeels</p>
+                            </div>
 
-                          <div
-                            className="overflow-x-auto mb-8 cursor-grab active:cursor-grabbing scrollbar-hidden"
-                            onMouseDown={(e) => {
-                              const container = e.currentTarget;
-                              const startX = e.pageX - container.offsetLeft;
-                              const scrollLeft = container.scrollLeft;
+                            <div
+                              className="overflow-x-auto mb-8 cursor-grab active:cursor-grabbing scrollbar-hidden"
+                              onMouseDown={(e) => {
+                                const container = e.currentTarget;
+                                const startX = e.pageX - container.offsetLeft;
+                                const scrollLeft = container.scrollLeft;
 
-                              const handleMouseMove = (e: MouseEvent) => {
-                                const x = e.pageX - container.offsetLeft;
-                                const walk = (x - startX) * 1;
-                                container.scrollLeft = scrollLeft - walk;
-                              };
+                                const handleMouseMove = (e: MouseEvent) => {
+                                  const x = e.pageX - container.offsetLeft;
+                                  const walk = (x - startX) * 1;
+                                  container.scrollLeft = scrollLeft - walk;
+                                };
 
-                              const handleMouseUp = () => {
-                                document.removeEventListener('mousemove', handleMouseMove);
-                                document.removeEventListener('mouseup', handleMouseUp);
-                              };
+                                const handleMouseUp = () => {
+                                  document.removeEventListener('mousemove', handleMouseMove);
+                                  document.removeEventListener('mouseup', handleMouseUp);
+                                };
 
-                              document.addEventListener('mousemove', handleMouseMove);
-                              document.addEventListener('mouseup', handleMouseUp);
-                            }}
-                          >
-                            <div className="flex gap-4 pb-4" style={{ width: 'max-content' }}>
-                              {/* Alex's testimonial */}
-                              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex-shrink-0" style={{ width: '254px' }}>
-                                <div className="grid grid-cols-2 gap-2 mb-4">
-                                  <div className="relative">
-                                    <img
-                                      src="/before-after/m-before-0.webp"
-                                      alt="Alex before"
-                                      className="w-full h-48 object-cover rounded-lg"
-                                    />
-                                    <div className="absolute top-2 left-2 bg-gray-800 text-white px-2 py-1 rounded text-xs font-medium">
-                                      Before
+                                document.addEventListener('mousemove', handleMouseMove);
+                                document.addEventListener('mouseup', handleMouseUp);
+                              }}
+                            >
+                              <div className="flex gap-4 pb-4" style={{ width: 'max-content' }}>
+                                {/* Alex's testimonial */}
+                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex-shrink-0" style={{ width: '254px' }}>
+                                  <div className="grid grid-cols-2 gap-2 mb-4">
+                                    <div className="relative">
+                                      <img
+                                        src="/before-after/m-before-0.webp"
+                                        alt="Alex before"
+                                        className="w-full h-48 object-cover rounded-lg"
+                                      />
+                                      <div className="absolute top-2 left-2 bg-gray-800 text-white px-2 py-1 rounded text-xs font-medium">
+                                        Before
+                                      </div>
+                                    </div>
+                                    <div className="relative">
+                                      <img
+                                        src="/before-after/m-after-0.webp"
+                                        alt="Alex after"
+                                        className="w-full h-48 object-cover rounded-lg"
+                                      />
+                                      <div className="absolute top-2 left-2 bg-emerald-600 text-white px-2 py-1 rounded text-xs font-medium">
+                                        After
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="relative">
-                                    <img
-                                      src="/before-after/m-after-0.webp"
-                                      alt="Alex after"
-                                      className="w-full h-48 object-cover rounded-lg"
-                                    />
-                                    <div className="absolute top-2 left-2 bg-emerald-600 text-white px-2 py-1 rounded text-xs font-medium">
-                                      After
-                                    </div>
+                                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Alex, 28</h3>
+                                  <p className="text-gray-600 mb-4">
+                                    Lost <span className="text-emerald-600 font-semibold">14 pounds</span> in 4 months
+                                  </p>
+                                  <div className="inline-flex items-center bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm">
+                                    <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
+                                    Verified Customer
                                   </div>
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Alex, 28</h3>
-                                <p className="text-gray-600 mb-4">
-                                  Lost <span className="text-emerald-600 font-semibold">14 pounds</span> in 4 months
-                                </p>
-                                <div className="inline-flex items-center bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm">
-                                  <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
-                                  Verified Customer
-                                </div>
-                              </div>
 
-                              {/* Jordan's testimonial */}
-                              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex-shrink-0" style={{ width: '254px' }}>
-                                <div className="grid grid-cols-2 gap-2 mb-4">
-                                  <div className="relative">
-                                    <img
-                                      src="/before-after/m-before-1.webp"
-                                      alt="Jordan before"
-                                      className="w-full h-48 object-cover rounded-lg"
-                                    />
-                                    <div className="absolute top-2 left-2 bg-gray-800 text-white px-2 py-1 rounded text-xs font-medium">
-                                      Before
+                                {/* Jordan's testimonial */}
+                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex-shrink-0" style={{ width: '254px' }}>
+                                  <div className="grid grid-cols-2 gap-2 mb-4">
+                                    <div className="relative">
+                                      <img
+                                        src="/before-after/m-before-1.webp"
+                                        alt="Jordan before"
+                                        className="w-full h-48 object-cover rounded-lg"
+                                      />
+                                      <div className="absolute top-2 left-2 bg-gray-800 text-white px-2 py-1 rounded text-xs font-medium">
+                                        Before
+                                      </div>
+                                    </div>
+                                    <div className="relative">
+                                      <img
+                                        src="/before-after/m-after-1.webp"
+                                        alt="Jordan after"
+                                        className="w-full h-48 object-cover rounded-lg"
+                                      />
+                                      <div className="absolute top-2 left-2 bg-emerald-600 text-white px-2 py-1 rounded text-xs font-medium">
+                                        After
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="relative">
-                                    <img
-                                      src="/before-after/m-after-1.webp"
-                                      alt="Jordan after"
-                                      className="w-full h-48 object-cover rounded-lg"
-                                    />
-                                    <div className="absolute top-2 left-2 bg-emerald-600 text-white px-2 py-1 rounded text-xs font-medium">
-                                      After
-                                    </div>
+                                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Jordan, 32</h3>
+                                  <p className="text-gray-600 mb-4">
+                                    Lost <span className="text-emerald-600 font-semibold">18 pounds</span> in 5 months
+                                  </p>
+                                  <div className="inline-flex items-center bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm">
+                                    <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
+                                    Verified Customer
                                   </div>
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Jordan, 32</h3>
-                                <p className="text-gray-600 mb-4">
-                                  Lost <span className="text-emerald-600 font-semibold">18 pounds</span> in 5 months
-                                </p>
-                                <div className="inline-flex items-center bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm">
-                                  <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
-                                  Verified Customer
-                                </div>
-                              </div>
 
-                              {/* Taylor's testimonial */}
-                              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex-shrink-0" style={{ width: '254px' }}>
-                                <div className="grid grid-cols-2 gap-2 mb-4">
-                                  <div className="relative">
-                                    <img
-                                      src="/before-after/m-before-2.webp"
-                                      alt="Taylor before"
-                                      className="w-full h-48 object-cover rounded-lg"
-                                    />
-                                    <div className="absolute top-2 left-2 bg-gray-800 text-white px-2 py-1 rounded text-xs font-medium">
-                                      Before
+                                {/* Taylor's testimonial */}
+                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex-shrink-0" style={{ width: '254px' }}>
+                                  <div className="grid grid-cols-2 gap-2 mb-4">
+                                    <div className="relative">
+                                      <img
+                                        src="/before-after/m-before-2.webp"
+                                        alt="Taylor before"
+                                        className="w-full h-48 object-cover rounded-lg"
+                                      />
+                                      <div className="absolute top-2 left-2 bg-gray-800 text-white px-2 py-1 rounded text-xs font-medium">
+                                        Before
+                                      </div>
+                                    </div>
+                                    <div className="relative">
+                                      <img
+                                        src="/before-after/m-after-2.webp"
+                                        alt="Taylor after"
+                                        className="w-full h-48 object-cover rounded-lg"
+                                      />
+                                      <div className="absolute top-2 left-2 bg-emerald-600 text-white px-2 py-1 rounded text-xs font-medium">
+                                        After
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="relative">
-                                    <img
-                                      src="/before-after/m-after-2.webp"
-                                      alt="Taylor after"
-                                      className="w-full h-48 object-cover rounded-lg"
-                                    />
-                                    <div className="absolute top-2 left-2 bg-emerald-600 text-white px-2 py-1 rounded text-xs font-medium">
-                                      After
-                                    </div>
+                                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Taylor, 35</h3>
+                                  <p className="text-gray-600 mb-4">
+                                    Lost <span className="text-emerald-600 font-semibold">12 pounds</span> in 3 months
+                                  </p>
+                                  <div className="inline-flex items-center bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm">
+                                    <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
+                                    Verified Customer
                                   </div>
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Taylor, 35</h3>
-                                <p className="text-gray-600 mb-4">
-                                  Lost <span className="text-emerald-600 font-semibold">12 pounds</span> in 3 months
-                                </p>
-                                <div className="inline-flex items-center bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm">
-                                  <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
-                                  Verified Customer
-                                </div>
-                              </div>
 
-                              {/* Casey's testimonial */}
-                              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex-shrink-0" style={{ width: '254px' }}>
-                                <div className="grid grid-cols-2 gap-2 mb-4">
-                                  <div className="relative">
-                                    <img
-                                      src="/before-after/m-before-3.webp"
-                                      alt="Casey before"
-                                      className="w-full h-48 object-cover rounded-lg"
-                                    />
-                                    <div className="absolute top-2 left-2 bg-gray-800 text-white px-2 py-1 rounded text-xs font-medium">
-                                      Before
+                                {/* Casey's testimonial */}
+                                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex-shrink-0" style={{ width: '254px' }}>
+                                  <div className="grid grid-cols-2 gap-2 mb-4">
+                                    <div className="relative">
+                                      <img
+                                        src="/before-after/m-before-3.webp"
+                                        alt="Casey before"
+                                        className="w-full h-48 object-cover rounded-lg"
+                                      />
+                                      <div className="absolute top-2 left-2 bg-gray-800 text-white px-2 py-1 rounded text-xs font-medium">
+                                        Before
+                                      </div>
+                                    </div>
+                                    <div className="relative">
+                                      <img
+                                        src="/before-after/m-after-3.webp"
+                                        alt="Casey after"
+                                        className="w-full h-48 object-cover rounded-lg"
+                                      />
+                                      <div className="absolute top-2 left-2 bg-emerald-600 text-white px-2 py-1 rounded text-xs font-medium">
+                                        After
+                                      </div>
                                     </div>
                                   </div>
-                                  <div className="relative">
-                                    <img
-                                      src="/before-after/m-after-3.webp"
-                                      alt="Casey after"
-                                      className="w-full h-48 object-cover rounded-lg"
-                                    />
-                                    <div className="absolute top-2 left-2 bg-emerald-600 text-white px-2 py-1 rounded text-xs font-medium">
-                                      After
-                                    </div>
+                                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Casey, 41</h3>
+                                  <p className="text-gray-600 mb-4">
+                                    Lost <span className="text-emerald-600 font-semibold">16 pounds</span> in 6 months
+                                  </p>
+                                  <div className="inline-flex items-center bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm">
+                                    <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
+                                    Verified Customer
                                   </div>
-                                </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Casey, 41</h3>
-                                <p className="text-gray-600 mb-4">
-                                  Lost <span className="text-emerald-600 font-semibold">16 pounds</span> in 6 months
-                                </p>
-                                <div className="inline-flex items-center bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm">
-                                  <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
-                                  Verified Customer
                                 </div>
                               </div>
                             </div>
+
+                            <div className="text-center">
+                              <p className="text-gray-600 text-base leading-relaxed">
+                                Swipe to see more success stories and start your own transformation journey.
+                              </p>
+                            </div>
                           </div>
+                        ) : currentStep?.title === 'Create Your Account' ? (
+                          isEmailVerificationMode ? (
+                            <EmailVerificationStep
+                              email={verificationEmail}
+                              code={verificationCode}
+                              onCodeChange={setVerificationCode}
+                              onVerify={emailVerificationHandlers.handleVerifyCode}
+                              onBack={() => {
+                                setIsEmailVerificationMode(false);
+                                setVerificationCode('');
+                                setVerificationError('');
+                              }}
+                              onResendCode={emailVerificationHandlers.handleResendCode}
+                              error={verificationError}
+                              isVerifying={isVerifying}
+                              clinicName={domainClinic?.name}
+                            />
+                          ) : (
+                            <AccountCreationStep
+                              isSignInMode={isSignInMode}
+                              onToggleMode={() => {
+                                setIsSignInMode(!isSignInMode);
+                                setSignInEmail('');
+                                setSignInPassword('');
+                                setSignInError('');
+                              }}
+                              firstName={answers['firstName'] || ''}
+                              lastName={answers['lastName'] || ''}
+                              email={answers['email'] || ''}
+                              mobile={answers['mobile'] || ''}
+                              onFieldChange={handleAnswerChange}
+                              signInEmail={signInEmail}
+                              signInPassword={signInPassword}
+                              signInError={signInError}
+                              isSigningIn={isSigningIn}
+                              onSignInEmailChange={(value) => {
+                                setSignInEmail(value);
+                                setSignInError('');
+                              }}
+                              onSignInPasswordChange={(value) => {
+                                setSignInPassword(value);
+                                setSignInError('');
+                              }}
+                              onSignIn={handleSignIn}
+                              onEmailSignIn={emailVerificationHandlers.handleEmailSignIn}
+                              clinicName={domainClinic?.name}
+                            />
+                          )
+                        ) : currentStep?.questions && currentStep.questions.length > 0 ? (
+                          <div className="space-y-6">
+                            {currentStep.questions
+                              .filter((question) => {
+                                const conditionalLogic = (question as any).conditionalLogic;
+                                if (!conditionalLogic) return true;
 
-                          <div className="text-center">
-                            <p className="text-gray-600 text-base leading-relaxed">
-                              Swipe to see more success stories and start your own transformation journey.
-                            </p>
-                          </div>
-                        </div>
-                      ) : currentStep?.title === 'Create Your Account' ? (
-                        isEmailVerificationMode ? (
-                          <EmailVerificationStep
-                            email={verificationEmail}
-                            code={verificationCode}
-                            onCodeChange={setVerificationCode}
-                            onVerify={emailVerificationHandlers.handleVerifyCode}
-                            onBack={() => {
-                              setIsEmailVerificationMode(false);
-                              setVerificationCode('');
-                              setVerificationError('');
-                            }}
-                            onResendCode={emailVerificationHandlers.handleResendCode}
-                            error={verificationError}
-                            isVerifying={isVerifying}
-                            clinicName={domainClinic?.name}
-                          />
-                        ) : (
-                          <AccountCreationStep
-                            isSignInMode={isSignInMode}
-                            onToggleMode={() => {
-                              setIsSignInMode(!isSignInMode);
-                              setSignInEmail('');
-                              setSignInPassword('');
-                              setSignInError('');
-                            }}
-                            firstName={answers['firstName'] || ''}
-                            lastName={answers['lastName'] || ''}
-                            email={answers['email'] || ''}
-                            mobile={answers['mobile'] || ''}
-                            onFieldChange={handleAnswerChange}
-                            signInEmail={signInEmail}
-                            signInPassword={signInPassword}
-                            signInError={signInError}
-                            isSigningIn={isSigningIn}
-                            onSignInEmailChange={(value) => {
-                              setSignInEmail(value);
-                              setSignInError('');
-                            }}
-                            onSignInPasswordChange={(value) => {
-                              setSignInPassword(value);
-                              setSignInError('');
-                            }}
-                            onSignIn={handleSignIn}
-                            onEmailSignIn={emailVerificationHandlers.handleEmailSignIn}
-                            clinicName={domainClinic?.name}
-                          />
-                        )
-                      ) : currentStep?.questions && currentStep.questions.length > 0 ? (
-                        <div className="space-y-6">
-                          {currentStep.questions
-                            .filter((question) => {
-                              const conditionalLogic = (question as any).conditionalLogic;
-                              if (!conditionalLogic) return true;
+                                try {
+                                  // Find the parent question (conditionalLevel 0) in this step
+                                  const parentQuestion = currentStep.questions?.find(q =>
+                                    (q as any).conditionalLevel === 0 || !(q as any).conditionalLevel
+                                  );
 
-                              try {
-                                // Find the parent question (conditionalLevel 0) in this step
-                                const parentQuestion = currentStep.questions?.find(q =>
-                                  (q as any).conditionalLevel === 0 || !(q as any).conditionalLevel
-                                );
+                                  if (!parentQuestion) return false;
+                                  const parentAnswer = answers[parentQuestion.id];
 
-                                if (!parentQuestion) return false;
-                                const parentAnswer = answers[parentQuestion.id];
+                                  // Helper to check if a single condition is met
+                                  const checkCondition = (conditionStr: string): boolean => {
+                                    if (conditionStr.startsWith('answer_equals:')) {
+                                      const requiredValue = conditionStr.replace('answer_equals:', '').trim();
 
-                                // Helper to check if a single condition is met
-                                const checkCondition = (conditionStr: string): boolean => {
-                                  if (conditionStr.startsWith('answer_equals:')) {
-                                    const requiredValue = conditionStr.replace('answer_equals:', '').trim();
+                                      // Handle array answers (for checkboxes/multiple choice)
+                                      if (Array.isArray(parentAnswer)) {
+                                        return parentAnswer.includes(requiredValue);
+                                      }
+
+                                      return parentAnswer === requiredValue;
+                                    }
+                                    return false;
+                                  };
+
+                                  // Parse complex logic with AND/OR operators
+                                  // Format: "answer_equals:value1 OR answer_equals:value2 AND answer_equals:value3"
+                                  if (conditionalLogic.includes(' OR ') || conditionalLogic.includes(' AND ')) {
+                                    const tokens = conditionalLogic.split(' ');
+                                    const conditions: Array<{ check: boolean, operator?: 'OR' | 'AND' }> = [];
+
+                                    for (let i = 0; i < tokens.length; i++) {
+                                      const token = tokens[i];
+                                      if (token.startsWith('answer_equals:')) {
+                                        const isTrue = checkCondition(token);
+                                        // Look ahead for operator
+                                        const nextToken = tokens[i + 1];
+                                        const operator = (nextToken === 'OR' || nextToken === 'AND') ? nextToken as 'OR' | 'AND' : undefined;
+                                        conditions.push({ check: isTrue, operator });
+                                      }
+                                    }
+
+                                    // Evaluate the conditions with proper precedence (AND has higher precedence than OR)
+                                    // First, group AND conditions
+                                    let result = conditions[0]?.check ?? false;
+                                    let currentOperator: 'OR' | 'AND' | undefined = conditions[0]?.operator;
+
+                                    for (let i = 1; i < conditions.length; i++) {
+                                      const cond = conditions[i];
+                                      if (currentOperator === 'AND') {
+                                        result = result && cond.check;
+                                      } else if (currentOperator === 'OR') {
+                                        result = result || cond.check;
+                                      }
+                                      currentOperator = cond.operator;
+                                    }
+
+                                    return result;
+                                  }
+
+                                  // Simple single condition: "answer_equals:optionValue"
+                                  if (conditionalLogic.startsWith('answer_equals:')) {
+                                    return checkCondition(conditionalLogic);
+                                  }
+
+                                  // Support legacy format: "question:2,answer:yes"
+                                  const parts = conditionalLogic.split(',');
+                                  const targetQuestionOrder = parseInt(parts[0].split(':')[1]);
+                                  const answerPart = parts.slice(1).join(',');
+                                  const requiredAnswer = answerPart.substring(answerPart.indexOf(':') + 1);
+
+                                  const targetQuestion = currentStep.questions.find(q => q.questionOrder === targetQuestionOrder);
+                                  if (targetQuestion) {
+                                    const targetAnswer = answers[targetQuestion.id];
 
                                     // Handle array answers (for checkboxes/multiple choice)
-                                    if (Array.isArray(parentAnswer)) {
-                                      return parentAnswer.includes(requiredValue);
+                                    if (Array.isArray(targetAnswer)) {
+                                      return targetAnswer.includes(requiredAnswer);
                                     }
 
-                                    return parentAnswer === requiredValue;
+                                    return targetAnswer === requiredAnswer;
                                   }
                                   return false;
+                                } catch (error) {
+                                  console.error('Error parsing conditional logic:', conditionalLogic, error);
+                                  return true;
+                                }
+                              })
+                              .sort((a, b) => {
+                                const aLevel = (a as any).conditionalLevel || 0;
+                                const bLevel = (b as any).conditionalLevel || 0;
+                                const aSubOrder = (a as any).subQuestionOrder;
+                                const bSubOrder = (b as any).subQuestionOrder;
+                                const aConditional = (a as any).conditionalLogic;
+                                const bConditional = (b as any).conditionalLogic;
+
+                                if (aLevel !== bLevel) {
+                                  return aLevel - bLevel;
+                                }
+
+                                const sameConditionalGroup = aConditional && bConditional &&
+                                  aConditional.split(',')[0] === bConditional.split(',')[0] &&
+                                  aConditional.split(',')[1] === bConditional.split(',')[1];
+
+                                if (sameConditionalGroup &&
+                                  aSubOrder !== null && aSubOrder !== undefined &&
+                                  bSubOrder !== null && bSubOrder !== undefined) {
+                                  return aSubOrder - bSubOrder;
+                                }
+
+                                return a.questionOrder - b.questionOrder;
+                              })
+                              .map((question) => {
+                                // Apply dynamic variable replacement to question text
+                                const questionWithReplacedVars = {
+                                  ...question,
+                                  questionText: replaceCurrentVariables(question.questionText || ''),
+                                  placeholder: replaceCurrentVariables(question.placeholder || '')
                                 };
 
-                                // Parse complex logic with AND/OR operators
-                                // Format: "answer_equals:value1 OR answer_equals:value2 AND answer_equals:value3"
-                                if (conditionalLogic.includes(' OR ') || conditionalLogic.includes(' AND ')) {
-                                  const tokens = conditionalLogic.split(' ');
-                                  const conditions: Array<{ check: boolean, operator?: 'OR' | 'AND' }> = [];
-
-                                  for (let i = 0; i < tokens.length; i++) {
-                                    const token = tokens[i];
-                                    if (token.startsWith('answer_equals:')) {
-                                      const isTrue = checkCondition(token);
-                                      // Look ahead for operator
-                                      const nextToken = tokens[i + 1];
-                                      const operator = (nextToken === 'OR' || nextToken === 'AND') ? nextToken as 'OR' | 'AND' : undefined;
-                                      conditions.push({ check: isTrue, operator });
-                                    }
-                                  }
-
-                                  // Evaluate the conditions with proper precedence (AND has higher precedence than OR)
-                                  // First, group AND conditions
-                                  let result = conditions[0]?.check ?? false;
-                                  let currentOperator: 'OR' | 'AND' | undefined = conditions[0]?.operator;
-
-                                  for (let i = 1; i < conditions.length; i++) {
-                                    const cond = conditions[i];
-                                    if (currentOperator === 'AND') {
-                                      result = result && cond.check;
-                                    } else if (currentOperator === 'OR') {
-                                      result = result || cond.check;
-                                    }
-                                    currentOperator = cond.operator;
-                                  }
-
-                                  return result;
-                                }
-
-                                // Simple single condition: "answer_equals:optionValue"
-                                if (conditionalLogic.startsWith('answer_equals:')) {
-                                  return checkCondition(conditionalLogic);
-                                }
-
-                                // Support legacy format: "question:2,answer:yes"
-                                const parts = conditionalLogic.split(',');
-                                const targetQuestionOrder = parseInt(parts[0].split(':')[1]);
-                                const answerPart = parts.slice(1).join(',');
-                                const requiredAnswer = answerPart.substring(answerPart.indexOf(':') + 1);
-
-                                const targetQuestion = currentStep.questions.find(q => q.questionOrder === targetQuestionOrder);
-                                if (targetQuestion) {
-                                  const targetAnswer = answers[targetQuestion.id];
-
-                                  // Handle array answers (for checkboxes/multiple choice)
-                                  if (Array.isArray(targetAnswer)) {
-                                    return targetAnswer.includes(requiredAnswer);
-                                  }
-
-                                  return targetAnswer === requiredAnswer;
-                                }
-                                return false;
-                              } catch (error) {
-                                console.error('Error parsing conditional logic:', conditionalLogic, error);
-                                return true;
-                              }
-                            })
-                            .sort((a, b) => {
-                              const aLevel = (a as any).conditionalLevel || 0;
-                              const bLevel = (b as any).conditionalLevel || 0;
-                              const aSubOrder = (a as any).subQuestionOrder;
-                              const bSubOrder = (b as any).subQuestionOrder;
-                              const aConditional = (a as any).conditionalLogic;
-                              const bConditional = (b as any).conditionalLogic;
-
-                              if (aLevel !== bLevel) {
-                                return aLevel - bLevel;
-                              }
-
-                              const sameConditionalGroup = aConditional && bConditional &&
-                                aConditional.split(',')[0] === bConditional.split(',')[0] &&
-                                aConditional.split(',')[1] === bConditional.split(',')[1];
-
-                              if (sameConditionalGroup &&
-                                aSubOrder !== null && aSubOrder !== undefined &&
-                                bSubOrder !== null && bSubOrder !== undefined) {
-                                return aSubOrder - bSubOrder;
-                              }
-
-                              return a.questionOrder - b.questionOrder;
-                            })
-                            .map((question) => {
-                              // Apply dynamic variable replacement to question text
-                              const questionWithReplacedVars = {
-                                ...question,
-                                questionText: replaceCurrentVariables(question.questionText || ''),
-                                placeholder: replaceCurrentVariables(question.placeholder || '')
-                              };
-
-                              return (
-                                <QuestionRenderer
-                                  key={question.id}
-                                  question={questionWithReplacedVars}
-                                  answers={answers}
-                                  errors={errors}
-                                  theme={theme}
-                                  stepRequired={currentStep.required}
-                                  onAnswerChange={handleAnswerChange}
-                                  onRadioChange={(questionId: string, value: any) => {
-                                    // Clear any existing error on first selection
-                                    setErrors(prev => {
-                                      const next = { ...prev };
-                                      delete next[questionId];
-                                      return next;
-                                    });
-                                    handleRadioChange(questionId, value);
-                                  }}
-                                  onCheckboxChange={handleCheckboxChange}
-                                />
-                              );
-                            })}
-                        </div>
-                      ) : (
-                        // Informational steps (like Welcome)
-                        <div className="text-center space-y-4">
-                          <h2 className="text-2xl font-medium text-gray-900 mb-3">
-                            {stepTitle}
-                          </h2>
-                          {stepDescription && (
-                            <p className="text-gray-600 text-base leading-relaxed max-w-md mx-auto">
-                              {stepDescription}
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Continue button for regular steps (but not during sign-in or email verification on account creation step) */}
-                      {!(isCheckoutStep() && paymentStatus !== 'succeeded') && !(currentStep?.title === 'Create Your Account' && (isSignInMode || isEmailVerificationMode)) && (() => {
-                        // Check if step itself is dead end OR if any VISIBLE question is a dead end
-                        // Use same filter logic as question rendering above
-                        const visibleQuestions = currentStep?.questions?.filter((question: any) => {
-                          const conditionalLogic = question.conditionalLogic;
-                          if (!conditionalLogic) return true;
-
-                          try {
-                            const parentQuestion = currentStep.questions?.find((q: any) =>
-                              q.conditionalLevel === 0 || !q.conditionalLevel
-                            );
-                            if (!parentQuestion) return false;
-
-                            const parentAnswer = answers[parentQuestion.id];
-                            if (!parentAnswer) return false;
-
-                            if (conditionalLogic.startsWith('answer_equals:')) {
-                              const requiredValue = conditionalLogic.replace('answer_equals:', '').trim();
-                              if (Array.isArray(parentAnswer)) {
-                                return parentAnswer.includes(requiredValue);
-                              }
-                              return parentAnswer === requiredValue;
-                            }
-                            return false;
-                          } catch (error) {
-                            return true;
-                          }
-                        }) || []
-
-                        const hasDeadEndQuestion = visibleQuestions.some((q: any) => {
-                          const questionText = q.questionText?.toLowerCase() || ''
-                          return questionText.includes('unfortunat') || questionText.includes('disqualif') ||
-                            questionText.includes('do not qualify') || questionText.includes('cannot be medically')
-                        })
-
-                        const isDeadEndStep = currentStep?.isDeadEnd || hasDeadEndQuestion
-
-                        return isDeadEndStep ? (
-                          <div className="space-y-3">
-                            {currentStepIndex > 0 && (
-                              <button
-                                onClick={() => setCurrentStepIndex(prev => prev - 1)}
-                                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
-                              >
-                                <Icon icon="lucide:arrow-left" className="mr-2 h-4 w-4" />
-                                Go Back
-                              </button>
-                            )}
-                            <button
-                              onClick={onClose}
-                              className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
-                            >
-                              Close Form
-                              <Icon icon="lucide:x" className="ml-2 h-4 w-4" />
-                            </button>
+                                return (
+                                  <QuestionRenderer
+                                    key={question.id}
+                                    question={questionWithReplacedVars}
+                                    answers={answers}
+                                    errors={errors}
+                                    theme={theme}
+                                    stepRequired={currentStep.required}
+                                    onAnswerChange={handleAnswerChange}
+                                    onRadioChange={(questionId: string, value: any) => {
+                                      // Clear any existing error on first selection
+                                      setErrors(prev => {
+                                        const next = { ...prev };
+                                        delete next[questionId];
+                                        return next;
+                                      });
+                                      handleRadioChange(questionId, value);
+                                    }}
+                                    onCheckboxChange={handleCheckboxChange}
+                                  />
+                                );
+                              })}
                           </div>
                         ) : (
-                          <button
-                            onClick={handleNext}
-                            disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
-                            className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            style={{
-                              backgroundColor: theme.primary,
-                              ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
-                            }}
-                          >
-                            {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
-                              (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
-                                isProductSelectionStep() ? 'Continue to Checkout' :
-                                  isCheckoutStep() ? 'Complete Order' : 'Continue'}
-                            <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
-                          </button>
-                        )
-                      })()}
-                    </>
-                  )}
+                          // Informational steps (like Welcome)
+                          <div className="text-center space-y-4">
+                            <h2 className="text-2xl font-medium text-gray-900 mb-3">
+                              {stepTitle}
+                            </h2>
+                            {stepDescription && (
+                              <p className="text-gray-600 text-base leading-relaxed max-w-md mx-auto">
+                                {stepDescription}
+                              </p>
+                            )}
+                          </div>
+                        )}
 
-                  {/* Show payment completion status for checkout step */}
-                  {isCheckoutStep() && paymentStatus !== 'succeeded' && (
-                    <div className="text-center text-sm text-gray-600 mt-4">
-                      Complete payment above to continue
-                    </div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
+                        {/* Continue button for regular steps (but not during sign-in or email verification on account creation step) */}
+                        {!(isCheckoutStep() && paymentStatus !== 'succeeded') && !(currentStep?.title === 'Create Your Account' && (isSignInMode || isEmailVerificationMode)) && (() => {
+                          // Check if step itself is dead end OR if any VISIBLE question is a dead end
+                          // Use same filter logic as question rendering above
+                          const visibleQuestions = currentStep?.questions?.filter((question: any) => {
+                            const conditionalLogic = question.conditionalLogic;
+                            if (!conditionalLogic) return true;
+
+                            try {
+                              const parentQuestion = currentStep.questions?.find((q: any) =>
+                                q.conditionalLevel === 0 || !q.conditionalLevel
+                              );
+                              if (!parentQuestion) return false;
+
+                              const parentAnswer = answers[parentQuestion.id];
+                              if (!parentAnswer) return false;
+
+                              if (conditionalLogic.startsWith('answer_equals:')) {
+                                const requiredValue = conditionalLogic.replace('answer_equals:', '').trim();
+                                if (Array.isArray(parentAnswer)) {
+                                  return parentAnswer.includes(requiredValue);
+                                }
+                                return parentAnswer === requiredValue;
+                              }
+                              return false;
+                            } catch (error) {
+                              return true;
+                            }
+                          }) || []
+
+                          const hasDeadEndQuestion = visibleQuestions.some((q: any) => {
+                            const questionText = q.questionText?.toLowerCase() || ''
+                            return questionText.includes('unfortunat') || questionText.includes('disqualif') ||
+                              questionText.includes('do not qualify') || questionText.includes('cannot be medically')
+                          })
+
+                          const isDeadEndStep = currentStep?.isDeadEnd || hasDeadEndQuestion
+
+                          return isDeadEndStep ? (
+                            <div className="space-y-3">
+                              {currentStepIndex > 0 && (
+                                <button
+                                  onClick={() => setCurrentStepIndex(prev => prev - 1)}
+                                  className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
+                                >
+                                  <Icon icon="lucide:arrow-left" className="mr-2 h-4 w-4" />
+                                  Go Back
+                                </button>
+                              )}
+                              <button
+                                onClick={onClose}
+                                className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors"
+                              >
+                                Close Form
+                                <Icon icon="lucide:x" className="ml-2 h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={handleNext}
+                              disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
+                              className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                              style={{
+                                backgroundColor: theme.primary,
+                                ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
+                              }}
+                            >
+                              {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
+                                (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
+                                  isProductSelectionStep() ? 'Continue to Checkout' :
+                                    isCheckoutStep() ? 'Complete Order' : 'Continue'}
+                              <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
+                            </button>
+                          )
+                        })()}
+                      </>
+                    )}
+
+                    {/* Show payment completion status for checkout step */}
+                    {isCheckoutStep() && paymentStatus !== 'succeeded' && (
+                      <div className="text-center text-sm text-gray-600 mt-4">
+                        Complete payment above to continue
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
-          </div>
-        </ModalBody>
-      </ModalContent>
-    </Modal>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
+      {/* Email Input Modal */}
+      {console.log('📧 About to render EmailInputModal, showEmailModal:', showEmailModal)}
+      <EmailInputModal
+        isOpen={showEmailModal}
+        email={verificationEmail}
+        onEmailChange={setVerificationEmail}
+        onContinue={emailVerificationHandlers.handleSendCodeFromModal}
+        onCancel={() => {
+          setShowEmailModal(false);
+          setVerificationEmail('');
+          setEmailModalError('');
+        }}
+        isLoading={emailModalLoading}
+        error={emailModalError}
+      />
+    </>
   );
 };

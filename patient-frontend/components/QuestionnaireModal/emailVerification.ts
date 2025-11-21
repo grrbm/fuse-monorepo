@@ -1,7 +1,8 @@
 import { sendVerificationCode, verifyCode } from "./auth";
 
 interface EmailVerificationHandlers {
-  handleEmailSignIn: () => Promise<void>;
+  handleEmailSignIn: () => void;
+  handleSendCodeFromModal: () => Promise<void>;
   handleVerifyCode: () => Promise<void>;
   handleResendCode: () => Promise<void>;
 }
@@ -24,29 +25,43 @@ interface EmailVerificationState {
   setAccountCreated: (created: boolean) => void;
   setCurrentStepIndex: (index: any) => void;
   getTotalSteps: () => number;
+  setShowEmailModal: (show: boolean) => void;
+  setEmailModalLoading: (loading: boolean) => void;
+  setEmailModalError: (error: string) => void;
 }
 
 export const createEmailVerificationHandlers = (
   state: EmailVerificationState
 ): EmailVerificationHandlers => {
-  const handleEmailSignIn = async () => {
-    const email = state.answers['email'];
+  const handleSendCodeFromModal = async () => {
+    const email = state.verificationEmail || state.answers['email'];
+    
+    console.log('📧 Attempting to send code to:', email);
     
     if (!email || !email.includes('@')) {
-      alert('Please enter a valid email address first');
+      state.setEmailModalError('Please enter a valid email address');
       return;
     }
 
-    state.setVerificationError('');
-    state.setVerificationEmail(email);
+    state.setEmailModalError('');
+    state.setEmailModalLoading(true);
     
     const result = await sendVerificationCode(email);
     
+    state.setEmailModalLoading(false);
+    
     if (result.success) {
+      // Update the answers with the email
+      if (state.verificationEmail && state.verificationEmail !== state.answers['email']) {
+        state.setAnswers((prev: any) => ({ ...prev, email: state.verificationEmail }));
+      }
+      
+      // Close modal and show verification step
+      state.setShowEmailModal(false);
       state.setIsEmailVerificationMode(true);
       console.log('✅ Verification code sent');
     } else {
-      alert(result.error || 'Failed to send verification code');
+      state.setEmailModalError(result.error || 'Failed to send verification code');
     }
   };
 
@@ -112,8 +127,32 @@ export const createEmailVerificationHandlers = (
     }
   };
 
+  const handleEmailSignIn = () => {
+    console.log('🔵 handleEmailSignIn called');
+    const email = state.answers['email'];
+    
+    console.log('📧 Current email in answers:', email);
+    
+    if (!email || !email.includes('@')) {
+      // Show email input modal
+      console.log('📧 No valid email, calling setShowEmailModal(true)');
+      state.setShowEmailModal(true);
+      console.log('📧 setShowEmailModal called');
+      state.setVerificationEmail('');
+      state.setEmailModalError('');
+      return;
+    }
+
+    // Email already filled, show modal with pre-filled email
+    console.log('📧 Email exists, pre-filling modal');
+    state.setVerificationEmail(email);
+    state.setShowEmailModal(true);
+    state.setEmailModalError('');
+  };
+
   return {
     handleEmailSignIn,
+    handleSendCodeFromModal,
     handleVerifyCode,
     handleResendCode
   };

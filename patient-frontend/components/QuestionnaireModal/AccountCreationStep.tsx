@@ -1,17 +1,18 @@
 import React from "react";
+import ReactDOM from "react-dom";
 import { Icon } from "@iconify/react";
 
 interface AccountCreationStepProps {
   isSignInMode: boolean;
   onToggleMode: () => void;
-  
+
   // Sign-up form props
   firstName: string;
   lastName: string;
   email: string;
   mobile: string;
   onFieldChange: (field: string, value: string) => void;
-  
+
   // Sign-in form props
   signInEmail: string;
   signInPassword: string;
@@ -20,10 +21,10 @@ interface AccountCreationStepProps {
   onSignInEmailChange: (value: string) => void;
   onSignInPasswordChange: (value: string) => void;
   onSignIn: () => void;
-  
+
   // Email verification props
   onEmailSignIn: () => void;
-  
+
   clinicName?: string;
 }
 
@@ -117,7 +118,7 @@ export const AccountCreationStep: React.FC<AccountCreationStepProps> = ({
           {/* Back to Sign Up */}
           <div className="text-center pt-4">
             <span className="text-gray-600">Don't have an account? </span>
-            <button 
+            <button
               onClick={onToggleMode}
               className="text-gray-900 font-medium hover:underline"
             >
@@ -203,7 +204,7 @@ export const AccountCreationStep: React.FC<AccountCreationStepProps> = ({
             {/* Already have an account */}
             <div className="text-center">
               <span className="text-gray-600">Already have an account? </span>
-              <button 
+              <button
                 onClick={onToggleMode}
                 className="text-gray-900 font-medium hover:underline"
               >
@@ -269,6 +270,143 @@ export const AccountCreationStep: React.FC<AccountCreationStepProps> = ({
       )}
     </div>
   );
+};
+
+// Email Input Modal Component
+interface EmailInputModalProps {
+  isOpen: boolean;
+  email: string;
+  onEmailChange: (email: string) => void;
+  onContinue: () => void;
+  onCancel: () => void;
+  isLoading: boolean;
+  error: string;
+}
+
+export const EmailInputModal: React.FC<EmailInputModalProps> = ({
+  isOpen,
+  email,
+  onEmailChange,
+  onContinue,
+  onCancel,
+  isLoading,
+  error
+}) => {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  console.log('📧 EmailInputModal render - isOpen:', isOpen);
+
+  // Focus the input when modal opens
+  React.useEffect(() => {
+    if (isOpen && inputRef.current) {
+      // Small delay to ensure modal is rendered
+      setTimeout(() => {
+        inputRef.current?.focus();
+        console.log('📧 Input focused');
+      }, 100);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  console.log('📧 EmailInputModal is visible!');
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4 bg-black bg-opacity-50"
+      style={{ zIndex: 50 }}
+      onClick={(e) => {
+        // Allow backdrop clicks to close
+        if (e.target === e.currentTarget) {
+          onCancel();
+        }
+      }}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="email-modal-title"
+      >
+        <div>
+          <h3 id="email-modal-title" className="text-xl font-semibold text-gray-900 mb-2">Enter your email</h3>
+          <p className="text-gray-600 text-sm">We'll send you a verification code to continue</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+          <input
+            ref={inputRef}
+            type="email"
+            value={email}
+            onChange={(e) => {
+              console.log('📧 Input onChange triggered:', e.target.value);
+              onEmailChange(e.target.value);
+            }}
+            onClick={(e) => {
+              console.log('📧 Input onClick triggered');
+              e.stopPropagation();
+            }}
+            onFocus={() => {
+              console.log('📧 Input onFocus triggered');
+            }}
+            onBlur={() => {
+              console.log('📧 Input onBlur triggered');
+            }}
+            onMouseDown={(e) => {
+              console.log('📧 Input onMouseDown triggered');
+              e.stopPropagation();
+            }}
+            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            placeholder="your.email@example.com"
+            autoFocus
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && email && email.includes('@')) {
+                onContinue();
+              }
+            }}
+          />
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onContinue}
+            disabled={isLoading || !email || !email.includes('@')}
+            className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <Icon icon="lucide:loader-2" className="animate-spin" />
+                <span>Sending...</span>
+              </>
+            ) : (
+              'Continue'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render modal using portal to isolate from parent events
+  if (typeof document !== 'undefined') {
+    return ReactDOM.createPortal(modalContent, document.body);
+  }
+
+  return null;
 };
 
 // Email Verification Code Input Component
@@ -363,7 +501,7 @@ export const EmailVerificationStep: React.FC<EmailVerificationStepProps> = ({
             {codeDigits.map((digit, index) => (
               <input
                 key={index}
-                ref={el => inputRefs.current[index] = el}
+                ref={el => { inputRefs.current[index] = el; }}
                 type="text"
                 inputMode="numeric"
                 maxLength={1}
@@ -403,7 +541,7 @@ export const EmailVerificationStep: React.FC<EmailVerificationStepProps> = ({
         {/* Resend Code */}
         <div className="text-center">
           <span className="text-gray-600 text-sm">Didn't receive the code? </span>
-          <button 
+          <button
             onClick={onResendCode}
             className="text-emerald-600 text-sm font-medium hover:underline"
           >
