@@ -66,6 +66,7 @@ interface Product {
   pharmacyProvider?: string
   isActive: boolean
   slug?: string
+  imageUrl?: string
 }
 
 export default function ProductEditor() {

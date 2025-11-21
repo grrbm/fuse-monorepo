@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Loader2, Plus, Package, FileText, X } from "lucide-react"
+import { Loader2, Plus, Package, FileText, X, Image as ImageIcon } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
 import { toast } from "sonner"
@@ -28,6 +28,7 @@ interface Product {
   requiredDoctorQuestions?: any[]
   isActive: boolean
   createdAt: string
+  imageUrl?: string
 }
 
 interface PharmacyVendor {
@@ -747,6 +748,22 @@ export default function Products() {
                   key={product.id}
                   className={`bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden transition-all hover:shadow-md hover:border-[#4FA59C] ${!product.isActive ? "opacity-60" : ""}`}
                 >
+                  {/* Product Image Header */}
+                  {product.imageUrl && (
+                    <div className="w-full h-48 overflow-hidden bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                      <img 
+                        src={product.imageUrl} 
+                        alt={product.name} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  {!product.imageUrl && (
+                    <div className="w-full h-48 bg-gradient-to-br from-[#F9FAFB] to-[#F3F4F6] border-b border-[#E5E7EB] flex items-center justify-center">
+                      <ImageIcon className="h-16 w-16 text-[#D1D5DB]" />
+                    </div>
+                  )}
+                  
                   <div className="p-6 space-y-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
