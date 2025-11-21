@@ -127,16 +127,15 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 offset = '0'
             } = req.query as any;
 
-            // Build where clause - show ALL orders by default
+            // Build where clause - show only PAID orders by default (orders that have been paid)
             const whereClause: any = {
                 // Only show orders with tenantProductId (orders for tenant products)
-                tenantProductId: { [Op.ne]: null }
+                tenantProductId: { [Op.ne]: null },
+                // Only show paid orders and beyond (not pending or payment_processing)
+                status: status || {
+                    [Op.in]: ['paid', 'processing', 'shipped', 'delivered']
+                }
             };
-
-            // Optional status filter (if not provided, show all statuses)
-            if (status) {
-                whereClause.status = status;
-            }
 
             // Optional clinic filter
             if (clinicId) {
