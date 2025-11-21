@@ -335,7 +335,7 @@ class OrderService {
                     console.log(`🚀 [Approve] Calling createPharmacyOrder...`);
                     const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
                     console.log(`✅ [Approve] Pharmacy order creation result:`, result);
-                    if (result.success) {
+                    if (result && result.success) {
                         console.log(`✅ [Approve] Pharmacy order created successfully for order ${orderId}`);
                     } else {
                         console.error(`⚠️ [Approve] Pharmacy order creation returned failure:`, result);
@@ -425,7 +425,7 @@ class OrderService {
                         console.log(`🚀 [Approve] Calling createPharmacyOrder after payment capture...`);
                         const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
                         console.log(`✅ [Approve] Pharmacy order creation result:`, result);
-                        if (result.success) {
+                        if (result && result.success) {
                             console.log(`✅ [Approve] Pharmacy order created successfully for order ${orderId}`);
                         } else {
                             console.error(`⚠️ [Approve] Pharmacy order creation returned failure:`, result);
@@ -508,7 +508,7 @@ class OrderService {
                                 console.log(`🚀 [Approve] Calling createPharmacyOrder (payment already captured)...`);
                                 const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage);
                                 console.log(`✅ [Approve] Pharmacy order creation result:`, result);
-                                if (result.success) {
+                                if (result && result.success) {
                                     console.log(`✅ [Approve] Pharmacy order created successfully for order ${orderId}`);
                                 } else {
                                     console.error(`⚠️ [Approve] Pharmacy order creation returned failure:`, result);
