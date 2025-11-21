@@ -31,7 +31,7 @@ export const trackFormView = async (params: {
     const eventKey = `${params.userId}:${params.productId}:${params.formId}:view`;
     const now = Date.now();
     const lastTracked = recentEvents.get(eventKey);
-    
+
     if (lastTracked && (now - lastTracked) < DEDUP_WINDOW_MS) {
       console.log('📊 [Analytics] Skipping duplicate form view event (tracked recently)');
       return;
@@ -62,7 +62,7 @@ export const trackFormView = async (params: {
 
     // Mark as tracked
     recentEvents.set(eventKey, now);
-    
+
     // Clean up old entries
     setTimeout(() => recentEvents.delete(eventKey), DEDUP_WINDOW_MS);
 
@@ -95,7 +95,7 @@ export const trackFormConversion = async (params: {
     const eventKey = `${params.userId}:${params.productId}:${params.formId}:conversion`;
     const now = Date.now();
     const lastTracked = recentEvents.get(eventKey);
-    
+
     if (lastTracked && (now - lastTracked) < DEDUP_WINDOW_MS) {
       console.log('📊 [Analytics] Skipping duplicate conversion event (tracked recently)');
       return;
@@ -128,7 +128,7 @@ export const trackFormConversion = async (params: {
 
     // Mark as tracked
     recentEvents.set(eventKey, now);
-    
+
     // Clean up old entries
     setTimeout(() => recentEvents.delete(eventKey), DEDUP_WINDOW_MS);
 
@@ -149,12 +149,12 @@ const generateSessionId = (): string => {
 
   // Check if we already have a session ID stored
   let sessionId = sessionStorage.getItem('fuse-analytics-session-id');
-  
+
   if (!sessionId) {
     sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     sessionStorage.setItem('fuse-analytics-session-id', sessionId);
   }
-  
+
   return sessionId;
 };
 
@@ -175,7 +175,7 @@ export const trackFormDropOff = async (params: {
     const eventKey = `${params.userId}:${params.productId}:${params.formId}:dropoff:${params.dropOffStage}`;
     const now = Date.now();
     const lastTracked = recentEvents.get(eventKey);
-    
+
     if (lastTracked && (now - lastTracked) < DEDUP_WINDOW_MS) {
       console.log('📊 [Analytics] Skipping duplicate dropoff event (tracked recently)');
       return;
@@ -208,7 +208,7 @@ export const trackFormDropOff = async (params: {
 
     // Mark as tracked
     recentEvents.set(eventKey, now);
-    
+
     // Clean up old entries
     setTimeout(() => recentEvents.delete(eventKey), DEDUP_WINDOW_MS);
 
