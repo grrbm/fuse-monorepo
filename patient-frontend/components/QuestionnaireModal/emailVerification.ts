@@ -35,9 +35,9 @@ export const createEmailVerificationHandlers = (
 ): EmailVerificationHandlers => {
   const handleSendCodeFromModal = async () => {
     const email = state.verificationEmail || state.answers['email'];
-    
+
     console.log('📧 Attempting to send code to:', email);
-    
+
     if (!email || !email.includes('@')) {
       state.setEmailModalError('Please enter a valid email address');
       return;
@@ -45,17 +45,17 @@ export const createEmailVerificationHandlers = (
 
     state.setEmailModalError('');
     state.setEmailModalLoading(true);
-    
+
     const result = await sendVerificationCode(email);
-    
+
     state.setEmailModalLoading(false);
-    
+
     if (result.success) {
       // Update the answers with the email
       if (state.verificationEmail && state.verificationEmail !== state.answers['email']) {
         state.setAnswers((prev: any) => ({ ...prev, email: state.verificationEmail }));
       }
-      
+
       // Close modal and show verification step
       state.setShowEmailModal(false);
       state.setIsEmailVerificationMode(true);
@@ -91,9 +91,9 @@ export const createEmailVerificationHandlers = (
         // Exit verification mode and advance
         state.setIsEmailVerificationMode(false);
         state.setVerificationCode('');
-        
+
         console.log('✅ Existing user verified, advancing');
-        
+
         setTimeout(() => {
           if (state.questionnaire) {
             const totalSteps = state.getTotalSteps();
@@ -119,7 +119,7 @@ export const createEmailVerificationHandlers = (
   const handleResendCode = async () => {
     state.setVerificationError('');
     const result = await sendVerificationCode(state.verificationEmail);
-    
+
     if (result.success) {
       alert('Verification code sent!');
     } else {
@@ -130,9 +130,9 @@ export const createEmailVerificationHandlers = (
   const handleEmailSignIn = () => {
     console.log('🔵 handleEmailSignIn called');
     const email = state.answers['email'];
-    
+
     console.log('📧 Current email in answers:', email);
-    
+
     if (!email || !email.includes('@')) {
       // Show email input modal
       console.log('📧 No valid email, calling setShowEmailModal(true)');
