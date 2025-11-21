@@ -154,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
 
   const baseNavItems = [
     { id: "dashboard", label: "Dashboard", icon: "lucide:layout-dashboard" },
-    { id: "offerings", label: "Offerings", icon: "lucide:list-checks" },
+    // { id: "offerings", label: "Offerings", icon: "lucide:list-checks" }, // Hidden
     { id: "treatments", label: "Treatments", icon: "lucide:pill" },
     { id: "messenger", label: "Messenger", icon: "lucide:message-square" },
     { id: "account", label: "Account", icon: "lucide:user" },
