@@ -34,6 +34,10 @@ import Sale from '../models/Sale';
 import DoctorPatientChats from '../models/DoctorPatientChats';
 import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
+import TenantCustomFeatures from '../models/TenantCustomFeatures';
+import TierConfiguration from '../models/TierConfiguration';
+import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
+import FormAnalyticsDaily from '../models/FormAnalyticsDaily';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -88,7 +92,8 @@ export const sequelize = new Sequelize(databaseUrl, {
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
-    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct
+    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
+    TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily
   ],
 });
 
@@ -253,6 +258,37 @@ export async function initializeDatabase() {
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
 
+    // Ensure TierConfiguration exists for all active BrandSubscriptionPlans
+    try {
+      console.log('🔍 Checking TierConfiguration for active plans...');
+      const activePlans = await BrandSubscriptionPlans.findAll({
+        where: { isActive: true }
+      });
+
+      for (const plan of activePlans) {
+        const existingConfig = await TierConfiguration.findOne({
+          where: { brandSubscriptionPlanId: plan.id }
+        });
+
+        if (!existingConfig) {
+          // Determine default canAddCustomProducts based on plan type
+          const isPremiumTier = plan.planType.toLowerCase() === 'premium' ||
+            plan.planType.toLowerCase() === 'enterprise';
+
+          await TierConfiguration.create({
+            brandSubscriptionPlanId: plan.id,
+            canAddCustomProducts: isPremiumTier,
+          });
+          console.log(`✅ Created TierConfiguration for plan: ${plan.name} (${plan.planType}) - canAddCustomProducts: ${isPremiumTier}`);
+        } else {
+          console.log(`✓ TierConfiguration already exists for plan: ${plan.name}`);
+        }
+      }
+      console.log('✅ TierConfiguration check complete');
+    } catch (error) {
+      console.error('❌ Error ensuring TierConfiguration:', error);
+    }
+
     // Force recreate GlobalFormStructure table (drop and recreate)
     try {
       console.log('🔄 Dropping and recreating GlobalFormStructure table...');
@@ -306,6 +342,17 @@ export async function initializeDatabase() {
       await sequelize.query('DELETE FROM "TenantProductForms" WHERE "deletedAt" IS NOT NULL;');
     } catch (e) {
       // ignore
+    }
+
+    // Ensure customMaxProducts column exists on BrandSubscription
+    try {
+      await sequelize.query(`
+        ALTER TABLE "BrandSubscription"
+        ADD COLUMN IF NOT EXISTS "customMaxProducts" INTEGER;
+      `);
+      console.log('✅ Ensured customMaxProducts column exists on BrandSubscription');
+    } catch (e) {
+      console.log('⚠️  customMaxProducts column may already exist or error:', e instanceof Error ? e.message : e);
     }
 
     // Reset retry flag at the start of a new billing cycle

@@ -39,6 +39,7 @@ import { ProductSelection } from "./components/ProductSelection";
 import { BMICalculator } from "./components/BMICalculator";
 import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVariables";
 import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
+import { trackFormView, trackFormConversion, trackFormDropOff } from "../../lib/analytics";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
@@ -53,7 +54,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   productPrice,
   productStripePriceId,
   productStripeProductId,
-  tenantProductId
+  tenantProductId,
+  tenantProductFormId
 }) => {
   console.log('🔍 QuestionnaireModal received globalFormStructure:', globalFormStructure)
   const { clinic: domainClinic, isLoading: isLoadingClinic } = useClinicFromDomain();
@@ -93,6 +95,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     securityCode: "",
     country: "brazil"
   });
+
+  // Track if we've already sent analytics for this modal session
+  const hasTrackedViewRef = React.useRef(false);
+  const hasConvertedRef = React.useRef(false);
+  const hasTrackedDropOffRef = React.useRef(false);
+  const lastStageRef = React.useRef<'product' | 'payment' | 'account'>('product');
 
   // Calculate BMI width for animation
   const bmiWidth = React.useMemo(() => {
@@ -640,6 +648,153 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   }, [questionnaireId, domainClinic?.id, isOpen]);
 
+  // Track form view when modal opens
+  React.useEffect(() => {
+    const handleTrackFormView = async () => {
+      // Use tenantProductFormId - this should always be available from the URL
+      const formIdForTracking = tenantProductFormId;
+
+      console.log('🔍 [Analytics] Checking tracking conditions:', {
+        isOpen,
+        questionnaireId,
+        tenantProductFormId,
+        formIdForTracking,
+        tenantProductId,
+        hasTrackedView: hasTrackedViewRef.current,
+        domainClinic: domainClinic ? { id: domainClinic.id, name: domainClinic.name, userId: (domainClinic as any).userId } : null
+      });
+
+      // Only track if modal is open and we have the required data
+      if (!isOpen || !formIdForTracking || !tenantProductId || !domainClinic) {
+        console.log('⚠️ [Analytics] Skipping tracking - missing required data');
+        return;
+      }
+
+      // Skip if we've already tracked this modal session
+      if (hasTrackedViewRef.current) {
+        console.log('⚠️ [Analytics] Skipping tracking - already tracked for this modal session');
+        return;
+      }
+
+      // Get the user ID from the clinic (the brand owner)
+      const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
+
+      if (!userId) {
+        console.warn('⚠️ [Analytics] Cannot track view: no userId found on clinic. Clinic data:', domainClinic);
+        return;
+      }
+
+      console.log('✅ [Analytics] All conditions met, calling trackFormView...');
+
+      // Mark as tracked IMMEDIATELY to prevent duplicate calls
+      hasTrackedViewRef.current = true;
+
+      await trackFormView({
+        userId,
+        productId: tenantProductId,
+        formId: formIdForTracking,
+        clinicId: domainClinic.id,
+        clinicName: domainClinic.name,
+        productName: productName || undefined
+      });
+    };
+
+    handleTrackFormView();
+  }, [isOpen, questionnaireId, tenantProductFormId, tenantProductId, domainClinic, productName]);
+
+  // Track drop-off when user leaves page or closes modal
+  const prevIsOpenRef = React.useRef(isOpen);
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    // Reset drop-off flag when opening
+    hasTrackedDropOffRef.current = false;
+
+    // Function to track drop-off
+    const trackDropOff = (useBeacon = false) => {
+      if (hasTrackedViewRef.current && !hasConvertedRef.current && !hasTrackedDropOffRef.current && tenantProductFormId && tenantProductId && domainClinic) {
+        const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
+
+        if (userId) {
+          const stage = lastStageRef.current;
+
+          console.log('📊 [Analytics] Tracking drop-off:', {
+            userId,
+            productId: tenantProductId,
+            formId: tenantProductFormId,
+            stage,
+            useBeacon,
+          });
+
+          hasTrackedDropOffRef.current = true;
+
+          trackFormDropOff({
+            userId,
+            productId: tenantProductId,
+            formId: tenantProductFormId,
+            dropOffStage: stage,
+            clinicId: domainClinic.id,
+            clinicName: domainClinic.name,
+            productName: productName || undefined,
+            useBeacon,
+          });
+        }
+      }
+    };
+
+    // Handle page unload (tab close, window close, navigation away)
+    const handleBeforeUnload = () => {
+      trackDropOff(true); // Use sendBeacon for reliability
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isOpen, tenantProductFormId, tenantProductId, domainClinic, productName]);
+
+  // Track drop-off when modal closes explicitly (user clicks X or back button)
+  React.useEffect(() => {
+    const wasOpen = prevIsOpenRef.current;
+    const isNowClosed = !isOpen;
+
+    // Track drop-off only when modal was open and is now closed
+    if (wasOpen && isNowClosed && hasTrackedViewRef.current && !hasConvertedRef.current && !hasTrackedDropOffRef.current && tenantProductFormId && tenantProductId && domainClinic) {
+      const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
+
+      if (userId) {
+        const stage = lastStageRef.current;
+
+        console.log('📊 [Analytics] Tracking drop-off on modal close:', {
+          userId,
+          productId: tenantProductId,
+          formId: tenantProductFormId,
+          stage,
+        });
+
+        hasTrackedDropOffRef.current = true;
+
+        trackFormDropOff({
+          userId,
+          productId: tenantProductId,
+          formId: tenantProductFormId,
+          dropOffStage: stage,
+          clinicId: domainClinic.id,
+          clinicName: domainClinic.name,
+          productName: productName || undefined,
+          useBeacon: false, // Use regular fetch for explicit closes
+        });
+      }
+    }
+
+    // Update the previous value
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, tenantProductFormId, tenantProductId, domainClinic, productName]);
+
   // Reset state when modal closes
   React.useEffect(() => {
     if (!isOpen) {
@@ -653,6 +808,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setPaymentIntentId(null);
       setPaymentStatus('idle');
       setSelectedPlan("monthly");
+      // Reset analytics tracking flags
+      hasTrackedViewRef.current = false;
+      hasConvertedRef.current = false;
+      hasTrackedDropOffRef.current = false;
       setShippingInfo({
         address: "",
         apartment: "",
@@ -809,6 +968,33 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     return currentStepIndex === checkoutStepIndex;
   };
 
+  // Determine the current stage for analytics drop-off tracking
+  const getCurrentStage = (): 'product' | 'payment' | 'account' => {
+    // If we're on the checkout step, it's the payment stage
+    if (isCheckoutStep()) {
+      return 'payment';
+    }
+
+    // Otherwise, check the current step's category or questionnaire type
+    const currentStep = getCurrentQuestionnaireStep();
+    if (currentStep) {
+      // If the step category is 'user_profile', it's the account stage
+      if (currentStep.category === 'user_profile') {
+        return 'account';
+      }
+    }
+
+    // Default to 'product' stage for normal questions
+    return 'product';
+  };
+
+  // Update the last stage ref whenever the user navigates
+  React.useEffect(() => {
+    if (isOpen && questionnaire) {
+      const currentStage = getCurrentStage();
+      lastStageRef.current = currentStage;
+    }
+  }, [currentStepIndex, isOpen, questionnaire]);
 
   // Helper: Evaluate step-level conditional logic
   const evaluateStepConditionalLogic = (step: any): boolean => {
@@ -1666,6 +1852,27 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setPaymentStatus('succeeded');
       console.log('💳 Payment authorized successfully:', paymentIntentId);
       console.log('💳 Subscription will be created after manual payment capture');
+
+      // Track conversion in analytics - use tenantProductFormId which is always available from URL
+      if (tenantProductFormId && tenantProductId && domainClinic) {
+        const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
+
+        if (userId) {
+          await trackFormConversion({
+            userId,
+            productId: tenantProductId,
+            formId: tenantProductFormId,
+            clinicId: domainClinic.id,
+            clinicName: domainClinic.name,
+            productName: productName || undefined,
+            paymentIntentId: paymentIntentId,
+            orderId: orderId || undefined
+          });
+
+          // Mark as converted so we don't track a drop-off
+          hasConvertedRef.current = true;
+        }
+      }
 
       // Don't close modal, allow user to continue with questionnaire steps
     } catch (error) {

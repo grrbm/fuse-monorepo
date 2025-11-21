@@ -28,6 +28,14 @@ interface Subscription {
   }
   nextBillingDate?: string
   monthlyPrice?: number
+  tierConfig?: {
+    canAddCustomProducts?: boolean
+    hasAccessToAnalytics?: boolean
+  } | null
+  customFeatures?: {
+    canAddCustomProducts?: boolean
+    hasAccessToAnalytics?: boolean
+  } | null
 }
 
 interface AuthContextType {
@@ -89,20 +97,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     input: RequestInfo | URL,
     init: RequestInit & { skipLogoutOn401?: boolean } = {}
   ): Promise<Response> => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+    console.log('🔐 [Auth] authenticatedFetch called for:', url)
+    
     const activeToken = token || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null)
+    console.log('🔐 [Auth] Token present:', !!activeToken)
+    
     const headers = new Headers(init.headers || {})
 
     if (activeToken && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${activeToken}`)
     }
 
+    console.log('🔐 [Auth] Sending request...')
     const response = await fetch(input, {
       ...init,
       headers,
       credentials: init.credentials ?? 'include',
     })
 
+    console.log('🔐 [Auth] Response status:', response.status, 'for', url)
+
     if (response.status === 401 && !init.skipLogoutOn401) {
+      console.log('❌ [Auth] 401 Unauthorized - logging out user')
       handleUnauthorized()
       throw new Error('unauthorized')
     }
@@ -110,23 +127,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return response
   }
 
-  // Check for existing token on mount
+  // Check for existing token on mount or impersonation token in URL
   useEffect(() => {
-    const storedToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null
-    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('admin_user') : null
+    const checkAuth = async () => {
+      // Check for impersonation token in URL
+      const urlParams = new URLSearchParams(window.location.search)
+      const impersonateToken = urlParams.get('impersonateToken')
 
-    if (storedToken && storedUser) {
-      try {
-        const userData = JSON.parse(storedUser)
-        setToken(storedToken)
-        setUser(userData)
-      } catch (error) {
-        localStorage.removeItem('admin_token')
-        localStorage.removeItem('admin_user')
+      if (impersonateToken) {
+        console.log('🎭 [Impersonation] Token found in URL, fetching user data...')
+        
+        try {
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+          const response = await fetch(`${apiUrl}/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${impersonateToken}`,
+            },
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.user) {
+              console.log('✅ [Impersonation] User data fetched successfully')
+              
+              // Store token and user data
+              localStorage.setItem('admin_token', impersonateToken)
+              localStorage.setItem('admin_user', JSON.stringify(data.user))
+              
+              setToken(impersonateToken)
+              setUser(data.user)
+
+              // Clean up URL by removing the impersonateToken parameter
+              urlParams.delete('impersonateToken')
+              const newUrl = urlParams.toString() 
+                ? `${window.location.pathname}?${urlParams.toString()}`
+                : window.location.pathname
+              window.history.replaceState({}, '', newUrl)
+              
+              setIsLoading(false)
+              return
+            }
+          }
+          
+          console.error('❌ [Impersonation] Failed to fetch user data with impersonation token')
+        } catch (error) {
+          console.error('❌ [Impersonation] Error:', error)
+        }
       }
+
+      // Fallback to checking for stored token
+      const storedToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null
+      const storedUser = typeof window !== 'undefined' ? localStorage.getItem('admin_user') : null
+
+      if (storedToken && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser)
+          setToken(storedToken)
+          setUser(userData)
+        } catch (error) {
+          localStorage.removeItem('admin_token')
+          localStorage.removeItem('admin_user')
+        }
+      }
+
+      setIsLoading(false)
     }
 
-    setIsLoading(false)
+    checkAuth()
   }, [])
 
   // Fetch subscription data when user or token changes
