@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   Card,
   CardBody,
@@ -54,6 +55,8 @@ export const TreatmentsPage: React.FC = () => {
   const [uploadingLogo, setUploadingLogo] = React.useState(false);
   const [savingTreatment, setSavingTreatment] = React.useState(false);
   const [selectedTreatmentForQuestionnaire, setSelectedTreatmentForQuestionnaire] = React.useState<Treatment | null>(null);
+  const [expandedOrders, setExpandedOrders] = React.useState<Set<string>>(new Set());
+  const [expandedTreatments, setExpandedTreatments] = React.useState<Set<string>>(new Set());
   const { user } = useAuth();
 
   // Modal controls
@@ -414,108 +417,313 @@ export const TreatmentsPage: React.FC = () => {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0"
       >
         <h1 className="text-2xl font-semibold">Treatments & Orders</h1>
-        <Button
-          color="primary"
-          startContent={<Icon icon="lucide:plus" />}
-          size="sm"
-          className="sm:size-md w-full sm:w-auto"
-          onPress={user?.role === 'doctor' ? handleAddTreatment : undefined}
-        >
-          {user?.role === 'doctor' ? 'Add New Treatment' : 'Request New Treatment'}
-        </Button>
       </motion.div>
 
-      {/* Active Orders Section - Only show for patients */}
-      {user?.role !== 'doctor' && (
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* LEFT COLUMN - Active Orders */}
+        {user?.role !== 'doctor' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.05 }}
+            className="space-y-4"
+          >
+            <h2 className="text-xl font-semibold">Active Orders</h2>
+            {isLoadingOrders ? (
+              <Card className="border border-content3">
+                <CardBody className="p-8 text-center">
+                  <div className="flex justify-center mb-3">
+                    <Icon icon="lucide:loader-2" className="text-3xl text-primary animate-spin" />
+                  </div>
+                  <p className="text-foreground-500">Loading your orders...</p>
+                </CardBody>
+              </Card>
+            ) : orders.length > 0 ? (
+              <div className="space-y-4">
+              {orders
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .map((order) => {
+                  // Status configuration with distinctive colors
+                  const orderStatusConfig: Record<string, any> = {
+                    pending: { color: "warning", icon: "lucide:clock", label: "Pending", borderClass: "border-l-warning" },
+                    paid: { color: "primary", icon: "lucide:check-circle", label: "Payment Captured", borderClass: "border-l-primary" },
+                    created: { color: "primary", icon: "lucide:file-text", label: "Order Created", borderClass: "border-l-primary" },
+                    assigned: { color: "secondary", icon: "lucide:user-check", label: "Assigned", borderClass: "border-l-secondary" },
+                    approved: { color: "secondary", icon: "lucide:clipboard-check", label: "Approved", borderClass: "border-l-secondary" },
+                    processing: { color: "primary", icon: "lucide:package", label: "Processing", borderClass: "border-l-primary" },
+                    waiting: { color: "warning", icon: "lucide:pause-circle", label: "Waiting", borderClass: "border-l-warning" },
+                    filled: { color: "primary", icon: "lucide:package-check", label: "Filled", borderClass: "border-l-primary" },
+                    shipped: { color: "success", icon: "lucide:truck", label: "Shipped", borderClass: "border-l-success" },
+                    delivered: { color: "success", icon: "lucide:home", label: "Delivered", borderClass: "border-l-success" },
+                    completed: { color: "success", icon: "lucide:check-circle-2", label: "Completed", borderClass: "border-l-success" },
+                    cancelled: { color: "danger", icon: "lucide:x-circle", label: "Cancelled", borderClass: "border-l-danger" },
+                    rejected: { color: "danger", icon: "lucide:ban", label: "Rejected", borderClass: "border-l-danger" },
+                    problem: { color: "danger", icon: "lucide:alert-triangle", label: "Issue", borderClass: "border-l-danger" }
+                  };
+
+                  const shippingOrder = order.shippingOrders?.[0];
+                  const currentStatus = shippingOrder?.status?.toLowerCase() || order.status?.toLowerCase() || 'pending';
+                  const statusInfo = orderStatusConfig[currentStatus] || orderStatusConfig.pending;
+
+                  // Get progress percentage based on status
+                  const getProgress = () => {
+                    const statusOrder = ['pending', 'paid', 'created', 'assigned', 'approved', 'processing', 'filled', 'shipped', 'delivered', 'completed'];
+                    const currentIndex = statusOrder.indexOf(currentStatus);
+                    if (currentIndex === -1) return 0;
+                    return ((currentIndex + 1) / statusOrder.length) * 100;
+                  };
+
+                  const progress = getProgress();
+                  
+                  // Get border color class from config
+                  const borderColorClass = statusInfo.borderClass || 'border-l-primary';
+
+                  const formatDate = (dateString: string) => {
+                    return new Date(dateString).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    });
+                  };
+
+                  const isExpanded = expandedOrders.has(order.id);
+
+                  const toggleExpanded = () => {
+                    const newExpanded = new Set(expandedOrders);
+                    if (isExpanded) {
+                      newExpanded.delete(order.id);
+                    } else {
+                      newExpanded.add(order.id);
+                    }
+                    setExpandedOrders(newExpanded);
+                  };
+
+                  return (
+                    <Card
+                      key={order.id}
+                      className={`w-full cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-l-4 ${borderColorClass} group`}
+                      isPressable
+                      onPress={toggleExpanded}
+                    >
+                      <CardBody className="p-4">
+                        {/* Header - Always visible */}
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-base text-foreground">{order.orderNumber}</h3>
+                            <p className="text-xs text-foreground-500">Ordered {formatDate(order.createdAt)}</p>
+                            <p className="text-sm font-semibold text-foreground mt-1">
+                              ${typeof order.totalAmount === 'number'
+                                ? order.totalAmount.toFixed(2)
+                                : parseFloat(order.totalAmount || '0').toFixed(2)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Chip color={statusInfo.color as any} size="sm" variant="flat" className="text-xs">
+                              <div className="flex items-center gap-1">
+                                <Icon icon={statusInfo.icon} width={14} />
+                                <span>{statusInfo.label}</span>
+                              </div>
+                            </Chip>
+                            <Icon 
+                              icon="lucide:chevron-down" 
+                              className={`text-foreground-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}
+                              width={20}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Progress Bar - Always visible */}
+                        {!['cancelled', 'rejected', 'problem'].includes(currentStatus) && (
+                          <div className="w-full mb-3">
+                            <div className="h-1.5 bg-content2 rounded-full overflow-hidden">
+                              <motion.div
+                                className={`h-full ${
+                                  statusInfo.color === 'success' ? 'bg-success' :
+                                  statusInfo.color === 'warning' ? 'bg-warning' :
+                                  statusInfo.color === 'danger' ? 'bg-danger' :
+                                  statusInfo.color === 'secondary' ? 'bg-secondary' :
+                                  'bg-primary'
+                                }`}
+                                initial={{ width: 0 }}
+                                animate={{ width: `${progress}%` }}
+                                transition={{ duration: 0.5 }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action Button - Always visible when collapsed */}
+                        {!isExpanded && (
+                          <Link href={`/offerings/${order.id}`} className="block">
+                            <Button
+                              size="sm"
+                              variant="flat"
+                              color="primary"
+                              className="w-full"
+                              startContent={<Icon icon="lucide:eye" width={14} />}
+                            >
+                              View Details
+                            </Button>
+                          </Link>
+                        )}
+
+                        {/* Expandable content */}
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.3 }}
+                          >
+                            <Divider className="my-3" />
+
+                            {/* Products/Items */}
+                            <div className="mb-3">
+                          <h4 className="text-xs font-semibold mb-2 text-foreground-500">Items</h4>
+                          <div className="space-y-2">
+                            {order.orderItems && order.orderItems.length > 0 ? (
+                              order.orderItems.map((item: any, index: number) => (
+                                <div key={index} className="flex justify-between items-start text-xs">
+                                  <div className="flex-1">
+                                    <p className="font-medium text-foreground">{item.product?.name || 'Product'}</p>
+                                    {item.product?.placeholderSig && (
+                                      <p className="text-xs text-foreground-400 mt-0.5">{item.product.placeholderSig}</p>
+                                    )}
+                                  </div>
+                                  <p className="text-foreground-500 ml-2">Qty: {item.quantity}</p>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-xs text-foreground">{order.tenantProduct?.product?.name || 'Order Item'}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Tracking Information */}
+                        {shippingOrder && (
+                          <>
+                            <Divider className="my-3" />
+                            <div className="mb-3">
+                              <h4 className="text-xs font-semibold mb-2 text-foreground-500">Tracking Details</h4>
+                              <div className="space-y-1.5">
+                                {shippingOrder.pharmacyOrderId && (
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <Icon icon="lucide:package" className="text-foreground-400" width={12} />
+                                    <span className="text-foreground-500">Pharmacy:</span>
+                                    <span className="font-medium text-foreground">{shippingOrder.pharmacyOrderId}</span>
+                                  </div>
+                                )}
+                                {shippingOrder.trackingNumber && (
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <Icon icon="lucide:truck" className="text-foreground-400" width={12} />
+                                    <span className="text-foreground-500">Tracking:</span>
+                                    {shippingOrder.trackingUrl ? (
+                                      <a
+                                        href={shippingOrder.trackingUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-medium text-primary hover:underline"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {shippingOrder.trackingNumber}
+                                      </a>
+                                    ) : (
+                                      <span className="font-medium text-foreground font-mono">{shippingOrder.trackingNumber}</span>
+                                    )}
+                                  </div>
+                                )}
+                                {shippingOrder.shippedAt && (
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <Icon icon="lucide:calendar" className="text-foreground-400" width={12} />
+                                    <span className="text-foreground-500">Shipped:</span>
+                                    <span className="font-medium text-foreground">{formatDate(shippingOrder.shippedAt)}</span>
+                                  </div>
+                                )}
+                                {shippingOrder.deliveredAt && (
+                                  <div className="flex items-center gap-2 text-xs">
+                                    <Icon icon="lucide:calendar-check" className="text-foreground-400" width={12} />
+                                    <span className="text-foreground-500">Delivered:</span>
+                                    <span className="font-medium text-foreground">{formatDate(shippingOrder.deliveredAt)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Shipping Address */}
+                        {order.shippingAddress && (
+                          <>
+                            <Divider className="my-3" />
+                            <div className="mb-3">
+                              <h4 className="text-xs font-semibold mb-2 text-foreground-500">Delivery Address</h4>
+                              <div className="text-xs text-foreground-600 space-y-0.5">
+                                <p>{order.shippingAddress.address}</p>
+                                {order.shippingAddress.apartment && <p>{order.shippingAddress.apartment}</p>}
+                                <p>
+                                  {order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.zipCode}
+                                </p>
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                            {/* Total Amount */}
+                            <Divider className="my-3" />
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-semibold text-foreground">Total Amount</span>
+                              <span className="text-lg font-bold text-foreground">
+                                ${typeof order.totalAmount === 'number'
+                                  ? order.totalAmount.toFixed(2)
+                                  : parseFloat(order.totalAmount || '0').toFixed(2)}
+                              </span>
+                            </div>
+                          </motion.div>
+                        )}
+                      </CardBody>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <Card className="border border-content3">
+                <CardBody className="p-8 text-center">
+                  <div className="flex justify-center mb-3">
+                    <div className="p-3 rounded-full bg-content2">
+                      <Icon icon="lucide:package-open" className="text-3xl text-foreground-400" />
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-medium mb-1">No Orders Yet</h3>
+                  <p className="text-foreground-500">
+                    When you order treatments, you'll see them here with tracking information
+                  </p>
+                </CardBody>
+              </Card>
+            )}
+          </motion.div>
+        )}
+
+        {/* RIGHT COLUMN - Treatments */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.05 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="space-y-4"
         >
-          <h2 className="text-xl font-semibold mb-4">Active Orders</h2>
-          {isLoadingOrders ? (
-            <Card className="border border-content3">
-              <CardBody className="p-8 text-center">
-                <div className="flex justify-center mb-3">
-                  <Icon icon="lucide:loader-2" className="text-3xl text-primary animate-spin" />
-                </div>
-                <p className="text-foreground-500">Loading your orders...</p>
-              </CardBody>
-            </Card>
-          ) : orders.length > 0 ? (
-            <div className="space-y-4">
-              {orders.map((order) => (
-                <OrderTrackingCard key={order.id} order={order} />
-              ))}
-            </div>
-          ) : (
-            <Card className="border border-content3">
-              <CardBody className="p-8 text-center">
-                <div className="flex justify-center mb-3">
-                  <div className="p-3 rounded-full bg-content2">
-                    <Icon icon="lucide:package-open" className="text-3xl text-foreground-400" />
-                  </div>
-                </div>
-                <h3 className="text-lg font-medium mb-1">No Orders Yet</h3>
-                <p className="text-foreground-500">
-                  When you order treatments, you'll see them here with tracking information
-                </p>
-              </CardBody>
-            </Card>
-          )}
-        </motion.div>
-      )}
+          <h2 className="text-xl font-semibold">Treatments</h2>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-      >
-        <Card className="border border-content3">
-          <CardBody className="p-3 sm:p-4">
-            <div className="flex flex-col gap-4">
-              <div className="w-full">
-                <Input
-                  placeholder="Search treatments..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  startContent={<Icon icon="lucide:search" className="text-foreground-400" />}
-                  isClearable
-                  onClear={() => setSearchQuery("")}
-                  size="sm"
-                  className="sm:size-md"
-                />
-              </div>
-              {user?.role !== 'doctor' && (
-                <Tabs
-                  selectedKey={selectedTab}
-                  onSelectionChange={(key) => setSelectedTab(key as string)}
-                  variant="light"
-                  color="primary"
-                  classNames={{
-                    base: "w-full",
-                    tabList: "gap-2 overflow-x-auto flex-nowrap"
-                  }}
-                  size="sm"
-                >
-                  <Tab key="all" title="All Treatments" />
-                  <Tab key="active" title="Active" />
-                  <Tab key="paused" title="Paused" />
-                  <Tab key="cancelled" title="Cancelled" />
-                </Tabs>
-              )}
-            </div>
-
-            <motion.div
-              variants={container}
-              initial="hidden"
-              animate="show"
-              className="space-y-4 mt-4"
-            >
-              {isLoading ? (
+          {/* Treatments List */}
+          <motion.div
+            variants={container}
+            initial="hidden"
+            animate="show"
+            className="space-y-4"
+          >
+                {isLoading ? (
                 <div className="text-center py-8">
                   <div className="flex justify-center mb-3">
                     <div className="p-3 rounded-full bg-content2">
@@ -526,150 +734,190 @@ export const TreatmentsPage: React.FC = () => {
                   <p className="text-foreground-500">Please wait while we fetch your treatments</p>
                 </div>
               ) : filteredTreatments.length > 0 ? (
-                filteredTreatments.map((treatment) => (
-                  <motion.div key={treatment.id} variants={item}>
-                    <Card className="border border-content3">
-                      <CardBody className="p-3 sm:p-4">
-                        <div className="flex flex-col gap-4">
-                          <div className="flex gap-3">
-                            <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0">
-                              <img
-                                src={treatment.treatmentLogo || treatment.image || "https://img.heroui.chat/image/medicine?w=100&h=100&u=default"}
-                                alt={treatment.name}
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
+                filteredTreatments.map((treatment) => {
+                  const statusColor = getStatusColor(getTreatmentDisplayStatus(treatment));
+                  const borderColorClass = statusColor === 'success' 
+                    ? 'border-l-success' 
+                    : statusColor === 'warning' 
+                    ? 'border-l-warning' 
+                    : statusColor === 'danger' 
+                    ? 'border-l-danger' 
+                    : 'border-l-primary';
 
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap gap-2 items-start justify-between">
-                                <div>
-                                  <h3 className="font-medium text-lg">{treatment.name}</h3>
-                                  <p className="text-foreground-600 text-sm">{treatment.subtitle || "Treatment"}</p>
-                                </div>
-                                <Chip
-                                  color={getStatusColor(getTreatmentDisplayStatus(treatment)) as any}
-                                  variant="flat"
-                                  size="sm"
-                                >
-                                  {getStatusLabel(getTreatmentDisplayStatus(treatment))}
-                                </Chip>
+                  const isExpanded = expandedTreatments.has(treatment.id);
+
+                  const toggleExpanded = () => {
+                    const newExpanded = new Set(expandedTreatments);
+                    if (isExpanded) {
+                      newExpanded.delete(treatment.id);
+                    } else {
+                      newExpanded.add(treatment.id);
+                    }
+                    setExpandedTreatments(newExpanded);
+                  };
+
+                  return (
+                    <motion.div key={treatment.id} variants={item}>
+                      <Card 
+                        className={`w-full cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-l-4 ${borderColorClass} group`}
+                        isPressable
+                        onPress={toggleExpanded}
+                      >
+                        <CardBody className="p-4">
+                          {/* Header - Always visible */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex gap-3 flex-1">
+                              <div className="h-12 w-12 rounded-md overflow-hidden flex-shrink-0 bg-primary-100 flex items-center justify-center">
+                                {treatment.treatmentLogo || treatment.image ? (
+                                  <img
+                                    src={treatment.treatmentLogo || treatment.image}
+                                    alt={treatment.name}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <Icon 
+                                    icon="lucide:pill" 
+                                    className="text-primary" 
+                                    width={24}
+                                  />
+                                )}
                               </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-base text-foreground line-clamp-1">{treatment.name}</h3>
+                                <p className="text-xs text-foreground-500 line-clamp-1">{treatment.subtitle || "Treatment"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Chip
+                                color={statusColor as any}
+                                variant="flat"
+                                size="sm"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>{getStatusLabel(getTreatmentDisplayStatus(treatment))}</span>
+                                </div>
+                              </Chip>
+                              <Icon 
+                                icon="lucide:chevron-down" 
+                                className={`text-foreground-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}
+                                width={20}
+                              />
                             </div>
                           </div>
 
-                          <Divider className="my-1" />
+                          {/* Expandable content */}
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              <Divider className="my-3" />
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                              <h4 className="text-sm font-medium mb-2">Treatment Details</h4>
-                              <div className="space-y-1 text-sm">
-                                <p className="flex items-center gap-2">
-                                  <Icon icon="lucide:pill" className="text-foreground-500" />
-                                  <span className="text-foreground-600">Sig:</span> {treatment.placeholderSig || "As prescribed"}
-                                </p>
-                                <p className="flex items-center gap-2">
-                                  <Icon icon="lucide:repeat" className="text-foreground-500" />
-                                  <span className="text-foreground-600">Refills:</span> {treatment.refills || 0} remaining
-                                </p>
-                                <p className="flex items-center gap-2">
-                                  <Icon icon="lucide:calendar" className="text-foreground-500" />
-                                  <span className="text-foreground-600">Expires:</span> {treatment.expiryDate || "N/A"}
-                                </p>
-                                {treatment.nextRefillDate && (
-                                  <p className="flex items-center gap-2">
-                                    <Icon icon="lucide:calendar-clock" className="text-foreground-500" />
-                                    <span className="text-foreground-600">Next Refill:</span> {treatment.nextRefillDate}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-
-                            <div>
-                              <h4 className="text-sm font-medium mb-2">Prescribing Doctor</h4>
-                              <div className="flex items-center gap-3">
-                                <Avatar 
-                                  name={treatment.doctor?.name || "Dr. Unknown"}
-                                  size="sm"
-                                  fallback={
-                                    <span className="text-lg">👨‍⚕️</span>
-                                  }
-                                />
-                                <div>
-                                  <p className="font-medium">{treatment.doctor?.name || "Dr. Unknown"}</p>
-                                  <p className="text-sm text-foreground-500">{treatment.doctor?.specialty || "General Medicine"}</p>
+                              <div className="space-y-2">
+                                <div className="flex items-start gap-2 text-xs text-foreground-500">
+                                  <Icon icon="lucide:pill" width={14} className="mt-0.5 flex-shrink-0" />
+                                  <span>{treatment.placeholderSig || "As prescribed"}</span>
                                 </div>
-                              </div>
+                                
+                                <div className="flex items-center gap-4 text-xs text-foreground-500">
+                                  <div className="flex items-center gap-1">
+                                    <Icon icon="lucide:repeat" width={12} />
+                                    <span>{treatment.refills || 0} refills remaining</span>
+                                  </div>
+                                  {treatment.expiryDate && (
+                                    <div className="flex items-center gap-1">
+                                      <Icon icon="lucide:calendar" width={12} />
+                                      <span>Expires: {treatment.expiryDate}</span>
+                                    </div>
+                                  )}
+                                </div>
 
-                              <h4 className="text-sm font-medium mt-3 mb-1">Instructions</h4>
-                              <p className="text-sm text-foreground-600">{treatment.instructions || "No instructions available"}</p>
-                            </div>
+                                {treatment.nextRefillDate && (
+                                  <div className="flex items-center gap-2 text-xs text-foreground-500">
+                                    <Icon icon="lucide:calendar-clock" width={12} />
+                                    <span>Next Refill: {treatment.nextRefillDate}</span>
+                                  </div>
+                                )}
 
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {user?.role === 'doctor' ? (
-                                // Doctor actions
-                                <>
-                                  <Button
-                                    size="sm"
-                                    color="primary"
-                                    variant="flat"
-                                    startContent={<Icon icon="lucide:edit" />}
-                                    className="flex-1 sm:flex-none"
-                                    onPress={() => handleEditTreatment(treatment)}
-                                  >
-                                    Edit Treatment
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="light"
-                                    startContent={<Icon icon="lucide:trash-2" />}
-                                    className="flex-1 sm:flex-none"
-                                    color="danger"
-                                  >
-                                    Delete
-                                  </Button>
-                                </>
-                              ) : (
-                                // Patient actions
-                                <>
-                                  {getTreatmentDisplayStatus(treatment) === "active" && (
+                                {treatment.doctor && (
+                                  <>
+                                    <Divider className="my-2" />
+                                    <div>
+                                      <h4 className="text-xs font-semibold mb-2 text-foreground-500">Prescribing Doctor</h4>
+                                      <div className="flex items-center gap-2">
+                                        <Avatar 
+                                          name={treatment.doctor.name}
+                                          size="sm"
+                                          className="h-6 w-6"
+                                          fallback={<span className="text-xs">👨‍⚕️</span>}
+                                        />
+                                        <div className="text-xs">
+                                          <p className="font-medium text-foreground">{treatment.doctor.name}</p>
+                                          <p className="text-foreground-400">{treatment.doctor.specialty}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+
+                                {treatment.instructions && (
+                                  <>
+                                    <Divider className="my-2" />
+                                    <div>
+                                      <h4 className="text-xs font-semibold mb-1 text-foreground-500">Instructions</h4>
+                                      <p className="text-xs text-foreground-600">{treatment.instructions}</p>
+                                    </div>
+                                  </>
+                                )}
+
+                                <Divider className="my-3" />
+                                <div className="flex gap-2">
+                                  {user?.role === 'doctor' ? (
                                     <Button
                                       size="sm"
                                       color="primary"
                                       variant="flat"
-                                      startContent={<Icon icon="lucide:refresh-cw" />}
-                                      className="flex-1 sm:flex-none"
+                                      startContent={<Icon icon="lucide:edit" width={14} />}
+                                      className="flex-1"
                                       onPress={() => {
-                                        // Check if this is a treatment with a questionnaire
-                                        if (treatment.name.includes("NAD+") || treatment.name === "Weight Loss 2" || treatment.name.includes("Weight Loss")) {
-                                          handleOpenQuestionnaire(treatment);
-                                        } else {
-                                          // For other treatments, show regular refill request
-                                          alert("Refill request submitted for " + treatment.name);
-                                        }
+                                        handleEditTreatment(treatment);
                                       }}
                                     >
-                                      Request Refill
+                                      Edit Treatment
                                     </Button>
+                                  ) : (
+                                    getTreatmentDisplayStatus(treatment) === "active" && (
+                                      <Button
+                                        size="sm"
+                                        color="primary"
+                                        variant="flat"
+                                        startContent={<Icon icon="lucide:refresh-cw" width={14} />}
+                                        className="flex-1"
+                                        onPress={() => {
+                                          if (treatment.name.includes("NAD+") || treatment.name === "Weight Loss 2" || treatment.name.includes("Weight Loss")) {
+                                            handleOpenQuestionnaire(treatment);
+                                          } else {
+                                            alert("Refill request submitted for " + treatment.name);
+                                          }
+                                        }}
+                                      >
+                                        Request Refill
+                                      </Button>
+                                    )
                                   )}
-                                  <Button
-                                    size="sm"
-                                    variant="light"
-                                    startContent={<Icon icon="lucide:message-square" />}
-                                    className="flex-1 sm:flex-none"
-                                  >
-                                    Contact Doctor
-                                  </Button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </CardBody>
-                    </Card>
-                  </motion.div>
-                ))
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </CardBody>
+                      </Card>
+                    </motion.div>
+                  );
+                })
               ) : (
-                <div className="text-center py-8">
+                <div className="text-center py-8 p-4 rounded-md bg-white shadow-md">
                   <div className="flex justify-center mb-3">
                     <div className="p-3 rounded-full bg-content2">
                       <Icon icon="lucide:search-x" className="text-3xl text-foreground-400" />
@@ -683,10 +931,10 @@ export const TreatmentsPage: React.FC = () => {
                   </p>
                 </div>
               )}
-            </motion.div>
-          </CardBody>
-        </Card>
-      </motion.div>
+          </motion.div>
+        </motion.div>
+        
+      </div>
 
       {/* Add Treatment Modal */}
       <Modal
