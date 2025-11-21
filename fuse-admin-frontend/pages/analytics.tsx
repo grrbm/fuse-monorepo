@@ -28,6 +28,17 @@ interface FormAnalytics {
   conversions: number
   conversionRate: number
   formUrl: string
+  dropOffs?: {
+    product: number
+    payment: number
+    account: number
+    total: number
+  }
+  dropOffRates?: {
+    product: number
+    payment: number
+    account: number
+  }
 }
 
 interface AnalyticsOverview {
@@ -51,6 +62,17 @@ interface ProductDetailAnalytics {
     totalViews: number
     totalConversions: number
     overallConversionRate: number
+    dropOffs?: {
+      product: number
+      payment: number
+      account: number
+      total: number
+    }
+    dropOffRates?: {
+      product: number
+      payment: number
+      account: number
+    }
   }
   forms: FormAnalytics[]
 }
@@ -369,6 +391,66 @@ export default function Analytics() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Drop-Off Stages */}
+            {selectedProduct.summary.dropOffRates && (
+              <Card className="mb-8">
+                <CardHeader>
+                  <CardTitle>Drop Off %</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Percentage of users who viewed the form and dropped off during each stage
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between gap-4">
+                    {/* Product Stage */}
+                    <div className="flex-1 text-center">
+                      <div className="text-3xl font-bold text-foreground mb-2">
+                        {formatPercentage(selectedProduct.summary.dropOffRates.product)}
+                      </div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Product
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {formatNumber(selectedProduct.summary.dropOffs?.product || 0)} drop-offs
+                      </div>
+                    </div>
+
+                    {/* Separator */}
+                    <div className="h-16 w-px bg-border"></div>
+
+                    {/* Payment Stage */}
+                    <div className="flex-1 text-center">
+                      <div className="text-3xl font-bold text-foreground mb-2">
+                        {formatPercentage(selectedProduct.summary.dropOffRates.payment)}
+                      </div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Payment
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {formatNumber(selectedProduct.summary.dropOffs?.payment || 0)} drop-offs
+                      </div>
+                    </div>
+
+                    {/* Separator */}
+                    <div className="h-16 w-px bg-border"></div>
+
+                    {/* Account Stage */}
+                    <div className="flex-1 text-center">
+                      <div className="text-3xl font-bold text-foreground mb-2">
+                        {formatPercentage(selectedProduct.summary.dropOffRates.account)}
+                      </div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        Account
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {formatNumber(selectedProduct.summary.dropOffs?.account || 0)} drop-offs
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Forms Performance */}
             <Card>

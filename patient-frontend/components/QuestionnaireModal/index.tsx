@@ -39,7 +39,7 @@ import { ProductSelection } from "./components/ProductSelection";
 import { BMICalculator } from "./components/BMICalculator";
 import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVariables";
 import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
-import { trackFormView, trackFormConversion } from "../../lib/analytics";
+import { trackFormView, trackFormConversion, trackFormDropOff } from "../../lib/analytics";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
@@ -98,6 +98,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
   // Track if we've already sent analytics for this modal session
   const hasTrackedViewRef = React.useRef(false);
+  const hasConvertedRef = React.useRef(false);
 
   // Calculate BMI width for animation
   const bmiWidth = React.useMemo(() => {
@@ -699,6 +700,38 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     handleTrackFormView();
   }, [isOpen, questionnaireId, tenantProductFormId, tenantProductId, domainClinic, productName]);
 
+  // Track drop-off when modal closes (unless user converted)
+  React.useEffect(() => {
+    return () => {
+      // This cleanup function runs when the component unmounts or when dependencies change
+      // Track drop-off if modal is closing and user hasn't converted
+      if (isOpen && hasTrackedViewRef.current && !hasConvertedRef.current && tenantProductFormId && tenantProductId && domainClinic) {
+        const userId = (domainClinic as any).userId || (domainClinic as any).ownerId;
+
+        if (userId) {
+          const stage = getCurrentStage();
+
+          console.log('📊 [Analytics] Tracking drop-off on modal close:', {
+            userId,
+            productId: tenantProductId,
+            formId: tenantProductFormId,
+            stage,
+          });
+
+          trackFormDropOff({
+            userId,
+            productId: tenantProductId,
+            formId: tenantProductFormId,
+            dropOffStage: stage,
+            clinicId: domainClinic.id,
+            clinicName: domainClinic.name,
+            productName: productName || undefined
+          });
+        }
+      }
+    };
+  }, [isOpen, hasTrackedViewRef.current, hasConvertedRef.current, tenantProductFormId, tenantProductId, domainClinic, productName, currentStepIndex, questionnaire]);
+
   // Reset state when modal closes
   React.useEffect(() => {
     if (!isOpen) {
@@ -712,8 +745,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setPaymentIntentId(null);
       setPaymentStatus('idle');
       setSelectedPlan("monthly");
-      // Reset analytics tracking flag
+      // Reset analytics tracking flags
       hasTrackedViewRef.current = false;
+      hasConvertedRef.current = false;
       setShippingInfo({
         address: "",
         apartment: "",
@@ -870,6 +904,25 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     return currentStepIndex === checkoutStepIndex;
   };
 
+  // Determine the current stage for analytics drop-off tracking
+  const getCurrentStage = (): 'product' | 'payment' | 'account' => {
+    // If we're on the checkout step, it's the payment stage
+    if (isCheckoutStep()) {
+      return 'payment';
+    }
+
+    // Otherwise, check the current step's category or questionnaire type
+    const currentStep = getCurrentQuestionnaireStep();
+    if (currentStep) {
+      // If the step category is 'user_profile', it's the account stage
+      if (currentStep.category === 'user_profile') {
+        return 'account';
+      }
+    }
+
+    // Default to 'product' stage for normal questions
+    return 'product';
+  };
 
   // Helper: Evaluate step-level conditional logic
   const evaluateStepConditionalLogic = (step: any): boolean => {
@@ -1743,6 +1796,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
             paymentIntentId: paymentIntentId,
             orderId: orderId || undefined
           });
+
+          // Mark as converted so we don't track a drop-off
+          hasConvertedRef.current = true;
         }
       }
 

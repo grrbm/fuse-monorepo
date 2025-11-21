@@ -11,13 +11,13 @@ import AnalyticsService from '../services/analytics.service';
 
 const router = Router();
 
-// Track analytics event (view or conversion)
+// Track analytics event (view, conversion, or dropoff)
 router.post('/analytics/track', async (req: Request, res: Response) => {
   try {
     console.log('📊 [Analytics API] Received tracking request');
     console.log('📊 [Analytics API] Request body:', req.body);
     
-    const { userId, productId, formId, eventType, sessionId, metadata } = req.body;
+    const { userId, productId, formId, eventType, sessionId, dropOffStage, metadata } = req.body;
 
     if (!userId || !productId || !formId || !eventType) {
       console.log('❌ [Analytics API] Missing required fields:', { userId, productId, formId, eventType });
@@ -27,11 +27,28 @@ router.post('/analytics/track', async (req: Request, res: Response) => {
       });
     }
 
-    if (!['view', 'conversion'].includes(eventType)) {
+    if (!['view', 'conversion', 'dropoff'].includes(eventType)) {
       console.log('❌ [Analytics API] Invalid eventType:', eventType);
       return res.status(400).json({
         success: false,
-        error: 'eventType must be either "view" or "conversion"',
+        error: 'eventType must be either "view", "conversion", or "dropoff"',
+      });
+    }
+
+    // Validate dropOffStage if eventType is 'dropoff'
+    if (eventType === 'dropoff' && !dropOffStage) {
+      console.log('❌ [Analytics API] Missing dropOffStage for dropoff event');
+      return res.status(400).json({
+        success: false,
+        error: 'dropOffStage is required for dropoff events',
+      });
+    }
+
+    if (eventType === 'dropoff' && !['product', 'payment', 'account'].includes(dropOffStage)) {
+      console.log('❌ [Analytics API] Invalid dropOffStage:', dropOffStage);
+      return res.status(400).json({
+        success: false,
+        error: 'dropOffStage must be one of: product, payment, account',
       });
     }
 
@@ -42,6 +59,7 @@ router.post('/analytics/track', async (req: Request, res: Response) => {
       formId,
       eventType,
       sessionId,
+      dropOffStage: eventType === 'dropoff' ? dropOffStage : null,
       metadata,
     });
 
@@ -178,7 +196,14 @@ router.get('/analytics/products/:productId', authenticateJWT, async (req: Reques
     );
 
     // Group analytics by form and event type
-    const formAnalytics: Record<string, { views: number; conversions: number; formUrl: string }> = {};
+    const formAnalytics: Record<string, { 
+      views: number; 
+      conversions: number; 
+      productDropOffs: number;
+      paymentDropOffs: number;
+      accountDropOffs: number;
+      formUrl: string;
+    }> = {};
 
     // Process analytics events
     analytics.forEach((event) => {
@@ -200,6 +225,9 @@ router.get('/analytics/products/:productId', authenticateJWT, async (req: Reques
         formAnalytics[formId] = {
           views: 0,
           conversions: 0,
+          productDropOffs: 0,
+          paymentDropOffs: 0,
+          accountDropOffs: 0,
           formUrl: formLabel,
         };
       }
@@ -209,21 +237,49 @@ router.get('/analytics/products/:productId', authenticateJWT, async (req: Reques
         formAnalytics[formId].views++;
       } else if (eventData.eventType === 'conversion') {
         formAnalytics[formId].conversions++;
+      } else if (eventData.eventType === 'dropoff') {
+        // Count drop-offs by stage
+        if (eventData.dropOffStage === 'product') {
+          formAnalytics[formId].productDropOffs++;
+        } else if (eventData.dropOffStage === 'payment') {
+          formAnalytics[formId].paymentDropOffs++;
+        } else if (eventData.dropOffStage === 'account') {
+          formAnalytics[formId].accountDropOffs++;
+        }
       }
     });
 
-    // Calculate conversion rates
-    const formAnalyticsWithRates = Object.entries(formAnalytics).map(([formId, data]) => ({
-      formId,
-      views: data.views,
-      conversions: data.conversions,
-      conversionRate: data.views > 0 ? (data.conversions / data.views) * 100 : 0,
-      formUrl: data.formUrl,
-    }));
+    // Calculate conversion rates and drop-off percentages
+    const formAnalyticsWithRates = Object.entries(formAnalytics).map(([formId, data]) => {
+      const totalDropOffs = data.productDropOffs + data.paymentDropOffs + data.accountDropOffs;
+      
+      return {
+        formId,
+        views: data.views,
+        conversions: data.conversions,
+        conversionRate: data.views > 0 ? (data.conversions / data.views) * 100 : 0,
+        formUrl: data.formUrl,
+        dropOffs: {
+          product: data.productDropOffs,
+          payment: data.paymentDropOffs,
+          account: data.accountDropOffs,
+          total: totalDropOffs,
+        },
+        dropOffRates: {
+          // Calculate drop-off percentage as % of total views
+          product: data.views > 0 ? (data.productDropOffs / data.views) * 100 : 0,
+          payment: data.views > 0 ? (data.paymentDropOffs / data.views) * 100 : 0,
+          account: data.views > 0 ? (data.accountDropOffs / data.views) * 100 : 0,
+        },
+      };
+    });
 
     // Calculate totals
     const totalViews = Object.values(formAnalytics).reduce((sum, data) => sum + data.views, 0);
     const totalConversions = Object.values(formAnalytics).reduce((sum, data) => sum + data.conversions, 0);
+    const totalProductDropOffs = Object.values(formAnalytics).reduce((sum, data) => sum + data.productDropOffs, 0);
+    const totalPaymentDropOffs = Object.values(formAnalytics).reduce((sum, data) => sum + data.paymentDropOffs, 0);
+    const totalAccountDropOffs = Object.values(formAnalytics).reduce((sum, data) => sum + data.accountDropOffs, 0);
     const overallConversionRate = totalViews > 0 ? (totalConversions / totalViews) * 100 : 0;
 
     return res.json({
@@ -237,6 +293,17 @@ router.get('/analytics/products/:productId', authenticateJWT, async (req: Reques
           totalViews,
           totalConversions,
           overallConversionRate,
+          dropOffs: {
+            product: totalProductDropOffs,
+            payment: totalPaymentDropOffs,
+            account: totalAccountDropOffs,
+            total: totalProductDropOffs + totalPaymentDropOffs + totalAccountDropOffs,
+          },
+          dropOffRates: {
+            product: totalViews > 0 ? (totalProductDropOffs / totalViews) * 100 : 0,
+            payment: totalViews > 0 ? (totalPaymentDropOffs / totalViews) * 100 : 0,
+            account: totalViews > 0 ? (totalAccountDropOffs / totalViews) * 100 : 0,
+          },
         },
         forms: formAnalyticsWithRates,
       },

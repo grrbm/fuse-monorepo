@@ -55,5 +55,26 @@ export default class FormAnalyticsDaily extends Model {
     defaultValue: 0,
   })
   declare conversions: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare productStageDropOffs: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare paymentStageDropOffs: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare accountStageDropOffs: number;
 }
 

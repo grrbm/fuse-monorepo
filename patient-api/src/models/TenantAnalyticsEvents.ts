@@ -29,16 +29,22 @@ export default class TenantAnalyticsEvents extends Entity {
   declare formId: string;
 
   @Column({
-    type: DataType.ENUM('view', 'conversion'),
+    type: DataType.ENUM('view', 'conversion', 'dropoff'),
     allowNull: false,
   })
-  declare eventType: 'view' | 'conversion';
+  declare eventType: 'view' | 'conversion' | 'dropoff';
 
   @Column({
     type: DataType.STRING,
     allowNull: true,
   })
   declare sessionId?: string;
+
+  @Column({
+    type: DataType.ENUM('product', 'payment', 'account'),
+    allowNull: true,
+  })
+  declare dropOffStage?: 'product' | 'payment' | 'account';
 
   @Column({
     type: DataType.JSONB,

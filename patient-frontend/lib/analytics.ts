@@ -4,8 +4,9 @@ interface TrackEventParams {
   userId: string;
   productId: string;
   formId: string;
-  eventType: 'view' | 'conversion';
+  eventType: 'view' | 'conversion' | 'dropoff';
   sessionId?: string;
+  dropOffStage?: 'product' | 'payment' | 'account';
   metadata?: Record<string, any>;
 }
 
@@ -155,6 +156,67 @@ const generateSessionId = (): string => {
   }
   
   return sessionId;
+};
+
+/**
+ * Track a form drop-off event (user closed modal before completing)
+ */
+export const trackFormDropOff = async (params: {
+  userId: string;
+  productId: string;
+  formId: string;
+  dropOffStage: 'product' | 'payment' | 'account';
+  clinicId?: string;
+  clinicName?: string;
+  productName?: string;
+}): Promise<void> => {
+  try {
+    // Check for duplicate event
+    const eventKey = `${params.userId}:${params.productId}:${params.formId}:dropoff:${params.dropOffStage}`;
+    const now = Date.now();
+    const lastTracked = recentEvents.get(eventKey);
+    
+    if (lastTracked && (now - lastTracked) < DEDUP_WINDOW_MS) {
+      console.log('📊 [Analytics] Skipping duplicate dropoff event (tracked recently)');
+      return;
+    }
+
+    console.log('📊 [Analytics] Tracking form drop-off:', {
+      userId: params.userId,
+      productId: params.productId,
+      formId: params.formId,
+      dropOffStage: params.dropOffStage,
+    });
+
+    await apiCall('/analytics/track', {
+      method: 'POST',
+      body: JSON.stringify({
+        userId: params.userId,
+        productId: params.productId,
+        formId: params.formId,
+        eventType: 'dropoff',
+        dropOffStage: params.dropOffStage,
+        sessionId: generateSessionId(),
+        metadata: {
+          clinicId: params.clinicId,
+          clinicName: params.clinicName,
+          productName: params.productName || 'Unknown Product',
+          timestamp: new Date().toISOString()
+        }
+      })
+    });
+
+    // Mark as tracked
+    recentEvents.set(eventKey, now);
+    
+    // Clean up old entries
+    setTimeout(() => recentEvents.delete(eventKey), DEDUP_WINDOW_MS);
+
+    console.log('✅ [Analytics] Drop-off tracked successfully');
+  } catch (error) {
+    console.error('❌ [Analytics] Failed to track drop-off:', error);
+    // Don't throw - analytics should not block user experience
+  }
 };
 
 /**

@@ -120,9 +120,9 @@ export function Sidebar() {
   const handleDisabledClick = (e: React.MouseEvent, itemName: string) => {
     e.preventDefault()
     
-    // Analytics requires upgrade
+    // Analytics requires upgrade - redirect to plans page
     if (itemName === 'Analytics' && !hasAccessToAnalytics) {
-      router.push('/settings?tab=subscription&message=Upgrade your plan to access Analytics.')
+      router.push('/plans?message=Upgrade your plan to access Analytics.')
       return
     }
     

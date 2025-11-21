@@ -26,7 +26,7 @@ export class AnalyticsService {
             [Op.lte]: endOfDay,
           },
         },
-        attributes: ['userId', 'productId', 'formId', 'eventType'],
+        attributes: ['userId', 'productId', 'formId', 'eventType', 'dropOffStage'],
       });
 
       // If no events, skip aggregation for this date
@@ -44,6 +44,9 @@ export class AnalyticsService {
         formId: string;
         views: number;
         conversions: number;
+        productStageDropOffs: number;
+        paymentStageDropOffs: number;
+        accountStageDropOffs: number;
       }> = {};
 
       events.forEach((event) => {
@@ -57,6 +60,9 @@ export class AnalyticsService {
             formId: eventData.formId,
             views: 0,
             conversions: 0,
+            productStageDropOffs: 0,
+            paymentStageDropOffs: 0,
+            accountStageDropOffs: 0,
           };
         }
 
@@ -64,6 +70,15 @@ export class AnalyticsService {
           aggregated[key].views++;
         } else if (eventData.eventType === 'conversion') {
           aggregated[key].conversions++;
+        } else if (eventData.eventType === 'dropoff') {
+          // Count drop-offs by stage
+          if (eventData.dropOffStage === 'product') {
+            aggregated[key].productStageDropOffs++;
+          } else if (eventData.dropOffStage === 'payment') {
+            aggregated[key].paymentStageDropOffs++;
+          } else if (eventData.dropOffStage === 'account') {
+            aggregated[key].accountStageDropOffs++;
+          }
         }
       });
 
@@ -79,6 +94,9 @@ export class AnalyticsService {
           formId: data.formId,
           views: data.views,
           conversions: data.conversions,
+          productStageDropOffs: data.productStageDropOffs,
+          paymentStageDropOffs: data.paymentStageDropOffs,
+          accountStageDropOffs: data.accountStageDropOffs,
         });
       }
 
