@@ -40,6 +40,8 @@ import { BMICalculator } from "./components/BMICalculator";
 import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVariables";
 import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
 import { trackFormView, trackFormConversion, trackFormDropOff } from "../../lib/analytics";
+import { signInUser, createUserAccount as createUserAccountAPI } from "./auth";
+import { AccountCreationStep } from "./AccountCreationStep";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
@@ -74,6 +76,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [accountCreated, setAccountCreated] = React.useState(false);
   const [patientName, setPatientName] = React.useState<string>('');
   const [patientFirstName, setPatientFirstName] = React.useState<string>('');
+
+  // Sign-in/Sign-up toggle
+  const [isSignInMode, setIsSignInMode] = React.useState(false);
+  const [signInEmail, setSignInEmail] = React.useState('');
+  const [signInPassword, setSignInPassword] = React.useState('');
+  const [signInError, setSignInError] = React.useState('');
+  const [isSigningIn, setIsSigningIn] = React.useState(false);
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -812,6 +821,12 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       hasTrackedViewRef.current = false;
       hasConvertedRef.current = false;
       hasTrackedDropOffRef.current = false;
+      // Reset sign-in state
+      setIsSignInMode(false);
+      setSignInEmail('');
+      setSignInPassword('');
+      setSignInError('');
+      setIsSigningIn(false);
       setShippingInfo({
         address: "",
         apartment: "",
@@ -1685,6 +1700,77 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     return result;
   };
 
+  // Handle sign-in
+  const handleSignIn = async () => {
+    setSignInError('');
+    setIsSigningIn(true);
+
+    const result = await signInUser(signInEmail, signInPassword);
+
+    if (result.success && result.userData) {
+      // Pre-fill the form with user's existing data
+      const newAnswers = {
+        ...answers,
+        firstName: result.userData.firstName,
+        lastName: result.userData.lastName,
+        email: result.userData.email,
+        mobile: result.userData.phoneNumber
+      };
+
+      setAnswers(newAnswers);
+
+      // Set patient variables
+      const firstName = result.userData.firstName;
+      const lastName = result.userData.lastName;
+      const fullName = `${firstName} ${lastName}`.trim();
+      setPatientFirstName(firstName);
+      setPatientName(fullName);
+
+      // Mark as already having an account
+      setUserId(result.userData.id);
+      setAccountCreated(true);
+
+      // Exit sign-in mode - this will trigger the useEffect below to advance the step
+      setIsSignInMode(false);
+      setIsSigningIn(false);
+
+      console.log('✅ User signed in successfully, will auto-advance to next step:', newAnswers);
+    } else {
+      setSignInError(result.error || 'Sign-in failed');
+      setIsSigningIn(false);
+    }
+  };
+
+  // Auto-advance to next step after successful sign-in
+  const shouldAdvanceAfterSignInRef = React.useRef(false);
+
+  React.useEffect(() => {
+    const currentStep = getCurrentQuestionnaireStep();
+    const isOnAccountStep = currentStep?.title === 'Create Your Account';
+
+    // Check if we just completed sign-in
+    if (isOnAccountStep && accountCreated && !isSignInMode && !isSigningIn && shouldAdvanceAfterSignInRef.current) {
+      console.log('🚀 Auto-advancing after sign-in');
+      shouldAdvanceAfterSignInRef.current = false; // Reset flag
+
+      // Small delay to ensure all state updates are processed
+      setTimeout(() => {
+        if (questionnaire) {
+          const totalSteps = getTotalSteps();
+          if (currentStepIndex < totalSteps - 1) {
+            setCurrentStepIndex(prev => prev + 1);
+            console.log('✅ Advanced to next step after sign-in');
+          }
+        }
+      }, 150);
+    }
+
+    // Set flag when starting sign-in
+    if (isSigningIn && isSignInMode) {
+      shouldAdvanceAfterSignInRef.current = true;
+    }
+  }, [accountCreated, isSignInMode, isSigningIn, currentStepIndex, questionnaire]);
+
   // Create user account after "Create Your Account" step
   const createUserAccount = async () => {
     // Immediately set patient name from answers (don't modify questionnaire to avoid re-render)
@@ -1698,39 +1784,20 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     console.log('👤 Set patient variables:', { firstName, fullName });
 
     // Try to create user account in background (don't block if it fails)
-    try {
-      console.log('🔐 Creating user account with data:', {
-        firstName: answers['firstName'],
-        lastName: answers['lastName'],
-        email: answers['email'],
-        mobile: answers['mobile']
-      });
+    const result = await createUserAccountAPI(
+      answers['firstName'],
+      answers['lastName'],
+      answers['email'],
+      answers['mobile'],
+      domainClinic?.id
+    );
 
-      const result = await apiCall('/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify({
-          firstName: answers['firstName'],
-          lastName: answers['lastName'],
-          email: answers['email'],
-          phoneNumber: answers['mobile'],
-          password: Math.random().toString(36).slice(-12) + 'Aa1!', // Generate stronger password
-          role: 'patient',
-          clinicId: domainClinic?.id || null
-        })
-      });
-
-      if (result.success && result.data) {
-        setUserId(result.data.userId || result.data.id);
-        setAccountCreated(true);
-        console.log('✅ User account created:', result.data.userId || result.data.id);
-      } else {
-        // If account creation failed (likely duplicate email), that's okay
-        console.log('ℹ️ Account creation failed (likely duplicate), will use existing account at payment');
-        setAccountCreated(true);
-      }
-    } catch (error) {
-      console.error('❌ Failed to create user account:', error);
+    if (result.success && result.userId) {
+      setUserId(result.userId);
+      setAccountCreated(true);
+    } else {
       // Don't block progression - account will be created/linked at payment time
+      setAccountCreated(true);
     }
   };
 
@@ -2566,142 +2633,34 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           </div>
                         </div>
                       ) : currentStep?.title === 'Create Your Account' ? (
-                        // Custom account creation form
-                        <div className="space-y-4">
-                          <div>
-                            <h3 className="text-2xl font-medium text-gray-900 mb-3">Create your account</h3>
-                            <p className="text-gray-600 text-base">We'll use this information to set up your personalized care plan</p>
-                          </div>
-
-                          <div className="space-y-6">
-                            {/* First Name and Last Name Row */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
-                                <input
-                                  type="text"
-                                  value={answers['firstName'] || ''}
-                                  onChange={(e) => handleAnswerChange('firstName', e.target.value)}
-                                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                  placeholder="John"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
-                                <input
-                                  type="text"
-                                  value={answers['lastName'] || ''}
-                                  onChange={(e) => handleAnswerChange('lastName', e.target.value)}
-                                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                  placeholder="Cena"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Email Address */}
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                              <input
-                                type="email"
-                                value={answers['email'] || ''}
-                                onChange={(e) => handleAnswerChange('email', e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                placeholder="john.cena@gmail.com"
-                              />
-                            </div>
-
-                            {/* Mobile Number */}
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>
-                              <div className="relative">
-                                <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex items-center">
-                                  <span className="text-lg mr-2">🇺🇸</span>
-                                </div>
-                                <input
-                                  type="tel"
-                                  value={answers['mobile'] || ''}
-                                  onChange={(e) => handleAnswerChange('mobile', e.target.value)}
-                                  className="w-full pl-16 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                  placeholder="(213) 343-4134"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* OAuth Section */}
-                          <div className="space-y-4 pt-4">
-                            {/* Already have an account */}
-                            <div className="text-center">
-                              <span className="text-gray-600">Already have an account? </span>
-                              <button
-                                onClick={() => {
-                                  // TODO: Implement sign in flow
-                                  alert('Sign in functionality coming soon!');
-                                }}
-                                className="text-gray-900 font-medium hover:underline"
-                              >
-                                Sign In
-                              </button>
-                            </div>
-
-                            {/* Divider with "or" */}
-                            <div className="relative flex items-center">
-                              <div className="flex-grow border-t border-gray-300"></div>
-                              <span className="flex-shrink mx-4 text-gray-500 font-medium">or</span>
-                              <div className="flex-grow border-t border-gray-300"></div>
-                            </div>
-
-                            {/* OAuth Buttons */}
-                            <div className="space-y-3">
-                              {/* Continue with Google */}
-                              <button
-                                onClick={() => {
-                                  // TODO: Implement Google OAuth
-                                  alert('Google sign-in coming soon!');
-                                }}
-                                className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-                              >
-                                <Icon icon="flat-color-icons:google" className="text-xl" />
-                                <span>Continue with Google</span>
-                              </button>
-
-                              {/* Continue with Apple */}
-                              <button
-                                onClick={() => {
-                                  // TODO: Implement Apple OAuth
-                                  alert('Apple sign-in coming soon!');
-                                }}
-                                className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-                              >
-                                <Icon icon="ic:baseline-apple" className="text-2xl" />
-                                <span>Continue with Apple</span>
-                              </button>
-                            </div>
-
-                            {/* Terms and Privacy */}
-                            <p className="text-center text-xs text-gray-500 leading-relaxed px-4">
-                              By creating an account using email, Google or Apple, I agree to the{' '}
-                              <a href="#" className="text-gray-700 underline hover:text-gray-900">
-                                Terms & Conditions
-                              </a>
-                              {' '}and acknowledge the{' '}
-                              <a href="#" className="text-gray-700 underline hover:text-gray-900">
-                                Privacy Policy
-                              </a>
-                              .
-                            </p>
-                          </div>
-
-                          {/* Privacy Notice */}
-                          <div className="bg-gray-100 rounded-xl p-4 mt-6">
-                            <div className="flex items-start gap-3">
-                              <Icon icon="lucide:lock" className="text-gray-600 text-lg flex-shrink-0 mt-0.5" />
-                              <p className="text-sm text-gray-600 leading-relaxed">
-                                {domainClinic?.name || 'Hims'} takes your privacy seriously with industry leading encryption.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
+                        <AccountCreationStep
+                          isSignInMode={isSignInMode}
+                          onToggleMode={() => {
+                            setIsSignInMode(!isSignInMode);
+                            setSignInEmail('');
+                            setSignInPassword('');
+                            setSignInError('');
+                          }}
+                          firstName={answers['firstName'] || ''}
+                          lastName={answers['lastName'] || ''}
+                          email={answers['email'] || ''}
+                          mobile={answers['mobile'] || ''}
+                          onFieldChange={handleAnswerChange}
+                          signInEmail={signInEmail}
+                          signInPassword={signInPassword}
+                          signInError={signInError}
+                          isSigningIn={isSigningIn}
+                          onSignInEmailChange={(value) => {
+                            setSignInEmail(value);
+                            setSignInError('');
+                          }}
+                          onSignInPasswordChange={(value) => {
+                            setSignInPassword(value);
+                            setSignInError('');
+                          }}
+                          onSignIn={handleSignIn}
+                          clinicName={domainClinic?.name}
+                        />
                       ) : currentStep?.questions && currentStep.questions.length > 0 ? (
                         <div className="space-y-6">
                           {currentStep.questions
@@ -2865,8 +2824,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                         </div>
                       )}
 
-                      {/* Continue button for regular steps */}
-                      {!(isCheckoutStep() && paymentStatus !== 'succeeded') && (() => {
+                      {/* Continue button for regular steps (but not during sign-in on account creation step) */}
+                      {!(isCheckoutStep() && paymentStatus !== 'succeeded') && !(currentStep?.title === 'Create Your Account' && isSignInMode) && (() => {
                         // Check if step itself is dead end OR if any VISIBLE question is a dead end
                         // Use same filter logic as question rendering above
                         const visibleQuestions = currentStep?.questions?.filter((question: any) => {
