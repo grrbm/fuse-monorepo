@@ -9,6 +9,7 @@ interface TierConfig {
   id: string;
   brandSubscriptionPlanId: string;
   canAddCustomProducts: boolean;
+  hasAccessToAnalytics: boolean;
 }
 
 interface Plan {
@@ -70,7 +71,7 @@ export default function TierManagement() {
     }
   };
 
-  const handleToggleFeature = async (planId: string, currentValue: boolean) => {
+  const handleToggleFeature = async (planId: string, featureName: 'canAddCustomProducts' | 'hasAccessToAnalytics', currentValue: boolean) => {
     if (!token) return;
 
     setSaving(planId);
@@ -82,7 +83,7 @@ export default function TierManagement() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          canAddCustomProducts: !currentValue,
+          [featureName]: !currentValue,
         }),
       });
 
@@ -189,6 +190,7 @@ export default function TierManagement() {
                           <button
                             onClick={() => handleToggleFeature(
                               tier.plan.id,
+                              'canAddCustomProducts',
                               tier.config?.canAddCustomProducts || false
                             )}
                             disabled={saving === tier.plan.id}
@@ -209,6 +211,43 @@ export default function TierManagement() {
                                 `}
                             >
                               {tier.config?.canAddCustomProducts ? (
+                                <Check className="h-3 w-3 text-[#4FA59C]" />
+                              ) : (
+                                <X className="h-3 w-3 text-[#9CA3AF]" />
+                              )}
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* Has Access To Analytics Toggle */}
+                        <div className="flex items-center space-x-3">
+                          <span className="text-sm text-[#6B7280]">
+                            Has Access To Analytics
+                          </span>
+                          <button
+                            onClick={() => handleToggleFeature(
+                              tier.plan.id,
+                              'hasAccessToAnalytics',
+                              tier.config?.hasAccessToAnalytics || false
+                            )}
+                            disabled={saving === tier.plan.id}
+                            className={`
+                                relative inline-flex h-7 w-12 items-center rounded-full transition-colors
+                                ${tier.config?.hasAccessToAnalytics
+                                ? 'bg-[#4FA59C]'
+                                : 'bg-[#D1D5DB]'
+                              }
+                                ${saving === tier.plan.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                              `}
+                          >
+                            <span
+                              className={`
+                                  inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm
+                                  flex items-center justify-center
+                                  ${tier.config?.hasAccessToAnalytics ? 'translate-x-6' : 'translate-x-1'}
+                                `}
+                            >
+                              {tier.config?.hasAccessToAnalytics ? (
                                 <Check className="h-3 w-3 text-[#4FA59C]" />
                               ) : (
                                 <X className="h-3 w-3 text-[#9CA3AF]" />

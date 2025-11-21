@@ -28,6 +28,14 @@ interface Subscription {
   }
   nextBillingDate?: string
   monthlyPrice?: number
+  tierConfig?: {
+    canAddCustomProducts?: boolean
+    hasAccessToAnalytics?: boolean
+  } | null
+  customFeatures?: {
+    canAddCustomProducts?: boolean
+    hasAccessToAnalytics?: boolean
+  } | null
 }
 
 interface AuthContextType {

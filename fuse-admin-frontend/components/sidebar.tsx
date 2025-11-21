@@ -43,7 +43,7 @@ const configuration = [{ name: "Settings", icon: Settings, current: false, href:
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export function Sidebar() {
-  const { user, logout, hasActiveSubscription, refreshSubscription, authenticatedFetch } = useAuth()
+  const { user, logout, hasActiveSubscription, refreshSubscription, authenticatedFetch, subscription } = useAuth()
   const router = useRouter()
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -55,6 +55,12 @@ export function Sidebar() {
     }
     return false;
   });
+
+  // Check if user has access to analytics based on tier or custom features
+  const hasAccessToAnalytics = 
+    subscription?.customFeatures?.hasAccessToAnalytics || 
+    subscription?.tierConfig?.hasAccessToAnalytics ||
+    false;
   const fetchSubscriptionBasicInfo = async () => {
     try {
       const response = await authenticatedFetch(`${API_URL}/brand-subscriptions/basic-info`, {
@@ -97,6 +103,11 @@ export function Sidebar() {
     // Plans page is always accessible
     if (itemName === 'Plans') return false
 
+    // Analytics requires specific access
+    if (itemName === 'Analytics') {
+      return !hasAccessToAnalytics
+    }
+
     // If no active subscription, disable everything except Plans and Settings
     if (!hasActiveSubscription) {
       return itemName !== 'Settings'
@@ -108,6 +119,13 @@ export function Sidebar() {
   // Helper function to handle clicks on disabled items
   const handleDisabledClick = (e: React.MouseEvent, itemName: string) => {
     e.preventDefault()
+    
+    // Analytics requires upgrade
+    if (itemName === 'Analytics' && !hasAccessToAnalytics) {
+      router.push('/settings?tab=subscription&message=Upgrade your plan to access Analytics.')
+      return
+    }
+    
     if (!hasActiveSubscription && itemName !== 'Plans' && itemName !== 'Settings') {
       // Redirect to settings instead of plans for subscription management
       router.push('/settings?tab=subscription&message=Please subscribe to access this feature.')
@@ -136,23 +154,37 @@ export function Sidebar() {
               Coming Soon
             </span>
           </div>
-        ) : disabled && !hasActiveSubscription ? (
+        ) : disabled ? (
           <div
             className={cn(
-              "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all cursor-pointer opacity-60 grayscale",
+              "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-all cursor-pointer",
+              item.name === 'Analytics' && !hasAccessToAnalytics
+                ? "opacity-70 text-muted-foreground/70 hover:bg-sidebar-accent/20 hover:opacity-80"
+                : "opacity-60 grayscale text-muted-foreground/60 hover:bg-sidebar-accent/30 hover:opacity-70",
               isActive
                 ? "bg-sidebar-accent/50 text-sidebar-accent-foreground/70"
-                : "text-muted-foreground/60 hover:bg-sidebar-accent/30 hover:opacity-70"
+                : ""
             )}
             onClick={(e) => handleDisabledClick(e, item.name)}
             onMouseEnter={() => setHoveredItem(item.name)}
             onMouseLeave={() => setHoveredItem(null)}
           >
             <div className="flex items-center">
-              <item.icon className="mr-3 h-4 w-4 opacity-50" />
-              <span className="opacity-75">{item.name}</span>
+              <item.icon className={cn(
+                "mr-3 h-4 w-4",
+                item.name === 'Analytics' && !hasAccessToAnalytics ? "opacity-70" : "opacity-50"
+              )} />
+              <span className={cn(
+                item.name === 'Analytics' && !hasAccessToAnalytics ? "opacity-90" : "opacity-75"
+              )}>{item.name}</span>
             </div>
-            <Lock className="ml-auto h-3 w-3 text-muted-foreground/50" />
+            {item.name === 'Analytics' && !hasAccessToAnalytics ? (
+              <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 text-orange-700 border border-orange-200 font-medium">
+                Upgrade
+              </span>
+            ) : (
+              <Lock className="ml-auto h-3 w-3 text-muted-foreground/50" />
+            )}
           </div>
         ) : (
           <Link
@@ -174,9 +206,11 @@ export function Sidebar() {
         )}
 
         {/* Tooltip for disabled items */}
-        {disabled && isHovered && !hasActiveSubscription && (
+        {disabled && isHovered && (
           <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg z-50 whitespace-nowrap">
-            Subscription Required
+            {item.name === 'Analytics' && !hasAccessToAnalytics
+              ? '✨ Upgrade to access Analytics'
+              : 'Subscription Required'}
           </div>
         )}
       </div>

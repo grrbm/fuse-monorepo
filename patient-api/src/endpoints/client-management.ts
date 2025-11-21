@@ -321,7 +321,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
       }
 
       const { userId } = req.params;
-      const { canAddCustomProducts } = req.body;
+      const { canAddCustomProducts, hasAccessToAnalytics } = req.body;
 
       // Find or create custom features for this user
       let customFeatures = await TenantCustomFeatures.findOne({
@@ -333,6 +333,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         customFeatures = await TenantCustomFeatures.create({
           userId,
           canAddCustomProducts: typeof canAddCustomProducts === 'boolean' ? canAddCustomProducts : false,
+          hasAccessToAnalytics: typeof hasAccessToAnalytics === 'boolean' ? hasAccessToAnalytics : false,
         });
         console.log('✅ [Client Mgmt] Created custom features for user:', userId);
       } else {
@@ -341,6 +342,10 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         
         if (typeof canAddCustomProducts === 'boolean') {
           updates.canAddCustomProducts = canAddCustomProducts;
+        }
+        
+        if (typeof hasAccessToAnalytics === 'boolean') {
+          updates.hasAccessToAnalytics = hasAccessToAnalytics;
         }
 
         await customFeatures.update(updates);

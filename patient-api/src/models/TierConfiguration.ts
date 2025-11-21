@@ -22,6 +22,13 @@ export default class TierConfiguration extends Entity {
   })
   declare canAddCustomProducts: boolean;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare hasAccessToAnalytics: boolean;
+
   @BelongsTo(() => BrandSubscriptionPlans)
   declare plan?: BrandSubscriptionPlans;
 
@@ -29,6 +36,7 @@ export default class TierConfiguration extends Entity {
   public getFeatures() {
     return {
       canAddCustomProducts: this.canAddCustomProducts,
+      hasAccessToAnalytics: this.hasAccessToAnalytics,
     };
   }
 }

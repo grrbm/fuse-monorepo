@@ -20,6 +20,7 @@ interface TenantCustomFeatures {
   id: string
   userId: string
   canAddCustomProducts: boolean
+  hasAccessToAnalytics: boolean
   createdAt: string
   updatedAt: string
 }
@@ -79,6 +80,7 @@ export default function ClientManagement() {
   // Custom features form state
   const [customFeaturesData, setCustomFeaturesData] = useState({
     canAddCustomProducts: false,
+    hasAccessToAnalytics: false,
   })
 
   useEffect(() => {
@@ -160,10 +162,12 @@ export default function ClientManagement() {
     if (customFeatures) {
       setCustomFeaturesData({
         canAddCustomProducts: customFeatures.canAddCustomProducts,
+        hasAccessToAnalytics: customFeatures.hasAccessToAnalytics,
       })
     } else {
       setCustomFeaturesData({
         canAddCustomProducts: false,
+        hasAccessToAnalytics: false,
       })
     }
   }
@@ -629,6 +633,29 @@ export default function ClientManagement() {
                                     </span>
                                     <p className="text-xs text-[#6B7280]">
                                       Allow this user to create custom products (normally restricted to Premium/Enterprise plans)
+                                    </p>
+                                  </div>
+                                </label>
+                              </div>
+
+                              {/* Has Access To Analytics */}
+                              <div>
+                                <label className="flex items-center space-x-3 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={customFeaturesData.hasAccessToAnalytics}
+                                    onChange={(e) => setCustomFeaturesData({
+                                      ...customFeaturesData,
+                                      hasAccessToAnalytics: e.target.checked
+                                    })}
+                                    className="w-4 h-4 text-[#4FA59C] border-[#D1D5DB] rounded focus:ring-[#4FA59C]"
+                                  />
+                                  <div>
+                                    <span className="text-sm font-medium text-[#374151]">
+                                      Has Access To Analytics
+                                    </span>
+                                    <p className="text-xs text-[#6B7280]">
+                                      Allow this user to access the Analytics section
                                     </p>
                                   </div>
                                 </label>

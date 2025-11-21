@@ -44,7 +44,7 @@ export function registerTierManagementEndpoints(app: Express, authenticateJWT: a
       console.log('🔍 [Tier Management] PATCH /admin/tiers/:planId/config called');
 
       const { planId } = req.params;
-      const { canAddCustomProducts } = req.body;
+      const { canAddCustomProducts, hasAccessToAnalytics } = req.body;
 
       // Check if plan exists
       const plan = await BrandSubscriptionPlans.findByPk(planId);
@@ -61,6 +61,7 @@ export function registerTierManagementEndpoints(app: Express, authenticateJWT: a
         config = await TierConfiguration.create({
           brandSubscriptionPlanId: planId,
           canAddCustomProducts: typeof canAddCustomProducts === 'boolean' ? canAddCustomProducts : false,
+          hasAccessToAnalytics: typeof hasAccessToAnalytics === 'boolean' ? hasAccessToAnalytics : false,
         });
         console.log(`✅ Created TierConfiguration for plan: ${plan.name}`);
       } else {
@@ -68,6 +69,10 @@ export function registerTierManagementEndpoints(app: Express, authenticateJWT: a
         
         if (typeof canAddCustomProducts === 'boolean') {
           updates.canAddCustomProducts = canAddCustomProducts;
+        }
+        
+        if (typeof hasAccessToAnalytics === 'boolean') {
+          updates.hasAccessToAnalytics = hasAccessToAnalytics;
         }
 
         await config.update(updates);

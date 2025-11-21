@@ -22,6 +22,13 @@ export default class TenantCustomFeatures extends Entity {
   })
   declare canAddCustomProducts: boolean;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare hasAccessToAnalytics: boolean;
+
   @BelongsTo(() => User)
   declare user?: User;
 
@@ -29,6 +36,7 @@ export default class TenantCustomFeatures extends Entity {
   public getFeatures() {
     return {
       canAddCustomProducts: this.canAddCustomProducts,
+      hasAccessToAnalytics: this.hasAccessToAnalytics,
     };
   }
 }
