@@ -140,3 +140,110 @@ export const createUserAccount = async (
   }
 };
 
+/**
+ * Send verification code to email
+ */
+export const sendVerificationCode = async (
+  email: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log('📧 Sending verification code to:', email);
+
+    const result = await apiCall('/auth/send-verification-code', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+
+    if (result.success) {
+      console.log('✅ Verification code sent successfully');
+      return { success: true };
+    } else {
+      return {
+        success: false,
+        error: result.message || 'Failed to send verification code'
+      };
+    }
+  } catch (error: any) {
+    console.error('❌ Send verification code error:', error);
+    return {
+      success: false,
+      error: 'Failed to send verification code. Please try again.'
+    };
+  }
+};
+
+/**
+ * Verify email code
+ */
+export const verifyCode = async (
+  email: string,
+  code: string
+): Promise<{
+  success: boolean;
+  isExistingUser?: boolean;
+  userData?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phoneNumber: string;
+  };
+  email?: string;
+  error?: string;
+}> => {
+  try {
+    console.log('🔐 Verifying code for:', email);
+
+    const result = await apiCall('/auth/verify-code', {
+      method: 'POST',
+      body: JSON.stringify({ email, code })
+    });
+
+    if (result.success && result.data) {
+      console.log('✅ Code verified successfully:', result.data);
+
+      if (result.data.isExistingUser && result.data.user) {
+        // Existing user - return their data
+        const userData = result.data.user;
+        return {
+          success: true,
+          isExistingUser: true,
+          userData: {
+            id: userData.id,
+            firstName: userData.firstName || '',
+            lastName: userData.lastName || '',
+            email: userData.email || email,
+            phoneNumber: userData.phoneNumber || ''
+          }
+        };
+      } else {
+        // New user - just verified email
+        return {
+          success: true,
+          isExistingUser: false,
+          email: result.data.email || email
+        };
+      }
+    } else {
+      return {
+        success: false,
+        error: result.message || 'Invalid verification code'
+      };
+    }
+  } catch (error: any) {
+    console.error('❌ Verify code error:', error);
+    
+    if (error?.message?.includes('401')) {
+      return {
+        success: false,
+        error: 'Invalid or expired verification code'
+      };
+    }
+    
+    return {
+      success: false,
+      error: 'Verification failed. Please try again.'
+    };
+  }
+};
+

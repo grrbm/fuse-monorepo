@@ -41,7 +41,8 @@ import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVari
 import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
 import { trackFormView, trackFormConversion, trackFormDropOff } from "../../lib/analytics";
 import { signInUser, createUserAccount as createUserAccountAPI } from "./auth";
-import { AccountCreationStep } from "./AccountCreationStep";
+import { AccountCreationStep, EmailVerificationStep } from "./AccountCreationStep";
+import { createEmailVerificationHandlers } from "./emailVerification";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   isOpen,
@@ -83,6 +84,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [signInPassword, setSignInPassword] = React.useState('');
   const [signInError, setSignInError] = React.useState('');
   const [isSigningIn, setIsSigningIn] = React.useState(false);
+
+  // Email verification state
+  const [isEmailVerificationMode, setIsEmailVerificationMode] = React.useState(false);
+  const [verificationEmail, setVerificationEmail] = React.useState('');
+  const [verificationCode, setVerificationCode] = React.useState('');
+  const [verificationError, setVerificationError] = React.useState('');
+  const [isVerifying, setIsVerifying] = React.useState(false);
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -1801,6 +1809,27 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   };
 
+  // Email verification handlers
+  const emailVerificationHandlers = createEmailVerificationHandlers({
+    answers,
+    verificationEmail,
+    verificationCode,
+    questionnaire,
+    currentStepIndex,
+    setVerificationError,
+    setVerificationEmail,
+    setIsEmailVerificationMode,
+    setIsVerifying,
+    setVerificationCode,
+    setAnswers,
+    setPatientFirstName,
+    setPatientName,
+    setUserId,
+    setAccountCreated,
+    setCurrentStepIndex,
+    getTotalSteps
+  });
+
   const handleNext = async () => {
     if (validateCurrentStep() && questionnaire) {
       const currentStep = getCurrentQuestionnaireStep();
@@ -2633,34 +2662,53 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           </div>
                         </div>
                       ) : currentStep?.title === 'Create Your Account' ? (
-                        <AccountCreationStep
-                          isSignInMode={isSignInMode}
-                          onToggleMode={() => {
-                            setIsSignInMode(!isSignInMode);
-                            setSignInEmail('');
-                            setSignInPassword('');
-                            setSignInError('');
-                          }}
-                          firstName={answers['firstName'] || ''}
-                          lastName={answers['lastName'] || ''}
-                          email={answers['email'] || ''}
-                          mobile={answers['mobile'] || ''}
-                          onFieldChange={handleAnswerChange}
-                          signInEmail={signInEmail}
-                          signInPassword={signInPassword}
-                          signInError={signInError}
-                          isSigningIn={isSigningIn}
-                          onSignInEmailChange={(value) => {
-                            setSignInEmail(value);
-                            setSignInError('');
-                          }}
-                          onSignInPasswordChange={(value) => {
-                            setSignInPassword(value);
-                            setSignInError('');
-                          }}
-                          onSignIn={handleSignIn}
-                          clinicName={domainClinic?.name}
-                        />
+                        isEmailVerificationMode ? (
+                          <EmailVerificationStep
+                            email={verificationEmail}
+                            code={verificationCode}
+                            onCodeChange={setVerificationCode}
+                            onVerify={emailVerificationHandlers.handleVerifyCode}
+                            onBack={() => {
+                              setIsEmailVerificationMode(false);
+                              setVerificationCode('');
+                              setVerificationError('');
+                            }}
+                            onResendCode={emailVerificationHandlers.handleResendCode}
+                            error={verificationError}
+                            isVerifying={isVerifying}
+                            clinicName={domainClinic?.name}
+                          />
+                        ) : (
+                          <AccountCreationStep
+                            isSignInMode={isSignInMode}
+                            onToggleMode={() => {
+                              setIsSignInMode(!isSignInMode);
+                              setSignInEmail('');
+                              setSignInPassword('');
+                              setSignInError('');
+                            }}
+                            firstName={answers['firstName'] || ''}
+                            lastName={answers['lastName'] || ''}
+                            email={answers['email'] || ''}
+                            mobile={answers['mobile'] || ''}
+                            onFieldChange={handleAnswerChange}
+                            signInEmail={signInEmail}
+                            signInPassword={signInPassword}
+                            signInError={signInError}
+                            isSigningIn={isSigningIn}
+                            onSignInEmailChange={(value) => {
+                              setSignInEmail(value);
+                              setSignInError('');
+                            }}
+                            onSignInPasswordChange={(value) => {
+                              setSignInPassword(value);
+                              setSignInError('');
+                            }}
+                            onSignIn={handleSignIn}
+                            onEmailSignIn={emailVerificationHandlers.handleEmailSignIn}
+                            clinicName={domainClinic?.name}
+                          />
+                        )
                       ) : currentStep?.questions && currentStep.questions.length > 0 ? (
                         <div className="space-y-6">
                           {currentStep.questions
@@ -2824,8 +2872,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                         </div>
                       )}
 
-                      {/* Continue button for regular steps (but not during sign-in on account creation step) */}
-                      {!(isCheckoutStep() && paymentStatus !== 'succeeded') && !(currentStep?.title === 'Create Your Account' && isSignInMode) && (() => {
+                      {/* Continue button for regular steps (but not during sign-in or email verification on account creation step) */}
+                      {!(isCheckoutStep() && paymentStatus !== 'succeeded') && !(currentStep?.title === 'Create Your Account' && (isSignInMode || isEmailVerificationMode)) && (() => {
                         // Check if step itself is dead end OR if any VISIBLE question is a dead end
                         // Use same filter logic as question rendering above
                         const visibleQuestions = currentStep?.questions?.filter((question: any) => {

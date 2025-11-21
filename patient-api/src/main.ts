@@ -702,6 +702,180 @@ app.post("/auth/signin", async (req, res) => {
   }
 });
 
+// In-memory store for email verification codes
+// Format: { email: { code: string, expiresAt: number, firstName?: string } }
+const verificationCodes = new Map<string, { code: string; expiresAt: number; firstName?: string }>();
+
+// Clean up expired codes every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [email, data] of verificationCodes.entries()) {
+    if (data.expiresAt < now) {
+      verificationCodes.delete(email);
+    }
+  }
+}, 5 * 60 * 1000);
+
+// Send verification code to email
+app.post("/auth/send-verification-code", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required"
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email format"
+      });
+    }
+
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store code with 10-minute expiration
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    
+    // Check if user exists to personalize email
+    let firstName: string | undefined;
+    try {
+      const existingUser = await User.findByEmail(email);
+      if (existingUser) {
+        firstName = existingUser.firstName;
+      }
+    } catch (error) {
+      // Continue even if user lookup fails
+      console.log('User lookup failed, sending generic email');
+    }
+    
+    verificationCodes.set(email.toLowerCase(), { code, expiresAt, firstName });
+
+    // Send email with code
+    const emailSent = await MailsSender.sendVerificationCode(email, code, firstName);
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send verification code. Please try again."
+      });
+    }
+
+    console.log(`✅ Verification code sent to: ${email}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Verification code sent to your email"
+    });
+
+  } catch (error) {
+    console.error('❌ Send verification code error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send verification code. Please try again."
+    });
+  }
+});
+
+// Verify code and sign in
+app.post("/auth/verify-code", async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and code are required"
+      });
+    }
+
+    // Get stored code
+    const storedData = verificationCodes.get(email.toLowerCase());
+
+    if (!storedData) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired verification code"
+      });
+    }
+
+    // Check if code is expired
+    if (storedData.expiresAt < Date.now()) {
+      verificationCodes.delete(email.toLowerCase());
+      return res.status(401).json({
+        success: false,
+        message: "Verification code has expired. Please request a new one."
+      });
+    }
+
+    // Verify code
+    if (storedData.code !== code.trim()) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid verification code"
+      });
+    }
+
+    // Code is valid - delete it
+    verificationCodes.delete(email.toLowerCase());
+
+    // Check if user exists
+    const user = await User.findByEmail(email);
+
+    if (user) {
+      // User exists - sign them in
+      
+      // Check if user account is activated
+      if (!user.activated) {
+        return res.status(401).json({
+          success: false,
+          message: "Please check your email and activate your account before signing in.",
+          needsActivation: true
+        });
+      }
+
+      // Update last login time
+      await user.updateLastLogin();
+
+      // Create JWT token
+      const token = createJWTToken(user);
+
+      console.log('✅ User signed in via verification code:', user.email);
+
+      return res.status(200).json({
+        success: true,
+        message: "Signed in successfully",
+        token: token,
+        user: user.toSafeJSON(),
+        isExistingUser: true
+      });
+    } else {
+      // User doesn't exist - return success but indicate they need to complete sign-up
+      console.log('✅ Verification successful for new user:', email);
+      
+      return res.status(200).json({
+        success: true,
+        message: "Email verified successfully",
+        email: email,
+        isExistingUser: false
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Verify code error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Verification failed. Please try again."
+    });
+  }
+});
+
 // Email verification endpoint
 app.get("/auth/verify-email", async (req, res) => {
   try {
