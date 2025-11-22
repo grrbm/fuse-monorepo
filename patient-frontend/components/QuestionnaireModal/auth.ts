@@ -160,7 +160,7 @@ export const sendVerificationCode = async (
     } else {
       return {
         success: false,
-        error: result.message || 'Failed to send verification code'
+        error: (result as any).message || (result as any).error || 'Failed to send verification code'
       };
     }
   } catch (error: any) {
@@ -227,7 +227,7 @@ export const verifyCode = async (
     } else {
       return {
         success: false,
-        error: result.message || 'Invalid verification code'
+        error: (result as any).message || (result as any).error || 'Invalid verification code'
       };
     }
   } catch (error: any) {
@@ -284,7 +284,7 @@ export const signInWithGoogle = async (
     } else {
       return {
         success: false,
-        error: result.message || 'Google sign-in failed'
+        error: (result as any).message || (result as any).error || 'Google sign-in failed'
       };
     }
   } catch (error: any) {
