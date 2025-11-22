@@ -698,9 +698,14 @@ app.get("/auth/google/callback", async (req, res) => {
       given_name?: string;
       family_name?: string;
     };
+    
+    console.log('👤 Google user info received:', googleUser);
+    
     const email = googleUser.email || '';
     const firstName = googleUser.given_name || '';
     const lastName = googleUser.family_name || '';
+    
+    console.log('📧 Extracted user data:', { email, firstName, lastName });
     
     if (!email) {
       throw new Error('Email not provided by Google');
@@ -710,18 +715,31 @@ app.get("/auth/google/callback", async (req, res) => {
     let user = await User.findByEmail(email);
     
     if (!user) {
-      // Create new user with Google account
-      user = await User.create({
-        email,
-        firstName,
-        lastName,
-        role: 'patient',
-        activated: true, // Google accounts are pre-verified
-        password: Math.random().toString(36).slice(-16) + 'Aa1!', // Random password (won't be used)
-        clinicId: clinicId || null
-      });
+      console.log('🆕 Creating new user via Google:', { email, firstName, lastName, clinicId });
       
-      console.log('✅ New user created via Google:', user.email);
+      // Create new user with Google account
+      try {
+        // Generate a random password and hash it
+        const randomPassword = Math.random().toString(36).slice(-16) + 'Aa1!';
+        const passwordHash = await User.hashPassword(randomPassword);
+        
+        user = await User.create({
+          email: email.toLowerCase().trim(),
+          firstName,
+          lastName,
+          role: 'patient',
+          activated: true, // Google accounts are pre-verified
+          passwordHash, // Pass the hashed password
+          clinicId: clinicId || null
+        });
+        
+        console.log('✅ New user created via Google:', user.email);
+      } catch (createError) {
+        console.error('❌ Failed to create user:', createError);
+        throw createError;
+      }
+    } else {
+      console.log('👤 Existing user found:', user.email);
     }
     
     // Update last login time
@@ -739,6 +757,11 @@ app.get("/auth/google/callback", async (req, res) => {
     
   } catch (error) {
     console.error('❌ Google OAuth callback error:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      error
+    });
     const returnUrl = req.query.state ? JSON.parse(Buffer.from(req.query.state as string, 'base64').toString()).returnUrl : 'http://localhost:3000';
     res.redirect(`${returnUrl}?googleAuth=error`);
   }
