@@ -40,7 +40,7 @@ import { BMICalculator } from "./components/BMICalculator";
 import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVariables";
 import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
 import { trackFormView, trackFormConversion, trackFormDropOff } from "../../lib/analytics";
-import { signInUser, createUserAccount as createUserAccountAPI } from "./auth";
+import { signInUser, createUserAccount as createUserAccountAPI, signInWithGoogle } from "./auth";
 import { AccountCreationStep, EmailVerificationStep, EmailInputModal } from "./AccountCreationStep";
 import { createEmailVerificationHandlers } from "./emailVerification";
 
@@ -103,6 +103,55 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Medication modal state
   const [showMedicationModal, setShowMedicationModal] = React.useState(false);
   const [selectedMedication, setSelectedMedication] = React.useState("semaglutide-orals");
+
+  // Handle Google OAuth callback
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const googleAuth = urlParams.get('googleAuth');
+    const token = urlParams.get('token');
+    const userStr = urlParams.get('user');
+
+    if (googleAuth === 'success' && token && userStr) {
+      try {
+        const userData = JSON.parse(decodeURIComponent(userStr));
+
+        // Pre-fill the form with user's data
+        const newAnswers = {
+          ...answers,
+          firstName: userData.firstName || '',
+          lastName: userData.lastName || '',
+          email: userData.email || '',
+          mobile: userData.phoneNumber || ''
+        };
+
+        setAnswers(newAnswers);
+        setPatientFirstName(userData.firstName);
+        setPatientName(`${userData.firstName} ${userData.lastName}`.trim());
+        setUserId(userData.id);
+        setAccountCreated(true);
+
+        console.log('✅ User signed in with Google, advancing to next step');
+
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        // Advance to next step
+        setTimeout(() => {
+          if (questionnaire) {
+            const totalSteps = getTotalSteps();
+            if (currentStepIndex < totalSteps - 1) {
+              setCurrentStepIndex(prev => prev + 1);
+            }
+          }
+        }, 150);
+      } catch (error) {
+        console.error('❌ Failed to parse Google user data:', error);
+      }
+    } else if (googleAuth === 'error') {
+      alert('Google sign-in failed. Please try again.');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
   const [shippingInfo, setShippingInfo] = React.useState({
     address: "",
     apartment: "",
@@ -1754,6 +1803,62 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   };
 
+  // Handle Google sign-in
+  const handleGoogleSignIn = async (credential: string) => {
+    if (!credential) {
+      console.log('⚠️ No Google credential provided');
+      return;
+    }
+
+    setIsSigningIn(true);
+
+    const result = await signInWithGoogle(credential, domainClinic?.id);
+
+    if (result.success && result.userData) {
+      // Pre-fill the form with user's existing data
+      const newAnswers = {
+        ...answers,
+        firstName: result.userData.firstName,
+        lastName: result.userData.lastName,
+        email: result.userData.email,
+        mobile: result.userData.phoneNumber
+      };
+
+      setAnswers(newAnswers);
+
+      // Set patient variables
+      const firstName = result.userData.firstName;
+      const lastName = result.userData.lastName;
+      const fullName = `${firstName} ${lastName}`.trim();
+      setPatientFirstName(firstName);
+      setPatientName(fullName);
+
+      // Mark as already having an account
+      setUserId(result.userData.id);
+      setAccountCreated(true);
+
+      // Exit sign-in mode
+      setIsSignInMode(false);
+
+      console.log('✅ User signed in with Google successfully, advancing to next step');
+
+      // Advance to next step after successful sign-in
+      setIsSigningIn(false);
+
+      setTimeout(() => {
+        if (questionnaire) {
+          const totalSteps = getTotalSteps();
+          if (currentStepIndex < totalSteps - 1) {
+            setCurrentStepIndex(prev => prev + 1);
+          }
+        }
+      }, 150);
+    } else {
+      setSignInError(result.error || 'Google sign-in failed');
+      setIsSigningIn(false);
+    }
+  };
+
   // Auto-advance to next step after successful sign-in
   const shouldAdvanceAfterSignInRef = React.useRef(false);
 
@@ -2729,6 +2834,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               }}
                               onSignIn={handleSignIn}
                               onEmailSignIn={emailVerificationHandlers.handleEmailSignIn}
+                              onGoogleSignIn={handleGoogleSignIn}
+                              clinicId={domainClinic?.id}
                               clinicName={domainClinic?.name}
                             />
                           )

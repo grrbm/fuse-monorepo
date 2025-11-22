@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import { Icon } from "@iconify/react";
+import { GoogleSignInButton } from "./GoogleSignInButton";
 
 interface AccountCreationStepProps {
   isSignInMode: boolean;
@@ -25,6 +26,10 @@ interface AccountCreationStepProps {
   // Email verification props
   onEmailSignIn: () => void;
 
+  // Google sign-in props
+  onGoogleSignIn: (credential: string) => void;
+
+  clinicId?: string;
   clinicName?: string;
 }
 
@@ -44,6 +49,8 @@ export const AccountCreationStep: React.FC<AccountCreationStepProps> = ({
   onSignInPasswordChange,
   onSignIn,
   onEmailSignIn,
+  onGoogleSignIn,
+  clinicId,
   clinicName
 }) => {
   return (
@@ -222,16 +229,7 @@ export const AccountCreationStep: React.FC<AccountCreationStepProps> = ({
             {/* OAuth Buttons */}
             <div className="space-y-3">
               {/* Continue with Google */}
-              <button
-                onClick={() => {
-                  // TODO: Implement Google OAuth
-                  alert('Google sign-in coming soon!');
-                }}
-                className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-              >
-                <Icon icon="flat-color-icons:google" className="text-xl" />
-                <span>Continue with Google</span>
-              </button>
+              <GoogleSignInButton clinicId={clinicId} />
 
               {/* Continue with Email */}
               <button

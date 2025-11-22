@@ -247,3 +247,52 @@ export const verifyCode = async (
   }
 };
 
+/**
+ * Sign in with Google
+ */
+export const signInWithGoogle = async (
+  credential: string,
+  clinicId?: string
+): Promise<SignInResult> => {
+  try {
+    console.log('🔐 Signing in with Google');
+
+    const result = await apiCall('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({
+        credential,
+        clinicId: clinicId || null
+      })
+    });
+
+    if (result.success && result.data) {
+      console.log('✅ Google sign-in successful:', result.data);
+
+      // Extract user data from response
+      const userData = result.data.user || result.data;
+      
+      return {
+        success: true,
+        userData: {
+          id: userData.id,
+          firstName: userData.firstName || '',
+          lastName: userData.lastName || '',
+          email: userData.email || '',
+          phoneNumber: userData.phoneNumber || ''
+        }
+      };
+    } else {
+      return {
+        success: false,
+        error: result.message || 'Google sign-in failed'
+      };
+    }
+  } catch (error: any) {
+    console.error('❌ Google sign-in error:', error);
+    return {
+      success: false,
+      error: 'Failed to sign in with Google. Please try again.'
+    };
+  }
+};
+
