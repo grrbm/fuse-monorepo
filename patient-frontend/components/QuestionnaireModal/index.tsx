@@ -104,16 +104,33 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [showMedicationModal, setShowMedicationModal] = React.useState(false);
   const [selectedMedication, setSelectedMedication] = React.useState("semaglutide-orals");
 
-  // Handle Google OAuth callback
+  // Track if we've handled Google OAuth to prevent step reset on modal reopen
+  const hasHandledGoogleAuthRef = React.useRef(false);
+
+  // Reset Google OAuth flag when component unmounts (user navigates away)
   React.useEffect(() => {
+    return () => {
+      console.log('🧹 [CLEANUP] Resetting hasHandledGoogleAuthRef on component unmount');
+      hasHandledGoogleAuthRef.current = false;
+    };
+  }, []);
+
+  // Handle Google OAuth callback - set user data from URL params
+  React.useEffect(() => {
+    console.log('🔍 [GOOGLE OAUTH] Effect triggered, current URL:', window.location.href);
     const urlParams = new URLSearchParams(window.location.search);
     const googleAuth = urlParams.get('googleAuth');
     const token = urlParams.get('token');
     const userStr = urlParams.get('user');
+    const skipAccount = urlParams.get('skipAccount');
+
+    console.log('🔍 [GOOGLE OAUTH] URL params:', { googleAuth, hasToken: !!token, hasUser: !!userStr, skipAccount });
+    console.log('🔍 [GOOGLE OAUTH] Full URL params object:', Object.fromEntries(urlParams.entries()));
 
     if (googleAuth === 'success' && token && userStr) {
       try {
         const userData = JSON.parse(decodeURIComponent(userStr));
+        console.log('👤 [GOOGLE OAUTH] Parsed user data:', userData);
 
         // Pre-fill the form with user's data
         const newAnswers = {
@@ -130,28 +147,30 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         setUserId(userData.id);
         setAccountCreated(true);
 
-        console.log('✅ User signed in with Google, advancing to next step');
+        // Mark that we've handled Google OAuth - this prevents step reset
+        hasHandledGoogleAuthRef.current = true;
 
-        // Clean URL
-        window.history.replaceState({}, document.title, window.location.pathname);
+        console.log('✅ [GOOGLE OAUTH] User data loaded, accountCreated set to true, marked as handled');
 
-        // Advance to next step
-        setTimeout(() => {
-          if (questionnaire) {
-            const totalSteps = getTotalSteps();
-            if (currentStepIndex < totalSteps - 1) {
-              setCurrentStepIndex(prev => prev + 1);
-            }
-          }
-        }, 150);
+        // Clean URL but KEEP skipAccount flag for step initialization
+        if (skipAccount === 'true') {
+          const cleanUrl = `${window.location.pathname}?skipAccount=true`;
+          console.log('🧹 [GOOGLE OAUTH] Cleaning URL but keeping skipAccount flag');
+          console.log('🧹 [GOOGLE OAUTH] Before:', window.location.href);
+          console.log('🧹 [GOOGLE OAUTH] After:', cleanUrl);
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+
       } catch (error) {
-        console.error('❌ Failed to parse Google user data:', error);
+        console.error('❌ [GOOGLE OAUTH] Failed to parse user data:', error);
       }
     } else if (googleAuth === 'error') {
       alert('Google sign-in failed. Please try again.');
       window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      console.log('ℹ️ [GOOGLE OAUTH] No Google OAuth params detected in URL');
     }
-  }, []);
+  }, []); // Run once on mount
   const [shippingInfo, setShippingInfo] = React.useState({
     address: "",
     apartment: "",
@@ -883,6 +902,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       hasTrackedViewRef.current = false;
       hasConvertedRef.current = false;
       hasTrackedDropOffRef.current = false;
+      // DON'T reset hasHandledGoogleAuthRef - we want to keep it across modal reopens
       // Reset sign-in state
       setIsSignInMode(false);
       setSignInEmail('');
@@ -909,8 +929,39 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Set initial step when questionnaire loads
   React.useEffect(() => {
     if (questionnaire && isOpen) {
-      // Always start at step 0 (either first questionnaire step or product selection)
-      setCurrentStepIndex(0);
+      console.log('🔍 [STEP INIT] Current URL:', window.location.href);
+      console.log('🔍 [STEP INIT] hasHandledGoogleAuthRef:', hasHandledGoogleAuthRef.current);
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const skipAccount = urlParams.get('skipAccount');
+      console.log('🔍 [STEP INIT] skipAccount flag:', skipAccount);
+
+      // If coming from Google OAuth, skip to the step AFTER account creation
+      if (skipAccount === 'true' && questionnaire.steps) {
+        const accountStepIndex = questionnaire.steps.findIndex(
+          (step: any) => step.title === 'Create Your Account'
+        );
+
+        console.log('🔍 [STEP INIT] Account step index:', accountStepIndex);
+
+        if (accountStepIndex >= 0) {
+          const targetStep = accountStepIndex + 1;
+          console.log('⏭️ [STEP INIT] Skipping account step - starting at step:', targetStep);
+          setCurrentStepIndex(targetStep);
+
+          // DON'T clean URL - keep the skipAccount flag so it works on modal reopen
+          console.log('✅ [STEP INIT] Keeping skipAccount flag in URL for persistence');
+          return;
+        }
+      }
+
+      // Otherwise, start at step 0 (but not if we've already handled Google OAuth)
+      if (!hasHandledGoogleAuthRef.current) {
+        console.log('📍 [STEP INIT] Starting at step 0');
+        setCurrentStepIndex(0);
+      } else {
+        console.log('⏭️ [STEP INIT] Skipping reset - Google OAuth handled, keeping current step');
+      }
     }
   }, [questionnaire, isOpen]);
 

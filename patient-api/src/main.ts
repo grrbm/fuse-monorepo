@@ -732,8 +732,9 @@ app.get("/auth/google/callback", async (req, res) => {
     
     console.log('✅ User signed in via Google:', user.email);
     
-    // Redirect back to frontend with token
-    const redirectUrl = `${returnUrl}?googleAuth=success&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
+    // Redirect back to frontend with token and flag to skip account creation step
+    const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
+    console.log('🔗 Redirecting to:', redirectUrl);
     res.redirect(redirectUrl);
     
   } catch (error) {
