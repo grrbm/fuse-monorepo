@@ -26,11 +26,42 @@ class WebSocketService {
     initialize(httpServer: HTTPServer): void {
         this.io = new SocketIOServer(httpServer, {
             cors: {
-                origin: [
-                    process.env.PATIENT_FRONTEND_URL || 'http://localhost:3000',
-                    process.env.DOCTOR_PORTAL_URL || 'http://localhost:3003',
-                    process.env.ADMIN_PORTAL_URL || 'http://localhost:3002',
-                ],
+                origin: (origin, callback) => {
+                    // Allow requests with no origin (mobile apps, etc.)
+                    if (!origin) return callback(null, true);
+
+                    const allowedOrigins = process.env.NODE_ENV === 'production'
+                        ? [
+                            process.env.PATIENT_FRONTEND_URL,
+                            process.env.DOCTOR_PORTAL_URL,
+                            process.env.ADMIN_PORTAL_URL,
+                            process.env.FRONTEND_URL,
+                        ].filter(Boolean)
+                        : ['http://localhost:3000', 'http://localhost:3002', 'http://localhost:3003', 'http://localhost:3030'];
+
+                    // Check if origin is allowed
+                    const isAllowed = allowedOrigins.includes(origin) ||
+                        // Allow clinic subdomains in development
+                        (process.env.NODE_ENV === 'development' && /^http:\/\/[a-zA-Z0-9.-]+\.localhost:3000$/.test(origin)) ||
+                        // Allow production clinic domains
+                        (process.env.NODE_ENV === 'production' && /^https:\/\/app\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$/.test(origin)) ||
+                        // Allow fuse.health root domain and any subdomain
+                        (process.env.NODE_ENV === 'production' && /^https:\/\/([a-zA-Z0-9-]+\.)*fuse\.health$/.test(origin)) ||
+                        // Allow any origin containing fusehealth.com (including rx.fusehealth.com, app.fusehealth.com, etc.)
+                        origin.includes('fusehealth.com') ||
+                        // Allow all subdomains of fusehealthstaging.xyz
+                        /^https:\/\/[a-zA-Z0-9-]+\.fusehealthstaging\.xyz$/.test(origin) ||
+                        // Allow all subdomains of unboundedhealth.xyz
+                        /^https:\/\/[a-zA-Z0-9-]+\.unboundedhealth\.xyz$/.test(origin);
+
+                    if (isAllowed) {
+                        console.log(`✅ [WS] CORS allowed origin: ${origin}`);
+                        callback(null, true);
+                    } else {
+                        console.log(`❌ [WS] CORS blocked origin: ${origin}`);
+                        callback(new Error('Not allowed by CORS'));
+                    }
+                },
                 credentials: true,
             },
         });

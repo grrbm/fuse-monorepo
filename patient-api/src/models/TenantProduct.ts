@@ -1,8 +1,9 @@
-import { Table, Column, DataType, BelongsTo, ForeignKey, Index } from 'sequelize-typescript';
+import { Table, Column, DataType, BelongsTo, ForeignKey, HasMany, Index } from 'sequelize-typescript';
 import Entity from './Entity';
 import Clinic from './Clinic';
 import Product from './Product';
 import Questionnaire from './Questionnaire';
+import TenantAnalyticsEvents from './TenantAnalyticsEvents';
 
 @Table({
     freezeTableName: true,
@@ -71,4 +72,7 @@ export default class TenantProduct extends Entity {
         allowNull: true,
     })
     declare stripePriceId?: string;
+
+    @HasMany(() => TenantAnalyticsEvents)
+    declare analyticsEvents: TenantAnalyticsEvents[];
 }

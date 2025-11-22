@@ -156,6 +156,7 @@ export default function PublicProductPage() {
                     productStripeProductId={product.stripeProductId || undefined}
                     productStripePriceId={product.stripePriceId || undefined}
                     tenantProductId={product.tenantProductId || undefined}
+                    tenantProductFormId={product.tenantProductFormId || (typeof extra === 'string' ? extra : undefined)}
                 />
             )}
         </div>

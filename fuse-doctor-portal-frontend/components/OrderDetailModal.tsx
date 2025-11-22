@@ -23,6 +23,8 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
     const [pharmacyCoverage, setPharmacyCoverage] = useState<any>(null);
     const [loadingCoverage, setLoadingCoverage] = useState(false);
     const [coverageError, setCoverageError] = useState<string | null>(null);
+    const [retryingEmail, setRetryingEmail] = useState(false);
+    const [retryingSpreadsheet, setRetryingSpreadsheet] = useState(false);
 
     // Pre-populate notes when order changes
     useEffect(() => {
@@ -42,14 +44,14 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
 
     const fetchPharmacyCoverage = async () => {
         if (!order?.id) return;
-        
+
         setLoadingCoverage(true);
         setCoverageError(null);
-        
+
         try {
             const response = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/doctor/orders/${order.id}/pharmacy-coverage`);
             const data = await response.json();
-            
+
             if (data.success && data.hasCoverage) {
                 setPharmacyCoverage(data.data);
             } else {
@@ -91,6 +93,46 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
             toast.error('Failed to approve order');
         } finally {
             setApproving(false);
+        }
+    };
+
+    const handleRetryEmail = async () => {
+        setRetryingEmail(true);
+        try {
+            const response = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/doctor/orders/${order.id}/retry-email`, {
+                method: 'POST',
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                toast.success('Email sent successfully!');
+            } else {
+                toast.error(data.message || 'Failed to send email');
+            }
+        } catch (error) {
+            toast.error('Failed to send email');
+        } finally {
+            setRetryingEmail(false);
+        }
+    };
+
+    const handleRetrySpreadsheet = async () => {
+        setRetryingSpreadsheet(true);
+        try {
+            const response = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/doctor/orders/${order.id}/retry-spreadsheet`, {
+                method: 'POST',
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                toast.success('Spreadsheet updated successfully!');
+            } else {
+                toast.error(data.message || 'Failed to update spreadsheet');
+            }
+        } catch (error) {
+            toast.error('Failed to update spreadsheet');
+        } finally {
+            setRetryingSpreadsheet(false);
         }
     };
 
@@ -421,21 +463,46 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                 </div>
 
                 {/* Footer Actions */}
-                <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex justify-end gap-3">
-                    <button
-                        onClick={onClose}
-                        className="px-4 py-2 border rounded-md hover:bg-gray-50"
-                    >
-                        Close
-                    </button>
-                    <button
-                        onClick={handleApprove}
-                        disabled={approving || loadingCoverage || !!coverageError || !pharmacyCoverage}
-                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={coverageError ? 'Cannot approve: ' + coverageError : ''}
-                    >
-                        {approving ? 'Approving...' : 'Approve Order'}
-                    </button>
+                <div className="sticky bottom-0 bg-white border-t px-6 py-4">
+                    <div className="flex justify-between items-center">
+                        {/* Left side - Retry buttons (only for IronSail) */}
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleRetryEmail}
+                                disabled={retryingEmail || !pharmacyCoverage || pharmacyCoverage.pharmacy?.slug !== 'ironsail'}
+                                className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={pharmacyCoverage?.pharmacy?.slug !== 'ironsail' ? 'Only available for IronSail orders' : 'Retry sending email to pharmacy'}
+                            >
+                                {retryingEmail ? 'Sending...' : '📧 Retry Email'}
+                            </button>
+                            <button
+                                onClick={handleRetrySpreadsheet}
+                                disabled={retryingSpreadsheet || !pharmacyCoverage || pharmacyCoverage.pharmacy?.slug !== 'ironsail'}
+                                className="px-3 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={pharmacyCoverage?.pharmacy?.slug !== 'ironsail' ? 'Only available for IronSail orders' : 'Retry adding order to spreadsheet'}
+                            >
+                                {retryingSpreadsheet ? 'Adding...' : '📊 Retry Spreadsheet'}
+                            </button>
+                        </div>
+
+                        {/* Right side - Main action buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                            >
+                                Close
+                            </button>
+                            <button
+                                onClick={handleApprove}
+                                disabled={approving || loadingCoverage || !!coverageError || !pharmacyCoverage}
+                                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={coverageError ? 'Cannot approve: ' + coverageError : ''}
+                            >
+                                {approving ? 'Approving...' : 'Approve Order'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

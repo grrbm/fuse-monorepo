@@ -5,6 +5,7 @@ import Treatment from './Treatment'
 import Product from './Product'
 import Questionnaire from './Questionnaire'
 import Clinic from './Clinic'
+import GlobalFormStructure from './GlobalFormStructure'
 
 @Table({
   freezeTableName: true,
@@ -104,6 +105,13 @@ export default class TenantProductForm extends Entity {
     allowNull: true,
   })
   declare globalFormStructureId?: string | null
+
+  @BelongsTo(() => GlobalFormStructure, {
+    foreignKey: 'globalFormStructureId',
+    targetKey: 'structureId',
+    constraints: false,
+  })
+  declare globalFormStructure?: GlobalFormStructure
 
 }
 

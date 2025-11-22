@@ -87,6 +87,7 @@ export interface QuestionnaireModalProps {
     productStripePriceId?: string;
     productStripeProductId?: string;
     tenantProductId?: string;
+    tenantProductFormId?: string; // Unique ID for this specific form variant (used for analytics)
 }
 
 export interface ThemePalette {

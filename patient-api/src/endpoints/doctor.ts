@@ -10,6 +10,7 @@ import ShippingAddress from '../models/ShippingAddress';
 import OrderService from '../services/order.service';
 import PharmacyProduct from '../models/PharmacyProduct';
 import Pharmacy from '../models/Pharmacy';
+import IronSailOrderService from '../services/pharmacy/ironsail-order';
 
 export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
 
@@ -126,16 +127,15 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 offset = '0'
             } = req.query as any;
 
-            // Build where clause - show ALL orders by default
+            // Build where clause - show only PAID orders by default (orders that have been paid)
             const whereClause: any = {
                 // Only show orders with tenantProductId (orders for tenant products)
-                tenantProductId: { [Op.ne]: null }
+                tenantProductId: { [Op.ne]: null },
+                // Only show paid orders and beyond (not pending or payment_processing)
+                status: status || {
+                    [Op.in]: ['paid', 'processing', 'shipped', 'delivered']
+                }
             };
-
-            // Optional status filter (if not provided, show all statuses)
-            if (status) {
-                whereClause.status = status;
-            }
 
             // Optional clinic filter
             if (clinicId) {
@@ -595,6 +595,210 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
         } catch (error) {
             console.error('❌ Error fetching doctor order stats:', error);
             res.status(500).json({ success: false, message: "Failed to fetch order statistics" });
+        }
+    });
+
+    // Retry email send for IronSail order
+    app.post("/doctor/orders/:orderId/retry-email", authenticateJWT, async (req: any, res: any) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Unauthorized" });
+            }
+
+            const { orderId } = req.params;
+
+            console.log(`📧 [Retry Email] Request for order ${orderId} by user ${currentUser.id}`);
+
+            // Fetch order with related data
+            const order = await Order.findOne({
+                where: { id: orderId },
+                include: [
+                    {
+                        model: User,
+                        as: 'user',
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'gender', 'dob', 'state']
+                    },
+                    {
+                        model: ShippingAddress,
+                        as: 'shippingAddress',
+                        attributes: ['state', 'address', 'apartment', 'city', 'zipCode', 'country']
+                    },
+                    {
+                        model: TenantProduct,
+                        as: 'tenantProduct',
+                        required: false,
+                        include: [
+                            {
+                                model: Product,
+                                as: 'product',
+                                attributes: ['id', 'name', 'placeholderSig']
+                            }
+                        ]
+                    }
+                ]
+            });
+
+            if (!order) {
+                return res.status(404).json({ success: false, message: "Order not found" });
+            }
+
+            // Get pharmacy coverage to verify it's IronSail
+            const patientState = order.shippingAddress?.state || order.user?.state;
+            const productId = order.tenantProduct?.product?.id;
+
+            if (!patientState || !productId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Cannot determine patient state or product for order"
+                });
+            }
+
+            const coverage = await PharmacyProduct.findOne({
+                where: {
+                    productId,
+                    state: patientState
+                },
+                include: [
+                    {
+                        model: Pharmacy,
+                        as: 'pharmacy',
+                        attributes: ['id', 'name', 'slug', 'isActive']
+                    }
+                ]
+            });
+
+            if (!coverage || !coverage.pharmacy) {
+                return res.status(400).json({
+                    success: false,
+                    message: "No pharmacy coverage found for this order"
+                });
+            }
+
+            if (coverage.pharmacy.slug !== 'ironsail') {
+                return res.status(400).json({
+                    success: false,
+                    message: `This action is only available for IronSail orders. Current pharmacy: ${coverage.pharmacy.name}`
+                });
+            }
+
+            console.log(`✅ [Retry Email] Order ${order.orderNumber} is IronSail, proceeding with email retry`);
+
+            // Retry email send
+            const ironSailService = new IronSailOrderService();
+            const result = await ironSailService.retrySendEmail(order, coverage);
+
+            res.json(result);
+
+        } catch (error) {
+            console.error('❌ [Retry Email] Error:', error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to retry email send",
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    });
+
+    // Retry spreadsheet write for IronSail order
+    app.post("/doctor/orders/:orderId/retry-spreadsheet", authenticateJWT, async (req: any, res: any) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Unauthorized" });
+            }
+
+            const { orderId } = req.params;
+
+            console.log(`📊 [Retry Spreadsheet] Request for order ${orderId} by user ${currentUser.id}`);
+
+            // Fetch order with related data
+            const order = await Order.findOne({
+                where: { id: orderId },
+                include: [
+                    {
+                        model: User,
+                        as: 'user',
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'gender', 'dob', 'state']
+                    },
+                    {
+                        model: ShippingAddress,
+                        as: 'shippingAddress',
+                        attributes: ['state', 'address', 'apartment', 'city', 'zipCode', 'country']
+                    },
+                    {
+                        model: TenantProduct,
+                        as: 'tenantProduct',
+                        required: false,
+                        include: [
+                            {
+                                model: Product,
+                                as: 'product',
+                                attributes: ['id', 'name', 'placeholderSig']
+                            }
+                        ]
+                    }
+                ]
+            });
+
+            if (!order) {
+                return res.status(404).json({ success: false, message: "Order not found" });
+            }
+
+            // Get pharmacy coverage to verify it's IronSail
+            const patientState = order.shippingAddress?.state || order.user?.state;
+            const productId = order.tenantProduct?.product?.id;
+
+            if (!patientState || !productId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Cannot determine patient state or product for order"
+                });
+            }
+
+            const coverage = await PharmacyProduct.findOne({
+                where: {
+                    productId,
+                    state: patientState
+                },
+                include: [
+                    {
+                        model: Pharmacy,
+                        as: 'pharmacy',
+                        attributes: ['id', 'name', 'slug', 'isActive']
+                    }
+                ]
+            });
+
+            if (!coverage || !coverage.pharmacy) {
+                return res.status(400).json({
+                    success: false,
+                    message: "No pharmacy coverage found for this order"
+                });
+            }
+
+            if (coverage.pharmacy.slug !== 'ironsail') {
+                return res.status(400).json({
+                    success: false,
+                    message: `This action is only available for IronSail orders. Current pharmacy: ${coverage.pharmacy.name}`
+                });
+            }
+
+            console.log(`✅ [Retry Spreadsheet] Order ${order.orderNumber} is IronSail, proceeding with spreadsheet retry`);
+
+            // Retry spreadsheet write
+            const ironSailService = new IronSailOrderService();
+            const result = await ironSailService.retryWriteToSpreadsheet(order, coverage);
+
+            res.json(result);
+
+        } catch (error) {
+            console.error('❌ [Retry Spreadsheet] Error:', error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to retry spreadsheet write",
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
         }
     });
 
