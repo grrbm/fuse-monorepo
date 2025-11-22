@@ -235,6 +235,7 @@ export class MailsSender {
   }
 
   /**
+<<<<<<< HEAD
    * Send patient welcome email with temporary password
    */
   static async sendPatientWelcomeEmail(

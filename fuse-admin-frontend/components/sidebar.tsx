@@ -65,8 +65,8 @@ export function Sidebar() {
   });
 
   // Check if user has access to analytics based on tier or custom features
-  const hasAccessToAnalytics = 
-    subscription?.customFeatures?.hasAccessToAnalytics || 
+  const hasAccessToAnalytics =
+    subscription?.customFeatures?.hasAccessToAnalytics ||
     subscription?.tierConfig?.hasAccessToAnalytics ||
     false;
   const fetchSubscriptionBasicInfo = async () => {
@@ -127,13 +127,13 @@ export function Sidebar() {
   // Helper function to handle clicks on disabled items
   const handleDisabledClick = (e: React.MouseEvent, itemName: string) => {
     e.preventDefault()
-    
+
     // Analytics requires upgrade - redirect to plans page
     if (itemName === 'Analytics' && !hasAccessToAnalytics) {
       router.push('/plans?message=Upgrade your plan to access Analytics.')
       return
     }
-    
+
     if (!hasActiveSubscription && itemName !== 'Plans' && itemName !== 'Settings') {
       // Redirect to settings instead of plans for subscription management
       router.push('/settings?tab=subscription&message=Please subscribe to access this feature.')
@@ -191,7 +191,7 @@ export function Sidebar() {
                 Upgrade
               </span>
             ) : (
-            <Lock className="ml-auto h-3 w-3 text-muted-foreground/50" />
+              <Lock className="ml-auto h-3 w-3 text-muted-foreground/50" />
             )}
           </div>
         ) : (

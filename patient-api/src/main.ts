@@ -657,18 +657,18 @@ app.post("/auth/signup", async (req, res) => {
 app.get("/auth/google/login", (req, res) => {
   const returnUrl = req.query.returnUrl as string || 'http://localhost:3000';
   const clinicId = req.query.clinicId as string || '';
-  
+
   // Store return URL and clinic ID in state parameter
   const state = Buffer.from(JSON.stringify({ returnUrl, clinicId })).toString('base64');
-  
-  const googleAuthUrl = 
+
+  const googleAuthUrl =
     `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}` +
     `&redirect_uri=${encodeURIComponent(process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/auth/google/callback')}` +
     `&response_type=code` +
     `&scope=email%20profile` +
     `&state=${state}`;
-  
+
   console.log('🔐 Redirecting to Google OAuth:', googleAuthUrl);
   res.redirect(googleAuthUrl);
 });
@@ -678,14 +678,14 @@ app.get("/auth/google/callback", async (req, res) => {
   try {
     const code = req.query.code as string;
     const state = req.query.state as string;
-    
+
     if (!code) {
       return res.status(400).send('Authorization code missing');
     }
-    
+
     // Decode state to get return URL and clinic ID
     const { returnUrl, clinicId } = JSON.parse(Buffer.from(state, 'base64').toString());
-    
+
     // Exchange code for access token
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -698,64 +698,87 @@ app.get("/auth/google/callback", async (req, res) => {
         grant_type: 'authorization_code'
       })
     });
-    
+
     const tokenData = await tokenResponse.json() as { access_token?: string; error?: string };
-    
+
     if (!tokenData.access_token) {
       throw new Error('Failed to get access token');
     }
-    
+
     // Get user info from Google
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` }
     });
-    
+
     const googleUser = await userInfoResponse.json() as {
       email?: string;
       given_name?: string;
       family_name?: string;
     };
+
+    console.log('👤 Google user info received:', googleUser);
+
     const email = googleUser.email || '';
     const firstName = googleUser.given_name || '';
     const lastName = googleUser.family_name || '';
-    
+
+    console.log('📧 Extracted user data:', { email, firstName, lastName });
+
     if (!email) {
       throw new Error('Email not provided by Google');
     }
-    
+
     // Check if user exists
     let user = await User.findByEmail(email);
-    
+
     if (!user) {
+      console.log('🆕 Creating new user via Google:', { email, firstName, lastName, clinicId });
+
       // Create new user with Google account
-      user = await User.create({
-        email,
-        firstName,
-        lastName,
-        role: 'patient',
-        activated: true, // Google accounts are pre-verified
-        password: Math.random().toString(36).slice(-16) + 'Aa1!', // Random password (won't be used)
-        clinicId: clinicId || null
-      });
-      
-      console.log('✅ New user created via Google:', user.email);
+      try {
+        // Generate a random password and hash it
+        const randomPassword = Math.random().toString(36).slice(-16) + 'Aa1!';
+        const passwordHash = await User.hashPassword(randomPassword);
+
+        user = await User.create({
+          email: email.toLowerCase().trim(),
+          firstName,
+          lastName,
+          role: 'patient',
+          activated: true, // Google accounts are pre-verified
+          passwordHash, // Pass the hashed password
+          clinicId: clinicId || null
+        });
+
+        console.log('✅ New user created via Google:', user.email);
+      } catch (createError) {
+        console.error('❌ Failed to create user:', createError);
+        throw createError;
+      }
+    } else {
+      console.log('👤 Existing user found:', user.email);
     }
-    
+
     // Update last login time
     await user.updateLastLogin();
-    
+
     // Create JWT token
     const token = createJWTToken(user);
-    
+
     console.log('✅ User signed in via Google:', user.email);
-    
+
     // Redirect back to frontend with token and flag to skip account creation step
     const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
     console.log('🔗 Redirecting to:', redirectUrl);
     res.redirect(redirectUrl);
-    
+
   } catch (error) {
     console.error('❌ Google OAuth callback error:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      error
+    });
     const returnUrl = req.query.state ? JSON.parse(Buffer.from(req.query.state as string, 'base64').toString()).returnUrl : 'http://localhost:3000';
     res.redirect(`${returnUrl}?googleAuth=error`);
   }
@@ -777,10 +800,10 @@ app.post("/auth/google", async (req, res) => {
     // For now, decode the JWT to get user info
     const base64Url = credential.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(Buffer.from(base64, 'base64').toString().split('').map(function(c) {
+    const jsonPayload = decodeURIComponent(Buffer.from(base64, 'base64').toString().split('').map(function (c) {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
-    
+
     const payload = JSON.parse(jsonPayload);
     const email = payload.email;
     const firstName = payload.given_name || '';
@@ -931,10 +954,10 @@ app.post("/auth/send-verification-code", async (req, res) => {
 
     // Generate 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Store code with 10-minute expiration
     const expiresAt = Date.now() + 10 * 60 * 1000;
-    
+
     // Check if user exists to personalize email
     let firstName: string | undefined;
     try {
@@ -946,7 +969,7 @@ app.post("/auth/send-verification-code", async (req, res) => {
       // Continue even if user lookup fails
       console.log('User lookup failed, sending generic email');
     }
-    
+
     verificationCodes.set(email.toLowerCase(), { code, expiresAt, firstName });
 
     // Send email with code
@@ -1022,7 +1045,7 @@ app.post("/auth/verify-code", async (req, res) => {
 
     if (user) {
       // User exists - sign them in
-      
+
       // Check if user account is activated
       if (!user.activated) {
         return res.status(401).json({
@@ -1050,7 +1073,7 @@ app.post("/auth/verify-code", async (req, res) => {
     } else {
       // User doesn't exist - return success but indicate they need to complete sign-up
       console.log('✅ Verification successful for new user:', email);
-      
+
       return res.status(200).json({
         success: true,
         message: "Email verified successfully",
