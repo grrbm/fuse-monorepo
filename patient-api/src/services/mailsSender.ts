@@ -233,4 +233,82 @@ export class MailsSender {
       return false
     }
   }
+
+  /**
+   * Send a 6-digit verification code for email sign-in
+   */
+  static async sendVerificationCode(email: string, code: string, firstName?: string): Promise<boolean> {
+    const greeting = firstName ? `Hello ${firstName}` : 'Hello';
+
+    const msg: any = {
+      to: email,
+      from: this.FROM_EMAIL,
+      subject: 'Your Fuse Verification Code',
+      text: `${greeting},\n\nYour verification code is: ${code}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this code, please ignore this email.\n\nBest regards,\nThe Fuse Team`,
+      // Disable click tracking
+      trackingSettings: {
+        clickTracking: {
+          enable: false
+        },
+        openTracking: {
+          enable: false
+        }
+      },
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">Verification Code</h1>
+          </div>
+          
+          <div style="padding: 40px 30px; background-color: #f8f9fa;">
+            <h2 style="color: #333; margin-top: 0;">${greeting},</h2>
+            
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              Use this verification code to continue:
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <div style="background-color: #f3f4f6; 
+                          padding: 20px; 
+                          border-radius: 12px; 
+                          display: inline-block;
+                          border: 2px solid #e5e7eb;">
+                <span style="font-size: 36px; 
+                            font-weight: bold; 
+                            letter-spacing: 8px; 
+                            color: #667eea;
+                            font-family: 'Courier New', monospace;">
+                  ${code}
+                </span>
+              </div>
+            </div>
+            
+            <p style="color: #666; font-size: 14px; text-align: center;">
+              <strong>This code will expire in 10 minutes.</strong>
+            </p>
+            
+            <p style="color: #999; font-size: 14px; margin-top: 30px;">
+              If you didn't request this code, please ignore this email.
+            </p>
+          </div>
+          
+          <div style="background-color: #333; padding: 20px; text-align: center;">
+            <p style="color: #ccc; margin: 0; font-size: 14px;">
+              Best regards,<br>
+              The Fuse Team
+            </p>
+          </div>
+        </div>
+      `
+    }
+
+    try {
+      await sgMail.send(msg)
+      console.log(`✅ Verification code sent to: ${email}`)
+      return true
+    } catch (error) {
+      console.error('❌ Failed to send verification code:', error)
+      return false
+    }
+  }
 }

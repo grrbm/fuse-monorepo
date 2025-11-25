@@ -176,21 +176,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Fallback to checking for stored token
-      const storedToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null
-      const storedUser = typeof window !== 'undefined' ? localStorage.getItem('admin_user') : null
+    const storedToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null
+    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('admin_user') : null
 
-      if (storedToken && storedUser) {
-        try {
-          const userData = JSON.parse(storedUser)
-          setToken(storedToken)
-          setUser(userData)
-        } catch (error) {
-          localStorage.removeItem('admin_token')
-          localStorage.removeItem('admin_user')
-        }
+    if (storedToken && storedUser) {
+      try {
+        const userData = JSON.parse(storedUser)
+        setToken(storedToken)
+        setUser(userData)
+      } catch (error) {
+        localStorage.removeItem('admin_token')
+        localStorage.removeItem('admin_user')
       }
+    }
 
-      setIsLoading(false)
+    setIsLoading(false)
     }
 
     checkAuth()
