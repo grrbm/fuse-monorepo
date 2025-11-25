@@ -258,6 +258,26 @@ export async function initializeDatabase() {
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
 
+    // Add new enum value for amount_capturable_updated status
+    try {
+      console.log('🔄 Adding amount_capturable_updated to Order status enum...');
+      await sequelize.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum 
+            WHERE enumlabel = 'amount_capturable_updated' 
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'enum_Order_status')
+          ) THEN
+            ALTER TYPE "enum_Order_status" ADD VALUE 'amount_capturable_updated';
+          END IF;
+        END $$;
+      `);
+      console.log('✅ Order status enum updated successfully');
+    } catch (enumError) {
+      console.log('⚠️  Could not add enum value (may already exist):', enumError instanceof Error ? enumError.message : enumError);
+    }
+
     // Ensure TierConfiguration exists for all active BrandSubscriptionPlans
     try {
       console.log('🔍 Checking TierConfiguration for active plans...');

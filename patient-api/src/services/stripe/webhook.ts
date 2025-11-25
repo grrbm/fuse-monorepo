@@ -594,7 +594,8 @@ export const handleSubscriptionUpdated = async (event: Stripe.Event): Promise<vo
  * @param paymentIntent
  */
 export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: Stripe.PaymentIntent): Promise<void> => {
-    console.log('payment_intent.amount_capturable_updated:', paymentIntent.id);
+    console.log('💰 payment_intent.amount_capturable_updated:', paymentIntent.id);
+    console.log('💰 Amount capturable:', paymentIntent.amount_capturable / 100, paymentIntent.currency.toUpperCase());
 
     // Find payment record to get associated order
     const payment = await Payment.findOne({
@@ -627,6 +628,24 @@ export const handlePaymentIntentAmountCapturableUpdated = async (paymentIntent: 
     const order = payment.order;
     const treatment = payment.order.treatment;
     const tenantProduct = payment.order.tenantProduct;
+
+    // Update payment status to reflect it's authorized (uncaptured)
+    try {
+        await payment.updateFromStripeEvent({ object: paymentIntent });
+        console.log('✅ Payment record updated with authorization status');
+    } catch (error) {
+        console.error('❌ Error updating payment record:', error);
+    }
+
+    // Update order status to AMOUNT_CAPTURABLE_UPDATED to indicate it has an authorized payment awaiting doctor approval
+    try {
+        if (order.status === OrderStatus.PENDING || order.status === OrderStatus.PAYMENT_PROCESSING) {
+            await order.update({ status: OrderStatus.AMOUNT_CAPTURABLE_UPDATED });
+            console.log('✅ Order status updated to AMOUNT_CAPTURABLE_UPDATED (authorized payment, awaiting doctor approval)');
+        }
+    } catch (error) {
+        console.error('❌ Error updating order status:', error);
+    }
 
     // Check if user has mdPatientId
     if (!user.mdPatientId) {

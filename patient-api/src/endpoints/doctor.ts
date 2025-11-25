@@ -127,13 +127,13 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 offset = '0'
             } = req.query as any;
 
-            // Build where clause - show only PAID orders by default (orders that have been paid)
+            // Build where clause - show orders ready for doctor review
             const whereClause: any = {
                 // Only show orders with tenantProductId (orders for tenant products)
                 tenantProductId: { [Op.ne]: null },
-                // Only show paid orders and beyond (not pending or payment_processing)
+                // Show: amount_capturable_updated (authorized payment awaiting approval), paid orders, and beyond
                 status: status || {
-                    [Op.in]: ['paid', 'processing', 'shipped', 'delivered']
+                    [Op.in]: ['amount_capturable_updated', 'paid', 'processing', 'shipped', 'delivered']
                 }
             };
 
