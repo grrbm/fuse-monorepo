@@ -21,7 +21,10 @@ import {
     FileText,
     Calendar,
     User,
-    Smartphone
+    Smartphone,
+    Code2,
+    ChevronDown,
+    ChevronUp
 } from 'lucide-react'
 
 interface TemplateBlock {
@@ -79,10 +82,7 @@ export default function Templates() {
     const [editedSubject, setEditedSubject] = useState('')
     const [editedType, setEditedType] = useState<'email' | 'sms'>('email')
     const [editedMergeFields, setEditedMergeFields] = useState<string[]>([])
-    const [newMergeField, setNewMergeField] = useState('')
-    const [showMergeFieldModal, setShowMergeFieldModal] = useState(false)
-    const [newMergeFieldName, setNewMergeFieldName] = useState('')
-    const [newMergeFieldDb, setNewMergeFieldDb] = useState('')
+    const [showHIPAAFieldsDropdown, setShowHIPAAFieldsDropdown] = useState(false)
 
     // Fetch templates on mount
     useEffect(() => {
@@ -248,7 +248,6 @@ export default function Templates() {
         setEditedSubject('')
         setEditedType(activeTab) // Use current active tab
         setEditedMergeFields([])
-        setNewMergeField('')
         setTemplateBlocks([{
             id: '1',
             type: 'text',
@@ -268,7 +267,6 @@ export default function Templates() {
         setEditedSubject('')
         setEditedType(type) // Set specific type
         setEditedMergeFields([])
-        setNewMergeField('')
         setTemplateBlocks([{
             id: '1',
             type: 'text',
@@ -289,7 +287,6 @@ export default function Templates() {
         setEditedSubject(selectedTemplate.subject || '')
         setEditedType(selectedTemplate.type)
         setEditedMergeFields(selectedTemplate.mergeFields || [])
-        setNewMergeField('')
         // Parse body to blocks if needed
         try {
             const parsed = JSON.parse(selectedTemplate.body)
@@ -324,63 +321,114 @@ export default function Templates() {
         }
     }
 
-    const handleAddMergeField = () => {
-        if (!newMergeField.trim()) return
-        
-        // Format: remove {{ }} if user typed them, then add them
-        const cleanField = newMergeField.trim().replace(/^\{\{|\}\}$/g, '').trim()
+    const handleAddHIPAAField = (fieldName: string, dbField: string) => {
+        // Create the merge field with mapping: name|dbField
+        const mergeFieldWithMapping = `${fieldName}|${dbField}`
         
         // Check if already exists
-        if (editedMergeFields.includes(cleanField)) {
-            setNewMergeField('')
+        if (editedMergeFields.some(f => f.startsWith(fieldName + '|'))) {
+            showError('This HIPAA field is already added')
             return
         }
-        
-        setEditedMergeFields([...editedMergeFields, cleanField])
-        setNewMergeField('')
+
+        setEditedMergeFields([...editedMergeFields, mergeFieldWithMapping])
+        setShowHIPAAFieldsDropdown(false)
+        success('HIPAA field added! Click "Save Changes" to persist.', 'Added to template')
     }
 
     const handleRemoveMergeField = (field: string) => {
         setEditedMergeFields(editedMergeFields.filter(f => f !== field))
     }
 
-    const handleMergeFieldKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            e.preventDefault()
-            handleAddMergeField()
-        }
-    }
+    // HIPAA Fields Dropdown Component
+    const HIPAAFieldsDropdown = () => {
+        const hipaaFields = [
+            { name: 'phone_last4', dbField: 'phone', description: 'Shows: XXX-XXX-4567' },
+            { name: 'phone_masked', dbField: 'phone', description: 'Shows: XXX-XXX-4567' },
+            { name: 'email_masked', dbField: 'email', description: 'Shows: j***@example.com' },
+            { name: 'age', dbField: 'dateOfBirth', description: 'Shows: 34 (calculated from DOB)' },
+            { name: 'dob_year', dbField: 'dateOfBirth', description: 'Shows: 1990' },
+            { name: 'name_masked', dbField: 'firstName', description: 'Shows: John D.' },
+            { name: 'firstName', dbField: 'firstName', description: 'Patient first name' },
+            { name: 'lastName', dbField: 'lastName', description: 'Patient last name' },
+            { name: 'email', dbField: 'email', description: 'Patient email address' },
+            { name: 'phone', dbField: 'phone', description: 'Patient phone number' },
+            { name: 'dateOfBirth', dbField: 'dateOfBirth', description: 'Patient date of birth' },
+            { name: 'gender', dbField: 'gender', description: 'Patient gender' },
+            { name: 'address', dbField: 'address', description: 'Patient address' },
+            { name: 'city', dbField: 'city', description: 'Patient city' },
+            { name: 'state', dbField: 'state', description: 'Patient state' },
+            { name: 'zipCode', dbField: 'zipCode', description: 'Patient zip code' },
+        ]
 
-    const handleOpenMergeFieldModal = () => {
-        setNewMergeFieldName('')
-        setNewMergeFieldDb('')
-        setShowMergeFieldModal(true)
-    }
+        return (
+            <div className="relative">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => setShowHIPAAFieldsDropdown(!showHIPAAFieldsDropdown)}
+                    className="flex items-center gap-2 h-8 text-xs"
+                >
+                    <Code2 className="h-3.5 w-3.5" />
+                    HIPAA Fields
+                    {showHIPAAFieldsDropdown ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </Button>
 
-    const handleCloseMergeFieldModal = () => {
-        setShowMergeFieldModal(false)
-        setNewMergeFieldName('')
-        setNewMergeFieldDb('')
-    }
+                {showHIPAAFieldsDropdown && (
+                    <>
+                        {/* Backdrop to close dropdown when clicking outside */}
+                        <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setShowHIPAAFieldsDropdown(false)}
+                        />
 
-    const handleSaveMergeField = () => {
-        if (!newMergeFieldName.trim() || !newMergeFieldDb.trim()) {
-            showError('Please fill both merge field name and database field')
-            return
-        }
+                        <div className="absolute z-20 bottom-full mb-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-2 max-h-[400px] overflow-y-auto">
+                            <div className="text-xs font-semibold text-gray-500 mb-2 px-2">
+                                Click to add HIPAA field
+                            </div>
 
-        // Create the merge field with mapping: name|dbField
-        const mergeFieldWithMapping = `${newMergeFieldName.trim()}|${newMergeFieldDb.trim()}`
-        
-        // Check if already exists
-        if (editedMergeFields.some(f => f.startsWith(newMergeFieldName.trim() + '|'))) {
-            showError('A merge field with this name already exists')
-            return
-        }
+                            {hipaaFields.map((field) => {
+                                const fieldKey = `${field.name}|${field.dbField}`
+                                const isAlreadyAdded = editedMergeFields.some(f => f.startsWith(field.name + '|'))
+                                
+                                return (
+                                    <button
+                                        key={fieldKey}
+                                        type="button"
+                                        onClick={() => {
+                                            if (!isAlreadyAdded) {
+                                                handleAddHIPAAField(field.name, field.dbField)
+                                            }
+                                        }}
+                                        disabled={isAlreadyAdded}
+                                        className={`w-full text-left px-3 py-2 rounded text-sm flex items-center justify-between group transition-colors ${
+                                            isAlreadyAdded 
+                                                ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-gray-900' 
+                                                : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                                        }`}
+                                    >
+                                        <div className="flex-1">
+                                            <div className="font-mono font-medium text-sm">{'{{' + field.name + '}}'}</div>
+                                            <div className="text-xs text-gray-500 mt-0.5">{field.description}</div>
+                                        </div>
+                                        {isAlreadyAdded && (
+                                            <span className="text-green-600 text-xs font-medium">Added</span>
+                                        )}
+                                    </button>
+                                )
+                            })}
 
-        setEditedMergeFields([...editedMergeFields, mergeFieldWithMapping])
-        handleCloseMergeFieldModal()
-        success('Merge field added! Click "Save Changes" to persist.', 'Added to template')
+                            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <p className="text-[10px] text-gray-500 px-2 leading-relaxed">
+                                    HIPAA-safe fields automatically mask sensitive PHI data to comply with regulations.
+                                </p>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+        )
     }
 
     // Helper function to render template body (handles both JSON blocks and plain text)
@@ -1174,32 +1222,15 @@ export default function Templates() {
                                             </div>
                                         )}
 
-                                        {/* Merge Fields */}
+                                        {/* HIPAA Fields */}
                                         <div>
-                                            <h3 className="font-semibold mb-2">Merge Fields</h3>
+                                            <h3 className="font-semibold mb-2">HIPAA Fields</h3>
                                             {(isEditMode || isCreatingNew) ? (
                                                 <div className="space-y-3">
-                                                    {/* Input to add new merge field */}
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="text"
-                                                            value={newMergeField}
-                                                            onChange={(e) => setNewMergeField(e.target.value)}
-                                                            onKeyDown={handleMergeFieldKeyDown}
-                                                            placeholder="Type field name and press Enter (e.g., first_name)"
-                                                            className="flex-1 px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                                                        />
-                                                        <Button 
-                                                            type="button" 
-                                                            size="sm" 
-                                                            onClick={handleAddMergeField}
-                                                            disabled={!newMergeField.trim()}
-                                                        >
-                                                            <Plus className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
+                                                    {/* HIPAA Fields Dropdown */}
+                                                    <HIPAAFieldsDropdown />
                                                     
-                                                    {/* Display existing merge fields */}
+                                                    {/* Display existing HIPAA fields */}
                                                     {editedMergeFields.length > 0 && (
                                                         <div className="space-y-2">
                                                             {editedMergeFields.map((field, idx) => {
@@ -1232,7 +1263,7 @@ export default function Templates() {
                                                     )}
                                                     
                                                     <p className="text-xs text-muted-foreground">
-                                                        Add field names that will be replaced with patient data
+                                                        Select HIPAA-safe fields that will be replaced with patient data
                                                     </p>
                                                 </div>
                                             ) : (
@@ -1265,7 +1296,7 @@ export default function Templates() {
                                                         </p>
                                                     </div>
                                                 ) : (
-                                                    <p className="text-sm text-muted-foreground">No merge fields defined</p>
+                                                    <p className="text-sm text-muted-foreground">No HIPAA fields defined</p>
                                                 )
                                             )}
                                         </div>
@@ -1383,11 +1414,11 @@ export default function Templates() {
                                                         </div>
                                                     </div>
 
-                                                    {/* Merge Fields Section */}
+                                                    {/* HIPAA Fields Section */}
                                                     <div className="pt-4 border-t border-border space-y-3">
-                                                        <h4 className="font-semibold text-sm">Merge Fields</h4>
+                                                        <h4 className="font-semibold text-sm">HIPAA Fields</h4>
                                                         
-                                                        {/* Display merge fields as badges */}
+                                                        {/* Display HIPAA fields as badges */}
                                                         {editedMergeFields.length > 0 && (
                                                             <div className="flex flex-wrap gap-2">
                                                                 {editedMergeFields.map((field, idx) => {
@@ -1409,16 +1440,9 @@ export default function Templates() {
                                                             </div>
                                                         )}
                                                         
-                                                        <Button
-                                                            variant="outline"
-                                                            className="w-full gap-2"
-                                                            onClick={handleOpenMergeFieldModal}
-                                                        >
-                                                            <Plus className="h-4 w-4" />
-                                                            Add Merge Field
-                                                        </Button>
+                                                        <HIPAAFieldsDropdown />
                                                         <p className="text-xs text-muted-foreground">
-                                                            Create custom fields to insert patient data
+                                                            Select HIPAA-safe fields to insert patient data
                                                         </p>
                                                     </div>
 
@@ -1519,7 +1543,7 @@ export default function Templates() {
                                                     {/* Preview Note */}
                                                     <div className="bg-muted p-3 rounded-lg">
                                                         <p className="text-xs text-muted-foreground">
-                                                            <strong>Note:</strong> Merge fields (like {'{{'} first_name {'}}'}  ) will be replaced with actual patient data when messages are sent.
+                                                            <strong>Note:</strong> HIPAA fields (like {'{{'} phone_masked {'}}'}  ) will be replaced with actual patient data when messages are sent.
                                                         </p>
                                                     </div>
                                                 </>
@@ -1589,141 +1613,6 @@ export default function Templates() {
                     </div>
                 )}
 
-                {/* Merge Field Modal */}
-                {showMergeFieldModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-                        <div className="bg-background rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-                            <div className="flex items-start gap-4 mb-6">
-                                <div className="p-3 rounded-full bg-primary/10">
-                                    <User className="h-6 w-6 text-primary" />
-                                </div>
-                                <div className="flex-1">
-                                    <h2 className="text-xl font-semibold mb-2">Add Merge Field</h2>
-                                    <p className="text-sm text-muted-foreground">
-                                        Create a custom field to insert patient data into your template
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* HIPAA-Safe Merge Tags Section */}
-                            <div className="mb-6 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-                                <h3 className="font-semibold text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
-                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                    </svg>
-                                    🔒 HIPAA-Safe Merge Tags (Recommended)
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                    <div>
-                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
-                                            {'{{phone_last4}}'}
-                                        </code>
-                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: XXX-XXX-4567</p>
-                                    </div>
-                                    <div>
-                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
-                                            {'{{phone_masked}}'}
-                                        </code>
-                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: XXX-XXX-4567</p>
-                                    </div>
-                                    <div>
-                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
-                                            {'{{email_masked}}'}
-                                        </code>
-                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: j***@example.com</p>
-                                    </div>
-                                    <div>
-                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
-                                            {'{{age}}'}
-                                        </code>
-                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: 34 (calculated from DOB)</p>
-                                    </div>
-                                    <div>
-                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
-                                            {'{{dob_year}}'}
-                                        </code>
-                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: 1990</p>
-                                    </div>
-                                    <div>
-                                        <code className="bg-white dark:bg-gray-900 px-2 py-1 rounded text-green-700 dark:text-green-300 font-mono">
-                                            {'{{name_masked}}'}
-                                        </code>
-                                        <p className="text-xs text-green-800 dark:text-green-200 mt-1">Shows: John D.</p>
-                                    </div>
-                                </div>
-                                <p className="text-xs text-green-800 dark:text-green-200 mt-3">
-                                    ℹ️ These fields automatically mask sensitive PHI data to comply with HIPAA regulations.
-                                </p>
-                            </div>
-
-                            <div className="space-y-4 mb-6">
-                                {/* Merge Field Name */}
-                                <div>
-                                    <label htmlFor="mergeFieldName" className="block text-sm font-medium mb-2">
-                                        Field Name <span className="text-destructive">*</span>
-                                    </label>
-                                    <input
-                                        id="mergeFieldName"
-                                        type="text"
-                                        value={newMergeFieldName}
-                                        onChange={(e) => setNewMergeFieldName(e.target.value)}
-                                        className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                                        placeholder="e.g., first_name, email, phone"
-                                        autoComplete="off"
-                                    />
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        This will appear as: {'{{'}{newMergeFieldName || 'field_name'}{'}}'}
-                                    </p>
-                                </div>
-
-                                {/* Database Field */}
-                                <div>
-                                    <label htmlFor="dbField" className="block text-sm font-medium mb-2">
-                                        Database Field (Users table) <span className="text-destructive">*</span>
-                                    </label>
-                                    <select
-                                        id="dbField"
-                                        value={newMergeFieldDb}
-                                        onChange={(e) => setNewMergeFieldDb(e.target.value)}
-                                        className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                                    >
-                                        <option value="">Select a field...</option>
-                                        <option value="firstName">firstName</option>
-                                        <option value="lastName">lastName</option>
-                                        <option value="email">email</option>
-                                        <option value="phone">phone</option>
-                                        <option value="dateOfBirth">dateOfBirth</option>
-                                        <option value="gender">gender</option>
-                                        <option value="address">address</option>
-                                        <option value="city">city</option>
-                                        <option value="state">state</option>
-                                        <option value="zipCode">zipCode</option>
-                                        <option value="createdAt">createdAt</option>
-                                    </select>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Select which user data to display
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3 justify-end">
-                                <Button 
-                                    variant="outline" 
-                                    onClick={handleCloseMergeFieldModal}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button 
-                                    variant="default"
-                                    onClick={handleSaveMergeField}
-                                    disabled={!newMergeFieldName.trim() || !newMergeFieldDb}
-                                >
-                                    Add Field
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 {/* Toast Notifications */}
                 <ToastManager toasts={toasts} onDismiss={dismiss} />
