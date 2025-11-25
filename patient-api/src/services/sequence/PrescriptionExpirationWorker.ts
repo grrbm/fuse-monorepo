@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import cron, { ScheduledTask } from 'node-cron';
 import { Op } from 'sequelize';
 import Prescription from '../../models/Prescription';
 import User from '../../models/User';
@@ -11,7 +11,7 @@ import SequenceTriggerService from './SequenceTriggerService';
 export default class PrescriptionExpirationWorker {
   private triggerService: SequenceTriggerService;
   private isRunning = false;
-  private cronJob: cron.ScheduledTask | null = null;
+  private cronJob: ScheduledTask | null = null;
 
   constructor() {
     this.triggerService = new SequenceTriggerService();
