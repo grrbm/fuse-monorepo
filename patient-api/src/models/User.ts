@@ -9,6 +9,7 @@ import UserPatient from './UserPatient';
 import BrandSubscription from './BrandSubscription';
 import TenantCustomFeatures from './TenantCustomFeatures';
 import TenantAnalyticsEvents from './TenantAnalyticsEvents';
+import UserTag from './UserTag';
 
 @Table({
   freezeTableName: true,
@@ -201,6 +202,26 @@ export default class User extends Entity {
   declare consentGivenAt?: Date;
 
   @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare emailOptedOut: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare smsOptedOut: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare optOutDate?: Date;
+
+  @Column({
     type: DataType.STRING,
     allowNull: true,
   })
@@ -285,6 +306,9 @@ export default class User extends Entity {
 
   @HasMany(() => TenantAnalyticsEvents)
   declare analyticsEvents: TenantAnalyticsEvents[];
+
+  @HasMany(() => UserTag)
+  declare userTags: UserTag[];
 
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {
