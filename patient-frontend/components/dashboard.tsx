@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import { UpcomingDates } from "./upcoming-dates";
 import { TreatmentsList } from "./treatments-list";
 import { ProductRecommendation } from "./product-recommendation";
-import { OfferingsSection } from "./offerings-section";
 
 export const Dashboard: React.FC = () => {
   return (
@@ -24,7 +23,6 @@ export const Dashboard: React.FC = () => {
         <div className="lg:col-span-2 space-y-4 md:space-y-6">
           <UpcomingDates />
           <TreatmentsList />
-          <OfferingsSection />
         </div>
 
         {/* Right Column */}

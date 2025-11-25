@@ -46,6 +46,8 @@ export const OfferingsSection: React.FC = () => {
     const [selected, setSelected] = React.useState<OfferingItem | null>(null);
     const [isOpen, setIsOpen] = React.useState(false);
     const [refreshing, setRefreshing] = React.useState<Record<string, boolean>>({});
+    const [approvedOpen, setApprovedOpen] = React.useState(true);
+    const [pendingOpen, setPendingOpen] = React.useState(true);
 
     const openDetails = (item: OfferingItem) => {
         setSelected(item);
@@ -116,152 +118,226 @@ export const OfferingsSection: React.FC = () => {
     return (
         <div className="space-y-8">
             <div>
-                <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-xl font-semibold tracking-tight">Approved offerings</h2>
-                    <Chip size="sm" variant="flat" color="success">{approved.length}</Chip>
+                <div 
+                    className="flex items-center justify-between mb-3 cursor-pointer select-none group"
+                    onClick={() => setApprovedOpen(!approvedOpen)}
+                >
+                    <div className="flex items-center gap-3">
+                        <Icon 
+                            icon="lucide:chevron-down" 
+                            className={`text-foreground-500 transition-transform duration-300 ${approvedOpen ? 'rotate-0' : '-rotate-90'}`}
+                            width={20}
+                        />
+                        <h2 className="text-xl font-semibold tracking-tight">Approved offerings</h2>
+                        <Chip size="sm" variant="flat" color="success">{approved.length}</Chip>
+                    </div>
                 </div>
-                {approved.length === 0 ? (
+                {approvedOpen && (approved.length === 0 ? (
                     <Card className="border-dashed">
                         <CardBody>
                             <div className="text-foreground-500">No approved offerings yet.</div>
                         </CardBody>
                     </Card>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {approved.map((item) => (
                             item.orderId ? (
-                                <Link href={`/offerings/${item.orderId}`} key={`${item.orderId}-${item.offeringId || item.caseOfferingId || "none"}`} className="block">
-                                    <Card className="cursor-pointer transition-shadow hover:shadow-md">
-                                        <CardBody>
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="flex-1">
-                                                    <div className="font-medium text-foreground">{item.title}</div>
-                                                    <div className="mt-1 text-sm text-foreground-500">Order {item.orderNumber}</div>
-                                                    {item.tenantProduct && item.tenantProduct.placeholderSig && (
-                                                        <div className="text-xs text-foreground-400 mt-1">
-                                                            {item.tenantProduct.placeholderSig}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Chip color="success" size="sm" variant="flat">Approved</Chip>
-                                                </div>
+                                <Link href={`/offerings/${item.orderId}`} key={`${item.orderId}-${item.offeringId || item.caseOfferingId || "none"}`} className="block group">
+                                    <Card className="cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-l-4 border-l-success h-full">
+                                        <CardBody className="p-4">
+                                            <div className="flex items-start justify-between gap-2 mb-3">
+                                                <Chip color="success" size="sm" variant="flat" className="text-xs">
+                                                    <Icon icon="lucide:check-circle" className="mr-1" width={14} />
+                                                    Approved
+                                                </Chip>
+                                                <Icon icon="lucide:arrow-right" className="text-foreground-400 group-hover:text-success transition-colors" width={18} />
                                             </div>
-                                            <div className="mt-3 flex items-center gap-1 text-xs text-foreground-500">
-                                                <Icon icon="lucide:clock" />
-                                                <span>Updated {new Date(item.updatedAt).toLocaleString()}</span>
+                                            
+                                            <div className="space-y-2">
+                                                <h3 className="font-semibold text-base text-foreground line-clamp-2 leading-tight">
+                                                    {item.title}
+                                                </h3>
+                                                
+                                                <div className="flex items-center gap-2 text-xs text-foreground-500">
+                                                    <Icon icon="lucide:package" width={14} />
+                                                    <span>Order #{item.orderNumber}</span>
+                                                </div>
+                                                
+                                                {item.tenantProduct && item.tenantProduct.placeholderSig && (
+                                                    <div className="flex items-start gap-2 text-xs text-foreground-400 mt-2 pt-2 border-t border-divider">
+                                                        <Icon icon="lucide:pill" width={14} className="mt-0.5 flex-shrink-0" />
+                                                        <span className="line-clamp-2">{item.tenantProduct.placeholderSig}</span>
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="flex items-center gap-1 text-xs text-foreground-400 pt-2">
+                                                    <Icon icon="lucide:clock" width={12} />
+                                                    <span>{new Date(item.updatedAt).toLocaleDateString()}</span>
+                                                </div>
                                             </div>
                                         </CardBody>
                                     </Card>
                                 </Link>
                             ) : (
-                                <Card key={`${item.orderId}-${item.offeringId || item.caseOfferingId || "none"}`} className="cursor-pointer transition-shadow hover:shadow-md" onClick={() => openDetails(item)}>
-                                    <CardBody>
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div>
-                                                <div className="font-medium text-foreground">{item.title}</div>
-                                                <div className="mt-1 text-sm text-foreground-500">Order {item.orderNumber}</div>
-                                                {item.caseId && (
-                                                    <div className="text-xs text-foreground-400 mt-1">Case: <span className="font-mono">{item.caseId}</span></div>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Button isIconOnly size="sm" variant="light" aria-label="Refresh" onClick={(ev) => { ev.stopPropagation(); handleResync(item); }} isDisabled={!item.caseId}>
+                                <Card key={`${item.orderId}-${item.offeringId || item.caseOfferingId || "none"}`} className="cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-l-4 border-l-success h-full group" onClick={() => openDetails(item)}>
+                                    <CardBody className="p-4">
+                                        <div className="flex items-start justify-between gap-2 mb-3">
+                                            <Chip color="success" size="sm" variant="flat" className="text-xs">
+                                                <Icon icon="lucide:check-circle" className="mr-1" width={14} />
+                                                Approved
+                                            </Chip>
+                                            <div className="flex items-center gap-1">
+                                                <Button isIconOnly size="sm" variant="light" aria-label="Refresh" onClick={(ev) => { ev.stopPropagation(); handleResync(item); }} isDisabled={!item.caseId} className="h-6 w-6 min-w-6">
                                                     {item.caseId && refreshing[item.caseId] ? (
-                                                        <Icon icon="lucide:loader-2" className="animate-spin" />
+                                                        <Icon icon="lucide:loader-2" className="animate-spin" width={14} />
                                                     ) : (
-                                                        <Icon icon="lucide:refresh-cw" />
+                                                        <Icon icon="lucide:refresh-cw" width={14} />
                                                     )}
                                                 </Button>
-                                                <Chip color="success" size="sm" variant="flat">Approved</Chip>
+                                                <Icon icon="lucide:eye" className="text-foreground-400 group-hover:text-success transition-colors" width={16} />
                                             </div>
                                         </div>
-                                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-foreground-500">
-                                            <div className="flex items-center gap-1">
-                                                <Icon icon="lucide:clock" />
-                                                <span>Updated {new Date(item.updatedAt).toLocaleString()}</span>
+                                        
+                                        <div className="space-y-2">
+                                            <h3 className="font-semibold text-base text-foreground line-clamp-2 leading-tight">
+                                                {item.title}
+                                            </h3>
+                                            
+                                            <div className="flex items-center gap-2 text-xs text-foreground-500">
+                                                <Icon icon="lucide:package" width={14} />
+                                                <span>Order #{item.orderNumber}</span>
                                             </div>
-                                            {item.productType && (
-                                                <div className="flex items-center gap-1 justify-end md:justify-start">
-                                                    <Icon icon="lucide:tag" />
-                                                    <span className="capitalize">{item.productType.replace(/^.*\\\\/, '')}</span>
+                                            
+                                            {item.caseId && (
+                                                <div className="flex items-center gap-2 text-xs text-foreground-400">
+                                                    <Icon icon="lucide:file-text" width={14} />
+                                                    <span className="font-mono text-xs truncate">Case: {item.caseId}</span>
                                                 </div>
                                             )}
+                                            
+                                            <div className="flex items-center justify-between gap-2 pt-2 text-xs border-t border-divider">
+                                                <div className="flex items-center gap-1 text-foreground-400">
+                                                    <Icon icon="lucide:clock" width={12} />
+                                                    <span>{new Date(item.updatedAt).toLocaleDateString()}</span>
+                                                </div>
+                                                {item.productType && (
+                                                    <div className="flex items-center gap-1 text-foreground-400">
+                                                        <Icon icon="lucide:tag" width={12} />
+                                                        <span className="capitalize text-xs">{item.productType.replace(/^.*\\\\/, '')}</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </CardBody>
                                 </Card>
                             )
                         ))}
                     </div>
-                )}
+                ))}
             </div>
 
             <div>
-                <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-xl font-semibold tracking-tight">Pending offerings</h2>
-                    <Chip size="sm" variant="flat" color="warning">{pending.length}</Chip>
+                <div 
+                    className="flex items-center justify-between mb-3 cursor-pointer select-none group"
+                    onClick={() => setPendingOpen(!pendingOpen)}
+                >
+                    <div className="flex items-center gap-3">
+                        <Icon 
+                            icon="lucide:chevron-down" 
+                            className={`text-foreground-500 transition-transform duration-300 ${pendingOpen ? 'rotate-0' : '-rotate-90'}`}
+                            width={20}
+                        />
+                        <h2 className="text-xl font-semibold tracking-tight">Pending offerings</h2>
+                        <Chip size="sm" variant="flat" color="warning">{pending.length}</Chip>
+                    </div>
                 </div>
-                {pending.length === 0 ? (
+                {pendingOpen && (pending.length === 0 ? (
                     <Card className="border-dashed">
                         <CardBody>
                             <div className="text-foreground-500">No pending offerings.</div>
                         </CardBody>
                     </Card>
                 ) : (
-                    <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {pending.map((item) => (
                             item.orderId ? (
-                                <Link href={`/offerings/${item.orderId}`} key={`${item.orderId}-pending-${item.orderId}`} className="block">
-                                    <Card className="cursor-pointer transition-shadow hover:shadow-md">
-                                        <CardBody>
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="flex-1">
-                                                    <div className="font-medium text-foreground">{item.title}</div>
-                                                    <div className="mt-1 text-sm text-foreground-500">Order {item.orderNumber}</div>
-                                                    {item.tenantProduct && item.tenantProduct.placeholderSig && (
-                                                        <div className="text-xs text-foreground-400 mt-1">
-                                                            {item.tenantProduct.placeholderSig}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Chip color="warning" size="sm" variant="flat">Pending</Chip>
-                                                </div>
+                                <Link href={`/offerings/${item.orderId}`} key={`${item.orderId}-pending-${item.orderId}`} className="block group">
+                                    <Card className="cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-l-4 border-l-warning h-full">
+                                        <CardBody className="p-4">
+                                            <div className="flex items-start justify-between gap-2 mb-3">
+                                                <Chip color="warning" size="sm" variant="flat" className="text-xs">
+                                                    <div className="flex items-center gap-1">
+                                                        <Icon icon="lucide:clock-3" width={14} />
+                                                        <span>Pending</span>
+                                                    </div>
+                                                </Chip>
+                                                <Icon icon="lucide:arrow-right" className="text-foreground-400 group-hover:text-warning transition-colors" width={18} />
                                             </div>
-                                            <div className="mt-3 flex items-center gap-1 text-xs text-foreground-500">
-                                                <Icon icon="lucide:clock" />
-                                                <span>Updated {new Date(item.updatedAt).toLocaleString()}</span>
+                                            
+                                            <div className="space-y-2">
+                                                <h3 className="font-semibold text-base text-foreground line-clamp-2 leading-tight">
+                                                    {item.title}
+                                                </h3>
+                                                
+                                                <div className="flex items-center gap-2 text-xs text-foreground-500">
+                                                    <Icon icon="lucide:package" width={14} />
+                                                    <span>Order #{item.orderNumber}</span>
+                                                </div>
+                                                
+                                                {item.tenantProduct && item.tenantProduct.placeholderSig && (
+                                                    <div className="flex items-start gap-2 text-xs text-foreground-400 mt-2 pt-2 border-t border-divider">
+                                                        <Icon icon="lucide:pill" width={14} className="mt-0.5 flex-shrink-0" />
+                                                        <span className="line-clamp-2">{item.tenantProduct.placeholderSig}</span>
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="flex items-center gap-1 text-xs text-foreground-400 pt-2">
+                                                    <Icon icon="lucide:clock" width={12} />
+                                                    <span>{new Date(item.updatedAt).toLocaleDateString()}</span>
+                                                </div>
                                             </div>
                                         </CardBody>
                                     </Card>
                                 </Link>
                             ) : (
-                                <Card key={`${item.orderId}-pending-${item.caseId}`} className="cursor-pointer transition-shadow hover:shadow-md" onClick={() => openDetails(item)}>
-                                    <CardBody>
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="flex-1">
-                                                <div className="font-medium text-foreground">{item.title}</div>
-                                                <div className="mt-1 text-sm text-foreground-500">Order {item.orderNumber}</div>
-                                                {item.tenantProduct && item.tenantProduct.placeholderSig && (
-                                                    <div className="text-xs text-foreground-400 mt-1">
-                                                        {item.tenantProduct.placeholderSig}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Chip color="warning" size="sm" variant="flat">Pending</Chip>
-                                            </div>
+                                <Card key={`${item.orderId}-pending-${item.caseId}`} className="cursor-pointer transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-l-4 border-l-warning h-full group" onClick={() => openDetails(item)}>
+                                    <CardBody className="p-4">
+                                        <div className="flex items-start justify-between gap-2 mb-3">
+                                            <Chip color="warning" size="sm" variant="flat" className="text-xs">
+                                                <Icon icon="lucide:clock-3" className="mr-1" width={14} />
+                                                Pending
+                                            </Chip>
+                                            <Icon icon="lucide:eye" className="text-foreground-400 group-hover:text-warning transition-colors" width={16} />
                                         </div>
-                                        <div className="mt-3 flex items-center gap-1 text-xs text-foreground-500">
-                                            <Icon icon="lucide:clock" />
-                                            <span>Updated {new Date(item.updatedAt).toLocaleString()}</span>
+                                        
+                                        <div className="space-y-2">
+                                            <h3 className="font-semibold text-base text-foreground line-clamp-2 leading-tight">
+                                                {item.title}
+                                            </h3>
+                                            
+                                            <div className="flex items-center gap-2 text-xs text-foreground-500">
+                                                <Icon icon="lucide:package" width={14} />
+                                                <span>Order #{item.orderNumber}</span>
+                                            </div>
+                                            
+                                            {item.tenantProduct && item.tenantProduct.placeholderSig && (
+                                                <div className="flex items-start gap-2 text-xs text-foreground-400 mt-2 pt-2 border-t border-divider">
+                                                    <Icon icon="lucide:pill" width={14} className="mt-0.5 flex-shrink-0" />
+                                                    <span className="line-clamp-2">{item.tenantProduct.placeholderSig}</span>
+                                                </div>
+                                            )}
+                                            
+                                            <div className="flex items-center gap-1 text-xs text-foreground-400 pt-2">
+                                                <Icon icon="lucide:clock" width={12} />
+                                                <span>{new Date(item.updatedAt).toLocaleDateString()}</span>
+                                            </div>
                                         </div>
                                     </CardBody>
                                 </Card>
                             )
                         ))}
                     </div>
-                )}
+                ))}
             </div>
 
             <OfferingDetailsModal item={selected} isOpen={isOpen} onClose={closeDetails} />

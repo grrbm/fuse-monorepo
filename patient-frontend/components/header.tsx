@@ -1,5 +1,5 @@
 import React from "react";
-import { Avatar, Badge, Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/react";
+import { Avatar, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
@@ -28,18 +28,6 @@ export const Header: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <Badge content="3" color="primary" placement="top-right">
-          <Button
-            isIconOnly
-            variant="light"
-            aria-label="Notifications"
-            className="text-foreground-500"
-          >
-            <Icon icon="lucide:bell" className="text-lg" />
-          </Button>
-        </Badge>
-        
         {/* User Profile Dropdown */}
         <Dropdown placement="bottom-end">
           <DropdownTrigger>
