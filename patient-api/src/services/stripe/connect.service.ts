@@ -66,13 +66,14 @@ export class StripeConnectService {
       }
     });
 
-    // Save account ID to clinic
+    // Save account ID and merchant model to clinic
     await clinic.update({
       stripeAccountId: account.id,
       stripeAccountType: 'express',
+      merchantOfRecord: merchantModel === 'direct' ? 'myself' : 'fuse',
     });
 
-    console.log(`✅ Stripe Connect account created: ${account.id} for clinic ${clinicId}`);
+    console.log(`✅ Stripe Connect account created: ${account.id} for clinic ${clinicId} (${merchantModel} model)`);
 
     return account.id;
   }

@@ -13,6 +13,11 @@ export enum PaymentStatus {
     CANCELLED = 'cancelled',
 }
 
+export enum MerchantOfRecord {
+    FUSE = 'fuse',
+    MYSELF = 'myself',
+}
+
 @Table({
     freezeTableName: true,
 })
@@ -116,6 +121,13 @@ export default class Clinic extends Entity {
         allowNull: true,
     })
     declare stripeOnboardedAt?: Date;
+
+    @Column({
+        type: DataType.ENUM(...Object.values(MerchantOfRecord)),
+        allowNull: true,
+        defaultValue: MerchantOfRecord.FUSE,
+    })
+    declare merchantOfRecord?: MerchantOfRecord;
 
     @Column({
         type: DataType.STRING,
