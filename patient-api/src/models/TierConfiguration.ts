@@ -29,6 +29,13 @@ export default class TierConfiguration extends Entity {
   })
   declare hasAccessToAnalytics: boolean;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare canUploadCustomProductImages: boolean;
+
   @BelongsTo(() => BrandSubscriptionPlans)
   declare plan?: BrandSubscriptionPlans;
 
@@ -37,6 +44,7 @@ export default class TierConfiguration extends Entity {
     return {
       canAddCustomProducts: this.canAddCustomProducts,
       hasAccessToAnalytics: this.hasAccessToAnalytics,
+      canUploadCustomProductImages: this.canUploadCustomProductImages,
     };
   }
 }

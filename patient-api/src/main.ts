@@ -14,6 +14,8 @@ import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
 import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
+import TierConfiguration from "./models/TierConfiguration";
+import TenantCustomFeatures from "./models/TenantCustomFeatures";
 import Subscription from "./models/Subscription";
 // import TenantProduct from "./models/TenantProduct";
 import { createJWTToken, authenticateJWT, getCurrentUser, extractTokenFromHeader, verifyJWTToken } from "./config/jwt";
@@ -1924,6 +1926,58 @@ app.post("/products/:id/upload-image", authenticateJWT, upload.single('image'), 
         success: false,
         message: "Only doctors and brand users can upload product images"
       });
+    }
+
+    // Check tier permissions for uploading custom product images
+    if (user.role === 'brand') {
+      // Get the user's active subscription
+      const subscription = await BrandSubscription.findOne({
+        where: { userId: user.id, status: BrandSubscriptionStatus.ACTIVE },
+        order: [['createdAt', 'DESC']]
+      });
+
+      if (!subscription) {
+        return res.status(403).json({
+          success: false,
+          message: "No active subscription found"
+        });
+      }
+
+      // Get custom features for this tenant (overrides tier config)
+      const customFeatures = await TenantCustomFeatures.findOne({
+        where: { userId: user.id }
+      });
+
+      // If custom features exist and explicitly allow/deny, use that
+      let canUpload = false;
+      if (customFeatures) {
+        canUpload = customFeatures.canUploadCustomProductImages;
+        console.log('🎨 Using custom features for image upload permission:', canUpload);
+      } else {
+        // Otherwise, check the tier configuration
+        const plan = await BrandSubscriptionPlans.findOne({
+          where: { planType: subscription.planType }
+        });
+
+        if (plan) {
+          const tierConfig = await TierConfiguration.findOne({
+            where: { brandSubscriptionPlanId: plan.id }
+          });
+
+          if (tierConfig) {
+            canUpload = tierConfig.canUploadCustomProductImages;
+            console.log('🎯 Using tier config for image upload permission:', canUpload);
+          }
+        }
+      }
+
+      if (!canUpload) {
+        return res.status(403).json({
+          success: false,
+          message: "Your current plan does not allow uploading custom product images. Please upgrade to a higher tier.",
+          code: "FEATURE_NOT_AVAILABLE"
+        });
+      }
     }
 
     // Check if this is a removal request (no file provided)
