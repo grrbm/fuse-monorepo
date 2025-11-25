@@ -4558,10 +4558,14 @@ app.post("/stripe/connect/session", authenticateJWT, async (req, res) => {
       });
     }
 
-    console.log(`🔄 Creating Stripe Connect session for clinic: ${clinicId}`);
+    // Get merchant model from request body (defaults to 'platform')
+    const { merchantModel } = req.body;
+    const validMerchantModel = merchantModel === 'direct' ? 'direct' : 'platform';
 
-    // Create account session
-    const clientSecret = await StripeConnectService.createAccountSession(clinicId);
+    console.log(`🔄 Creating Stripe Connect session for clinic: ${clinicId} (${validMerchantModel} model)`);
+
+    // Create account session with merchant model
+    const clientSecret = await StripeConnectService.createAccountSession(clinicId, validMerchantModel);
 
     res.status(200).json({
       success: true,
