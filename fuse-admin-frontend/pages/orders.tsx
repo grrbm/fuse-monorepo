@@ -306,8 +306,8 @@ export default function Orders() {
                         <button
                             onClick={openConnectModal}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${connectStatus?.onboardingComplete
-                                    ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
                                 }`}
                         >
                             {connectStatus?.onboardingComplete ? (
@@ -407,8 +407,8 @@ export default function Orders() {
                                     key={status}
                                     onClick={() => setStatusFilter(status)}
                                     className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${statusFilter === status
-                                            ? 'bg-foreground text-background'
-                                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                                        ? 'bg-foreground text-background'
+                                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                                         }`}
                                 >
                                     {status.charAt(0).toUpperCase() + status.slice(1)}
