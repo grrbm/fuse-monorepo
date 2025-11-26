@@ -225,8 +225,8 @@ app.use(cors({
       (process.env.NODE_ENV === 'production' && /^https:\/\/([a-zA-Z0-9-]+\.)*fuse\.health$/.test(origin)) ||
       // Allow any origin containing fusehealth.com (e.g., https://app.fusehealth.com, https://doctor.fusehealth.com)
       origin.includes('fusehealth.com') ||
-      // Allow all subdomains of fusehealthstaging.xyz
-      /^https:\/\/[a-zA-Z0-9-]+\.fusehealthstaging\.xyz$/.test(origin) ||
+      // Allow fusehealthstaging.xyz and all its subdomains (e.g., fusehealthstaging.xyz, backend.fusehealthstaging.xyz)
+      /^https:\/\/([a-zA-Z0-9-]+\.)?fusehealthstaging\.xyz$/.test(origin) ||
       // Allow all subdomains of unboundedhealth.xyz (legacy support)
       /^https:\/\/[a-zA-Z0-9-]+\.unboundedhealth\.xyz$/.test(origin);
 
@@ -9907,12 +9907,12 @@ async function startServer() {
           const hasAttachments = attachments && attachments.length > 0;
           const unreadCount = chat.unreadCountPatient;
           let smsBody: string;
-          
+
           // Build unread count message
-          const unreadMessage = unreadCount === 1 
-            ? 'You have 1 unread message.' 
+          const unreadMessage = unreadCount === 1
+            ? 'You have 1 unread message.'
             : `You have ${unreadCount} unread messages.`;
-          
+
           if (message && message.trim()) {
             // Truncate message preview to 35 characters max for SMS (leave room for unread count and other text)
             const messagePreview = message.length > 35 ? message.substring(0, 32) + '...' : message;
@@ -9923,7 +9923,7 @@ async function startServer() {
           } else {
             smsBody = `${patientName}, you have a new message from your doctor. ${unreadMessage}`;
           }
-          
+
           await SmsService.send(patient.phoneNumber, smsBody);
           console.log(`✅ SMS notification sent to patient ${patient.id} (${patient.phoneNumber})`);
         } catch (smsError) {
