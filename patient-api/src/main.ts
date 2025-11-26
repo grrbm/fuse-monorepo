@@ -4003,7 +4003,31 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       productId
     });
 
+    // Calculate fee breakdown
+    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
+    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
+    const totalPaid = Number(totalAmount) || 0;
+    const platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+    const stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
 
+    // Get pharmacy wholesale cost from the product
+    const pharmacyWholesaleUsd = Number(tenantProduct.product?.pharmacyWholesaleCost || 0);
+
+    // Doctor receives flat fee
+    const doctorUsd = Math.max(0, doctorFlatUsd);
+
+    // Brand gets the residual after all fees
+    const brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleUsd);
+
+    console.log('💰 Fee breakdown calculated:', {
+      totalPaid,
+      platformFeeUsd,
+      stripeFeeUsd,
+      pharmacyWholesaleUsd,
+      doctorUsd,
+      brandAmountUsd
+    });
 
     // Create order
     const orderNumber = await Order.generateOrderNumber();
@@ -4021,7 +4045,12 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       totalAmount: totalAmount,
       questionnaireAnswers,
       stripePriceId: tenantProduct.stripePriceId,
-      tenantProductId: tenantProduct.id
+      tenantProductId: tenantProduct.id,
+      platformFeeAmount: Number(platformFeeUsd.toFixed(2)),
+      stripeAmount: Number(stripeFeeUsd.toFixed(2)),
+      doctorAmount: Number(doctorUsd.toFixed(2)),
+      pharmacyWholesaleAmount: Number(pharmacyWholesaleUsd.toFixed(2)),
+      brandAmount: Number(brandAmountUsd.toFixed(2)),
     });
 
     // Create order item
@@ -4267,6 +4296,32 @@ app.post("/payments/product/sub", async (req, res) => {
     const userService = new UserService();
     const stripeCustomerId = await userService.getOrCreateCustomerId(user, { userId: user.id, tenantProductId });
 
+    // Calculate fee breakdown
+    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
+    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
+    const totalPaid = Number(totalAmount) || 0;
+    const platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+    const stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
+
+    // Get pharmacy wholesale cost from the product (quantity is 1 for subscriptions)
+    const pharmacyWholesaleUsd = Number((tenantProduct as any).product?.pharmacyWholesaleCost || 0);
+
+    // Doctor receives flat fee
+    const doctorUsd = Math.max(0, doctorFlatUsd);
+
+    // Brand gets the residual after all fees
+    const brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleUsd);
+
+    console.log('💰 Fee breakdown calculated:', {
+      totalPaid,
+      platformFeeUsd,
+      stripeFeeUsd,
+      pharmacyWholesaleUsd,
+      doctorUsd,
+      brandAmountUsd
+    });
+
     // Create order
     const orderNumber = await Order.generateOrderNumber();
     const order = await Order.create({
@@ -4284,6 +4339,11 @@ app.post("/payments/product/sub", async (req, res) => {
       questionnaireAnswers,
       stripePriceId: finalStripePriceId,
       tenantProductId: (tenantProduct as any).id,
+      platformFeeAmount: Number(platformFeeUsd.toFixed(2)),
+      stripeAmount: Number(stripeFeeUsd.toFixed(2)),
+      doctorAmount: Number(doctorUsd.toFixed(2)),
+      pharmacyWholesaleAmount: Number(pharmacyWholesaleUsd.toFixed(2)),
+      brandAmount: Number(brandAmountUsd.toFixed(2)),
     });
 
     // Order item
@@ -9498,6 +9558,10 @@ async function startServer() {
   // ============= ANALYTICS ENDPOINTS =============
   const analyticsRouter = (await import('./endpoints/analytics')).default;
   app.use('/', analyticsRouter);
+
+  // ============= CONFIG ENDPOINTS =============
+  const configRouter = (await import('./endpoints/config')).default;
+  app.use('/config', configRouter);
 
   // ============================================
   // DOCTOR-PATIENT CHAT ENDPOINTS
