@@ -2077,7 +2077,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         stripePriceId: stripePriceId || undefined, // Let backend create if missing
         userDetails: userDetails,
         questionnaireAnswers: questionnaireAnswers, // This is now the structured format
-        shippingInfo: shippingInfo
+        shippingInfo: shippingInfo,
+        clinicName: domainClinic?.name // For dynamic statement descriptor
       };
 
       // Add OBO parameter if clinic is merchant of record

@@ -3755,14 +3755,16 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Calculate distribution: platform fee (% of total), doctor flat, pharmacy wholesale, brand residual
+    // Calculate distribution: platform fee (% of total), stripe fee, doctor flat, pharmacy wholesale, brand residual
     // If Clinic has a Stripe Connect account, we transfer only the brand residual to the clinic
     const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
     const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
 
     let brandAmountUsd = 0;
     let pharmacyWholesaleTotal = 0;
     let platformFeeUsd = 0;
+    let stripeFeeUsd = 0;
     try {
       // Sum wholesale cost from treatment products aligned with selectedProducts
       if (treatment.products && selectedProducts) {
@@ -3776,8 +3778,9 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       }
       const totalPaid = Number(amount) || 0;
       platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+      stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
       const doctorUsd = Math.max(0, doctorFlatUsd);
-      brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - doctorUsd - pharmacyWholesaleTotal);
+      brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleTotal);
     } catch (e) {
       console.warn('⚠️ Failed to compute brandAmountUsd, defaulting to 0:', e);
       brandAmountUsd = 0;
@@ -3802,6 +3805,7 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
     try {
       await order.update({
         platformFeeAmount: platformFeeUsd,
+        stripeAmount: Number(stripeFeeUsd.toFixed(2)),
         doctorAmount: Number(doctorFlatUsd.toFixed(2)),
         pharmacyWholesaleAmount: Number(pharmacyWholesaleTotal.toFixed(2)),
         brandAmount: Number(brandAmountUsd.toFixed(2)),
@@ -4066,6 +4070,24 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
     if (useOnBehalfOf && tenantProduct.clinic?.stripeAccountId) {
       authPaymentIntentParams.on_behalf_of = tenantProduct.clinic.stripeAccountId;
       console.log(`💳 Using on_behalf_of parameter for clinic ${tenantProduct.clinic.id} with Stripe account ${tenantProduct.clinic.stripeAccountId}`);
+
+      // When clinic is MOR, use statement_descriptor to show clinic name only (no "FUSE")
+      if (tenantProduct.clinic?.name) {
+        const statementClinicName = tenantProduct.clinic.name
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor
+        authPaymentIntentParams.statement_descriptor = statementClinicName;
+        console.log(`💳 Clinic is MOR - Using statement descriptor: "${statementClinicName}"`);
+      }
+    } else {
+      // When Fuse is MOR, use statement_descriptor_suffix to show "FUSE *ClinicName"
+      if (tenantProduct.clinic?.name) {
+        const statementClinicName = tenantProduct.clinic.name
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor_suffix
+        authPaymentIntentParams.statement_descriptor_suffix = statementClinicName;
+        console.log(`💳 Fuse is MOR - Using statement descriptor suffix: "FUSE *${statementClinicName}"`);
+      }
     }
 
     // Docs: https://docs.stripe.com/api/payment_intents/create#create_payment_intent-on_behalf_of
@@ -4126,7 +4148,7 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
 // Public product subscription: creates manual-capture PaymentIntent and Order
 app.post("/payments/product/sub", async (req, res) => {
   try {
-    const { tenantProductId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo, useOnBehalfOf } = req.body || {};
+    const { tenantProductId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo, useOnBehalfOf, clinicName } = req.body || {};
 
     if (!tenantProductId || typeof tenantProductId !== 'string') {
       return res.status(400).json({ success: false, message: 'tenantProductId is required' });
@@ -4370,6 +4392,24 @@ app.post("/payments/product/sub", async (req, res) => {
     if (useOnBehalfOf && (tenantProduct as any).clinic?.stripeAccountId) {
       paymentIntentParams.on_behalf_of = (tenantProduct as any).clinic.stripeAccountId;
       console.log(`💳 Using on_behalf_of parameter for clinic ${(tenantProduct as any).clinic.id} with Stripe account ${(tenantProduct as any).clinic.stripeAccountId}`);
+
+      // When clinic is MOR, use statement_descriptor to show clinic name only (no "FUSE")
+      if (clinicName || (tenantProduct as any).clinic?.name) {
+        const statementClinicName = (clinicName || (tenantProduct as any).clinic?.name)
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor
+        paymentIntentParams.statement_descriptor = statementClinicName;
+        console.log(`💳 Clinic is MOR - Using statement descriptor: "${statementClinicName}"`);
+      }
+    } else {
+      // When Fuse is MOR, use statement_descriptor_suffix to show "FUSE *ClinicName"
+      if (clinicName || (tenantProduct as any).clinic?.name) {
+        const statementClinicName = (clinicName || (tenantProduct as any).clinic?.name)
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor_suffix
+        paymentIntentParams.statement_descriptor_suffix = statementClinicName;
+        console.log(`💳 Fuse is MOR - Using statement descriptor suffix: "FUSE *${statementClinicName}"`);
+      }
     }
 
     // Docs: https://docs.stripe.com/api/payment_intents/create#create_payment_intent-on_behalf_of

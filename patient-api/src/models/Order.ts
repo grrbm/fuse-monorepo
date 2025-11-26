@@ -176,6 +176,13 @@ export default class Order extends Entity {
   declare brandAmount: number;
 
   @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare stripeAmount: number;
+
+  @Column({
     type: DataType.TEXT,
     allowNull: true,
   })
