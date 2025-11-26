@@ -363,6 +363,59 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
     }
   });
 
+  // Update user role
+  app.patch("/admin/users/:userId/role", authenticateJWT, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      const adminUser = await User.findByPk(currentUser.id);
+      if (!adminUser) {
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      }
+
+      const { userId } = req.params;
+      const { role } = req.body;
+
+      // Validate role
+      const validRoles = ['patient', 'doctor', 'admin', 'brand'];
+      if (!role || !validRoles.includes(role)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid role. Must be one of: ${validRoles.join(', ')}`
+        });
+      }
+
+      // Find the target user
+      const targetUser = await User.findByPk(userId);
+      if (!targetUser) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      // Update the role
+      await targetUser.update({ role });
+
+      console.log(`✅ [Client Mgmt] Updated user ${userId} role from ${targetUser.role} to ${role}`);
+
+      res.status(200).json({
+        success: true,
+        message: 'User role updated successfully',
+        data: {
+          id: targetUser.id,
+          role: targetUser.role,
+          email: targetUser.email,
+          firstName: targetUser.firstName,
+          lastName: targetUser.lastName
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error updating user role:', error);
+      res.status(500).json({ success: false, message: 'Failed to update user role' });
+    }
+  });
+
   // Impersonate user (generate token for preview)
   app.post("/admin/users/:userId/impersonate", authenticateJWT, async (req, res) => {
     try {

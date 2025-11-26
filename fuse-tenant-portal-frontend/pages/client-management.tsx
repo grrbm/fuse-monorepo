@@ -67,6 +67,7 @@ export default function ClientManagement() {
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [availablePlans, setAvailablePlans] = useState<BrandSubscriptionPlan[]>([])
+  const [updatingRole, setUpdatingRole] = useState(false)
 
   // BrandSubscription form state
   const [formData, setFormData] = useState({
@@ -169,6 +170,52 @@ export default function ClientManagement() {
         canAddCustomProducts: false,
         hasAccessToAnalytics: false,
       })
+    }
+  }
+
+  const handleRoleChange = async (newRole: string) => {
+    if (!selectedUser) return
+
+    setUpdatingRole(true)
+    try {
+      const response = await fetch(`${baseUrl}/admin/users/${selectedUser.id}/role`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ role: newRole }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update user role')
+      }
+
+      const result = await response.json()
+      console.log('✅ Updated user role:', result.data)
+
+      toast.success(`Role updated to ${newRole}`)
+
+      // Update the selected user
+      const updatedUser = {
+        ...selectedUser,
+        role: newRole,
+      }
+      setSelectedUser(updatedUser)
+
+      // Also update in the users list
+      setUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === selectedUser.id
+            ? updatedUser
+            : u
+        )
+      )
+    } catch (error) {
+      console.error('Error updating user role:', error)
+      toast.error('Failed to update user role')
+    } finally {
+      setUpdatingRole(false)
     }
   }
 
@@ -395,11 +442,22 @@ export default function ClientManagement() {
                               {selectedUser.email}
                             </span>
                           </div>
-                          <div>
-                            <span className="text-[#6B7280]">Role:</span>
-                            <span className="ml-2 text-[#1F2937] font-medium">
-                              {selectedUser.role}
-                            </span>
+                          <div className="col-span-2">
+                            <label className="block text-[#6B7280] mb-1">Role:</label>
+                            <select
+                              value={selectedUser.role}
+                              onChange={(e) => handleRoleChange(e.target.value)}
+                              disabled={updatingRole}
+                              className="w-full px-3 py-2 border border-[#D1D5DB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4FA59C] bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <option value="patient">Patient</option>
+                              <option value="doctor">Doctor</option>
+                              <option value="admin">Admin</option>
+                              <option value="brand">Brand</option>
+                            </select>
+                            <p className="text-xs text-[#6B7280] mt-1">
+                              {updatingRole ? 'Updating role...' : 'Change the user\'s role in the system'}
+                            </p>
                           </div>
                           <div>
                             <span className="text-[#6B7280]">Business Type:</span>
@@ -410,7 +468,7 @@ export default function ClientManagement() {
                         </div>
 
                         {/* Preview Button */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 mt-4">
                           <Button
                             onClick={handlePreview}
                             disabled={previewing}
