@@ -191,7 +191,7 @@ export function Sidebar() {
                 Upgrade
               </span>
             ) : (
-              <Lock className="ml-auto h-3 w-3 text-muted-foreground/50" />
+            <Lock className="ml-auto h-3 w-3 text-muted-foreground/50" />
             )}
           </div>
         ) : (

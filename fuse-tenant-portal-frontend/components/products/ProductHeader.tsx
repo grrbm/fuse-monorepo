@@ -13,6 +13,7 @@ interface Product {
     category?: string
     categories?: string[]
     isActive: boolean
+    imageUrl?: string
 }
 
 interface ProductHeaderProps {

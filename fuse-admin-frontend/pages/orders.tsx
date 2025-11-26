@@ -12,6 +12,7 @@ import {
     Search,
     ChevronDown,
     ChevronRight,
+    ChevronLeft,
     Package,
     MapPin,
     CreditCard,
@@ -81,6 +82,7 @@ export default function Orders() {
     const [connectStatus, setConnectStatus] = useState<any>(null)
     const [connectLoading, setConnectLoading] = useState(false)
     const [connectInstance, setConnectInstance] = useState<any>(null)
+    const [merchantModel, setMerchantModel] = useState<'platform' | 'direct'>('platform')
 
     useEffect(() => {
         fetchOrders()
@@ -124,7 +126,10 @@ export default function Orders() {
                             headers: {
                                 'Authorization': `Bearer ${token}`,
                                 'Content-Type': 'application/json'
-                            }
+                            },
+                            body: JSON.stringify({
+                                merchantModel: merchantModel
+                            })
                         }
                     )
 
@@ -155,9 +160,14 @@ export default function Orders() {
     // Open Connect Modal
     const openConnectModal = async () => {
         setShowConnectModal(true)
-        if (!connectInstance) {
-            await initializeStripeConnect()
-        }
+        setMerchantModel('platform') // Reset to default
+        setConnectInstance(null) // Clear any existing instance
+    }
+
+    // Go back to merchant model selection
+    const goBackToSelection = () => {
+        setConnectInstance(null)
+        setConnectLoading(false)
     }
 
     // Close modal and refresh status
@@ -209,7 +219,7 @@ export default function Orders() {
     // Calculate brand revenue for an order
     const calculateBrandRevenue = (order: Order) => {
         if (!order.orderItems || order.orderItems.length === 0) return 0
-        
+
         return order.orderItems.reduce((total, item) => {
             const markup = item.brandPrice - item.pharmacyPrice
             const itemBrandRevenue = markup * item.quantity
@@ -228,7 +238,7 @@ export default function Orders() {
     // Filter orders
     const filteredOrders = orders.filter(order => {
         const matchesStatus = statusFilter === 'all' || order.status === statusFilter
-        const matchesSearch = searchTerm === '' || 
+        const matchesSearch = searchTerm === '' ||
             order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
             `${order.user?.firstName} ${order.user?.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
             order.user?.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -291,15 +301,14 @@ export default function Orders() {
                             <h1 className="text-3xl font-semibold text-foreground mb-2">Orders</h1>
                             <p className="text-sm text-muted-foreground">Track and manage customer orders</p>
                         </div>
-                        
+
                         {/* Stripe Connect Button */}
                         <button
                             onClick={openConnectModal}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                                connectStatus?.onboardingComplete
-                                    ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                            }`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${connectStatus?.onboardingComplete
+                                ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
                         >
                             {connectStatus?.onboardingComplete ? (
                                 <>
@@ -397,11 +406,10 @@ export default function Orders() {
                                 <button
                                     key={status}
                                     onClick={() => setStatusFilter(status)}
-                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                                        statusFilter === status
-                                            ? 'bg-foreground text-background'
-                                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                                    }`}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${statusFilter === status
+                                        ? 'bg-foreground text-background'
+                                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                                        }`}
                                 >
                                     {status.charAt(0).toUpperCase() + status.slice(1)}
                                 </button>
@@ -647,7 +655,74 @@ export default function Orders() {
 
                                 {/* Modal Body */}
                                 <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-                                    {connectLoading ? (
+                                    {!connectInstance && !connectLoading && !connectStatus?.onboardingComplete ? (
+                                        <div className="py-6">
+                                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Choose Your Payment Model</h3>
+                                            <p className="text-sm text-gray-600 mb-6">
+                                                Select how you want to handle payments and payouts
+                                            </p>
+
+                                            {/* Merchant Model Options */}
+                                            <div className="space-y-3">
+                                                {/* Option 1: Platform MOR */}
+                                                <button
+                                                    onClick={() => {
+                                                        setMerchantModel('platform')
+                                                        initializeStripeConnect()
+                                                    }}
+                                                    className="w-full text-left p-4 border-2 border-blue-500 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors"
+                                                >
+                                                    <div className="flex items-start justify-between">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <div className="w-4 h-4 rounded-full border-2 border-blue-600 bg-blue-600 flex items-center justify-center">
+                                                                    <div className="w-2 h-2 rounded-full bg-white"></div>
+                                                                </div>
+                                                                <h4 className="font-semibold text-gray-900">Fuse is the Merchant of Record</h4>
+                                                                <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">Recommended</span>
+                                                            </div>
+                                                            <p className="text-sm text-gray-600 ml-6">
+                                                                Fuse handles all payments and compliance. You receive automatic payouts based on your revenue share.
+                                                            </p>
+                                                            <ul className="mt-2 ml-6 space-y-1 text-sm text-gray-600">
+                                                                <li>✓ Simple setup - just connect to receive payouts</li>
+                                                                <li>✓ Fuse handles disputes and chargebacks</li>
+                                                                <li>✓ Automatic revenue sharing</li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </button>
+
+                                                {/* Option 2: Direct MOR (Coming Soon) */}
+                                                <div className="relative">
+                                                    <div className="w-full text-left p-4 border-2 border-gray-300 rounded-lg bg-gray-50 opacity-60 cursor-not-allowed">
+                                                        <div className="flex items-start justify-between">
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <div className="w-4 h-4 rounded-full border-2 border-gray-400"></div>
+                                                                    <h4 className="font-semibold text-gray-700">You are the Merchant of Record</h4>
+                                                                    <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-700 rounded">Coming Soon</span>
+                                                                </div>
+                                                                <p className="text-sm text-gray-500 ml-6">
+                                                                    Accept payments directly to your Stripe account. You handle all compliance and operations.
+                                                                </p>
+                                                                <ul className="mt-2 ml-6 space-y-1 text-sm text-gray-500">
+                                                                    <li>○ Direct control over payments</li>
+                                                                    <li>○ You handle disputes and chargebacks</li>
+                                                                    <li>○ More complex setup required</li>
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <div className="bg-white px-4 py-2 rounded-lg shadow-lg border border-gray-200">
+                                                            <span className="text-sm font-medium text-gray-700">Coming Soon</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : connectLoading ? (
                                         <div className="flex flex-col items-center justify-center py-12">
                                             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                                             <p className="text-gray-600">Loading Stripe Connect...</p>
@@ -688,6 +763,15 @@ export default function Orders() {
                                         </div>
                                     ) : (
                                         <div>
+                                            {/* Back Button */}
+                                            <button
+                                                onClick={goBackToSelection}
+                                                className="mb-4 flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                                            >
+                                                <ChevronLeft className="h-4 w-4" />
+                                                Back to payment model selection
+                                            </button>
+
                                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                                                 <div className="flex gap-3">
                                                     <AlertCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -706,7 +790,7 @@ export default function Orders() {
                                             {/* Stripe Connect Component Container */}
                                             <div id="stripe-connect-container" className="min-h-[400px]">
                                                 {connectInstance && (
-                                                    <StripeConnectAccountOnboarding 
+                                                    <StripeConnectAccountOnboarding
                                                         stripeConnectInstance={connectInstance}
                                                         onExit={closeConnectModal}
                                                     />
@@ -725,17 +809,17 @@ export default function Orders() {
 }
 
 // Stripe Connect Account Onboarding Component
-function StripeConnectAccountOnboarding({ 
-    stripeConnectInstance, 
-    onExit 
-}: { 
-    stripeConnectInstance: any, 
-    onExit: () => void 
+function StripeConnectAccountOnboarding({
+    stripeConnectInstance,
+    onExit
+}: {
+    stripeConnectInstance: any,
+    onExit: () => void
 }) {
     useEffect(() => {
         if (stripeConnectInstance) {
             const accountOnboarding = stripeConnectInstance.create('account-onboarding')
-            
+
             // Mount the component
             const container = document.getElementById('stripe-connect-container')
             if (container && accountOnboarding) {
