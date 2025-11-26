@@ -640,18 +640,18 @@ app.post("/auth/signup", async (req, res) => {
 app.get("/auth/google/login", (req, res) => {
   const returnUrl = req.query.returnUrl as string || 'http://localhost:3000';
   const clinicId = req.query.clinicId as string || '';
-  
+
   // Store return URL and clinic ID in state parameter
   const state = Buffer.from(JSON.stringify({ returnUrl, clinicId })).toString('base64');
-  
-  const googleAuthUrl = 
+
+  const googleAuthUrl =
     `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}` +
     `&redirect_uri=${encodeURIComponent(process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/auth/google/callback')}` +
     `&response_type=code` +
     `&scope=email%20profile` +
     `&state=${state}`;
-  
+
   console.log('🔐 Redirecting to Google OAuth:', googleAuthUrl);
   res.redirect(googleAuthUrl);
 });
@@ -661,14 +661,14 @@ app.get("/auth/google/callback", async (req, res) => {
   try {
     const code = req.query.code as string;
     const state = req.query.state as string;
-    
+
     if (!code) {
       return res.status(400).send('Authorization code missing');
     }
-    
+
     // Decode state to get return URL and clinic ID
     const { returnUrl, clinicId } = JSON.parse(Buffer.from(state, 'base64').toString());
-    
+
     // Exchange code for access token
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -681,48 +681,48 @@ app.get("/auth/google/callback", async (req, res) => {
         grant_type: 'authorization_code'
       })
     });
-    
+
     const tokenData = await tokenResponse.json() as { access_token?: string; error?: string };
-    
+
     if (!tokenData.access_token) {
       throw new Error('Failed to get access token');
     }
-    
+
     // Get user info from Google
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` }
     });
-    
+
     const googleUser = await userInfoResponse.json() as {
       email?: string;
       given_name?: string;
       family_name?: string;
     };
-    
+
     console.log('👤 Google user info received:', googleUser);
-    
+
     const email = googleUser.email || '';
     const firstName = googleUser.given_name || '';
     const lastName = googleUser.family_name || '';
-    
+
     console.log('📧 Extracted user data:', { email, firstName, lastName });
-    
+
     if (!email) {
       throw new Error('Email not provided by Google');
     }
-    
+
     // Check if user exists
     let user = await User.findByEmail(email);
-    
+
     if (!user) {
       console.log('🆕 Creating new user via Google:', { email, firstName, lastName, clinicId });
-      
+
       // Create new user with Google account
       try {
         // Generate a random password and hash it
         const randomPassword = Math.random().toString(36).slice(-16) + 'Aa1!';
         const passwordHash = await User.hashPassword(randomPassword);
-        
+
         user = await User.create({
           email: email.toLowerCase().trim(),
           firstName,
@@ -732,7 +732,7 @@ app.get("/auth/google/callback", async (req, res) => {
           passwordHash, // Pass the hashed password
           clinicId: clinicId || null
         });
-        
+
         console.log('✅ New user created via Google:', user.email);
       } catch (createError) {
         console.error('❌ Failed to create user:', createError);
@@ -741,20 +741,20 @@ app.get("/auth/google/callback", async (req, res) => {
     } else {
       console.log('👤 Existing user found:', user.email);
     }
-    
+
     // Update last login time
     await user.updateLastLogin();
-    
+
     // Create JWT token
     const token = createJWTToken(user);
-    
+
     console.log('✅ User signed in via Google:', user.email);
-    
+
     // Redirect back to frontend with token and flag to skip account creation step
     const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
     console.log('🔗 Redirecting to:', redirectUrl);
     res.redirect(redirectUrl);
-    
+
   } catch (error) {
     console.error('❌ Google OAuth callback error:', error);
     console.error('❌ Error details:', {
@@ -783,10 +783,10 @@ app.post("/auth/google", async (req, res) => {
     // For now, decode the JWT to get user info
     const base64Url = credential.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(Buffer.from(base64, 'base64').toString().split('').map(function(c) {
+    const jsonPayload = decodeURIComponent(Buffer.from(base64, 'base64').toString().split('').map(function (c) {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
-    
+
     const payload = JSON.parse(jsonPayload);
     const email = payload.email;
     const firstName = payload.given_name || '';
@@ -937,10 +937,10 @@ app.post("/auth/send-verification-code", async (req, res) => {
 
     // Generate 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Store code with 10-minute expiration
     const expiresAt = Date.now() + 10 * 60 * 1000;
-    
+
     // Check if user exists to personalize email
     let firstName: string | undefined;
     try {
@@ -952,7 +952,7 @@ app.post("/auth/send-verification-code", async (req, res) => {
       // Continue even if user lookup fails
       console.log('User lookup failed, sending generic email');
     }
-    
+
     verificationCodes.set(email.toLowerCase(), { code, expiresAt, firstName });
 
     // Send email with code
@@ -1028,7 +1028,7 @@ app.post("/auth/verify-code", async (req, res) => {
 
     if (user) {
       // User exists - sign them in
-      
+
       // Check if user account is activated
       if (!user.activated) {
         return res.status(401).json({
@@ -1056,7 +1056,7 @@ app.post("/auth/verify-code", async (req, res) => {
     } else {
       // User doesn't exist - return success but indicate they need to complete sign-up
       console.log('✅ Verification successful for new user:', email);
-      
+
       return res.status(200).json({
         success: true,
         message: "Email verified successfully",
@@ -3755,14 +3755,16 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Calculate distribution: platform fee (% of total), doctor flat, pharmacy wholesale, brand residual
+    // Calculate distribution: platform fee (% of total), stripe fee, doctor flat, pharmacy wholesale, brand residual
     // If Clinic has a Stripe Connect account, we transfer only the brand residual to the clinic
     const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
     const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
 
     let brandAmountUsd = 0;
     let pharmacyWholesaleTotal = 0;
     let platformFeeUsd = 0;
+    let stripeFeeUsd = 0;
     try {
       // Sum wholesale cost from treatment products aligned with selectedProducts
       if (treatment.products && selectedProducts) {
@@ -3776,8 +3778,9 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       }
       const totalPaid = Number(amount) || 0;
       platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+      stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
       const doctorUsd = Math.max(0, doctorFlatUsd);
-      brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - doctorUsd - pharmacyWholesaleTotal);
+      brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleTotal);
     } catch (e) {
       console.warn('⚠️ Failed to compute brandAmountUsd, defaulting to 0:', e);
       brandAmountUsd = 0;
@@ -3802,6 +3805,7 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
     try {
       await order.update({
         platformFeeAmount: platformFeeUsd,
+        stripeAmount: Number(stripeFeeUsd.toFixed(2)),
         doctorAmount: Number(doctorFlatUsd.toFixed(2)),
         pharmacyWholesaleAmount: Number(pharmacyWholesaleTotal.toFixed(2)),
         brandAmount: Number(brandAmountUsd.toFixed(2)),
@@ -3950,7 +3954,8 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
     const {
       productId,
       shippingInfo,
-      questionnaireAnswers
+      questionnaireAnswers,
+      useOnBehalfOf
     } = validation.data;
 
 
@@ -3998,7 +4003,31 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       productId
     });
 
+    // Calculate fee breakdown
+    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
+    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
+    const totalPaid = Number(totalAmount) || 0;
+    const platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+    const stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
 
+    // Get pharmacy wholesale cost from the product
+    const pharmacyWholesaleUsd = Number(tenantProduct.product?.pharmacyWholesaleCost || 0);
+
+    // Doctor receives flat fee
+    const doctorUsd = Math.max(0, doctorFlatUsd);
+
+    // Brand gets the residual after all fees
+    const brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleUsd);
+
+    console.log('💰 Fee breakdown calculated:', {
+      totalPaid,
+      platformFeeUsd,
+      stripeFeeUsd,
+      pharmacyWholesaleUsd,
+      doctorUsd,
+      brandAmountUsd
+    });
 
     // Create order
     const orderNumber = await Order.generateOrderNumber();
@@ -4016,7 +4045,12 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       totalAmount: totalAmount,
       questionnaireAnswers,
       stripePriceId: tenantProduct.stripePriceId,
-      tenantProductId: tenantProduct.id
+      tenantProductId: tenantProduct.id,
+      platformFeeAmount: Number(platformFeeUsd.toFixed(2)),
+      stripeAmount: Number(stripeFeeUsd.toFixed(2)),
+      doctorAmount: Number(doctorUsd.toFixed(2)),
+      pharmacyWholesaleAmount: Number(pharmacyWholesaleUsd.toFixed(2)),
+      brandAmount: Number(brandAmountUsd.toFixed(2)),
     });
 
     // Create order item
@@ -4044,7 +4078,7 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
     }
 
     // Create payment intent with Stripe (manual capture)
-    const paymentIntent = await stripe.paymentIntents.create({
+    const authPaymentIntentParams: any = {
       amount: Math.round(totalAmount * 100),
       currency: 'usd',
       customer: stripeCustomerId,
@@ -4059,7 +4093,34 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       description: `Subscription Authorization ${orderNumber} - ${tenantProduct.product.name}`,
       automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       setup_future_usage: 'off_session',
-    });
+    };
+
+    // Add on_behalf_of if clinic is merchant of record
+    if (useOnBehalfOf && tenantProduct.clinic?.stripeAccountId) {
+      authPaymentIntentParams.on_behalf_of = tenantProduct.clinic.stripeAccountId;
+      console.log(`💳 Using on_behalf_of parameter for clinic ${tenantProduct.clinic.id} with Stripe account ${tenantProduct.clinic.stripeAccountId}`);
+
+      // When clinic is MOR, use statement_descriptor to show clinic name only (no "FUSE")
+      if (tenantProduct.clinic?.name) {
+        const statementClinicName = tenantProduct.clinic.name
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor
+        authPaymentIntentParams.statement_descriptor = statementClinicName;
+        console.log(`💳 Clinic is MOR - Using statement descriptor: "${statementClinicName}"`);
+      }
+    } else {
+      // When Fuse is MOR, use statement_descriptor_suffix to show "FUSE *ClinicName"
+      if (tenantProduct.clinic?.name) {
+        const statementClinicName = tenantProduct.clinic.name
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor_suffix
+        authPaymentIntentParams.statement_descriptor_suffix = statementClinicName;
+        console.log(`💳 Fuse is MOR - Using statement descriptor suffix: "FUSE *${statementClinicName}"`);
+      }
+    }
+
+    // Docs: https://docs.stripe.com/api/payment_intents/create#create_payment_intent-on_behalf_of
+    const paymentIntent = await stripe.paymentIntents.create(authPaymentIntentParams);
 
     // Create payment record
     await Payment.create({
@@ -4116,7 +4177,7 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
 // Public product subscription: creates manual-capture PaymentIntent and Order
 app.post("/payments/product/sub", async (req, res) => {
   try {
-    const { tenantProductId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = req.body || {};
+    const { tenantProductId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo, useOnBehalfOf, clinicName } = req.body || {};
 
     if (!tenantProductId || typeof tenantProductId !== 'string') {
       return res.status(400).json({ success: false, message: 'tenantProductId is required' });
@@ -4235,6 +4296,32 @@ app.post("/payments/product/sub", async (req, res) => {
     const userService = new UserService();
     const stripeCustomerId = await userService.getOrCreateCustomerId(user, { userId: user.id, tenantProductId });
 
+    // Calculate fee breakdown
+    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
+    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
+    const totalPaid = Number(totalAmount) || 0;
+    const platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+    const stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
+
+    // Get pharmacy wholesale cost from the product (quantity is 1 for subscriptions)
+    const pharmacyWholesaleUsd = Number((tenantProduct as any).product?.pharmacyWholesaleCost || 0);
+
+    // Doctor receives flat fee
+    const doctorUsd = Math.max(0, doctorFlatUsd);
+
+    // Brand gets the residual after all fees
+    const brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleUsd);
+
+    console.log('💰 Fee breakdown calculated:', {
+      totalPaid,
+      platformFeeUsd,
+      stripeFeeUsd,
+      pharmacyWholesaleUsd,
+      doctorUsd,
+      brandAmountUsd
+    });
+
     // Create order
     const orderNumber = await Order.generateOrderNumber();
     const order = await Order.create({
@@ -4252,6 +4339,11 @@ app.post("/payments/product/sub", async (req, res) => {
       questionnaireAnswers,
       stripePriceId: finalStripePriceId,
       tenantProductId: (tenantProduct as any).id,
+      platformFeeAmount: Number(platformFeeUsd.toFixed(2)),
+      stripeAmount: Number(stripeFeeUsd.toFixed(2)),
+      doctorAmount: Number(doctorUsd.toFixed(2)),
+      pharmacyWholesaleAmount: Number(pharmacyWholesaleUsd.toFixed(2)),
+      brandAmount: Number(brandAmountUsd.toFixed(2)),
     });
 
     // Order item
@@ -4338,7 +4430,8 @@ app.post("/payments/product/sub", async (req, res) => {
     }
 
     // Manual-capture PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.create({
+    // Check if we should use On Behalf Of (OBO) parameter for clinic as merchant of record
+    const paymentIntentParams: any = {
       amount: Math.round(totalAmount * 100),
       currency: 'usd',
       customer: stripeCustomerId,
@@ -4353,7 +4446,34 @@ app.post("/payments/product/sub", async (req, res) => {
       description: `Subscription Authorization ${orderNumber} - ${(tenantProduct as any).product.name}`,
       automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       setup_future_usage: 'off_session',
-    });
+    };
+
+    // Add on_behalf_of if clinic is merchant of record
+    if (useOnBehalfOf && (tenantProduct as any).clinic?.stripeAccountId) {
+      paymentIntentParams.on_behalf_of = (tenantProduct as any).clinic.stripeAccountId;
+      console.log(`💳 Using on_behalf_of parameter for clinic ${(tenantProduct as any).clinic.id} with Stripe account ${(tenantProduct as any).clinic.stripeAccountId}`);
+
+      // When clinic is MOR, use statement_descriptor to show clinic name only (no "FUSE")
+      if (clinicName || (tenantProduct as any).clinic?.name) {
+        const statementClinicName = (clinicName || (tenantProduct as any).clinic?.name)
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor
+        paymentIntentParams.statement_descriptor = statementClinicName;
+        console.log(`💳 Clinic is MOR - Using statement descriptor: "${statementClinicName}"`);
+      }
+    } else {
+      // When Fuse is MOR, use statement_descriptor_suffix to show "FUSE *ClinicName"
+      if (clinicName || (tenantProduct as any).clinic?.name) {
+        const statementClinicName = (clinicName || (tenantProduct as any).clinic?.name)
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor_suffix
+        paymentIntentParams.statement_descriptor_suffix = statementClinicName;
+        console.log(`💳 Fuse is MOR - Using statement descriptor suffix: "FUSE *${statementClinicName}"`);
+      }
+    }
+
+    // Docs: https://docs.stripe.com/api/payment_intents/create#create_payment_intent-on_behalf_of
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
     // Store stripePriceId on order for subscription creation after capture
     await order.update({
@@ -4558,10 +4678,14 @@ app.post("/stripe/connect/session", authenticateJWT, async (req, res) => {
       });
     }
 
-    console.log(`🔄 Creating Stripe Connect session for clinic: ${clinicId}`);
+    // Get merchant model from request body (defaults to 'platform')
+    const { merchantModel } = req.body;
+    const validMerchantModel = merchantModel === 'direct' ? 'direct' : 'platform';
 
-    // Create account session
-    const clientSecret = await StripeConnectService.createAccountSession(clinicId);
+    console.log(`🔄 Creating Stripe Connect session for clinic: ${clinicId} (${validMerchantModel} model)`);
+
+    // Create account session with merchant model
+    const clientSecret = await StripeConnectService.createAccountSession(clinicId, validMerchantModel);
 
     res.status(200).json({
       success: true,
@@ -9434,6 +9558,10 @@ async function startServer() {
   // ============= ANALYTICS ENDPOINTS =============
   const analyticsRouter = (await import('./endpoints/analytics')).default;
   app.use('/', analyticsRouter);
+
+  // ============= CONFIG ENDPOINTS =============
+  const configRouter = (await import('./endpoints/config')).default;
+  app.use('/config', configRouter);
 
   // ============================================
   // DOCTOR-PATIENT CHAT ENDPOINTS

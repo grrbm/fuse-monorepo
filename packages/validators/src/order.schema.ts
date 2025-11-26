@@ -19,6 +19,7 @@ export const createProductSubscriptionSchema = z.object({
   productId: z.string().uuid('Invalid product ID'),
   shippingInfo: shippingInfoSchema,
   questionnaireAnswers: questionnaireAnswersSchema.optional(),
+  useOnBehalfOf: z.boolean().optional(),
 });
 
 /**

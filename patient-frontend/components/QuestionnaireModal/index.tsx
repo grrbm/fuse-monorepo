@@ -2058,22 +2058,38 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       console.log('📋 Raw answers object:', answers);
       console.log('📋 🎉 Final structured questionnaire answers:', questionnaireAnswers);
 
+      // Check if clinic is merchant of record to add OBO parameter
+      const clinicMerchantOfRecord = (domainClinic as any)?.merchantOfRecord;
+      const isClinicMOR = clinicMerchantOfRecord === 'myself';
+
       console.log('💳 Creating product subscription for selected plan:', {
         tenantProductId,
         stripePriceId: stripePriceId || 'will be created by backend',
         planId,
-        planName: selectedPlanData?.name
+        planName: selectedPlanData?.name,
+        merchantOfRecord: clinicMerchantOfRecord,
+        isClinicMOR,
+        willUseOBO: isClinicMOR
       });
+
+      const requestBody: any = {
+        tenantProductId: tenantProductId,
+        stripePriceId: stripePriceId || undefined, // Let backend create if missing
+        userDetails: userDetails,
+        questionnaireAnswers: questionnaireAnswers, // This is now the structured format
+        shippingInfo: shippingInfo,
+        clinicName: domainClinic?.name // For dynamic statement descriptor
+      };
+
+      // Add OBO parameter if clinic is merchant of record
+      if (isClinicMOR) {
+        requestBody.useOnBehalfOf = true;
+        console.log('💳 Adding OBO parameter - clinic is merchant of record');
+      }
 
       const result = await apiCall('/payments/product/sub', {
         method: 'POST',
-        body: JSON.stringify({
-          tenantProductId: tenantProductId,
-          stripePriceId: stripePriceId || undefined, // Let backend create if missing
-          userDetails: userDetails,
-          questionnaireAnswers: questionnaireAnswers, // This is now the structured format
-          shippingInfo: shippingInfo
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (result.success && result.data) {
