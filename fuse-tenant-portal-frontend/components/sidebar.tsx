@@ -9,6 +9,7 @@ import {
   Package,
   Users,
   Settings,
+  DollarSign,
 } from "lucide-react"
 
 const navigation = [
@@ -17,6 +18,7 @@ const navigation = [
   { name: "Forms", icon: FileText, href: "/forms" },
   { name: "Client Management", icon: Users, href: "/client-management" },
   { name: "Tier Management", icon: Settings, href: "/tier-management" },
+  { name: "Global Fees", icon: DollarSign, href: "/global-fees" },
 ]
 
 export function Sidebar() {
