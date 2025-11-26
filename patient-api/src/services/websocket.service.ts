@@ -49,10 +49,10 @@ class WebSocketService {
                         (process.env.NODE_ENV === 'production' && /^https:\/\/([a-zA-Z0-9-]+\.)*fuse\.health$/.test(origin)) ||
                         // Allow any origin containing fusehealth.com (including rx.fusehealth.com, app.fusehealth.com, etc.)
                         origin.includes('fusehealth.com') ||
-                        // Allow all subdomains of fusehealthstaging.xyz
-                        /^https:\/\/[a-zA-Z0-9-]+\.fusehealthstaging\.xyz$/.test(origin) ||
-                        // Allow all subdomains of unboundedhealth.xyz
-                        /^https:\/\/[a-zA-Z0-9-]+\.unboundedhealth\.xyz$/.test(origin);
+                        // Allow fusehealthstaging.xyz root domain and all subdomains
+                        /^https:\/\/([a-zA-Z0-9-]+\.)*fusehealthstaging\.xyz$/.test(origin) ||
+                        // Allow unboundedhealth.xyz root domain and all subdomains
+                        /^https:\/\/([a-zA-Z0-9-]+\.)*unboundedhealth\.xyz$/.test(origin);
 
                     if (isAllowed) {
                         console.log(`✅ [WS] CORS allowed origin: ${origin}`);
