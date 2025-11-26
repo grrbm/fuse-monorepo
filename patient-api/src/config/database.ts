@@ -43,6 +43,7 @@ import Sequence from '../models/Sequence';
 import SequenceRun from '../models/SequenceRun';
 import Tag from '../models/Tag';
 import UserTag from '../models/UserTag';
+import { GlobalFees } from '../models/GlobalFees';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -99,7 +100,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     UserPatient, TenantProduct, FormSectionTemplate,
     TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
     TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily,
-    MessageTemplate, Sequence, SequenceRun, Tag, UserTag
+    MessageTemplate, Sequence, SequenceRun, Tag, UserTag, GlobalFees
   ],
 });
 
@@ -313,6 +314,28 @@ export async function initializeDatabase() {
       console.log('✅ TierConfiguration check complete');
     } catch (error) {
       console.error('❌ Error ensuring TierConfiguration:', error);
+    }
+
+    // Ensure GlobalFees row exists (there should only ever be one row)
+    try {
+      console.log('🔍 Checking GlobalFees configuration...');
+      const feesCount = await GlobalFees.count();
+
+      if (feesCount === 0) {
+        await GlobalFees.create({
+          fuseTransactionFeePercent: 0,
+          fuseTransactionDoctorFeeUsd: 0,
+          stripeTransactionFeePercent: 0,
+        });
+        console.log('✅ Created default GlobalFees row (all fees set to zero)');
+      } else {
+        console.log(`✓ GlobalFees configuration exists (${feesCount} row${feesCount > 1 ? 's' : ''})`);
+        if (feesCount > 1) {
+          console.warn('⚠️  Warning: Multiple GlobalFees rows detected. There should only be one row.');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error ensuring GlobalFees:', error);
     }
 
     // Force recreate GlobalFormStructure table (drop and recreate)

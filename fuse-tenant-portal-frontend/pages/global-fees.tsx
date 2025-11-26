@@ -1,0 +1,305 @@
+import { useState, useEffect } from 'react';
+import { Header } from "@/components/header";
+import { Sidebar } from "@/components/sidebar";
+import { Card } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { DollarSign, Save, AlertCircle } from 'lucide-react';
+
+interface GlobalFees {
+  platformFeePercent: number;
+  stripeFeePercent: number;
+  doctorFlatFeeUsd: number;
+}
+
+export default function GlobalFees() {
+  const { token } = useAuth();
+  const [fees, setFees] = useState<GlobalFees>({
+    platformFeePercent: 0,
+    stripeFeePercent: 0,
+    doctorFlatFeeUsd: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  useEffect(() => {
+    if (token) {
+      fetchFees();
+    }
+  }, [token]);
+
+  const fetchFees = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/config/fees`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch global fees');
+      }
+
+      const result = await response.json();
+      if (result.success && result.data) {
+        setFees(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching global fees:', error);
+      setMessage({ type: 'error', text: 'Failed to load global fees configuration' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!token) return;
+
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/config/fees`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(fees),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update global fees');
+      }
+
+      const result = await response.json();
+      console.log('✅ Updated global fees:', result.data);
+      
+      setMessage({ type: 'success', text: 'Global fees updated successfully!' });
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setMessage(null);
+      }, 3000);
+    } catch (error) {
+      console.error('Error updating global fees:', error);
+      setMessage({ type: 'error', text: 'Failed to update global fees. Please try again.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleInputChange = (field: keyof GlobalFees, value: string) => {
+    const numValue = parseFloat(value) || 0;
+    setFees(prev => ({
+      ...prev,
+      [field]: numValue,
+    }));
+  };
+
+  return (
+    <div className="flex h-screen bg-[#F9FAFB]">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header />
+
+        <main className="flex-1 overflow-y-auto p-8">
+          <div className="max-w-3xl mx-auto">
+            {/* Header */}
+            <div className="mb-8">
+              <div className="flex items-center space-x-3 mb-2">
+                <div className="w-10 h-10 bg-gradient-to-br from-[#4FA59C] to-[#3d8580] rounded-xl flex items-center justify-center shadow-sm">
+                  <DollarSign className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-[#1F2937]">Global Fees Configuration</h1>
+                  <p className="text-sm text-[#6B7280]">Manage platform-wide transaction fees</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Alert Message */}
+            {message && (
+              <div className={`mb-6 p-4 rounded-xl border ${
+                message.type === 'success' 
+                  ? 'bg-green-50 border-green-200 text-green-800' 
+                  : 'bg-red-50 border-red-200 text-red-800'
+              }`}>
+                <div className="flex items-center space-x-2">
+                  <AlertCircle className="h-5 w-5" />
+                  <span className="text-sm font-medium">{message.text}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Configuration Card */}
+            {loading ? (
+              <Card className="p-8">
+                <div className="text-center text-[#6B7280]">Loading configuration...</div>
+              </Card>
+            ) : (
+              <Card className="p-8">
+                <div className="space-y-8">
+                  {/* Warning Banner */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="flex items-start space-x-3">
+                      <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-amber-900 mb-1">
+                          Important: Platform-Wide Configuration
+                        </p>
+                        <p className="text-sm text-amber-700">
+                          Changes to these fees will affect all new transactions across the entire platform. 
+                          Existing orders will not be affected.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fuse Platform Fee */}
+                  <div>
+                    <label className="block text-sm font-semibold text-[#1F2937] mb-2">
+                      Fuse Platform Fee (%)
+                    </label>
+                    <p className="text-sm text-[#6B7280] mb-3">
+                      Percentage of each transaction retained by the Fuse platform
+                    </p>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={fees.platformFeePercent}
+                        onChange={(e) => handleInputChange('platformFeePercent', e.target.value)}
+                        className="w-full px-4 py-3 border border-[#D1D5DB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:border-transparent text-[#1F2937] text-base"
+                        placeholder="e.g., 1.0"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6B7280] text-sm">
+                        %
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Stripe Fee */}
+                  <div>
+                    <label className="block text-sm font-semibold text-[#1F2937] mb-2">
+                      Stripe Transaction Fee (%)
+                    </label>
+                    <p className="text-sm text-[#6B7280] mb-3">
+                      Percentage charged by Stripe for payment processing
+                    </p>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={fees.stripeFeePercent}
+                        onChange={(e) => handleInputChange('stripeFeePercent', e.target.value)}
+                        className="w-full px-4 py-3 border border-[#D1D5DB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:border-transparent text-[#1F2937] text-base"
+                        placeholder="e.g., 3.9"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6B7280] text-sm">
+                        %
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Doctor Flat Fee */}
+                  <div>
+                    <label className="block text-sm font-semibold text-[#1F2937] mb-2">
+                      Doctor Flat Fee (USD)
+                    </label>
+                    <p className="text-sm text-[#6B7280] mb-3">
+                      Fixed amount paid to doctors per transaction
+                    </p>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6B7280] text-sm">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={fees.doctorFlatFeeUsd}
+                        onChange={(e) => handleInputChange('doctorFlatFeeUsd', e.target.value)}
+                        className="w-full pl-8 pr-4 py-3 border border-[#D1D5DB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:border-transparent text-[#1F2937] text-base"
+                        placeholder="e.g., 15.00"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6B7280] text-sm">
+                        USD
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Fee Breakdown Preview */}
+                  <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl p-5">
+                    <h3 className="text-sm font-semibold text-[#1F2937] mb-4">
+                      Example Fee Breakdown (on $100 sale)
+                    </h3>
+                    <div className="space-y-2.5">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#6B7280]">Platform Fee ({fees.platformFeePercent}%)</span>
+                        <span className="font-medium text-[#1F2937]">
+                          ${((fees.platformFeePercent / 100) * 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#6B7280]">Stripe Fee ({fees.stripeFeePercent}%)</span>
+                        <span className="font-medium text-[#1F2937]">
+                          ${((fees.stripeFeePercent / 100) * 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#6B7280]">Doctor Fee (flat)</span>
+                        <span className="font-medium text-[#1F2937]">
+                          ${fees.doctorFlatFeeUsd.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="pt-2.5 border-t border-[#D1D5DB]">
+                        <div className="flex justify-between text-sm font-semibold">
+                          <span className="text-[#1F2937]">Total Fees</span>
+                          <span className="text-[#4FA59C]">
+                            ${(
+                              ((fees.platformFeePercent / 100) * 100) +
+                              ((fees.stripeFeePercent / 100) * 100) +
+                              fees.doctorFlatFeeUsd
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm mt-2">
+                          <span className="text-[#6B7280]">Remaining for Brand</span>
+                          <span className="font-medium text-[#1F2937]">
+                            ${(
+                              100 -
+                              ((fees.platformFeePercent / 100) * 100) -
+                              ((fees.stripeFeePercent / 100) * 100) -
+                              fees.doctorFlatFeeUsd
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <div className="flex justify-end pt-4">
+                    <button
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="flex items-center space-x-2 px-6 py-3 bg-[#4FA59C] text-white font-medium rounded-xl hover:bg-[#3d8580] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    >
+                      <Save className="h-4 w-4" />
+                      <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+

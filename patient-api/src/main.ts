@@ -107,6 +107,20 @@ import { templateRoutes } from "./features/templates";
 import { contactRoutes } from "./features/contacts";
 import { tagRoutes } from "./features/tags";
 import { calculateSequenceAnalytics } from "./features/sequences/services/sequences.service";
+import { GlobalFees } from "./models/GlobalFees";
+
+// Helper function to fetch global fees from database
+async function getGlobalFees() {
+  const globalFees = await GlobalFees.findOne();
+  if (!globalFees) {
+    throw new Error('Global fees configuration not found in database');
+  }
+  return {
+    platformFeePercent: Number(globalFees.fuseTransactionFeePercent),
+    stripeFeePercent: Number(globalFees.stripeTransactionFeePercent),
+    doctorFlatFeeUsd: Number(globalFees.fuseTransactionDoctorFeeUsd),
+  };
+}
 
 // Helper function to generate unique clinic slug
 async function generateUniqueSlug(clinicName: string, excludeId?: string): Promise<string> {
@@ -3829,9 +3843,10 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
 
     // Calculate distribution: platform fee (% of total), stripe fee, doctor flat, pharmacy wholesale, brand residual
     // If Clinic has a Stripe Connect account, we transfer only the brand residual to the clinic
-    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
-    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
-    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
+    const fees = await getGlobalFees();
+    const platformFeePercent = fees.platformFeePercent;
+    const stripeFeePercent = fees.stripeFeePercent;
+    const doctorFlatUsd = fees.doctorFlatFeeUsd;
 
     let brandAmountUsd = 0;
     let pharmacyWholesaleTotal = 0;
@@ -4076,9 +4091,10 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
     });
 
     // Calculate fee breakdown
-    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
-    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
-    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
+    const fees = await getGlobalFees();
+    const platformFeePercent = fees.platformFeePercent;
+    const stripeFeePercent = fees.stripeFeePercent;
+    const doctorFlatUsd = fees.doctorFlatFeeUsd;
     const totalPaid = Number(totalAmount) || 0;
     const platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
     const stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
@@ -4369,9 +4385,10 @@ app.post("/payments/product/sub", async (req, res) => {
     const stripeCustomerId = await userService.getOrCreateCustomerId(user, { userId: user.id, tenantProductId });
 
     // Calculate fee breakdown
-    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
-    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
-    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
+    const fees = await getGlobalFees();
+    const platformFeePercent = fees.platformFeePercent;
+    const stripeFeePercent = fees.stripeFeePercent;
+    const doctorFlatUsd = fees.doctorFlatFeeUsd;
     const totalPaid = Number(totalAmount) || 0;
     const platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
     const stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
