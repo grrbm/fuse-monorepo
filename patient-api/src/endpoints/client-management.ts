@@ -7,7 +7,7 @@ import TenantCustomFeatures from '../models/TenantCustomFeatures';
 import { createJWTToken } from '../config/jwt';
 
 export function registerClientManagementEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
-  
+
   // Get all available subscription plans
   app.get("/admin/subscription-plans", authenticateJWT, async (req, res) => {
     try {
@@ -51,7 +51,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
 
       // Build where clause
       const whereClause: any = {};
-      
+
       if (search) {
         whereClause[Op.or] = [
           { firstName: { [Op.iLike]: `%${search}%` } },
@@ -64,7 +64,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         whereClause.role = role;
       }
 
-      const { rows: users, count} = await User.findAndCountAll({
+      const { rows: users, count } = await User.findAndCountAll({
         where: whereClause,
         attributes: [
           'id',
@@ -242,15 +242,15 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
 
       // Update only the fields that are provided
       const updates: any = {};
-      
+
       if (typeof productsChangedAmountOnCurrentCycle === 'number') {
         updates.productsChangedAmountOnCurrentCycle = productsChangedAmountOnCurrentCycle;
       }
-      
+
       if (typeof retriedProductSelectionForCurrentCycle === 'boolean') {
         updates.retriedProductSelectionForCurrentCycle = retriedProductSelectionForCurrentCycle;
       }
-      
+
       if (typeof tutorialFinished === 'boolean') {
         updates.tutorialFinished = tutorialFinished;
       }
@@ -266,7 +266,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         const planExists = await BrandSubscriptionPlans.findOne({
           where: { planType: planType }
         });
-        
+
         if (planExists) {
           updates.planType = planType;
         } else {
@@ -339,11 +339,11 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
       } else {
         // Update existing record
         const updates: any = {};
-        
+
         if (typeof canAddCustomProducts === 'boolean') {
           updates.canAddCustomProducts = canAddCustomProducts;
         }
-        
+
         if (typeof hasAccessToAnalytics === 'boolean') {
           updates.hasAccessToAnalytics = hasAccessToAnalytics;
         }
