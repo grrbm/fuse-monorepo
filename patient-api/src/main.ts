@@ -98,6 +98,7 @@ import QuestionnaireStep from "./models/QuestionnaireStep";
 import DashboardService from "./services/dashboard.service";
 import DoctorPatientChats from "./models/DoctorPatientChats";
 import WebSocketService from "./services/websocket.service";
+import SmsService from "./services/sms.service";
 import MessageTemplate from "./models/MessageTemplate";
 import Sequence from "./models/Sequence";
 import SequenceRun from "./models/SequenceRun";
@@ -9872,12 +9873,17 @@ async function startServer() {
       // Reload and manually add patient data
       await chat.reload();
       const patient = await User.findByPk(chat.patientId, {
-        attributes: ['id', 'firstName', 'lastName', 'email']
+        attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'smsOptedOut']
       });
 
       const chatWithPatient = {
         ...chat.toJSON(),
-        patient: patient ? patient.toJSON() : null
+        patient: patient ? {
+          id: patient.id,
+          firstName: patient.firstName,
+          lastName: patient.lastName,
+          email: patient.email
+        } : null
       };
 
       // Emit WebSocket event for new message
@@ -9893,6 +9899,40 @@ async function startServer() {
 
       // Emit doctor's unread count (reset to 0 since they sent the message)
       WebSocketService.emitUnreadCountUpdate(chat.doctorId, 0);
+
+      // Send SMS notification to patient if they have a phone number and haven't opted out
+      if (patient && patient.phoneNumber && !patient.smsOptedOut) {
+        try {
+          const patientName = patient.firstName || 'Patient';
+          const hasAttachments = attachments && attachments.length > 0;
+          const unreadCount = chat.unreadCountPatient;
+          let smsBody: string;
+          
+          // Build unread count message
+          const unreadMessage = unreadCount === 1 
+            ? 'You have 1 unread message.' 
+            : `You have ${unreadCount} unread messages.`;
+          
+          if (message && message.trim()) {
+            // Truncate message preview to 35 characters max for SMS (leave room for unread count and other text)
+            const messagePreview = message.length > 35 ? message.substring(0, 32) + '...' : message;
+            const attachmentText = hasAttachments ? ' (with attachment)' : '';
+            smsBody = `${patientName}, new message from your doctor: "${messagePreview}"${attachmentText}. ${unreadMessage}`;
+          } else if (hasAttachments) {
+            smsBody = `${patientName}, your doctor sent you a message with an attachment. ${unreadMessage}`;
+          } else {
+            smsBody = `${patientName}, you have a new message from your doctor. ${unreadMessage}`;
+          }
+          
+          await SmsService.send(patient.phoneNumber, smsBody);
+          console.log(`✅ SMS notification sent to patient ${patient.id} (${patient.phoneNumber})`);
+        } catch (smsError) {
+          // Don't fail the message send if SMS fails - log and continue
+          console.error('❌ Failed to send SMS notification to patient:', smsError);
+        }
+      } else if (patient && (!patient.phoneNumber || patient.smsOptedOut)) {
+        console.log(`ℹ️ Skipping SMS notification for patient ${patient.id}: ${!patient.phoneNumber ? 'no phone number' : 'SMS opted out'}`);
+      }
 
       res.json({
         success: true,
