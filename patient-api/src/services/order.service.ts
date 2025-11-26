@@ -345,7 +345,7 @@ class OrderService {
                     console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                     // Don't fail the approval - order is already paid
                 }
-            } else if ((order.status === OrderStatus.PENDING || order.status === OrderStatus.PROCESSING) && order.payment?.stripePaymentIntentId) {
+            } else if ((order.status === OrderStatus.PENDING || order.status === OrderStatus.PROCESSING || order.status === OrderStatus.AMOUNT_CAPTURABLE_UPDATED) && order.payment?.stripePaymentIntentId) {
                 // Get payment intent ID from Payment model (single source of truth)
                 const paymentIntentId = order.payment.stripePaymentIntentId;
 
@@ -358,8 +358,8 @@ class OrderService {
                     };
                 }
 
-                // Order has pending payment that needs to be captured
-                console.log(`💳 [Approve] Capturing payment for order ${orderId} with payment intent ${paymentIntentId}`);
+                // Order has pending/authorized payment that needs to be captured
+                console.log(`💳 [Approve] Capturing payment for order ${orderId} with status ${order.status} and payment intent ${paymentIntentId}`);
 
                 try {
                     // Capture the payment
