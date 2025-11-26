@@ -640,18 +640,18 @@ app.post("/auth/signup", async (req, res) => {
 app.get("/auth/google/login", (req, res) => {
   const returnUrl = req.query.returnUrl as string || 'http://localhost:3000';
   const clinicId = req.query.clinicId as string || '';
-  
+
   // Store return URL and clinic ID in state parameter
   const state = Buffer.from(JSON.stringify({ returnUrl, clinicId })).toString('base64');
-  
-  const googleAuthUrl = 
+
+  const googleAuthUrl =
     `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}` +
     `&redirect_uri=${encodeURIComponent(process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/auth/google/callback')}` +
     `&response_type=code` +
     `&scope=email%20profile` +
     `&state=${state}`;
-  
+
   console.log('🔐 Redirecting to Google OAuth:', googleAuthUrl);
   res.redirect(googleAuthUrl);
 });
@@ -661,14 +661,14 @@ app.get("/auth/google/callback", async (req, res) => {
   try {
     const code = req.query.code as string;
     const state = req.query.state as string;
-    
+
     if (!code) {
       return res.status(400).send('Authorization code missing');
     }
-    
+
     // Decode state to get return URL and clinic ID
     const { returnUrl, clinicId } = JSON.parse(Buffer.from(state, 'base64').toString());
-    
+
     // Exchange code for access token
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -681,48 +681,48 @@ app.get("/auth/google/callback", async (req, res) => {
         grant_type: 'authorization_code'
       })
     });
-    
+
     const tokenData = await tokenResponse.json() as { access_token?: string; error?: string };
-    
+
     if (!tokenData.access_token) {
       throw new Error('Failed to get access token');
     }
-    
+
     // Get user info from Google
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` }
     });
-    
+
     const googleUser = await userInfoResponse.json() as {
       email?: string;
       given_name?: string;
       family_name?: string;
     };
-    
+
     console.log('👤 Google user info received:', googleUser);
-    
+
     const email = googleUser.email || '';
     const firstName = googleUser.given_name || '';
     const lastName = googleUser.family_name || '';
-    
+
     console.log('📧 Extracted user data:', { email, firstName, lastName });
-    
+
     if (!email) {
       throw new Error('Email not provided by Google');
     }
-    
+
     // Check if user exists
     let user = await User.findByEmail(email);
-    
+
     if (!user) {
       console.log('🆕 Creating new user via Google:', { email, firstName, lastName, clinicId });
-      
+
       // Create new user with Google account
       try {
         // Generate a random password and hash it
         const randomPassword = Math.random().toString(36).slice(-16) + 'Aa1!';
         const passwordHash = await User.hashPassword(randomPassword);
-        
+
         user = await User.create({
           email: email.toLowerCase().trim(),
           firstName,
@@ -732,7 +732,7 @@ app.get("/auth/google/callback", async (req, res) => {
           passwordHash, // Pass the hashed password
           clinicId: clinicId || null
         });
-        
+
         console.log('✅ New user created via Google:', user.email);
       } catch (createError) {
         console.error('❌ Failed to create user:', createError);
@@ -741,20 +741,20 @@ app.get("/auth/google/callback", async (req, res) => {
     } else {
       console.log('👤 Existing user found:', user.email);
     }
-    
+
     // Update last login time
     await user.updateLastLogin();
-    
+
     // Create JWT token
     const token = createJWTToken(user);
-    
+
     console.log('✅ User signed in via Google:', user.email);
-    
+
     // Redirect back to frontend with token and flag to skip account creation step
     const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
     console.log('🔗 Redirecting to:', redirectUrl);
     res.redirect(redirectUrl);
-    
+
   } catch (error) {
     console.error('❌ Google OAuth callback error:', error);
     console.error('❌ Error details:', {
@@ -783,10 +783,10 @@ app.post("/auth/google", async (req, res) => {
     // For now, decode the JWT to get user info
     const base64Url = credential.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(Buffer.from(base64, 'base64').toString().split('').map(function(c) {
+    const jsonPayload = decodeURIComponent(Buffer.from(base64, 'base64').toString().split('').map(function (c) {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
-    
+
     const payload = JSON.parse(jsonPayload);
     const email = payload.email;
     const firstName = payload.given_name || '';
@@ -937,10 +937,10 @@ app.post("/auth/send-verification-code", async (req, res) => {
 
     // Generate 6-digit code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Store code with 10-minute expiration
     const expiresAt = Date.now() + 10 * 60 * 1000;
-    
+
     // Check if user exists to personalize email
     let firstName: string | undefined;
     try {
@@ -952,7 +952,7 @@ app.post("/auth/send-verification-code", async (req, res) => {
       // Continue even if user lookup fails
       console.log('User lookup failed, sending generic email');
     }
-    
+
     verificationCodes.set(email.toLowerCase(), { code, expiresAt, firstName });
 
     // Send email with code
@@ -1028,7 +1028,7 @@ app.post("/auth/verify-code", async (req, res) => {
 
     if (user) {
       // User exists - sign them in
-      
+
       // Check if user account is activated
       if (!user.activated) {
         return res.status(401).json({
@@ -1056,7 +1056,7 @@ app.post("/auth/verify-code", async (req, res) => {
     } else {
       // User doesn't exist - return success but indicate they need to complete sign-up
       console.log('✅ Verification successful for new user:', email);
-      
+
       return res.status(200).json({
         success: true,
         message: "Email verified successfully",
@@ -3950,7 +3950,8 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
     const {
       productId,
       shippingInfo,
-      questionnaireAnswers
+      questionnaireAnswers,
+      useOnBehalfOf
     } = validation.data;
 
 
@@ -4044,7 +4045,7 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
     }
 
     // Create payment intent with Stripe (manual capture)
-    const paymentIntent = await stripe.paymentIntents.create({
+    const authPaymentIntentParams: any = {
       amount: Math.round(totalAmount * 100),
       currency: 'usd',
       customer: stripeCustomerId,
@@ -4059,7 +4060,16 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       description: `Subscription Authorization ${orderNumber} - ${tenantProduct.product.name}`,
       automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       setup_future_usage: 'off_session',
-    });
+    };
+
+    // Add on_behalf_of if clinic is merchant of record
+    if (useOnBehalfOf && tenantProduct.clinic?.stripeAccountId) {
+      authPaymentIntentParams.on_behalf_of = tenantProduct.clinic.stripeAccountId;
+      console.log(`💳 Using on_behalf_of parameter for clinic ${tenantProduct.clinic.id} with Stripe account ${tenantProduct.clinic.stripeAccountId}`);
+    }
+
+    // Docs: https://docs.stripe.com/api/payment_intents/create#create_payment_intent-on_behalf_of
+    const paymentIntent = await stripe.paymentIntents.create(authPaymentIntentParams);
 
     // Create payment record
     await Payment.create({
@@ -4116,7 +4126,7 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
 // Public product subscription: creates manual-capture PaymentIntent and Order
 app.post("/payments/product/sub", async (req, res) => {
   try {
-    const { tenantProductId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = req.body || {};
+    const { tenantProductId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo, useOnBehalfOf } = req.body || {};
 
     if (!tenantProductId || typeof tenantProductId !== 'string') {
       return res.status(400).json({ success: false, message: 'tenantProductId is required' });
@@ -4338,7 +4348,8 @@ app.post("/payments/product/sub", async (req, res) => {
     }
 
     // Manual-capture PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.create({
+    // Check if we should use On Behalf Of (OBO) parameter for clinic as merchant of record
+    const paymentIntentParams: any = {
       amount: Math.round(totalAmount * 100),
       currency: 'usd',
       customer: stripeCustomerId,
@@ -4353,7 +4364,16 @@ app.post("/payments/product/sub", async (req, res) => {
       description: `Subscription Authorization ${orderNumber} - ${(tenantProduct as any).product.name}`,
       automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       setup_future_usage: 'off_session',
-    });
+    };
+
+    // Add on_behalf_of if clinic is merchant of record
+    if (useOnBehalfOf && (tenantProduct as any).clinic?.stripeAccountId) {
+      paymentIntentParams.on_behalf_of = (tenantProduct as any).clinic.stripeAccountId;
+      console.log(`💳 Using on_behalf_of parameter for clinic ${(tenantProduct as any).clinic.id} with Stripe account ${(tenantProduct as any).clinic.stripeAccountId}`);
+    }
+
+    // Docs: https://docs.stripe.com/api/payment_intents/create#create_payment_intent-on_behalf_of
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
     // Store stripePriceId on order for subscription creation after capture
     await order.update({
