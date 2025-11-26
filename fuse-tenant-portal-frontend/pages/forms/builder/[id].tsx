@@ -14,7 +14,7 @@ import { CheckCircle2, CircleSlash2 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { LAYOUT_OPTIONS } from "@fuse/enums"
 
- 
+
 
 export default function FormBuilder() {
   const router = useRouter()
@@ -145,6 +145,8 @@ export default function FormBuilder() {
     if (sectionType === "account") setSelectedAccount(templateId)
     if (sectionType === "doctor") setSelectedDoctor(templateId)
   }
+
+
 
   const handleSave = async () => {
     if (!selectedAssignment || saving) return

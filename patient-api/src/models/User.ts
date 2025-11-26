@@ -6,10 +6,10 @@ import ShippingAddress from './ShippingAddress';
 import { PatientAllergy, PatientDisease, PatientMedication } from '../services/pharmacy/patient';
 import BrandTreatment from './BrandTreatment';
 import UserPatient from './UserPatient';
-import UserTag from './UserTag';
 import BrandSubscription from './BrandSubscription';
 import TenantCustomFeatures from './TenantCustomFeatures';
 import TenantAnalyticsEvents from './TenantAnalyticsEvents';
+import UserTag from './UserTag';
 
 @Table({
   freezeTableName: true,

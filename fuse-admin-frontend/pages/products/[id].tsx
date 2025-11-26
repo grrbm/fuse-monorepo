@@ -67,6 +67,11 @@ export default function ProductDetail() {
     const [clinicIsCustomDomain, setClinicIsCustomDomain] = useState<boolean>(false)
     const [customizations, setCustomizations] = useState<Record<string, { customColor?: string | null; isActive: boolean }>>({})
     const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
+    const [fees, setFees] = useState<{ platformFeePercent: number; stripeFeePercent: number; doctorFlatFeeUsd: number }>({
+        platformFeePercent: 1,
+        stripeFeePercent: 3.9,
+        doctorFlatFeeUsd: 15
+    })
 
     const { user, token, authenticatedFetch } = useAuth()
     const [copiedPreview, setCopiedPreview] = useState<boolean>(false)
@@ -74,6 +79,11 @@ export default function ProductDetail() {
     const { id } = router.query
 
     const wholesaleCost = product?.pharmacyWholesaleCost ?? product?.price ?? 0
+
+    // Fee percentages and flat fees fetched from backend API
+    const PLATFORM_FEE_PERCENT = fees.platformFeePercent
+    const STRIPE_FEE_PERCENT = fees.stripeFeePercent
+    const DOCTOR_FLAT_FEE_USD = fees.doctorFlatFeeUsd
 
     // Preset colors
     const presetColors = [
@@ -86,6 +96,29 @@ export default function ProductDetail() {
         { name: "Pink", color: "#EC4899" },
         { name: "Teal", color: "#14B8A6" },
     ]
+
+    // Fetch fee configuration from backend
+    useEffect(() => {
+        const loadFees = async () => {
+            if (!token) return
+
+            try {
+                const res = await fetch(`${API_URL}/config/fees`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+
+                if (res.ok) {
+                    const data = await res.json()
+                    if (data.success && data.data) {
+                        setFees(data.data)
+                    }
+                }
+            } catch (err) {
+                console.error('Error fetching fee configuration:', err)
+            }
+        }
+        loadFees()
+    }, [token])
 
     // Fetch customizations
     useEffect(() => {
@@ -595,6 +628,21 @@ export default function ProductDetail() {
         }).format(price)
     }
 
+    // Calculate true profit including all fees
+    const calculateProfitBreakdown = (retailPrice: number) => {
+        const platformFee = (PLATFORM_FEE_PERCENT / 100) * retailPrice
+        const stripeFee = (STRIPE_FEE_PERCENT / 100) * retailPrice
+        const doctorFee = DOCTOR_FLAT_FEE_USD
+        const totalFees = platformFee + stripeFee + doctorFee
+        const wholesaleCostNum = Number(wholesaleCost) || 0
+        const totalCost = wholesaleCostNum + totalFees
+        const profit = retailPrice - totalCost
+        const margin = retailPrice > 0 ? ((profit / retailPrice) * 100) : 0
+        const isLoss = profit < 0
+
+        return { platformFee, stripeFee, doctorFee, totalFees, totalCost, profit, margin, isLoss }
+    }
+
     const getStatusBadge = (active: boolean) => {
         return active
             ? <Badge variant="outline" className="text-xs font-medium"><CheckCircle className="h-3 w-3 mr-1" /> Active</Badge>
@@ -750,8 +798,8 @@ export default function ProductDetail() {
                     {error && (
                         <div
                             className={`mb-6 p-4 border rounded-md ${error.includes('✅')
-                                    ? 'bg-background border-border text-foreground'
-                                    : 'bg-destructive/10 border-destructive/30 text-destructive text-sm'
+                                ? 'bg-background border-border text-foreground'
+                                : 'bg-destructive/10 border-destructive/30 text-destructive text-sm'
                                 }`}
                         >
                             <p>{error}</p>
@@ -828,13 +876,29 @@ export default function ProductDetail() {
                                                     Cancel
                                                 </Button>
                                             </div>
-                                            <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+                                            <div className="text-xs mt-3 pt-3 border-t border-border">
                                                 {(() => {
                                                     const price = parseFloat(newPrice) || 0
-                                                    const cost = wholesaleCost
-                                                    const profit = price - cost
-                                                    const margin = price > 0 ? ((profit / price) * 100) : 0
-                                                    return `Profit: ${formatPrice(profit)} (${margin.toFixed(1)}% margin)`
+                                                    const breakdown = calculateProfitBreakdown(price)
+                                                    return (
+                                                        <div>
+                                                            <div className={breakdown.isLoss ? 'text-red-600 font-semibold' : 'text-muted-foreground'}>
+                                                                Profit: {formatPrice(breakdown.profit)} ({breakdown.margin.toFixed(1)}% margin)
+                                                            </div>
+                                                            {breakdown.isLoss && (
+                                                                <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-xs">
+                                                                    ⚠️ <strong>Warning:</strong> You're losing {formatPrice(Math.abs(breakdown.profit))} per sale. Price should be at least {formatPrice(breakdown.totalCost)} to break even.
+                                                                </div>
+                                                            )}
+                                                            <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5">
+                                                                <div>• Wholesale: {formatPrice(wholesaleCost)}</div>
+                                                                <div>• Doctor Fee: {formatPrice(breakdown.doctorFee)}</div>
+                                                                <div>• Platform Fee ({PLATFORM_FEE_PERCENT}%): {formatPrice(breakdown.platformFee)}</div>
+                                                                <div>• Stripe Fee ({STRIPE_FEE_PERCENT}%): {formatPrice(breakdown.stripeFee)}</div>
+                                                                <div className="font-medium pt-0.5 border-t border-border/50">Total Cost: {formatPrice(breakdown.totalCost)}</div>
+                                                            </div>
+                                                        </div>
+                                                    )
                                                 })()}
                                             </div>
                                         </div>
@@ -843,13 +907,28 @@ export default function ProductDetail() {
                                             <div className="text-3xl font-semibold text-foreground">
                                                 {formatPrice(tenantProduct.price)}
                                             </div>
-                                            <div className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+                                            <div className="text-xs mt-3 pt-3 border-t border-border">
                                                 {(() => {
-                                                    const price = tenantProduct.price
-                                                    const cost = wholesaleCost
-                                                    const profit = price - cost
-                                                    const margin = price > 0 ? ((profit / price) * 100) : 0
-                                                    return `Profit: ${formatPrice(profit)} per unit (${margin.toFixed(1)}% margin)`
+                                                    const breakdown = calculateProfitBreakdown(tenantProduct.price)
+                                                    return (
+                                                        <div>
+                                                            <div className={breakdown.isLoss ? 'text-red-600 font-semibold' : 'text-muted-foreground'}>
+                                                                Profit: {formatPrice(breakdown.profit)} per unit ({breakdown.margin.toFixed(1)}% margin)
+                                                            </div>
+                                                            {breakdown.isLoss && (
+                                                                <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-400 text-xs">
+                                                                    ⚠️ <strong>Warning:</strong> You're losing {formatPrice(Math.abs(breakdown.profit))} per sale. Price should be at least {formatPrice(breakdown.totalCost)} to break even.
+                                                                </div>
+                                                            )}
+                                                            <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5">
+                                                                <div>• Wholesale: {formatPrice(wholesaleCost)}</div>
+                                                                <div>• Doctor Fee: {formatPrice(breakdown.doctorFee)}</div>
+                                                                <div>• Platform Fee ({PLATFORM_FEE_PERCENT}%): {formatPrice(breakdown.platformFee)}</div>
+                                                                <div>• Stripe Fee ({STRIPE_FEE_PERCENT}%): {formatPrice(breakdown.stripeFee)}</div>
+                                                                <div className="font-medium pt-0.5 border-t border-border/50">Total Cost: {formatPrice(breakdown.totalCost)}</div>
+                                                            </div>
+                                                        </div>
+                                                    )
                                                 })()}
                                             </div>
                                         </div>

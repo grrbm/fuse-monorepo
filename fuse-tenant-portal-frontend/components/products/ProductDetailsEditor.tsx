@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react"
 import { Loader2, Save, Package, RefreshCw, Upload, X, Image as ImageIcon } from "lucide-react"
 import { CATEGORY_OPTIONS } from "@fuse/enums"
 import { useAuth } from "@/contexts/AuthContext"
+import { useSubscriptionFeatures } from "@/hooks/useSubscriptionFeatures"
+import { toast } from "sonner"
 
 interface Product {
     id: string
@@ -27,8 +29,9 @@ interface ProductDetailsEditorProps {
 
 export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditorProps) {
     const { token } = useAuth()
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
+    const { features, loading: featuresLoading } = useSubscriptionFeatures()
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
     const [editing, setEditing] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -77,6 +80,115 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
         })
         setImagePreview(product.imageUrl || null)
     }, [product])
+
+    // Handle image file selection
+    const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            toast.error('Please select a valid image file')
+            return
+        }
+
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Image size must be less than 5MB')
+            return
+        }
+
+        // Upload image
+        await uploadImage(file)
+    }
+
+    // Upload image to backend
+    const uploadImage = async (file: File) => {
+        if (!token) {
+            toast.error('Not authenticated')
+            return
+        }
+
+        setUploadingImage(true)
+        try {
+            const formData = new FormData()
+            formData.append('image', file)
+
+            const response = await fetch(`${baseUrl}/products/${product.id}/upload-image`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+                body: formData,
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                if (data.code === 'FEATURE_NOT_AVAILABLE') {
+                    toast.error('Upgrade Required', {
+                        description: data.message || 'Your plan does not support custom product images'
+                    })
+                } else {
+                    toast.error(data.message || 'Failed to upload image')
+                }
+                return
+            }
+
+            setImagePreview(data.data.imageUrl)
+            toast.success('Image uploaded successfully')
+            
+            // Refresh product data
+            await onUpdate({})
+        } catch (error: any) {
+            console.error('Error uploading image:', error)
+            toast.error(error.message || 'Failed to upload image')
+        } finally {
+            setUploadingImage(false)
+            // Reset file input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ''
+            }
+        }
+    }
+
+    // Remove image
+    const handleRemoveImage = async () => {
+        if (!token) {
+            toast.error('Not authenticated')
+            return
+        }
+
+        setUploadingImage(true)
+        try {
+            const response = await fetch(`${baseUrl}/products/${product.id}/upload-image`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ removeImage: true }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                toast.error(data.message || 'Failed to remove image')
+                return
+            }
+
+            setImagePreview(null)
+            toast.success('Image removed successfully')
+            
+            // Refresh product data
+            await onUpdate({})
+        } catch (error: any) {
+            console.error('Error removing image:', error)
+            toast.error(error.message || 'Failed to remove image')
+        } finally {
+            setUploadingImage(false)
+        }
+    }
 
     // Function to regenerate slug from current name and medication size
     const handleRegenerateSlug = () => {
@@ -133,40 +245,6 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
             if (fileInputRef.current) {
                 fileInputRef.current.value = ''
             }
-        }
-    }
-
-    // Handle image removal
-    const handleRemoveImage = async () => {
-        if (!imagePreview) return
-
-        setError(null)
-        setUploadingImage(true)
-
-        try {
-            const response = await fetch(`${baseUrl}/products/${product.id}/upload-image`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ removeImage: true }),
-            })
-
-            const data = await response.json()
-
-            if (!response.ok) {
-                throw new Error(data.message || 'Failed to remove image')
-            }
-
-            setImagePreview(null)
-            // Trigger parent update to refresh product data
-            await onUpdate({ imageUrl: undefined })
-        } catch (error: any) {
-            console.error('Failed to remove image:', error)
-            setError(error.message || 'Failed to remove image. Please try again.')
-        } finally {
-            setUploadingImage(false)
         }
     }
 
@@ -427,6 +505,83 @@ export function ProductDetailsEditor({ product, onUpdate }: ProductDetailsEditor
                         ) : (
                             <p className="text-[#6B7280] font-mono text-sm">{product.slug || "——"}</p>
                         )}
+                    </div>
+
+                    {/* Product Image */}
+                    <div className="md:col-span-2">
+                        <label className="text-sm font-medium text-[#4B5563] mb-2 block">
+                            Product Image
+                            {!features.canUploadCustomProductImages && (
+                                <span className="text-xs text-[#9CA3AF] ml-2">(Upgrade to Premium/Enterprise tier)</span>
+                            )}
+                        </label>
+                        <div className="flex items-start gap-4">
+                            {/* Image Preview */}
+                            <div className="flex-shrink-0">
+                                {imagePreview ? (
+                                    <div className="relative w-32 h-32 rounded-xl border-2 border-[#E5E7EB] overflow-hidden bg-gray-50">
+                                        <img
+                                            src={imagePreview}
+                                            alt={product.name}
+                                            className="w-full h-full object-cover"
+                                        />
+                                        {features.canUploadCustomProductImages && (
+                                            <button
+                                                type="button"
+                                                onClick={handleRemoveImage}
+                                                disabled={uploadingImage}
+                                                className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+                                                title="Remove image"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="w-32 h-32 rounded-xl border-2 border-dashed border-[#E5E7EB] bg-[#F9FAFB] flex items-center justify-center">
+                                        <ImageIcon className="h-8 w-8 text-[#9CA3AF]" />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Upload Button */}
+                            <div className="flex-1">
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageSelect}
+                                    disabled={!features.canUploadCustomProductImages || uploadingImage}
+                                    className="hidden"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={!features.canUploadCustomProductImages || uploadingImage || featuresLoading}
+                                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-[#4B5563] transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {uploadingImage ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Uploading...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload className="h-4 w-4" />
+                                            {imagePreview ? 'Change Image' : 'Upload Image'}
+                                        </>
+                                    )}
+                                </button>
+                                <p className="text-xs text-[#9CA3AF] mt-2">
+                                    JPG, PNG or WebP. Max 5MB.
+                                    {!features.canUploadCustomProductImages && (
+                                        <span className="block text-[#F59E0B] mt-1">
+                                            ⚠️ Upgrade to Premium or Enterprise to upload custom product images
+                                        </span>
+                                    )}
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Description */}

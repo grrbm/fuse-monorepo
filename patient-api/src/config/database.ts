@@ -34,15 +34,15 @@ import Sale from '../models/Sale';
 import DoctorPatientChats from '../models/DoctorPatientChats';
 import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
+import TenantCustomFeatures from '../models/TenantCustomFeatures';
+import TierConfiguration from '../models/TierConfiguration';
+import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
+import FormAnalyticsDaily from '../models/FormAnalyticsDaily';
 import MessageTemplate from '../models/MessageTemplate';
 import Sequence from '../models/Sequence';
 import SequenceRun from '../models/SequenceRun';
 import Tag from '../models/Tag';
 import UserTag from '../models/UserTag';
-import TenantCustomFeatures from '../models/TenantCustomFeatures';
-import TierConfiguration from '../models/TierConfiguration';
-import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
-import FormAnalyticsDaily from '../models/FormAnalyticsDaily';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -98,8 +98,8 @@ export const sequelize = new Sequelize(databaseUrl, {
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
     TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
-    MessageTemplate, Sequence, SequenceRun, Tag, UserTag,
-    TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily
+    TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily,
+    MessageTemplate, Sequence, SequenceRun, Tag, UserTag
   ],
 });
 
@@ -263,6 +263,26 @@ export async function initializeDatabase() {
     // Sync all models to database (safer sync mode)
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully');
+
+    // Add new enum value for amount_capturable_updated status
+    try {
+      console.log('🔄 Adding amount_capturable_updated to Order status enum...');
+      await sequelize.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum 
+            WHERE enumlabel = 'amount_capturable_updated' 
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'enum_Order_status')
+          ) THEN
+            ALTER TYPE "enum_Order_status" ADD VALUE 'amount_capturable_updated';
+          END IF;
+        END $$;
+      `);
+      console.log('✅ Order status enum updated successfully');
+    } catch (enumError) {
+      console.log('⚠️  Could not add enum value (may already exist):', enumError instanceof Error ? enumError.message : enumError);
+    }
 
     // Ensure TierConfiguration exists for all active BrandSubscriptionPlans
     try {

@@ -17,6 +17,7 @@ import TenantProduct from './TenantProduct';
 export enum OrderStatus {
   PENDING = 'pending',
   PAYMENT_PROCESSING = 'payment_processing',
+  AMOUNT_CAPTURABLE_UPDATED = 'amount_capturable_updated', // Payment authorized but not captured (awaiting doctor approval)
   PAID = 'paid',
   PAYMENT_DUE = 'payment_due',
   PROCESSING = 'processing',
@@ -173,6 +174,13 @@ export default class Order extends Entity {
     defaultValue: 0,
   })
   declare brandAmount: number;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0,
+  })
+  declare stripeAmount: number;
 
   @Column({
     type: DataType.TEXT,

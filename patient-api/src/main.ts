@@ -14,6 +14,8 @@ import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
 import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
+import TierConfiguration from "./models/TierConfiguration";
+import TenantCustomFeatures from "./models/TenantCustomFeatures";
 import Subscription from "./models/Subscription";
 // import TenantProduct from "./models/TenantProduct";
 import { createJWTToken, authenticateJWT, getCurrentUser, extractTokenFromHeader, verifyJWTToken } from "./config/jwt";
@@ -96,6 +98,7 @@ import QuestionnaireStep from "./models/QuestionnaireStep";
 import DashboardService from "./services/dashboard.service";
 import DoctorPatientChats from "./models/DoctorPatientChats";
 import WebSocketService from "./services/websocket.service";
+import SmsService from "./services/sms.service";
 import MessageTemplate from "./models/MessageTemplate";
 import Sequence from "./models/Sequence";
 import SequenceRun from "./models/SequenceRun";
@@ -2315,6 +2318,58 @@ app.post("/products/:id/upload-image", authenticateJWT, upload.single('image'), 
       });
     }
 
+    // Check tier permissions for uploading custom product images
+    if (user.role === 'brand') {
+      // Get the user's active subscription
+      const subscription = await BrandSubscription.findOne({
+        where: { userId: user.id, status: BrandSubscriptionStatus.ACTIVE },
+        order: [['createdAt', 'DESC']]
+      });
+
+      if (!subscription) {
+        return res.status(403).json({
+          success: false,
+          message: "No active subscription found"
+        });
+      }
+
+      // Get custom features for this tenant (overrides tier config)
+      const customFeatures = await TenantCustomFeatures.findOne({
+        where: { userId: user.id }
+      });
+
+      // If custom features exist and explicitly allow/deny, use that
+      let canUpload = false;
+      if (customFeatures) {
+        canUpload = customFeatures.canUploadCustomProductImages;
+        console.log('🎨 Using custom features for image upload permission:', canUpload);
+      } else {
+        // Otherwise, check the tier configuration
+        const plan = await BrandSubscriptionPlans.findOne({
+          where: { planType: subscription.planType }
+        });
+
+        if (plan) {
+          const tierConfig = await TierConfiguration.findOne({
+            where: { brandSubscriptionPlanId: plan.id }
+          });
+
+          if (tierConfig) {
+            canUpload = tierConfig.canUploadCustomProductImages;
+            console.log('🎯 Using tier config for image upload permission:', canUpload);
+          }
+        }
+      }
+
+      if (!canUpload) {
+        return res.status(403).json({
+          success: false,
+          message: "Your current plan does not allow uploading custom product images. Please upgrade to a higher tier.",
+          code: "FEATURE_NOT_AVAILABLE"
+        });
+      }
+    }
+
     // Check if this is a removal request (no file provided)
     const removeImage = req.body && typeof req.body === 'object' && 'removeImage' in req.body && req.body.removeImage === true;
 
@@ -3772,14 +3827,16 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Calculate distribution: platform fee (% of total), doctor flat, pharmacy wholesale, brand residual
+    // Calculate distribution: platform fee (% of total), stripe fee, doctor flat, pharmacy wholesale, brand residual
     // If Clinic has a Stripe Connect account, we transfer only the brand residual to the clinic
     const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
     const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
 
     let brandAmountUsd = 0;
     let pharmacyWholesaleTotal = 0;
     let platformFeeUsd = 0;
+    let stripeFeeUsd = 0;
     try {
       // Sum wholesale cost from treatment products aligned with selectedProducts
       if (treatment.products && selectedProducts) {
@@ -3793,8 +3850,9 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       }
       const totalPaid = Number(amount) || 0;
       platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+      stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
       const doctorUsd = Math.max(0, doctorFlatUsd);
-      brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - doctorUsd - pharmacyWholesaleTotal);
+      brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleTotal);
     } catch (e) {
       console.warn('⚠️ Failed to compute brandAmountUsd, defaulting to 0:', e);
       brandAmountUsd = 0;
@@ -3819,6 +3877,7 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
     try {
       await order.update({
         platformFeeAmount: platformFeeUsd,
+        stripeAmount: Number(stripeFeeUsd.toFixed(2)),
         doctorAmount: Number(doctorFlatUsd.toFixed(2)),
         pharmacyWholesaleAmount: Number(pharmacyWholesaleTotal.toFixed(2)),
         brandAmount: Number(brandAmountUsd.toFixed(2)),
@@ -3967,7 +4026,8 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
     const {
       productId,
       shippingInfo,
-      questionnaireAnswers
+      questionnaireAnswers,
+      useOnBehalfOf
     } = validation.data;
 
 
@@ -4015,7 +4075,31 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       productId
     });
 
+    // Calculate fee breakdown
+    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
+    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
+    const totalPaid = Number(totalAmount) || 0;
+    const platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+    const stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
 
+    // Get pharmacy wholesale cost from the product
+    const pharmacyWholesaleUsd = Number(tenantProduct.product?.pharmacyWholesaleCost || 0);
+
+    // Doctor receives flat fee
+    const doctorUsd = Math.max(0, doctorFlatUsd);
+
+    // Brand gets the residual after all fees
+    const brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleUsd);
+
+    console.log('💰 Fee breakdown calculated:', {
+      totalPaid,
+      platformFeeUsd,
+      stripeFeeUsd,
+      pharmacyWholesaleUsd,
+      doctorUsd,
+      brandAmountUsd
+    });
 
     // Create order
     const orderNumber = await Order.generateOrderNumber();
@@ -4033,7 +4117,12 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       totalAmount: totalAmount,
       questionnaireAnswers,
       stripePriceId: tenantProduct.stripePriceId,
-      tenantProductId: tenantProduct.id
+      tenantProductId: tenantProduct.id,
+      platformFeeAmount: Number(platformFeeUsd.toFixed(2)),
+      stripeAmount: Number(stripeFeeUsd.toFixed(2)),
+      doctorAmount: Number(doctorUsd.toFixed(2)),
+      pharmacyWholesaleAmount: Number(pharmacyWholesaleUsd.toFixed(2)),
+      brandAmount: Number(brandAmountUsd.toFixed(2)),
     });
 
     // Create order item
@@ -4061,7 +4150,7 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
     }
 
     // Create payment intent with Stripe (manual capture)
-    const paymentIntent = await stripe.paymentIntents.create({
+    const authPaymentIntentParams: any = {
       amount: Math.round(totalAmount * 100),
       currency: 'usd',
       customer: stripeCustomerId,
@@ -4076,7 +4165,34 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
       description: `Subscription Authorization ${orderNumber} - ${tenantProduct.product.name}`,
       automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       setup_future_usage: 'off_session',
-    });
+    };
+
+    // Add on_behalf_of if clinic is merchant of record
+    if (useOnBehalfOf && tenantProduct.clinic?.stripeAccountId) {
+      authPaymentIntentParams.on_behalf_of = tenantProduct.clinic.stripeAccountId;
+      console.log(`💳 Using on_behalf_of parameter for clinic ${tenantProduct.clinic.id} with Stripe account ${tenantProduct.clinic.stripeAccountId}`);
+
+      // When clinic is MOR, use statement_descriptor to show clinic name only (no "FUSE")
+      if (tenantProduct.clinic?.name) {
+        const statementClinicName = tenantProduct.clinic.name
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor
+        authPaymentIntentParams.statement_descriptor = statementClinicName;
+        console.log(`💳 Clinic is MOR - Using statement descriptor: "${statementClinicName}"`);
+      }
+    } else {
+      // When Fuse is MOR, use statement_descriptor_suffix to show "FUSE *ClinicName"
+      if (tenantProduct.clinic?.name) {
+        const statementClinicName = tenantProduct.clinic.name
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor_suffix
+        authPaymentIntentParams.statement_descriptor_suffix = statementClinicName;
+        console.log(`💳 Fuse is MOR - Using statement descriptor suffix: "FUSE *${statementClinicName}"`);
+      }
+    }
+
+    // Docs: https://docs.stripe.com/api/payment_intents/create#create_payment_intent-on_behalf_of
+    const paymentIntent = await stripe.paymentIntents.create(authPaymentIntentParams);
 
     // Create payment record
     await Payment.create({
@@ -4133,7 +4249,7 @@ app.post("/products/create-payment-intent", authenticateJWT, async (req, res) =>
 // Public product subscription: creates manual-capture PaymentIntent and Order
 app.post("/payments/product/sub", async (req, res) => {
   try {
-    const { tenantProductId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo } = req.body || {};
+    const { tenantProductId, stripePriceId, userDetails, questionnaireAnswers, shippingInfo, useOnBehalfOf, clinicName } = req.body || {};
 
     if (!tenantProductId || typeof tenantProductId !== 'string') {
       return res.status(400).json({ success: false, message: 'tenantProductId is required' });
@@ -4252,6 +4368,32 @@ app.post("/payments/product/sub", async (req, res) => {
     const userService = new UserService();
     const stripeCustomerId = await userService.getOrCreateCustomerId(user, { userId: user.id, tenantProductId });
 
+    // Calculate fee breakdown
+    const platformFeePercent = Number(process.env.FUSE_TRANSACTION_FEE_PERCENT ?? 1);
+    const stripeFeePercent = Number(process.env.STRIPE_TRANSACTION_FEE_PERCENT ?? 3.9);
+    const doctorFlatUsd = Number(process.env.FUSE_TRANSACTION_DOCTOR_FEE_USD ?? 20);
+    const totalPaid = Number(totalAmount) || 0;
+    const platformFeeUsd = Math.max(0, (platformFeePercent / 100) * totalPaid);
+    const stripeFeeUsd = Math.max(0, (stripeFeePercent / 100) * totalPaid);
+
+    // Get pharmacy wholesale cost from the product (quantity is 1 for subscriptions)
+    const pharmacyWholesaleUsd = Number((tenantProduct as any).product?.pharmacyWholesaleCost || 0);
+
+    // Doctor receives flat fee
+    const doctorUsd = Math.max(0, doctorFlatUsd);
+
+    // Brand gets the residual after all fees
+    const brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleUsd);
+
+    console.log('💰 Fee breakdown calculated:', {
+      totalPaid,
+      platformFeeUsd,
+      stripeFeeUsd,
+      pharmacyWholesaleUsd,
+      doctorUsd,
+      brandAmountUsd
+    });
+
     // Create order
     const orderNumber = await Order.generateOrderNumber();
     const order = await Order.create({
@@ -4269,6 +4411,11 @@ app.post("/payments/product/sub", async (req, res) => {
       questionnaireAnswers,
       stripePriceId: finalStripePriceId,
       tenantProductId: (tenantProduct as any).id,
+      platformFeeAmount: Number(platformFeeUsd.toFixed(2)),
+      stripeAmount: Number(stripeFeeUsd.toFixed(2)),
+      doctorAmount: Number(doctorUsd.toFixed(2)),
+      pharmacyWholesaleAmount: Number(pharmacyWholesaleUsd.toFixed(2)),
+      brandAmount: Number(brandAmountUsd.toFixed(2)),
     });
 
     // Order item
@@ -4355,7 +4502,8 @@ app.post("/payments/product/sub", async (req, res) => {
     }
 
     // Manual-capture PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.create({
+    // Check if we should use On Behalf Of (OBO) parameter for clinic as merchant of record
+    const paymentIntentParams: any = {
       amount: Math.round(totalAmount * 100),
       currency: 'usd',
       customer: stripeCustomerId,
@@ -4370,7 +4518,34 @@ app.post("/payments/product/sub", async (req, res) => {
       description: `Subscription Authorization ${orderNumber} - ${(tenantProduct as any).product.name}`,
       automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
       setup_future_usage: 'off_session',
-    });
+    };
+
+    // Add on_behalf_of if clinic is merchant of record
+    if (useOnBehalfOf && (tenantProduct as any).clinic?.stripeAccountId) {
+      paymentIntentParams.on_behalf_of = (tenantProduct as any).clinic.stripeAccountId;
+      console.log(`💳 Using on_behalf_of parameter for clinic ${(tenantProduct as any).clinic.id} with Stripe account ${(tenantProduct as any).clinic.stripeAccountId}`);
+
+      // When clinic is MOR, use statement_descriptor to show clinic name only (no "FUSE")
+      if (clinicName || (tenantProduct as any).clinic?.name) {
+        const statementClinicName = (clinicName || (tenantProduct as any).clinic?.name)
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor
+        paymentIntentParams.statement_descriptor = statementClinicName;
+        console.log(`💳 Clinic is MOR - Using statement descriptor: "${statementClinicName}"`);
+      }
+    } else {
+      // When Fuse is MOR, use statement_descriptor_suffix to show "FUSE *ClinicName"
+      if (clinicName || (tenantProduct as any).clinic?.name) {
+        const statementClinicName = (clinicName || (tenantProduct as any).clinic?.name)
+          .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+          .substring(0, 22); // Stripe limit for statement_descriptor_suffix
+        paymentIntentParams.statement_descriptor_suffix = statementClinicName;
+        console.log(`💳 Fuse is MOR - Using statement descriptor suffix: "FUSE *${statementClinicName}"`);
+      }
+    }
+
+    // Docs: https://docs.stripe.com/api/payment_intents/create#create_payment_intent-on_behalf_of
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
     // Store stripePriceId on order for subscription creation after capture
     await order.update({
@@ -4575,10 +4750,14 @@ app.post("/stripe/connect/session", authenticateJWT, async (req, res) => {
       });
     }
 
-    console.log(`🔄 Creating Stripe Connect session for clinic: ${clinicId}`);
+    // Get merchant model from request body (defaults to 'platform')
+    const { merchantModel } = req.body;
+    const validMerchantModel = merchantModel === 'direct' ? 'direct' : 'platform';
 
-    // Create account session
-    const clientSecret = await StripeConnectService.createAccountSession(clinicId);
+    console.log(`🔄 Creating Stripe Connect session for clinic: ${clinicId} (${validMerchantModel} model)`);
+
+    // Create account session with merchant model
+    const clientSecret = await StripeConnectService.createAccountSession(clinicId, validMerchantModel);
 
     res.status(200).json({
       success: true,
@@ -9458,6 +9637,10 @@ async function startServer() {
   const analyticsRouter = (await import('./endpoints/analytics')).default;
   app.use('/', analyticsRouter);
 
+  // ============= CONFIG ENDPOINTS =============
+  const configRouter = (await import('./endpoints/config')).default;
+  app.use('/config', configRouter);
+
   // ============================================
   // DOCTOR-PATIENT CHAT ENDPOINTS
   // ============================================
@@ -9690,12 +9873,17 @@ async function startServer() {
       // Reload and manually add patient data
       await chat.reload();
       const patient = await User.findByPk(chat.patientId, {
-        attributes: ['id', 'firstName', 'lastName', 'email']
+        attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'smsOptedOut']
       });
 
       const chatWithPatient = {
         ...chat.toJSON(),
-        patient: patient ? patient.toJSON() : null
+        patient: patient ? {
+          id: patient.id,
+          firstName: patient.firstName,
+          lastName: patient.lastName,
+          email: patient.email
+        } : null
       };
 
       // Emit WebSocket event for new message
@@ -9711,6 +9899,40 @@ async function startServer() {
 
       // Emit doctor's unread count (reset to 0 since they sent the message)
       WebSocketService.emitUnreadCountUpdate(chat.doctorId, 0);
+
+      // Send SMS notification to patient if they have a phone number and haven't opted out
+      if (patient && patient.phoneNumber && !patient.smsOptedOut) {
+        try {
+          const patientName = patient.firstName || 'Patient';
+          const hasAttachments = attachments && attachments.length > 0;
+          const unreadCount = chat.unreadCountPatient;
+          let smsBody: string;
+          
+          // Build unread count message
+          const unreadMessage = unreadCount === 1 
+            ? 'You have 1 unread message.' 
+            : `You have ${unreadCount} unread messages.`;
+          
+          if (message && message.trim()) {
+            // Truncate message preview to 35 characters max for SMS (leave room for unread count and other text)
+            const messagePreview = message.length > 35 ? message.substring(0, 32) + '...' : message;
+            const attachmentText = hasAttachments ? ' (with attachment)' : '';
+            smsBody = `${patientName}, new message from your doctor: "${messagePreview}"${attachmentText}. ${unreadMessage}`;
+          } else if (hasAttachments) {
+            smsBody = `${patientName}, your doctor sent you a message with an attachment. ${unreadMessage}`;
+          } else {
+            smsBody = `${patientName}, you have a new message from your doctor. ${unreadMessage}`;
+          }
+          
+          await SmsService.send(patient.phoneNumber, smsBody);
+          console.log(`✅ SMS notification sent to patient ${patient.id} (${patient.phoneNumber})`);
+        } catch (smsError) {
+          // Don't fail the message send if SMS fails - log and continue
+          console.error('❌ Failed to send SMS notification to patient:', smsError);
+        }
+      } else if (patient && (!patient.phoneNumber || patient.smsOptedOut)) {
+        console.log(`ℹ️ Skipping SMS notification for patient ${patient.id}: ${!patient.phoneNumber ? 'no phone number' : 'SMS opted out'}`);
+      }
 
       res.json({
         success: true,

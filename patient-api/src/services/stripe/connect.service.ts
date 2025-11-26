@@ -12,10 +12,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 export class StripeConnectService {
   /**
    * Create or retrieve a Stripe Connect account for a clinic
+   * @param merchantModel - 'platform' (Fuse MOR) or 'direct' (Clinic MOR)
    */
-  async createOrGetConnectAccount(clinicId: string): Promise<string> {
+  async createOrGetConnectAccount(
+    clinicId: string,
+    merchantModel: 'platform' | 'direct' = 'platform'
+  ): Promise<string> {
     const clinic = await Clinic.findByPk(clinicId);
-    
+
     if (!clinic) {
       throw new Error('Clinic not found');
     }
@@ -27,41 +31,92 @@ export class StripeConnectService {
     }
 
     // Create a new Express Connect account
-    console.log(`🔄 Creating new Stripe Connect account for clinic ${clinicId}`);
-    
+    console.log(`🔄 Creating new Stripe Connect account for clinic ${clinicId} (${merchantModel} model)`);
+
+    // Configure capabilities based on merchant model
+    // Docs: https://docs.stripe.com/api/accounts/create (change the API to Node.js in the docs)
+    // Capabilities: https://docs.stripe.com/connect/account-capabilities
+    // Controller: https://docs.stripe.com/connect/controller-reference
+    const capabilities: any = {
+      transfers: { requested: true }, // Always enable transfers for payouts
+    };
+
+    // Only add card_payments if clinic is direct merchant of record
+    if (merchantModel === 'direct') {
+      capabilities.card_payments = { requested: true };
+    }
+
     const account = await stripe.accounts.create({
       type: 'express',
       country: 'US',
       email: clinic.name ? `${clinic.slug}@fuse-brands.com` : undefined,
-      capabilities: {
-        transfers: { requested: true },
+      capabilities,
+      controller: {
+        stripe_dashboard: { type: 'express' },        // Express dashboard access
+        fees: { payer: 'application' },                // Platform pays Stripe fees
+        losses: { payments: 'application' },           // Platform liable for disputes/losses
+        requirement_collection: 'stripe',              // Stripe handles compliance/requirements
       },
       business_type: 'company',
       metadata: {
         clinicId: clinic.id,
         clinicName: clinic.name,
         clinicSlug: clinic.slug,
+        merchantModel: merchantModel,
       }
     });
 
-    // Save account ID to clinic
+    // Save account ID and merchant model to clinic
     await clinic.update({
       stripeAccountId: account.id,
       stripeAccountType: 'express',
+      merchantOfRecord: merchantModel === 'direct' ? 'myself' : 'fuse',
     });
 
-    console.log(`✅ Stripe Connect account created: ${account.id} for clinic ${clinicId}`);
-    
+    console.log(`✅ Stripe Connect account created: ${account.id} for clinic ${clinicId} (${merchantModel} model)`);
+
     return account.id;
+  }
+
+  /**
+   * Update an existing Connect account with proper capabilities and controller settings
+   * Note: card_payments is only added for 'direct' merchant model
+   */
+  async updateAccountCapabilities(
+    accountId: string,
+    merchantModel: 'platform' | 'direct' = 'platform'
+  ): Promise<void> {
+    console.log(`🔄 Updating capabilities for account ${accountId} (${merchantModel} model)`);
+
+    try {
+      const capabilities: any = {
+        transfers: { requested: true },
+      };
+
+      // Only add card_payments if direct merchant of record
+      if (merchantModel === 'direct') {
+        capabilities.card_payments = { requested: true };
+      }
+
+      await stripe.accounts.update(accountId, { capabilities });
+
+      console.log(`✅ Account ${accountId} capabilities updated`);
+    } catch (error: any) {
+      console.error(`❌ Failed to update account capabilities:`, error.message);
+      // Don't throw - this might fail if account already has these settings
+    }
   }
 
   /**
    * Create an Account Session for embedded components
    * This allows the frontend to access Stripe Connect UI
    */
-  async createAccountSession(clinicId: string): Promise<string> {
+  async createAccountSession(
+    clinicId: string,
+    merchantModel: 'platform' | 'direct' = 'platform'
+  ): Promise<string> {
     const clinic = await Clinic.findByPk(clinicId);
-    
+
     if (!clinic) {
       throw new Error('Clinic not found');
     }
@@ -69,7 +124,10 @@ export class StripeConnectService {
     // Ensure clinic has a Stripe account
     let accountId = clinic.stripeAccountId;
     if (!accountId) {
-      accountId = await this.createOrGetConnectAccount(clinicId);
+      accountId = await this.createOrGetConnectAccount(clinicId, merchantModel);
+    } else {
+      // Update existing account to ensure it has the right capabilities
+      await this.updateAccountCapabilities(accountId, merchantModel);
     }
 
     console.log(`🔄 Creating Account Session for clinic ${clinicId}, account ${accountId}`);
@@ -79,7 +137,7 @@ export class StripeConnectService {
       account: accountId,
       components: {
         account_onboarding: { enabled: true },
-        payments: { 
+        payments: {
           enabled: true,
           features: {
             refund_management: true,
@@ -87,13 +145,13 @@ export class StripeConnectService {
             capture_payments: true,
           }
         },
-        payouts: { 
+        payouts: {
           enabled: true,
           features: {
             standard_payouts: true,
           }
         },
-        balances: { 
+        balances: {
           enabled: true,
           features: {
             standard_payouts: true,
@@ -104,7 +162,7 @@ export class StripeConnectService {
     });
 
     console.log(`✅ Account Session created for clinic ${clinicId}`);
-    
+
     return accountSession.client_secret;
   }
 
@@ -125,7 +183,7 @@ export class StripeConnectService {
     };
   }> {
     const clinic = await Clinic.findByPk(clinicId);
-    
+
     if (!clinic) {
       throw new Error('Clinic not found');
     }
@@ -144,7 +202,7 @@ export class StripeConnectService {
     const account = await stripe.accounts.retrieve(clinic.stripeAccountId);
 
     // Update local record if status changed
-    const needsUpdate = 
+    const needsUpdate =
       clinic.stripeDetailsSubmitted !== account.details_submitted ||
       clinic.stripeChargesEnabled !== account.charges_enabled ||
       clinic.stripePayoutsEnabled !== account.payouts_enabled;
@@ -155,8 +213,8 @@ export class StripeConnectService {
         stripeChargesEnabled: account.charges_enabled,
         stripePayoutsEnabled: account.payouts_enabled,
         stripeOnboardingComplete: account.details_submitted && account.charges_enabled && account.payouts_enabled,
-        stripeOnboardedAt: (account.details_submitted && account.charges_enabled && account.payouts_enabled && !clinic.stripeOnboardedAt) 
-          ? new Date() 
+        stripeOnboardedAt: (account.details_submitted && account.charges_enabled && account.payouts_enabled && !clinic.stripeOnboardedAt)
+          ? new Date()
           : clinic.stripeOnboardedAt,
       });
     }
@@ -201,8 +259,8 @@ export class StripeConnectService {
       stripeChargesEnabled: account.charges_enabled,
       stripePayoutsEnabled: account.payouts_enabled,
       stripeOnboardingComplete: isNowComplete,
-      stripeOnboardedAt: (isNowComplete && !clinic.stripeOnboardedAt) 
-        ? new Date() 
+      stripeOnboardedAt: (isNowComplete && !clinic.stripeOnboardedAt)
+        ? new Date()
         : clinic.stripeOnboardedAt,
     });
 
@@ -246,16 +304,21 @@ export class StripeConnectService {
    * Create an account link for onboarding (alternative to embedded components)
    * This can be used as a fallback or for email invitations
    */
-  async createAccountLink(clinicId: string, refreshUrl: string, returnUrl: string): Promise<string> {
+  async createAccountLink(
+    clinicId: string,
+    refreshUrl: string,
+    returnUrl: string,
+    merchantModel: 'platform' | 'direct' = 'platform'
+  ): Promise<string> {
     const clinic = await Clinic.findByPk(clinicId);
-    
+
     if (!clinic) {
       throw new Error('Clinic not found');
     }
 
     let accountId = clinic.stripeAccountId;
     if (!accountId) {
-      accountId = await this.createOrGetConnectAccount(clinicId);
+      accountId = await this.createOrGetConnectAccount(clinicId, merchantModel);
     }
 
     const accountLink = await stripe.accountLinks.create({
