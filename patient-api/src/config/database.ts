@@ -39,6 +39,7 @@ import TierConfiguration from '../models/TierConfiguration';
 import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
 import FormAnalyticsDaily from '../models/FormAnalyticsDaily';
 import { GlobalFees } from '../models/GlobalFees';
+import UserRoles from '../models/UserRoles';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -94,7 +95,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
     TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
-    TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily, GlobalFees
+    TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily, GlobalFees, UserRoles
   ],
 });
 
@@ -330,6 +331,44 @@ export async function initializeDatabase() {
       }
     } catch (error) {
       console.error('❌ Error ensuring GlobalFees:', error);
+    }
+
+    // Backfill UserRoles table from deprecated User.role field
+    try {
+      console.log('🔄 Backfilling UserRoles table from User.role field...');
+
+      // Get all users
+      const users = await User.findAll({
+        attributes: ['id', 'role']
+      });
+
+      let backfilledCount = 0;
+      let skippedCount = 0;
+
+      for (const user of users) {
+        // Check if UserRoles entry already exists
+        const existingRoles = await UserRoles.findOne({
+          where: { userId: user.id }
+        });
+
+        if (!existingRoles) {
+          // Create UserRoles based on deprecated role field
+          await UserRoles.create({
+            userId: user.id,
+            patient: user.role === 'patient',
+            doctor: user.role === 'doctor',
+            admin: user.role === 'admin',
+            brand: user.role === 'brand',
+          });
+          backfilledCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      console.log(`✅ UserRoles backfill complete: ${backfilledCount} created, ${skippedCount} already existed (${users.length} total users)`);
+    } catch (error) {
+      console.error('❌ Error backfilling UserRoles:', error);
     }
 
     // Force recreate GlobalFormStructure table (drop and recreate)

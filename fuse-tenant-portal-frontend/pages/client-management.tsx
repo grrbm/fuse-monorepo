@@ -42,18 +42,30 @@ interface BrandSubscription {
   plan?: BrandSubscriptionPlan
 }
 
+interface UserRoles {
+  id: string
+  userId: string
+  patient: boolean
+  doctor: boolean
+  admin: boolean
+  brand: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 interface User {
   id: string
   firstName: string
   lastName: string
   email: string
-  role: string
+  role: string // deprecated, kept for backwards compatibility
   activated: boolean
   businessType?: string
   createdAt: string
   updatedAt: string
   brandSubscriptions?: BrandSubscription[]
   tenantCustomFeatures?: TenantCustomFeatures[]
+  userRoles?: UserRoles
 }
 
 export default function ClientManagement() {
@@ -67,6 +79,7 @@ export default function ClientManagement() {
   const [saving, setSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [availablePlans, setAvailablePlans] = useState<BrandSubscriptionPlan[]>([])
+  const [updatingRole, setUpdatingRole] = useState(false)
 
   // BrandSubscription form state
   const [formData, setFormData] = useState({
@@ -81,6 +94,14 @@ export default function ClientManagement() {
   const [customFeaturesData, setCustomFeaturesData] = useState({
     canAddCustomProducts: false,
     hasAccessToAnalytics: false,
+  })
+
+  // User roles state
+  const [userRolesData, setUserRolesData] = useState({
+    patient: false,
+    doctor: false,
+    admin: false,
+    brand: false,
   })
 
   useEffect(() => {
@@ -169,6 +190,77 @@ export default function ClientManagement() {
         canAddCustomProducts: false,
         hasAccessToAnalytics: false,
       })
+    }
+
+    // Load user roles
+    if (user.userRoles) {
+      setUserRolesData({
+        patient: user.userRoles.patient,
+        doctor: user.userRoles.doctor,
+        admin: user.userRoles.admin,
+        brand: user.userRoles.brand,
+      })
+    } else {
+      // Fallback to deprecated role field
+      setUserRolesData({
+        patient: user.role === 'patient',
+        doctor: user.role === 'doctor',
+        admin: user.role === 'admin',
+        brand: user.role === 'brand',
+      })
+    }
+  }
+
+  const handleRolesChange = async () => {
+    if (!selectedUser) return
+
+    setUpdatingRole(true)
+    try {
+      const response = await fetch(`${baseUrl}/admin/users/${selectedUser.id}/roles`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userRolesData),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update user roles')
+      }
+
+      const result = await response.json()
+      console.log('✅ Updated user roles:', result.data)
+
+      const activeRoles = Object.entries(userRolesData)
+        .filter(([_, value]) => value)
+        .map(([key, _]) => key)
+
+      toast.success(`Roles updated: ${activeRoles.join(', ') || 'none'}`)
+
+      // Update the selected user
+      const updatedUser = {
+        ...selectedUser,
+        userRoles: {
+          ...selectedUser.userRoles!,
+          ...userRolesData,
+        },
+      }
+      setSelectedUser(updatedUser)
+
+      // Also update in the users list
+      setUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === selectedUser.id
+            ? updatedUser
+            : u
+        )
+      )
+    } catch (error) {
+      console.error('Error updating user roles:', error)
+      toast.error('Failed to update user roles')
+    } finally {
+      setUpdatingRole(false)
     }
   }
 
@@ -395,11 +487,60 @@ export default function ClientManagement() {
                               {selectedUser.email}
                             </span>
                           </div>
-                          <div>
-                            <span className="text-[#6B7280]">Role:</span>
-                            <span className="ml-2 text-[#1F2937] font-medium">
-                              {selectedUser.role}
-                            </span>
+                          <div className="col-span-2">
+                            <label className="block text-[#6B7280] mb-2">Roles (select all that apply):</label>
+                            <div className="space-y-2">
+                              <label className="flex items-center space-x-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={userRolesData.patient}
+                                  onChange={(e) => setUserRolesData({ ...userRolesData, patient: e.target.checked })}
+                                  disabled={updatingRole}
+                                  className="w-4 h-4 text-[#4FA59C] border-[#D1D5DB] rounded focus:ring-[#4FA59C]"
+                                />
+                                <span className="text-sm text-[#374151]">Patient</span>
+                              </label>
+                              <label className="flex items-center space-x-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={userRolesData.doctor}
+                                  onChange={(e) => setUserRolesData({ ...userRolesData, doctor: e.target.checked })}
+                                  disabled={updatingRole}
+                                  className="w-4 h-4 text-[#4FA59C] border-[#D1D5DB] rounded focus:ring-[#4FA59C]"
+                                />
+                                <span className="text-sm text-[#374151]">Doctor</span>
+                              </label>
+                              <label className="flex items-center space-x-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={userRolesData.admin}
+                                  onChange={(e) => setUserRolesData({ ...userRolesData, admin: e.target.checked })}
+                                  disabled={updatingRole}
+                                  className="w-4 h-4 text-[#4FA59C] border-[#D1D5DB] rounded focus:ring-[#4FA59C]"
+                                />
+                                <span className="text-sm text-[#374151]">Admin</span>
+                              </label>
+                              <label className="flex items-center space-x-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={userRolesData.brand}
+                                  onChange={(e) => setUserRolesData({ ...userRolesData, brand: e.target.checked })}
+                                  disabled={updatingRole}
+                                  className="w-4 h-4 text-[#4FA59C] border-[#D1D5DB] rounded focus:ring-[#4FA59C]"
+                                />
+                                <span className="text-sm text-[#374151]">Brand</span>
+                              </label>
+                            </div>
+                            <Button
+                              onClick={handleRolesChange}
+                              disabled={updatingRole}
+                              className="mt-3 bg-[#4FA59C] hover:bg-[#3d8580] text-white text-sm"
+                            >
+                              {updatingRole ? 'Updating...' : 'Update Roles'}
+                            </Button>
+                            <p className="text-xs text-[#6B7280] mt-2">
+                              Users can have multiple roles. Changes take effect immediately.
+                            </p>
                           </div>
                           <div>
                             <span className="text-[#6B7280]">Business Type:</span>
@@ -410,7 +551,7 @@ export default function ClientManagement() {
                         </div>
 
                         {/* Preview Button */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 mt-4">
                           <Button
                             onClick={handlePreview}
                             disabled={previewing}

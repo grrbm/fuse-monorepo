@@ -31,6 +31,7 @@ import ShippingOrder from "./models/ShippingOrder";
 import QuestionnaireService from "./services/questionnaire.service";
 import formTemplateService from "./services/formTemplate.service";
 import User from "./models/User";
+import UserRoles from "./models/UserRoles";
 import Clinic from "./models/Clinic";
 import { Op } from "sequelize";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
@@ -810,19 +811,25 @@ app.post("/auth/google", async (req, res) => {
     let user = await User.findByEmail(email);
 
     if (!user) {
-      // Create new user with Google account
-      user = await User.create({
+      // Create new user with Google account using createUser to automatically create UserRoles
+      user = await User.createUser({
         email,
         firstName,
         lastName,
-        role: 'patient',
-        activated: true, // Google accounts are pre-verified
         password: Math.random().toString(36).slice(-16) + 'Aa1!', // Random password (won't be used)
-        clinicId: clinicId || null
+        role: 'patient',
       });
+
+      // Set additional fields
+      user.activated = true; // Google accounts are pre-verified
+      user.clinicId = clinicId || null;
+      await user.save();
 
       console.log('✅ New user created via Google:', user.email);
     }
+
+    // Load UserRoles for the user
+    await user.getUserRoles();
 
     // Update last login time
     await user.updateLastLogin();
@@ -871,6 +878,9 @@ app.post("/auth/signin", async (req, res) => {
         message: "Invalid email or password"
       });
     }
+
+    // Load UserRoles for the user
+    await user.getUserRoles();
 
     // Validate password (permanent or temporary)
     const isValidPassword = await user.validateAnyPassword(password);
@@ -1457,7 +1467,7 @@ app.put("/clinic/:id", authenticateJWT, async (req, res) => {
     }
 
     // Only allow doctors and brand users to update clinic data, and only their own clinic
-    if ((user.role !== 'doctor' && user.role !== 'brand') || user.clinicId !== id) {
+    if (!user.hasAnyRoleSync(['doctor', 'brand']) || user.clinicId !== id) {
       return res.status(403).json({
         success: false,
         message: "Access denied"
@@ -1539,7 +1549,7 @@ app.post("/clinic/:id/upload-logo", authenticateJWT, upload.single('logo'), asyn
     }
 
     // Only allow doctors and brand users to upload logos for their own clinic
-    if ((user.role !== 'doctor' && user.role !== 'brand') || user.clinicId !== id) {
+    if (!user.hasAnyRoleSync(['doctor', 'brand']) || user.clinicId !== id) {
       return res.status(403).json({
         success: false,
         message: "Access denied"
@@ -1790,10 +1800,11 @@ app.get("/products/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
     }
 
     // Only allow doctors and brand users to access products for their own clinic
-    if (user.role !== 'doctor' && user.role !== 'brand') {
+    if (!user.hasAnyRoleSync(['doctor', 'brand'])) {
+      const roles = user.userRoles?.getActiveRoles() || [user.role];
       return res.status(403).json({
         success: false,
-        message: `Access denied. Only doctors and brand users can access products. Your role: ${user.role}`
+        message: `Access denied. Only doctors and brand users can access products. Your roles: ${roles.join(', ')}`
       });
     }
 
@@ -1932,10 +1943,11 @@ app.get("/products/:id", async (req, res) => {
     }
 
     // Only allow doctors and brand users to access products
-    if (user.role !== 'doctor' && user.role !== 'brand') {
+    if (!user.hasAnyRoleSync(['doctor', 'brand'])) {
+      const roles = user.userRoles?.getActiveRoles() || [user.role];
       return res.status(403).json({
         success: false,
-        message: `Access denied. Only doctors and brand users can access products. Your role: ${user.role}`
+        message: `Access denied. Only doctors and brand users can access products. Your roles: ${roles.join(', ')}`
       });
     }
 
@@ -2080,10 +2092,11 @@ app.post("/products", authenticateJWT, async (req, res) => {
     }
 
     // Only allow doctors and brand users to create products
-    if (user.role !== 'doctor' && user.role !== 'brand') {
+    if (!user.hasAnyRoleSync(['doctor', 'brand'])) {
+      const roles = user.userRoles?.getActiveRoles() || [user.role];
       return res.status(403).json({
         success: false,
-        message: `Access denied. Only doctors and brand users can create products. Your role: ${user.role}`
+        message: `Access denied. Only doctors and brand users can create products. Your roles: ${roles.join(', ')}`
       });
     }
 
@@ -2143,10 +2156,11 @@ app.delete("/products/:id", authenticateJWT, async (req, res) => {
     }
 
     // Only allow doctors and brand users to delete products
-    if (user.role !== 'doctor' && user.role !== 'brand') {
+    if (!user.hasAnyRoleSync(['doctor', 'brand'])) {
+      const roles = user.userRoles?.getActiveRoles() || [user.role];
       return res.status(403).json({
         success: false,
-        message: `Access denied. Only doctors and brand users can delete products. Your role: ${user.role}`
+        message: `Access denied. Only doctors and brand users can delete products. Your roles: ${roles.join(', ')}`
       });
     }
 
@@ -2233,10 +2247,11 @@ app.put("/products/:id", authenticateJWT, async (req, res) => {
     }
 
     // Only allow doctors and brand users to update products
-    if (user.role !== 'doctor' && user.role !== 'brand') {
+    if (!user.hasAnyRoleSync(['doctor', 'brand'])) {
+      const roles = user.userRoles?.getActiveRoles() || [user.role];
       return res.status(403).json({
         success: false,
-        message: `Access denied. Only doctors and brand users can update products. Your role: ${user.role}`
+        message: `Access denied. Only doctors and brand users can update products. Your roles: ${roles.join(', ')}`
       });
     }
 
@@ -2305,7 +2320,7 @@ app.post("/products/:id/upload-image", authenticateJWT, upload.single('image'), 
     }
 
     // Only allow doctors and brand users to upload product images for their own clinic's products
-    if (user.role !== 'doctor' && user.role !== 'brand') {
+    if (!user.hasAnyRoleSync(['doctor', 'brand'])) {
       return res.status(403).json({
         success: false,
         message: "Only doctors and brand users can upload product images"
@@ -2635,7 +2650,7 @@ app.post("/treatment/:id/upload-logo", authenticateJWT, upload.single('logo'), a
     }
 
     // Only allow doctors and brand users to upload treatment logos for their own clinic's treatments
-    if (user.role !== 'doctor' && user.role !== 'brand') {
+    if (!user.hasAnyRoleSync(['doctor', 'brand'])) {
       return res.status(403).json({
         success: false,
         message: "Only doctors and brand users can upload treatment logos"
@@ -2927,7 +2942,9 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
     const { name, defaultQuestionnaire } = validation.data;
 
     // Fetch full user data from database to get clinicId
-    const user = await User.findByPk(currentUser.id);
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }]
+    });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -2936,7 +2953,7 @@ app.post("/treatments", authenticateJWT, async (req, res) => {
     }
 
     // Only allow doctors and brand users to create treatments
-    if ((user.role !== 'doctor' && user.role !== 'brand') || !user.clinicId) {
+    if (!user.hasAnyRoleSync(['doctor', 'brand']) || !user.clinicId) {
       return res.status(403).json({
         success: false,
         message: "Only doctors and brand users with a clinic can create treatments"
@@ -5081,7 +5098,9 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
 
     // Fetch full user data from database to get clinicId
     console.log('🔍 [ORDERS/:ID] Fetching user from database...');
-    const user = await User.findByPk(currentUser.id);
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }]
+    });
 
     if (!user) {
       console.log('❌ [ORDERS/:ID] User not found in database');
@@ -5102,13 +5121,14 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
     let accessType = 'unknown';
 
     // If user is a patient, only allow access to their own orders
-    if (user.role === 'patient') {
+    if (user.hasRoleSync('patient')) {
       whereClause.userId = currentUser.id;
       accessType = 'patient_own_orders';
       console.log('🔍 [ORDERS/:ID] Patient access - restricting to own orders');
-    } else if (user.role === 'doctor' || user.role === 'brand') {
+    } else if (user.hasAnyRoleSync(['doctor', 'brand'])) {
+      const activeRoles = user.userRoles?.getActiveRoles() || [user.role];
       accessType = 'clinic_access';
-      console.log(`🔍 [ORDERS/:ID] ${user.role.toUpperCase()} access - checking order belongs to clinic`);
+      console.log(`🔍 [ORDERS/:ID] ${activeRoles.join('/').toUpperCase()} access - checking order belongs to clinic`);
 
       // For doctors and brand users, find the order and check if it belongs to their clinic
       console.log('🔍 [ORDERS/:ID] Finding order by ID...');
@@ -5399,8 +5419,17 @@ app.post("/brand-subscriptions/create-payment-intent", authenticateJWT, async (r
   try {
 
     const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
 
-    if (currentUser?.role !== 'brand') {
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }]
+    });
+    if (!user || !user.hasRoleSync('brand')) {
       console.error('❌ BACKEND CREATE: Access denied - not brand role')
       return res.status(403).json({
         success: false,
@@ -5430,14 +5459,7 @@ app.post("/brand-subscriptions/create-payment-intent", authenticateJWT, async (r
       });
     }
 
-    // Get full user data from database
-    const user = await User.findByPk(currentUser.id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found"
-      });
-    }
+    // User already fetched above
 
 
     // Create or retrieve Stripe customer
@@ -5516,8 +5538,17 @@ app.post("/brand-subscriptions/create-payment-intent", authenticateJWT, async (r
 app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
 
-    if (!currentUser || currentUser.role !== 'brand') {
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }]
+    });
+    if (!user || !user.hasRoleSync('brand')) {
       return res.status(403).json({
         success: false,
         message: "Access denied. Brand role required."
@@ -5543,8 +5574,17 @@ app.post("/confirm-payment-intent", authenticateJWT, async (req, res) => {
 app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
   try {
     const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
 
-    if (currentUser?.role !== 'brand') {
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }]
+    });
+    if (!user || !user.hasRoleSync('brand')) {
       return res.status(403).json({
         success: false,
         message: "Access denied. Brand role required."
@@ -5778,8 +5818,10 @@ app.get("/admin/tenants", authenticateJWT, async (req, res) => {
     }
 
     // Only admins can list tenants
-    const user = await User.findByPk(currentUser.id);
-    if (!user || user.role !== 'admin') {
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }]
+    });
+    if (!user || !user.hasRoleSync('admin')) {
       return res.status(403).json({ success: false, message: "Forbidden" });
     }
 
@@ -5816,8 +5858,10 @@ app.get("/admin/tenants/:userId/questionnaires", authenticateJWT, async (req, re
     }
 
     // Only admins can view questionnaires for a tenant
-    const user = await User.findByPk(currentUser.id);
-    if (!user || user.role !== 'admin') {
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }]
+    });
+    if (!user || !user.hasRoleSync('admin')) {
       return res.status(403).json({ success: false, message: "Forbidden" });
     }
 
@@ -9592,7 +9636,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'doctor') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('doctor')) {
         return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
       }
 
@@ -9634,7 +9681,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'doctor') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('doctor')) {
         return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
       }
 
@@ -9680,7 +9730,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'doctor') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('doctor')) {
         return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
       }
 
@@ -9747,7 +9800,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'doctor') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('doctor')) {
         return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
       }
 
@@ -9856,7 +9912,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'doctor') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('doctor')) {
         return res.status(403).json({ success: false, message: "Access denied. Doctor role required." });
       }
 
@@ -9910,7 +9969,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'patient') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('patient')) {
         return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
       }
 
@@ -9941,7 +10003,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'patient') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('patient')) {
         return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
       }
 
@@ -10039,7 +10104,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'patient') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('patient')) {
         return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
       }
 
@@ -10106,7 +10174,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'patient') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('patient')) {
         return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
       }
 
@@ -10215,7 +10286,10 @@ async function startServer() {
         return res.status(401).json({ success: false, message: "Not authenticated" });
       }
 
-      if (currentUser.role !== 'patient') {
+      const user = await User.findByPk(currentUser.id, {
+        include: [{ model: UserRoles, as: 'userRoles', required: false }]
+      });
+      if (!user || !user.hasRoleSync('patient')) {
         return res.status(403).json({ success: false, message: "Access denied. Patient role required." });
       }
 
@@ -10539,14 +10613,17 @@ app.get("/brand-treatments", authenticateJWT, async (req, res) => {
     }
 
     const user = await User.findByPk(currentUser.id, {
-      include: [Clinic],
+      include: [
+        Clinic,
+        { model: UserRoles, as: 'userRoles', required: false }
+      ],
     });
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    if (user.role !== "brand") {
+    if (!user.hasRoleSync("brand")) {
       return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
     }
 
@@ -10594,13 +10671,15 @@ app.post("/brand-treatments", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const user = await User.findByPk(currentUser.id);
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }]
+    });
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    if (user.role !== "brand") {
+    if (!user.hasRoleSync("brand")) {
       return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
     }
 
@@ -10653,13 +10732,15 @@ app.delete("/brand-treatments", authenticateJWT, async (req, res) => {
       return res.status(401).json({ success: false, message: "Not authenticated" });
     }
 
-    const user = await User.findByPk(currentUser.id);
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }]
+    });
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    if (user.role !== "brand") {
+    if (!user.hasRoleSync("brand")) {
       return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
     }
 
@@ -10693,14 +10774,17 @@ app.get("/brand-treatments/published", authenticateJWT, async (req, res) => {
     }
 
     const user = await User.findByPk(currentUser.id, {
-      include: [Clinic],
+      include: [
+        Clinic,
+        { model: UserRoles, as: 'userRoles', required: false }
+      ],
     });
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    if (user.role !== 'brand') {
+    if (!user.hasRoleSync('brand')) {
       return res.status(403).json({ success: false, message: "Access denied. Brand role required." });
     }
 
