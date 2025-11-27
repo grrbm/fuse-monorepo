@@ -9,6 +9,7 @@ import UserPatient from './UserPatient';
 import BrandSubscription from './BrandSubscription';
 import TenantCustomFeatures from './TenantCustomFeatures';
 import TenantAnalyticsEvents from './TenantAnalyticsEvents';
+import UserRoles from './UserRoles';
 
 @Table({
   freezeTableName: true,
@@ -162,6 +163,11 @@ export default class User extends Entity {
   })
   declare planSelectionTimestamp?: Date;
 
+  /**
+   * @deprecated This field is deprecated. Use the UserRoles table instead for multi-role support.
+   * This field is maintained for backwards compatibility only.
+   * To check roles, use: await user.getUserRoles() or include UserRoles in your query.
+   */
   @Column({
     type: DataType.ENUM('patient', 'doctor', 'admin', 'brand'),
     allowNull: false,
@@ -286,6 +292,9 @@ export default class User extends Entity {
   @HasMany(() => TenantAnalyticsEvents)
   declare analyticsEvents: TenantAnalyticsEvents[];
 
+  @HasOne(() => UserRoles, 'userId')
+  declare userRoles?: UserRoles;
+
   // Instance methods
   public async validatePassword(password: string): Promise<boolean> {
     return bcrypt.compare(password, this.passwordHash);
@@ -320,9 +329,91 @@ export default class User extends Entity {
     await this.save();
   }
 
+  /**
+   * Get or create UserRoles for this user
+   */
+  public async getUserRoles(): Promise<UserRoles> {
+    if (this.userRoles) {
+      return this.userRoles;
+    }
+
+    let roles = await UserRoles.findOne({ where: { userId: this.id } });
+    if (!roles) {
+      // Create roles based on deprecated role field
+      roles = await UserRoles.create({
+        userId: this.id,
+        patient: this.role === 'patient',
+        doctor: this.role === 'doctor',
+        admin: this.role === 'admin',
+        brand: this.role === 'brand',
+      });
+    }
+    this.userRoles = roles;
+    return roles;
+  }
+
+  /**
+   * Check if user has a specific role (async)
+   * Loads UserRoles from database if not already loaded
+   */
+  public async hasRole(role: 'patient' | 'doctor' | 'admin' | 'brand'): Promise<boolean> {
+    const roles = await this.getUserRoles();
+    return roles.hasRole(role);
+  }
+
+  /**
+   * Check if user has any of the specified roles (async)
+   * Loads UserRoles from database if not already loaded
+   */
+  public async hasAnyRole(roles: Array<'patient' | 'doctor' | 'admin' | 'brand'>): Promise<boolean> {
+    const userRoles = await this.getUserRoles();
+    return userRoles.hasAnyRole(roles);
+  }
+
+  /**
+   * Check if user has all of the specified roles (async)
+   * Loads UserRoles from database if not already loaded
+   */
+  public async hasAllRoles(roles: Array<'patient' | 'doctor' | 'admin' | 'brand'>): Promise<boolean> {
+    const userRoles = await this.getUserRoles();
+    return userRoles.hasAllRoles(roles);
+  }
+
+  /**
+   * Synchronous role check - USE THIS for authorization checks
+   * Works with UserRoles if loaded, falls back to deprecated role field
+   * 
+   * Note: Make sure to include UserRoles in your query or this will use the deprecated role field
+   * Example: User.findByPk(id, { include: [{ model: UserRoles, as: 'userRoles' }] })
+   */
+  public hasRoleSync(role: 'patient' | 'doctor' | 'admin' | 'brand'): boolean {
+    // If userRoles is loaded, use it
+    if (this.userRoles) {
+      return this.userRoles.hasRole(role);
+    }
+    // Fallback to deprecated role field
+    return this.role === role;
+  }
+
+  /**
+   * Synchronous check for any role - USE THIS for authorization checks
+   * Works with UserRoles if loaded, falls back to deprecated role field
+   * 
+   * Note: Make sure to include UserRoles in your query or this will use the deprecated role field
+   * Example: User.findByPk(id, { include: [{ model: UserRoles, as: 'userRoles' }] })
+   */
+  public hasAnyRoleSync(roles: Array<'patient' | 'doctor' | 'admin' | 'brand'>): boolean {
+    // If userRoles is loaded, use it
+    if (this.userRoles) {
+      return this.userRoles.hasAnyRole(roles);
+    }
+    // Fallback to deprecated role field
+    return roles.includes(this.role);
+  }
+
   // Return user data without sensitive information (for API responses)
   public toSafeJSON() {
-    return {
+    const json: any = {
       id: this.id,
       firstName: this.firstName,
       lastName: this.lastName,
@@ -335,11 +426,18 @@ export default class User extends Entity {
       city: this.city,
       state: this.state,
       zipCode: this.zipCode,
-      role: this.role,
+      role: this.role, // @deprecated - use roles array instead
       clinicId: this.clinicId,
       createdAt: this.createdAt,
       lastLoginAt: this.lastLoginAt,
     };
+
+    // Include roles if userRoles is loaded
+    if (this.userRoles) {
+      json.roles = this.userRoles.getActiveRoles();
+    }
+
+    return json;
   }
 
   // Static methods
