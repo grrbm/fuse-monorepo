@@ -20,6 +20,7 @@ const PATIENT_PUBLIC_PATH_PATTERNS = [
   ...PUBLIC_PATH_PATTERNS,
   '/my-products',
   '/my-products/[...rest]',
+  '/verify-email',
 ] as const
 
 const matchesPublicPattern = (pattern: string, pathname: string, asPath: string) => {
