@@ -4,6 +4,7 @@ import User from '../models/User';
 import BrandSubscription from '../models/BrandSubscription';
 import BrandSubscriptionPlans from '../models/BrandSubscriptionPlans';
 import TenantCustomFeatures from '../models/TenantCustomFeatures';
+import UserRoles from '../models/UserRoles';
 import { createJWTToken } from '../config/jwt';
 
 export function registerClientManagementEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
@@ -86,6 +87,11 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
           {
             model: TenantCustomFeatures,
             as: 'tenantCustomFeatures',
+            required: false,
+          },
+          {
+            model: UserRoles,
+            as: 'userRoles',
             required: false,
           }
         ],
@@ -171,6 +177,11 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
           {
             model: TenantCustomFeatures,
             as: 'tenantCustomFeatures',
+            required: false,
+          },
+          {
+            model: UserRoles,
+            as: 'userRoles',
             required: false,
           }
         ],
@@ -363,7 +374,92 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
     }
   });
 
-  // Update user role
+  // Update user roles (multi-role support)
+  app.patch("/admin/users/:userId/roles", authenticateJWT, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: "Not authenticated" });
+      }
+
+      const adminUser = await User.findByPk(currentUser.id);
+      if (!adminUser) {
+        return res.status(403).json({ success: false, message: "Forbidden" });
+      }
+
+      const { userId } = req.params;
+      const { patient, doctor, admin, brand } = req.body;
+
+      // Validate at least one boolean was provided
+      if (typeof patient !== 'boolean' && typeof doctor !== 'boolean' && 
+          typeof admin !== 'boolean' && typeof brand !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          message: 'At least one role must be specified (patient, doctor, admin, brand)'
+        });
+      }
+
+      // Find the target user
+      const targetUser = await User.findByPk(userId);
+      if (!targetUser) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      // Get or create UserRoles
+      let userRoles = await UserRoles.findOne({ where: { userId } });
+      
+      if (!userRoles) {
+        // Create new UserRoles record
+        userRoles = await UserRoles.create({
+          userId,
+          patient: patient ?? false,
+          doctor: doctor ?? false,
+          admin: admin ?? false,
+          brand: brand ?? false,
+        });
+        console.log(`✅ [Client Mgmt] Created UserRoles for user ${userId}`);
+      } else {
+        // Update existing roles
+        const updates: any = {};
+        if (typeof patient === 'boolean') updates.patient = patient;
+        if (typeof doctor === 'boolean') updates.doctor = doctor;
+        if (typeof admin === 'boolean') updates.admin = admin;
+        if (typeof brand === 'boolean') updates.brand = brand;
+
+        await userRoles.update(updates);
+        console.log(`✅ [Client Mgmt] Updated UserRoles for user ${userId}:`, updates);
+      }
+
+      // Also update the deprecated role field to the first active role for backwards compatibility
+      const activeRoles = userRoles.getActiveRoles();
+      if (activeRoles.length > 0) {
+        await targetUser.update({ role: activeRoles[0] });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'User roles updated successfully',
+        data: {
+          id: targetUser.id,
+          roles: userRoles.getActiveRoles(),
+          email: targetUser.email,
+          firstName: targetUser.firstName,
+          lastName: targetUser.lastName,
+          // Include individual role flags
+          patient: userRoles.patient,
+          doctor: userRoles.doctor,
+          admin: userRoles.admin,
+          brand: userRoles.brand,
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error updating user roles:', error);
+      res.status(500).json({ success: false, message: 'Failed to update user roles' });
+    }
+  });
+
+  // Legacy endpoint for backwards compatibility - updates single role via deprecated field
+  // @deprecated Use PATCH /admin/users/:userId/roles instead
   app.patch("/admin/users/:userId/role", authenticateJWT, async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
@@ -394,10 +490,30 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         return res.status(404).json({ success: false, message: 'User not found' });
       }
 
-      // Update the role
+      // Update UserRoles table - set only the specified role to true, others to false
+      let userRoles = await UserRoles.findOne({ where: { userId } });
+      
+      if (!userRoles) {
+        userRoles = await UserRoles.create({
+          userId,
+          patient: role === 'patient',
+          doctor: role === 'doctor',
+          admin: role === 'admin',
+          brand: role === 'brand',
+        });
+      } else {
+        await userRoles.update({
+          patient: role === 'patient',
+          doctor: role === 'doctor',
+          admin: role === 'admin',
+          brand: role === 'brand',
+        });
+      }
+
+      // Update the deprecated role field for backwards compatibility
       await targetUser.update({ role });
 
-      console.log(`✅ [Client Mgmt] Updated user ${userId} role from ${targetUser.role} to ${role}`);
+      console.log(`✅ [Client Mgmt] Updated user ${userId} role to ${role} (legacy endpoint)`);
 
       res.status(200).json({
         success: true,
@@ -405,6 +521,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         data: {
           id: targetUser.id,
           role: targetUser.role,
+          roles: userRoles.getActiveRoles(),
           email: targetUser.email,
           firstName: targetUser.firstName,
           lastName: targetUser.lastName
