@@ -30,7 +30,7 @@ const navigation = [
   { name: "Plans", icon: Crown, current: false, href: "/plans" },
 ]
 
-const operations = [
+const allOperations = [
   { name: "Treatments", icon: Stethoscope, current: false, href: "#", comingSoon: true },
   // { name: "Offerings", icon: Gift, current: false, href: "/offerings" },
   { name: "Products", icon: Package, current: false, href: "/products", id: "tutorial-step-3" },
@@ -63,6 +63,14 @@ export function Sidebar() {
     }
     return false;
   });
+
+  // Filter out Sequences, Templates, Contacts, and Tags in production
+  const operations = allOperations.filter(item => {
+    if (process.env.NODE_ENV === 'production') {
+      return !['Sequences', 'Templates', 'Contacts', 'Tags'].includes(item.name)
+    }
+    return true
+  })
 
   // Check if user has access to analytics based on tier or custom features
   const hasAccessToAnalytics =
@@ -245,6 +253,16 @@ export function Sidebar() {
         {/* Operations Section */}
         <div className="pt-6">
           <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Operations</h3>
+          {process.env.NODE_ENV !== 'production' && (
+            <div className="px-3 mb-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+              <p className="text-xs text-amber-800 dark:text-amber-200 font-medium">
+                ⚠️ Testing Mode
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                Sequences, Templates, Contacts, and Tags are being tested and won't be available in production.
+              </p>
+            </div>
+          )}
           <div className="space-y-1">
             {operations.map((item) => renderSidebarItem(item, 'operations'))}
           </div>

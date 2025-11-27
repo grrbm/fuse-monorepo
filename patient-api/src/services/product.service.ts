@@ -45,7 +45,7 @@ class ProductService {
         const where: any = {}
 
         // If user is a brand, only show their own custom products and standard products (null brandId)
-        if (user?.role === 'brand') {
+        if (user?.hasRoleSync('brand')) {
             where[Op.or] = [
                 { brandId: userId },      // Their own custom products
                 { brandId: null }         // Standard platform products
@@ -121,11 +121,12 @@ class ProductService {
             }
 
             // Allow admins, doctors, and brand users to update product fields (e.g., isActive)
-            if (user.role !== 'admin' && user.role !== 'doctor' && user.role !== 'brand') {
+            if (!user.hasAnyRoleSync(['admin', 'doctor', 'brand'])) {
+                const roles = user.userRoles?.getActiveRoles() || [user.role]; // Fallback for deprecated role
                 return {
                     success: false,
                     message: "Access denied",
-                    error: `Only admin, doctor, or brand users can update products. Your role: ${user.role}`
+                    error: `Only admin, doctor, or brand users can update products. Your roles: ${roles.join(', ')}`
                 };
             }
 
@@ -142,7 +143,7 @@ class ProductService {
                 ...restInput,
                 categories,
                 isActive: input.isActive ?? true,
-                brandId: user.role === 'brand' ? userId : undefined,
+                brandId: user.hasRoleSync('brand') ? userId : undefined,
             })
 
             // If there are requiredDoctorQuestions, create a FormSectionTemplate
@@ -208,11 +209,12 @@ class ProductService {
             }
 
             // Allow admins, doctors, and brand users to update product fields
-            if (user.role !== 'admin' && user.role !== 'doctor' && user.role !== 'brand') {
+            if (!user.hasAnyRoleSync(['admin', 'doctor', 'brand'])) {
+                const roles = user.userRoles?.getActiveRoles() || [user.role]; // Fallback for deprecated role
                 return {
                     success: false,
                     message: "Access denied",
-                    error: `Only admin, doctor, or brand users can update products. Your role: ${user.role}`
+                    error: `Only admin, doctor, or brand users can update products. Your roles: ${roles.join(', ')}`
                 };
             }
 
@@ -345,14 +347,14 @@ class ProductService {
             }
 
             // Only allow brand users to delete their own products, or admins to delete any
-            if (user.role === 'brand') {
+            if (user.hasRoleSync('brand')) {
                 if (product.brandId !== userId) {
                     return {
                         success: false,
                         message: 'You can only delete products that you created',
                     }
                 }
-            } else if (user.role !== 'admin') {
+            } else if (!user.hasRoleSync('admin')) {
                 return {
                     success: false,
                     message: 'Only brand users can delete their own products, or admins can delete any product',
@@ -437,11 +439,12 @@ class ProductService {
             }
 
             // Only allow doctors and brand users
-            if (user.role !== 'doctor' && user.role !== 'brand') {
+            if (!user.hasAnyRoleSync(['doctor', 'brand'])) {
+                const roles = user.userRoles?.getActiveRoles() || [user.role]; // Fallback for deprecated role
                 return {
                     success: false,
                     message: "Access denied",
-                    error: `Only doctors and brand users can access products. Your role: ${user.role}`
+                    error: `Only doctors and brand users can access products. Your roles: ${roles.join(', ')}`
                 };
             }
 
@@ -454,7 +457,8 @@ class ProductService {
                 };
             }
 
-            console.log(`🛍️ Fetching products for clinic: ${clinicId}, user role: ${user.role}, user clinicId: ${user.clinicId}`);
+            const userRoles = user.userRoles?.getActiveRoles() || [user.role]; // Fallback for deprecated role
+            console.log(`🛍️ Fetching products for clinic: ${clinicId}, user roles: ${userRoles.join(', ')}, user clinicId: ${user.clinicId}`);
 
             const result = await listProductsByClinic(
                 clinicId,
