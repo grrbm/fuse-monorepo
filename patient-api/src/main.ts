@@ -811,19 +811,25 @@ app.post("/auth/google", async (req, res) => {
     let user = await User.findByEmail(email);
 
     if (!user) {
-      // Create new user with Google account
-      user = await User.create({
+      // Create new user with Google account using createUser to automatically create UserRoles
+      user = await User.createUser({
         email,
         firstName,
         lastName,
-        role: 'patient',
-        activated: true, // Google accounts are pre-verified
         password: Math.random().toString(36).slice(-16) + 'Aa1!', // Random password (won't be used)
-        clinicId: clinicId || null
+        role: 'patient',
       });
+
+      // Set additional fields
+      user.activated = true; // Google accounts are pre-verified
+      user.clinicId = clinicId || null;
+      await user.save();
 
       console.log('✅ New user created via Google:', user.email);
     }
+
+    // Load UserRoles for the user
+    await user.getUserRoles();
 
     // Update last login time
     await user.updateLastLogin();
@@ -872,6 +878,9 @@ app.post("/auth/signin", async (req, res) => {
         message: "Invalid email or password"
       });
     }
+
+    // Load UserRoles for the user
+    await user.getUserRoles();
 
     // Validate password (permanent or temporary)
     const isValidPassword = await user.validateAnyPassword(password);

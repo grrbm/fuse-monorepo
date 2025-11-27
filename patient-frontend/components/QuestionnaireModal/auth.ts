@@ -35,7 +35,7 @@ export const signInUser = async (
 
       // Extract user data from response
       const userData = result.data.user || result.data;
-      
+
       return {
         success: true,
         userData: {
@@ -49,21 +49,21 @@ export const signInUser = async (
     } else {
       // Handle specific error messages from the API
       const errorData = result.data || result;
-      
+
       if (errorData?.needsActivation) {
         return {
           success: false,
           error: 'Please check your email and activate your account before signing in.'
         };
       }
-      
+
       if (errorData?.message) {
         return {
           success: false,
           error: errorData.message
         };
       }
-      
+
       return {
         success: false,
         error: 'Invalid email or password. Please try again.'
@@ -71,7 +71,7 @@ export const signInUser = async (
     }
   } catch (error: any) {
     console.error('❌ Sign-in error:', error);
-    
+
     // Handle network or API errors
     if (error?.message?.includes('401')) {
       return {
@@ -79,14 +79,14 @@ export const signInUser = async (
         error: 'Invalid email or password. Please check your credentials.'
       };
     }
-    
+
     if (error?.message?.includes('404')) {
       return {
         success: false,
         error: 'Sign-in service not available. Please try again later.'
       };
     }
-    
+
     return {
       success: false,
       error: 'Failed to sign in. Please check your internet connection and try again.'
@@ -120,7 +120,7 @@ export const createUserAccount = async (
         email,
         phoneNumber,
         password: Math.random().toString(36).slice(-12) + 'Aa1!', // Generate stronger password
-        role: 'patient',
+        role: 'patient', // Backend automatically creates UserRoles entry with patient: true
         clinicId: clinicId || null
       })
     });
@@ -232,14 +232,14 @@ export const verifyCode = async (
     }
   } catch (error: any) {
     console.error('❌ Verify code error:', error);
-    
+
     if (error?.message?.includes('401')) {
       return {
         success: false,
         error: 'Invalid or expired verification code'
       };
     }
-    
+
     return {
       success: false,
       error: 'Verification failed. Please try again.'
@@ -270,7 +270,7 @@ export const signInWithGoogle = async (
 
       // Extract user data from response
       const userData = result.data.user || result.data;
-      
+
       return {
         success: true,
         userData: {

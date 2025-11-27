@@ -458,19 +458,31 @@ export default class User extends Entity {
     businessType?: string;
   }): Promise<User> {
     const passwordHash = await this.hashPassword(userData.password);
+    const finalRole = userData.role || 'patient';
 
-    return this.create({
+    const user = await this.create({
       firstName: userData.firstName,
       lastName: userData.lastName,
       email: userData.email.toLowerCase().trim(),
       passwordHash,
-      role: userData.role || 'patient',
+      role: finalRole, // @deprecated - kept for backwards compatibility
       dob: userData.dob,
       phoneNumber: userData.phoneNumber,
       website: userData.website,
       businessType: userData.businessType,
       consentGivenAt: new Date(), // Record consent when user signs up
     });
+
+    // Create UserRoles entry for the new user
+    await UserRoles.create({
+      userId: user.id,
+      patient: finalRole === 'patient',
+      doctor: finalRole === 'doctor',
+      admin: finalRole === 'admin',
+      brand: finalRole === 'brand',
+    });
+
+    return user;
   }
 
   public static async findByEmail(email: string): Promise<User | null> {
