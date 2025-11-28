@@ -33,11 +33,39 @@ export default function Forms() {
   const [deletingForProductId, setDeletingForProductId] = useState<string | null>(null)
   const [productQStatus, setProductQStatus] = useState<Record<string, 'unknown' | 'exists' | 'none'>>({})
   const [productInfoById, setProductInfoById] = useState<Record<string, { placeholderSig?: string }>>({})
+  const [productFormTemplates, setProductFormTemplates] = useState<Array<{ id: string; title: string; description: string }>>([])
 
   useEffect(() => {
     refresh()
     refreshQuestionnaires()
   }, [])
+
+  // Fetch product form templates
+  useEffect(() => {
+    const fetchProductFormTemplates = async () => {
+      if (!token) return
+
+      try {
+        const res = await fetch(`${baseUrl}/questionnaires/templates/product-forms`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          const forms = Array.isArray(data?.data) ? data.data : []
+          setProductFormTemplates(forms.map((f: any) => ({
+            id: f.id,
+            title: f.title || 'Untitled Form',
+            description: f.description || ''
+          })))
+        }
+      } catch (error) {
+        console.error('Failed to fetch product form templates:', error)
+      }
+    }
+
+    fetchProductFormTemplates()
+  }, [token, baseUrl])
 
   // Probe product questionnaire existence for current assignments
   useEffect(() => {
@@ -353,8 +381,8 @@ export default function Forms() {
                 Configure product-specific forms and manage standardized question templates.
               </p>
             </div>
-            <button 
-              onClick={refresh} 
+            <button
+              onClick={refresh}
               disabled={loading}
               className="rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50"
             >
@@ -366,41 +394,37 @@ export default function Forms() {
           <div className="flex items-center gap-2 bg-white rounded-2xl p-1.5 w-fit shadow-sm border border-[#E5E7EB]">
             <button
               onClick={() => setActiveTab("products")}
-              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
-                activeTab === "products"
-                  ? "bg-[#4FA59C] text-white shadow-sm"
-                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
-              }`}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === "products"
+                ? "bg-[#4FA59C] text-white shadow-sm"
+                : "text-[#6B7280] hover:bg-[#F3F4F6]"
+                }`}
             >
-              Medical Questions
+              Medical Questions Templates
             </button>
             <button
               onClick={() => setActiveTab("templates")}
-              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
-                activeTab === "templates"
-                  ? "bg-[#4FA59C] text-white shadow-sm"
-                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
-              }`}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === "templates"
+                ? "bg-[#4FA59C] text-white shadow-sm"
+                : "text-[#6B7280] hover:bg-[#F3F4F6]"
+                }`}
             >
               Standardized Questions
             </button>
             <button
               onClick={() => setActiveTab("account")}
-              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
-                activeTab === "account"
-                  ? "bg-[#4FA59C] text-white shadow-sm"
-                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
-              }`}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === "account"
+                ? "bg-[#4FA59C] text-white shadow-sm"
+                : "text-[#6B7280] hover:bg-[#F3F4F6]"
+                }`}
             >
               Account Questions
             </button>
             <button
               onClick={() => setActiveTab("structure")}
-              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
-                activeTab === "structure"
-                  ? "bg-[#4FA59C] text-white shadow-sm"
-                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
-              }`}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === "structure"
+                ? "bg-[#4FA59C] text-white shadow-sm"
+                : "text-[#6B7280] hover:bg-[#F3F4F6]"
+                }`}
             >
               Global Structure
             </button>
@@ -412,20 +436,20 @@ export default function Forms() {
             </div>
           )}
 
-          {/* Products Tab */}
+          {/* Medical Questions Templates Tab */}
           {activeTab === "products" && (
             <>
               {/* Filters */}
               <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
                 <div className="p-6 pb-4 border-b border-[#E5E7EB]">
                   <h2 className="text-lg font-semibold text-[#1F2937]">Filter & Sort</h2>
-                  <p className="text-sm text-[#6B7280] mt-0.5">Find the product form you want to configure</p>
+                  <p className="text-sm text-[#6B7280] mt-0.5">Find the template you want to edit</p>
                 </div>
                 <div className="p-6">
-                  <div className="grid gap-4 md:grid-cols-4">
+                  <div className="grid gap-4 md:grid-cols-2">
                     {/* Search */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-[#4B5563]">Search Products</label>
+                      <label className="text-sm font-medium text-[#4B5563]">Search Templates</label>
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
                         <input
@@ -435,38 +459,6 @@ export default function Forms() {
                           className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
                         />
                       </div>
-                    </div>
-
-                    {/* Category Filter */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-[#4B5563]">Category</label>
-                      <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                      >
-                        {CATEGORY_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Status Filter */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-[#4B5563]">Status</label>
-                      <select
-                        value={selectedStatus}
-                        onChange={(e) => setSelectedStatus(e.target.value)}
-                        className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                      >
-                        {STATUS_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
                     </div>
 
                     {/* Sort */}
@@ -488,174 +480,170 @@ export default function Forms() {
                 </div>
               </div>
 
-              {/* Results Summary */}
+              {/* Results Summary and Create Button */}
               <div className="flex items-center justify-between text-sm text-[#6B7280]">
                 <span>
-                  Showing {filteredAndSortedAssignments.length} of {assignments.length} product forms
+                  Showing {(() => {
+                    const filtered = productFormTemplates.filter((q: any) => {
+                      const matchesSearch = !searchQuery ||
+                        q.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        q.description?.toLowerCase().includes(searchQuery.toLowerCase())
+                      return matchesSearch
+                    })
+                    return filtered.length
+                  })()} of {productFormTemplates.length} templates
                 </span>
                 <div className="flex items-center gap-3">
-                  {(searchQuery || selectedCategory || selectedStatus !== "all") && (
+                  {searchQuery && (
                     <button
                       onClick={() => {
                         setSearchQuery("")
-                        setSelectedCategory("")
-                        setSelectedStatus("all")
                       }}
                       className="px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1F2937] hover:bg-[#F3F4F6] rounded-xl transition-all"
                     >
                       Clear Filters
                     </button>
                   )}
-                  <div className="flex items-center gap-2">
-                    <button 
-                      disabled={page <= 1 || loading} 
-                      onClick={() => setPage(Math.max(1, page - 1))}
-                      className="px-4 py-2 text-sm font-medium border border-[#E5E7EB] rounded-xl text-[#4B5563] hover:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                      Prev
-                    </button>
-                    <span className="text-xs px-3">Page {page} / {totalPages}</span>
-                    <button 
-                      disabled={page >= totalPages || loading} 
-                      onClick={() => setPage(page + 1)}
-                      className="px-4 py-2 text-sm font-medium border border-[#E5E7EB] rounded-xl text-[#4B5563] hover:bg-[#F3F4F6] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                      Next
-                    </button>
-                  </div>
+                  <button
+                    onClick={async () => {
+                      if (!token) return
+                      setCreating(true)
+                      try {
+                        const response = await fetch(`${baseUrl}/questionnaires/templates`, {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({
+                            title: `New Template`,
+                            description: `Template created on ${new Date().toLocaleDateString()}`,
+                            formTemplateType: 'normal',
+                          }),
+                        })
+
+                        if (!response.ok) {
+                          const data = await response.json().catch(() => ({}))
+                          throw new Error(data.message || "Failed to create template")
+                        }
+
+                        const data = await response.json()
+                        const template = data.data
+
+                        router.push(`/forms/editor/${template.id}`)
+                      } catch (err: any) {
+                        console.error("Error creating template:", err)
+                        alert(err.message || "Failed to create template")
+                      } finally {
+                        setCreating(false)
+                      }
+                    }}
+                    disabled={creating}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium disabled:opacity-50"
+                  >
+                    <Plus className="h-5 w-5" />
+                    {creating ? 'Creating...' : 'Create New Template'}
+                  </button>
                 </div>
               </div>
 
-              {/* Product Forms List */}
+              {/* Templates List */}
               {loading ? (
                 <div className="flex h-64 items-center justify-center text-[#6B7280]">
                   <Loader2 className="mr-3 h-6 w-6 animate-spin text-[#4FA59C]" />
-                  <span className="text-base">Loading forms...</span>
+                  <span className="text-base">Loading templates...</span>
                 </div>
-              ) : filteredAndSortedAssignments.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-16">
-                  <div className="flex flex-col items-center justify-center text-[#6B7280]">
-                    <div className="bg-[#F3F4F6] rounded-full p-6 mb-4">
-                      <Search className="h-12 w-12 text-[#9CA3AF]" />
-                    </div>
-                    <p className="text-lg text-[#4B5563]">No product forms found matching your filters.</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredAndSortedAssignments.map((assignment) => {
-                    const locked = isLocked(assignment)
-                    const isLive = assignment.publishedUrl && assignment.lastPublishedAt
-                    const categoryLabel = CATEGORY_OPTIONS.find(c => c.value === assignment.treatment?.category)?.label
+              ) : (() => {
+                const filtered = productFormTemplates.filter((q: any) => {
+                  const matchesSearch = !searchQuery ||
+                    q.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    q.description?.toLowerCase().includes(searchQuery.toLowerCase())
+                  return matchesSearch
+                }).sort((a: any, b: any) => {
+                  const titleA = a.title || ""
+                  const titleB = b.title || ""
+                  switch (selectedSort) {
+                    case "name_asc":
+                      return titleA.localeCompare(titleB)
+                    case "name_desc":
+                      return titleB.localeCompare(titleA)
+                    default:
+                      return 0
+                  }
+                })
 
-                    return (
-                      <div key={assignment.id} className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden hover:shadow-md hover:border-[#4FA59C] transition-all">
+                return filtered.length === 0 ? (
+                  <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-16">
+                    <div className="flex flex-col items-center justify-center text-[#6B7280]">
+                      <div className="bg-[#F3F4F6] rounded-full p-6 mb-4">
+                        <Search className="h-12 w-12 text-[#9CA3AF]" />
+                      </div>
+                      <p className="text-lg text-[#4B5563]">No templates found matching your filters.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {filtered.map((template: any) => (
+                      <div key={template.id} className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden hover:shadow-md hover:border-[#4FA59C] transition-all">
                         <div className="p-6 pb-4 border-b border-[#E5E7EB]">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <h3 className="text-lg font-semibold text-[#1F2937]">{assignment.treatment?.name || "Untitled Product"}</h3>
-                              <div className="mt-2 flex items-center gap-2">
-                                {categoryLabel && (
-                                  <span className="inline-block px-2.5 py-1 bg-[#F3F4F6] text-[#4B5563] text-xs font-medium rounded-full border border-[#E5E7EB]">
-                                    {categoryLabel}
-                                  </span>
-                                )}
-                                {assignment?.treatmentId && productInfoById[assignment.treatmentId]?.placeholderSig && (
-                                  <div className="text-xs text-[#9CA3AF]">{productInfoById[assignment.treatmentId]?.placeholderSig}</div>
-                                )}
-                              </div>
+                              <h3 className="text-lg font-semibold text-[#1F2937]">{template.title || "Untitled Template"}</h3>
+                              {template.description && (
+                                <p className="text-sm text-[#6B7280] mt-2">{template.description}</p>
+                              )}
                             </div>
                           </div>
                         </div>
                         <div className="p-6 space-y-4">
-                          {/* Status Badges */}
-                          <div className="flex flex-wrap gap-2">
-                            {!assignment.hasAssignment ? (
-                              <span className="inline-block px-3 py-1 bg-[#F3F4F6] text-[#6B7280] text-xs font-medium rounded-full border border-[#E5E7EB] uppercase tracking-wide">
-                                Not Configured
-                              </span>
-                            ) : isLive ? (
-                              <span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-200 uppercase tracking-wide">
-                                Live
-                              </span>
-                            ) : (
-                              <span className="inline-block px-3 py-1 bg-yellow-50 text-[#F59E0B] text-xs font-medium rounded-full border border-yellow-200 uppercase tracking-wide">
-                                Pending
-                              </span>
-                            )}
-                            {locked && (
-                              <span className="inline-block px-3 py-1 bg-amber-50 text-amber-700 text-xs font-medium rounded-full border border-amber-200 uppercase tracking-wide flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                Locked
-                              </span>
-                            )}
-                            {assignment.hasAssignment && (
-                              <span className="inline-block px-3 py-1 bg-white text-[#4B5563] text-xs font-medium rounded-full border border-[#E5E7EB] uppercase tracking-wide">
-                                {assignment.layoutTemplate}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Metadata */}
-                          <div className="space-y-2 text-sm">
-                            {assignment.lastPublishedAt && (
-                              <div className="flex items-center justify-between py-2 border-t border-[#E5E7EB]">
-                                <span className="text-[#6B7280]">Last Updated:</span>
-                                <span className="font-medium text-[#1F2937]">
-                                  {new Date(assignment.lastPublishedAt).toLocaleDateString()}
-                                </span>
-                              </div>
-                            )}
-                            {locked && (
-                              <div className="flex items-center justify-between py-2 border-t border-[#E5E7EB]">
-                                <span className="text-[#6B7280]">Unlocks:</span>
-                                <span className="font-medium text-amber-600">
-                                  {new Date(assignment.lockedUntil!).toLocaleDateString()}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
                           {/* Actions */}
                           <div className="flex gap-2 pt-2">
                             <button
-                              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm transition-all ${
-                                assignment.hasAssignment 
-                                  ? 'bg-[#4FA59C] hover:bg-[#478F87] text-white'
-                                  : 'bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#4B5563] border border-[#E5E7EB]'
-                              } disabled:opacity-50 disabled:cursor-not-allowed`}
-                              onClick={() => handleConfigureProduct(assignment)}
-                              disabled={configuringProductId === assignment.treatmentId}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium shadow-sm transition-all bg-[#4FA59C] hover:bg-[#478F87] text-white"
+                              onClick={() => router.push(`/forms/editor/${template.id}`)}
                             >
                               <Edit3 className="h-4 w-4" />
-                              {configuringProductId === assignment.treatmentId
-                                ? 'Opening...'
-                                : (!assignment.hasAssignment ? "Configure Form" : locked ? "View Form" : "Edit Form")}
+                              Edit Template
                             </button>
-                            {productQStatus[assignment.treatmentId] !== 'exists' && (
-                              <button
-                                className="px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                onClick={() => handleCreateProductQuestionnaire(assignment)}
-                                disabled={creatingForProductId === assignment.treatmentId}
-                              >
-                                {creatingForProductId === assignment.treatmentId ? 'Creating...' : 'Create'}
-                              </button>
-                            )}
-                            {isLive && (
-                              <button
-                                className="p-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all"
-                                onClick={() => handleViewLive(assignment)}
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                              </button>
-                            )}
+                            <button
+                              className="px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#EF4444] hover:bg-[#FEF2F2] text-sm font-medium transition-all"
+                              onClick={async () => {
+                                if (!token) return
+                                if (!confirm('Delete this template? This cannot be undone.')) return
+                                try {
+                                  const res = await fetch(`${baseUrl}/questionnaires/${template.id}`, {
+                                    method: 'DELETE',
+                                    headers: { Authorization: `Bearer ${token}` },
+                                  })
+                                  const data = await res.json().catch(() => ({}))
+                                  if (!res.ok) throw new Error(data?.message || 'Failed to delete template')
+                                  // Refetch templates after deletion
+                                  const refetchRes = await fetch(`${baseUrl}/questionnaires/templates/product-forms`, {
+                                    headers: { Authorization: `Bearer ${token}` }
+                                  })
+                                  if (refetchRes.ok) {
+                                    const refetchData = await refetchRes.json()
+                                    const forms = Array.isArray(refetchData?.data) ? refetchData.data : []
+                                    setProductFormTemplates(forms.map((f: any) => ({
+                                      id: f.id,
+                                      title: f.title || 'Untitled Form',
+                                      description: f.description || ''
+                                    })))
+                                  }
+                                } catch (e: any) {
+                                  alert(e?.message || 'Failed to delete template')
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )
+              })()}
             </>
           )}
 
@@ -790,7 +778,7 @@ export default function Forms() {
                   </p>
                   {accountQuestionnaire ? (
                     <div className="grid grid-cols-2 gap-3">
-                      <button 
+                      <button
                         onClick={() => router.push(`/forms/editor/${accountQuestionnaire.id}`)}
                         className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
                       >
@@ -1034,7 +1022,7 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
 
   const handleSaveStructure = async () => {
     if (!token) return
-    
+
     setSaving(true)
     try {
       const newStructure: GlobalStructure = {
@@ -1082,7 +1070,7 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
 
     try {
       const updatedStructures = structures.filter(s => s.id !== id)
-      
+
       // Save to backend
       const response = await fetch(`${baseUrl}/global-form-structures`, {
         method: 'POST',
@@ -1206,7 +1194,7 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
                           </div>
                           {index < array.length - 1 && (
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-[#9CA3AF] flex-shrink-0">
-                              <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           )}
                         </div>
@@ -1279,73 +1267,70 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
               <div>
                 <h3 className="text-lg font-semibold text-[#1F2937] mb-3">Form Sections</h3>
 
-        <div className="p-6 space-y-3">
-          {sections.map((section, index) => (
-            <div
-              key={section.id}
-              draggable
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragEnd={handleDragEnd}
-              className={`bg-white border-2 rounded-xl p-5 transition-all cursor-move ${
-                draggedIndex === index ? 'border-[#4FA59C] shadow-lg scale-105' : 'border-[#E5E7EB] hover:border-[#D1D5DB]'
-              } ${!section.enabled ? 'opacity-60' : ''}`}
-            >
-              <div className="flex items-start gap-4">
-                {/* Drag Handle */}
-                <div className="flex-shrink-0 mt-1">
-                  <GripVertical className="h-5 w-5 text-[#9CA3AF]" />
-                </div>
+                <div className="p-6 space-y-3">
+                  {sections.map((section, index) => (
+                    <div
+                      key={section.id}
+                      draggable
+                      onDragStart={() => handleDragStart(index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragEnd={handleDragEnd}
+                      className={`bg-white border-2 rounded-xl p-5 transition-all cursor-move ${draggedIndex === index ? 'border-[#4FA59C] shadow-lg scale-105' : 'border-[#E5E7EB] hover:border-[#D1D5DB]'
+                        } ${!section.enabled ? 'opacity-60' : ''}`}
+                    >
+                      <div className="flex items-start gap-4">
+                        {/* Drag Handle */}
+                        <div className="flex-shrink-0 mt-1">
+                          <GripVertical className="h-5 w-5 text-[#9CA3AF]" />
+                        </div>
 
-                {/* Icon */}
-                <div className="flex-shrink-0">
-                  <div className="w-12 h-12 bg-[#F3F4F6] rounded-xl flex items-center justify-center text-2xl">
-                    {section.icon}
-                  </div>
-                </div>
+                        {/* Icon */}
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 bg-[#F3F4F6] rounded-xl flex items-center justify-center text-2xl">
+                            {section.icon}
+                          </div>
+                        </div>
 
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-1">
-                    <h3 className="font-semibold text-[#1F2937]">{section.label}</h3>
-                    <span className="px-2 py-0.5 bg-[#F3F4F6] text-[#6B7280] rounded-full text-xs font-medium">
-                      Step {index + 1}
-                    </span>
-                  </div>
-                  <p className="text-sm text-[#6B7280]">{section.description}</p>
-                  
-                  {/* Section-specific info */}
-                  {section.type === 'category_questions' && (
-                    <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-purple-50 border border-purple-200 rounded-lg">
-                      <span className="text-xs text-purple-700">✨ Supports Variants (Variant 1, Variant 2)</span>
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h3 className="font-semibold text-[#1F2937]">{section.label}</h3>
+                            <span className="px-2 py-0.5 bg-[#F3F4F6] text-[#6B7280] rounded-full text-xs font-medium">
+                              Step {index + 1}
+                            </span>
+                          </div>
+                          <p className="text-sm text-[#6B7280]">{section.description}</p>
+
+                          {/* Section-specific info */}
+                          {section.type === 'category_questions' && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-purple-50 border border-purple-200 rounded-lg">
+                              <span className="text-xs text-purple-700">✨ Supports Variants (Variant 1, Variant 2)</span>
+                            </div>
+                          )}
+                          {(section.type === 'account_creation' || section.type === 'checkout') && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-lg">
+                              <span className="text-xs text-green-700">🔒 Auto-injected by system</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Toggle */}
+                        <div className="flex-shrink-0">
+                          <button
+                            onClick={() => toggleSection(section.id)}
+                            disabled={section.type === 'account_creation' || section.type === 'checkout'}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${section.enabled ? 'bg-[#4FA59C]' : 'bg-gray-300'
+                              }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${section.enabled ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  {(section.type === 'account_creation' || section.type === 'checkout') && (
-                    <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-lg">
-                      <span className="text-xs text-green-700">🔒 Auto-injected by system</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Toggle */}
-                <div className="flex-shrink-0">
-                  <button
-                    onClick={() => toggleSection(section.id)}
-                    disabled={section.type === 'account_creation' || section.type === 'checkout'}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      section.enabled ? 'bg-[#4FA59C]' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        section.enabled ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+                  ))}
                 </div>
               </div>
 
