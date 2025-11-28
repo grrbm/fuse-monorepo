@@ -89,6 +89,8 @@ export default function TemplateEditor() {
   const [editingConditionalStepId, setEditingConditionalStepId] = useState<string | null>(null)
   const [hoveredConditionalStepId, setHoveredConditionalStepId] = useState<string | null>(null)
   const stepRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const [editingTemplateName, setEditingTemplateName] = useState(false)
+  const [tempTemplateName, setTempTemplateName] = useState("")
   const [selectedQuestionForConditional, setSelectedQuestionForConditional] = useState<{
     stepId: string
     questionId: string
@@ -1923,8 +1925,88 @@ export default function TemplateEditor() {
                 {/* Metadata Cards */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
-                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Form Name</p>
-                    <p className="font-semibold text-foreground text-base">{template.title}</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Template Name</p>
+                    {editingTemplateName ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={tempTemplateName}
+                          onChange={(e) => setTempTemplateName(e.target.value)}
+                          className="flex-1 px-2 py-1 text-base font-semibold border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4FA59C]"
+                          autoFocus
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter') {
+                              if (!token || !templateId || typeof templateId !== 'string') return
+                              try {
+                                const res = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ name: tempTemplateName })
+                                })
+                                if (res.ok) {
+                                  const data = await res.json()
+                                  setTemplate(data.data)
+                                  setEditingTemplateName(false)
+                                  setSaveMessage("✅ Template name updated!")
+                                  setTimeout(() => setSaveMessage(null), 3000)
+                                }
+                              } catch (e: any) {
+                                console.error('Failed to update template name:', e)
+                              }
+                            } else if (e.key === 'Escape') {
+                              setEditingTemplateName(false)
+                              setTempTemplateName(template.title)
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!token || !templateId || typeof templateId !== 'string') return
+                            try {
+                              const res = await fetch(`${baseUrl}/questionnaires/templates/${templateId}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ name: tempTemplateName })
+                              })
+                              if (res.ok) {
+                                const data = await res.json()
+                                setTemplate(data.data)
+                                setEditingTemplateName(false)
+                                setSaveMessage("✅ Template name updated!")
+                                setTimeout(() => setSaveMessage(null), 3000)
+                              }
+                            } catch (e: any) {
+                              console.error('Failed to update template name:', e)
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-[#4FA59C] hover:bg-[#478F87] text-white transition-colors"
+                        >
+                          <Save className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingTemplateName(false)
+                            setTempTemplateName(template.title)
+                          }}
+                          className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between group">
+                        <p className="font-semibold text-foreground text-base">{template.title}</p>
+                        <button
+                          onClick={() => {
+                            setTempTemplateName(template.title)
+                            setEditingTemplateName(true)
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-muted transition-all"
+                        >
+                          <Edit className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="bg-card rounded-2xl p-5 shadow-md border border-border/40 hover:shadow-lg transition-shadow">
                     <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Status</p>
