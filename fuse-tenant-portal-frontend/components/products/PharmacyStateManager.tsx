@@ -55,6 +55,21 @@ interface PharmacyAssignment {
   form?: string
   rxId?: string
   pharmacy: Pharmacy
+  pharmacyCoverageId?: string
+  pharmacyCoverage?: {
+    id: string
+    customName: string
+    customSig: string
+  } | null
+}
+
+interface CoverageGroup {
+  key: string
+  coverageId?: string | null
+  pharmacy: Pharmacy
+  coverageName: string
+  coverageSig?: string
+  assignments: PharmacyAssignment[]
 }
 
 interface PharmacyStateManagerProps {
@@ -77,6 +92,19 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [selectedPharmacyProduct, setSelectedPharmacyProduct] = useState<PharmacyProduct | null>(null)
   const [productSearchQuery, setProductSearchQuery] = useState("")
+  const [customProductName, setCustomProductName] = useState("")
+  const [customSig, setCustomSig] = useState("")
+
+  const resetCoverageForm = () => {
+    setSelectedStates([])
+    setSelectedPharmacy("")
+    setSelectedPharmacyProduct(null)
+    setPharmacyProducts([])
+    setProductSearchQuery("")
+    setCustomProductName("")
+    setCustomSig("")
+    setError(null)
+  }
 
   useEffect(() => {
     fetchData()
@@ -173,6 +201,19 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   const handleAddAssignment = async () => {
     if (!token || !selectedPharmacy || selectedStates.length === 0) return
 
+    const trimmedName = customProductName.trim()
+    const trimmedSig = customSig.trim()
+
+    if (!trimmedName) {
+      setError("Custom product name is required")
+      return
+    }
+
+    if (!trimmedSig) {
+      setError("Custom SIG is required")
+      return
+    }
+
     try {
       setSaving(true)
       setError(null)
@@ -180,17 +221,19 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
       const payload: any = {
         pharmacyId: selectedPharmacy,
         states: selectedStates,
+        customName: trimmedName,
+        customSig: trimmedSig,
       }
 
-      // Include pharmacy product info if selected
+      payload.sig = trimmedSig
+
       if (selectedPharmacyProduct) {
         payload.pharmacyProductId = selectedPharmacyProduct.sku.toString()
         payload.pharmacyProductName = selectedPharmacyProduct.nameWithStrength || selectedPharmacyProduct.name
-        payload.sig = selectedPharmacyProduct.sig
         payload.pharmacyWholesaleCost = selectedPharmacyProduct.wholesalePrice || selectedPharmacyProduct.price
         payload.form = selectedPharmacyProduct.form
         payload.rxId = selectedPharmacyProduct.rxId
-        
+
         console.log('📦 Selected pharmacy product:', {
           sku: selectedPharmacyProduct.sku,
           name: selectedPharmacyProduct.name,
@@ -217,12 +260,7 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
         throw new Error(data.message || "Failed to assign pharmacy")
       }
 
-      // Reset form and refresh
-      setSelectedStates([])
-      setSelectedPharmacy("")
-      setSelectedPharmacyProduct(null)
-      setPharmacyProducts([])
-      setProductSearchQuery("")
+      resetCoverageForm()
       setShowAddForm(false)
       await fetchData()
     } catch (err: any) {
@@ -277,39 +315,80 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
     }
   }
 
-  const handleRemoveAllPharmacyAssignments = async (pharmacyId: string, pharmacyName: string) => {
-    if (!token || !confirm(`Remove all ${pharmacyName} coverage? This will delete all state assignments for this pharmacy.`)) return
+  const handleRemoveCoverageGroup = async ({
+    coverageId,
+    pharmacyId,
+    pharmacyName,
+    coverageName,
+  }: {
+    coverageId?: string | null
+    pharmacyId: string
+    pharmacyName: string
+    coverageName?: string
+  }) => {
+    if (!token) return
+
+    const label = coverageName ? `"${coverageName}"` : "this coverage"
+    if (!confirm(`Remove ${pharmacyName} coverage ${label}? This will delete all state assignments for this coverage.`)) return
 
     try {
-      const response = await fetch(`${baseUrl}/products/${productId}/pharmacies/${pharmacyId}/assignments`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      setSaving(true)
+      setError(null)
 
-      if (!response.ok) {
-        throw new Error("Failed to remove pharmacy coverage")
+      if (coverageId) {
+        const response = await fetch(`${baseUrl}/pharmacy-coverage/${coverageId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to remove pharmacy coverage")
+        }
+      } else {
+        const response = await fetch(`${baseUrl}/products/${productId}/pharmacies/${pharmacyId}/assignments`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to remove pharmacy coverage")
+        }
       }
 
       await fetchData()
     } catch (err) {
       console.error("Error removing pharmacy coverage:", err)
       setError("Failed to remove pharmacy coverage")
+    } finally {
+      setSaving(false)
     }
   }
 
-  // Group assignments by pharmacy
-  const groupedAssignments = assignments.reduce((acc, assignment) => {
-    const pharmacyId = assignment.pharmacyId
-    if (!acc[pharmacyId]) {
-      acc[pharmacyId] = {
+  const coverageGroups = assignments.reduce<Record<string, CoverageGroup>>((acc, assignment) => {
+    const coverageId = assignment.pharmacyCoverageId || null
+    const coverage = assignment.pharmacyCoverage
+
+    const key = coverageId ?? `legacy-${assignment.pharmacyId}-${assignment.pharmacyProductId || 'no-product'}-${assignment.sig || ''}`
+
+    if (!acc[key]) {
+      acc[key] = {
+        key,
+        coverageId,
         pharmacy: assignment.pharmacy,
-        states: []
+        coverageName: coverage?.customName || assignment.pharmacyProductName || `${assignment.pharmacy.name} Coverage`,
+        coverageSig: coverage?.customSig || assignment.sig || '',
+        assignments: []
       }
     }
-    acc[pharmacyId].states.push(assignment.state)
-    acc[pharmacyId].states.sort()
+
+    acc[key].assignments.push(assignment)
     return acc
-  }, {} as Record<string, { pharmacy: Pharmacy; states: string[] }>)
+  }, {})
+
+  const sortedCoverageGroups = Object.values(coverageGroups).map(group => ({
+    ...group,
+    assignments: [...group.assignments].sort((a, b) => a.state.localeCompare(b.state))
+  })).sort((a, b) => a.coverageName.localeCompare(b.coverageName))
 
   if (loading) {
     return (
@@ -332,7 +411,14 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
             <h2 className="text-xl font-semibold text-[#1F2937]">Pharmacy & State Coverage</h2>
           </div>
           <button 
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={() => {
+              if (!showAddForm) {
+                resetCoverageForm()
+                setShowAddForm(true)
+              } else {
+                setShowAddForm(false)
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
           >
             <Plus className="h-4 w-4" />
@@ -459,7 +545,16 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                                 type="radio"
                                 name="pharmacyProduct"
                                 checked={selectedPharmacyProduct?.id === product.id}
-                                onChange={() => setSelectedPharmacyProduct(product)}
+                                onChange={() => {
+                                  setSelectedPharmacyProduct(product)
+                                  const defaultName = product.nameWithStrength || product.name || ""
+                                  if (!customProductName && defaultName) {
+                                    setCustomProductName(defaultName)
+                                  }
+                                  if (!customSig && product.sig) {
+                                    setCustomSig(product.sig)
+                                  }
+                                }}
                                 className="mt-1 w-4 h-4 border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C]"
                               />
                               <div className="flex-1 min-w-0">
@@ -500,10 +595,51 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
               </div>
             )}
 
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium text-[#4B5563] mb-2 block">
+                  Custom Product Name
+                </label>
+                <input
+                  type="text"
+                  value={customProductName}
+                  onChange={(e) => setCustomProductName(e.target.value)}
+                  placeholder="e.g. NAD+ Wellness Kit"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                  maxLength={120}
+                />
+                <p className="text-xs text-[#9CA3AF] mt-1">
+                  Displayed on the coverage card. Keep it short and descriptive.
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-[#4B5563] mb-2 block">
+                  Custom SIG (Dispensing Instructions)
+                </label>
+                <textarea
+                  value={customSig}
+                  onChange={(e) => setCustomSig(e.target.value)}
+                  placeholder="e.g. Take 1 capsule daily with food."
+                  rows={3}
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all resize-none"
+                  maxLength={500}
+                />
+                <p className="text-xs text-[#9CA3AF] mt-1">
+                  This will appear on the coverage card and is saved with the assignment.
+                </p>
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={handleAddAssignment}
-                disabled={!selectedPharmacy || selectedStates.length === 0 || saving}
+                disabled={
+                  !selectedPharmacy ||
+                  selectedStates.length === 0 ||
+                  !customProductName.trim() ||
+                  !customSig.trim() ||
+                  saving
+                }
                 className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? (
@@ -516,7 +652,10 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                 )}
               </button>
               <button 
-                onClick={() => setShowAddForm(false)}
+                onClick={() => {
+                  resetCoverageForm()
+                  setShowAddForm(false)
+                }}
                 className="px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
               >
                 Cancel
@@ -528,7 +667,7 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
         {/* Current Assignments */}
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-[#9CA3AF] uppercase tracking-wider">Current Coverage</h3>
-          {Object.keys(groupedAssignments).length === 0 ? (
+          {sortedCoverageGroups.length === 0 ? (
             <div className="text-center p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl bg-[#F9FAFB]">
               <div className="bg-white rounded-full p-4 mx-auto w-fit mb-3">
                 <Building2 className="h-8 w-8 text-[#9CA3AF]" />
@@ -538,103 +677,125 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
               </p>
             </div>
           ) : (
-            Object.values(groupedAssignments).map(({ pharmacy, states }) => {
-              const firstAssignment = assignments.find(a => a.pharmacyId === pharmacy.id)
-              return (
-                <div key={pharmacy.id} className="p-5 border border-[#E5E7EB] rounded-2xl bg-white hover:shadow-md transition-all">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-[#1F2937] text-base">{pharmacy.name}</h4>
-                      <p className="text-sm text-[#6B7280] mt-0.5">{states.length} states covered</p>
-                      <div className="mt-3 space-y-2">
-                        {/* Show pharmacy product info if selected */}
-                        {firstAssignment?.pharmacyProductName && (
-                          <div className="space-y-1">
+            <>
+              {sortedCoverageGroups.map((group) => {
+                const firstAssignment = group.assignments[0]
+                const states = group.assignments.map(a => a.state)
+
+                return (
+                  <div key={group.key} className="p-5 border border-[#E5E7EB] rounded-2xl bg-white hover:shadow-md transition-all">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-[#1F2937] text-base">{group.coverageName}</h4>
+                        <p className="text-sm text-[#6B7280] mt-0.5">
+                          Managed by <span className="font-medium text-[#1F2937]">{group.pharmacy.name}</span> • {states.length} states covered
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {group.coverageSig && (
                             <div className="text-sm">
-                              <span className="text-[#9CA3AF]">Pharmacy Product: </span>
-                              <span className="font-medium text-[#1F2937]">{firstAssignment.pharmacyProductName}</span>
-                              {firstAssignment.pharmacyProductId && (
-                                <span className="text-[#9CA3AF] ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
+                              <span className="text-[#9CA3AF]">SIG: </span>
+                              <span className="text-[#1F2937] italic">{group.coverageSig}</span>
+                            </div>
+                          )}
+
+                          {firstAssignment?.pharmacyProductName && (
+                            <div className="space-y-1">
+                              <div className="text-sm">
+                                <span className="text-[#9CA3AF]">Pharmacy Product: </span>
+                                <span className="font-medium text-[#1F2937]">{firstAssignment.pharmacyProductName}</span>
+                                {firstAssignment.pharmacyProductId && (
+                                  <span className="text-[#9CA3AF] ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
+                                )}
+                              </div>
+                              {group.pharmacy.slug === 'ironsail' && firstAssignment.form && (
+                                <div className="text-sm">
+                                  <span className="text-[#9CA3AF]">Medication Form: </span>
+                                  <span className="text-[#1F2937]">{firstAssignment.form}</span>
+                                </div>
+                              )}
+                              {group.pharmacy.slug === 'ironsail' && firstAssignment.rxId && (
+                                <div className="text-sm">
+                                  <span className="text-[#9CA3AF]">RX ID: </span>
+                                  <span className="text-[#1F2937] font-mono">{firstAssignment.rxId}</span>
+                                </div>
                               )}
                             </div>
-                            {firstAssignment.sig && (
-                              <div className="text-sm">
-                                <span className="text-[#9CA3AF]">SIG: </span>
-                                <span className="text-[#1F2937] italic">{firstAssignment.sig}</span>
+                          )}
+
+                          {firstAssignment && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[#9CA3AF] text-sm">Wholesale Price:</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm text-[#4B5563]">$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  className="w-24 h-8 text-sm px-3 py-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                                  defaultValue={firstAssignment.pharmacyWholesaleCost || ""}
+                                  onBlur={(e) => {
+                                    const customPrice = parseFloat(e.target.value)
+                                    if (!isNaN(customPrice) && customPrice > 0) {
+                                      handleUpdateCustomPrice(firstAssignment.id, customPrice)
+                                    }
+                                  }}
+                                />
                               </div>
-                            )}
-                            {pharmacy.slug === 'ironsail' && firstAssignment.form && (
-                              <div className="text-sm">
-                                <span className="text-[#9CA3AF]">Medication Form: </span>
-                                <span className="text-[#1F2937]">{firstAssignment.form}</span>
-                              </div>
-                            )}
-                            {pharmacy.slug === 'ironsail' && firstAssignment.rxId && (
-                              <div className="text-sm">
-                                <span className="text-[#9CA3AF]">RX ID: </span>
-                                <span className="text-[#1F2937] font-mono">{firstAssignment.rxId}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        
-                        {/* Pricing section - always show, always editable */}
-                        {firstAssignment && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[#9CA3AF] text-sm">Wholesale Price:</span>
-                            <div className="flex items-center gap-1">
-                              <span className="text-sm text-[#4B5563]">$</span>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="0.00"
-                                className="w-24 h-8 text-sm px-3 py-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                                defaultValue={firstAssignment.pharmacyWholesaleCost || ""}
-                                onBlur={(e) => {
-                                  const customPrice = parseFloat(e.target.value)
-                                  if (!isNaN(customPrice) && customPrice > 0) {
-                                    handleUpdateCustomPrice(firstAssignment.id, customPrice)
-                                  }
-                                }}
-                              />
+                              {firstAssignment.pharmacyWholesaleCost && (
+                                <span className="inline-block px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs">From Spreadsheet</span>
+                              )}
                             </div>
-                            {firstAssignment.pharmacyWholesaleCost && (
-                              <span className="inline-block px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs">From Spreadsheet</span>
-                            )}
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
+                      <button
+                        onClick={() =>
+                          handleRemoveCoverageGroup({
+                            coverageId: group.coverageId,
+                            pharmacyId: group.pharmacy.id,
+                            pharmacyName: group.pharmacy.name,
+                            coverageName: group.coverageName,
+                          })
+                        }
+                        className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-xl transition-all"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleRemoveAllPharmacyAssignments(pharmacy.id, pharmacy.name)}
-                      className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-xl transition-all"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {states.map((state) => {
-                      const assignment = assignments.find(a => a.pharmacyId === pharmacy.id && a.state === state)
-                      return (
+                    <div className="flex flex-wrap gap-2">
+                      {group.assignments.map((assignment) => (
                         <div
-                          key={state}
+                          key={assignment.id}
                           className="group relative inline-flex items-center gap-1 px-3 py-1.5 bg-[#F3F4F6] text-[#4B5563] rounded-full border border-[#E5E7EB] text-xs font-medium hover:bg-white hover:border-[#4FA59C] transition-all"
                         >
-                          <span>{state}</span>
+                          <span>{assignment.state}</span>
                           <button
-                            onClick={() => assignment && handleRemoveAssignment(assignment.id)}
+                            onClick={() => handleRemoveAssignment(assignment.id)}
                             className="opacity-0 group-hover:opacity-100 transition-opacity ml-1"
                           >
                             <Trash2 className="h-3 w-3 text-[#EF4444]" />
                           </button>
                         </div>
-                      )
-                    })}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )
-            })
+                )
+              })}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetCoverageForm()
+                    setShowAddForm(true)
+                  }}
+                  className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full border border-dashed border-[#4FA59C] text-[#4FA59C] hover:bg-[#ECFDF5] hover:border-[#22C55E] hover:text-[#166534] text-sm font-medium transition-all"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add 1 more product
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>

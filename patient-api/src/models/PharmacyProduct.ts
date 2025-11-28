@@ -1,5 +1,6 @@
 import { Table, Column, DataType, ForeignKey, BelongsTo, Model } from 'sequelize-typescript';
 import Pharmacy from './Pharmacy';
+import PharmacyCoverage from './PharmacyCoverage';
 import Product from './Product';
 
 @Table({
@@ -35,6 +36,13 @@ export default class PharmacyProduct extends Model {
         allowNull: false,
     })
     declare pharmacyId: string;
+
+    @ForeignKey(() => PharmacyCoverage)
+    @Column({
+        type: DataType.UUID,
+        allowNull: true,
+    })
+    declare pharmacyCoverageId?: string;
 
     @Column({
         type: DataType.STRING(2), // US state code (e.g., 'CA', 'NY')
@@ -83,5 +91,8 @@ export default class PharmacyProduct extends Model {
 
     @BelongsTo(() => Pharmacy)
     declare pharmacy: Pharmacy;
+
+    @BelongsTo(() => PharmacyCoverage)
+    declare pharmacyCoverage?: PharmacyCoverage;
 }
 

@@ -18,6 +18,7 @@ import TenantProduct from "../models/TenantProduct";
 import WebSocketService from "./websocket.service";
 import PharmacyProduct from "../models/PharmacyProduct";
 import Pharmacy from "../models/Pharmacy";
+import PharmacyCoverage from "../models/PharmacyCoverage";
 
 
 interface ListOrdersByClinicResult {
@@ -306,6 +307,10 @@ class OrderService {
                         model: Pharmacy,
                         as: 'pharmacy',
                         attributes: ['id', 'name', 'slug', 'isActive']
+                    },
+                    {
+                        model: PharmacyCoverage,
+                        as: 'pharmacyCoverage'
                     }
                 ]
             });

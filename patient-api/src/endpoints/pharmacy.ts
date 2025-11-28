@@ -1,6 +1,7 @@
 import { Express } from 'express';
 import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
+import PharmacyCoverage from '../models/PharmacyCoverage';
 import Product from '../models/Product';
 import { PharmacyIntegrationService } from '../services/pharmacyIntegration';
 import { IronSailService } from '../services/pharmacyIntegration/ironsail.service';
@@ -48,6 +49,38 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
         }
     });
 
+    // Delete an entire pharmacy coverage (and all of its assignments)
+    app.delete("/pharmacy-coverage/:coverageId", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            const { coverageId } = req.params;
+
+            const coverage = await PharmacyCoverage.findByPk(coverageId);
+            if (!coverage) {
+                return res.status(404).json({ success: false, message: "Pharmacy coverage not found" });
+            }
+
+            const deletedAssignments = await PharmacyProduct.destroy({
+                where: { pharmacyCoverageId: coverageId }
+            });
+
+            await coverage.destroy();
+
+            res.json({
+                success: true,
+                message: `Deleted pharmacy coverage ${coverageId} and ${deletedAssignments} assignment(s)`,
+                deletedAssignments
+            });
+        } catch (error) {
+            console.error('Error deleting pharmacy coverage:', error);
+            res.status(500).json({ success: false, message: "Failed to delete pharmacy coverage" });
+        }
+    });
+
     // List all pharmacies
     app.get("/pharmacies", authenticateJWT, async (req, res) => {
         try {
@@ -80,7 +113,10 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
 
             const assignments = await PharmacyProduct.findAll({
                 where: { productId },
-                include: [{ model: Pharmacy, as: 'pharmacy' }],
+                include: [
+                    { model: Pharmacy, as: 'pharmacy' },
+                    { model: PharmacyCoverage, as: 'pharmacyCoverage' },
+                ],
                 order: [['state', 'ASC']]
             });
 
@@ -111,7 +147,17 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
             }
 
             const { productId } = req.params;
-            const { pharmacyId, states, pharmacyProductId, pharmacyProductName, pharmacyWholesaleCost, sig, form, rxId } = req.body;
+            const {
+                pharmacyId,
+                states,
+                customName,
+                customSig,
+                pharmacyProductId,
+                pharmacyProductName,
+                pharmacyWholesaleCost,
+                form,
+                rxId
+            } = req.body;
 
             console.log('📋 Creating pharmacy assignment with data:', {
                 pharmacyId,
@@ -119,7 +165,8 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 pharmacyProductId,
                 pharmacyProductName,
                 pharmacyWholesaleCost,
-                sig,
+                customName,
+                customSig,
                 form,
                 rxId
             });
@@ -128,6 +175,16 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 return res.status(400).json({
                     success: false,
                     message: "pharmacyId and states array are required"
+                });
+            }
+
+            const trimmedCustomName = typeof customName === 'string' ? customName.trim() : '';
+            const trimmedCustomSig = typeof customSig === 'string' ? customSig.trim() : '';
+
+            if (!trimmedCustomName || !trimmedCustomSig) {
+                return res.status(400).json({
+                    success: false,
+                    message: "customName and customSig are required"
                 });
             }
 
@@ -146,6 +203,13 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                     conflicts: existingAssignments.map(a => a.state)
                 });
             }
+
+            const coverage = await PharmacyCoverage.create({
+                productId,
+                pharmacyId,
+                customName: trimmedCustomName,
+                customSig: trimmedCustomSig,
+            });
 
             // HACK: For AbsoluteRX, try to find the price from existing Product model
             let wholesaleCost = pharmacyWholesaleCost;
@@ -171,27 +235,37 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                     PharmacyProduct.create({
                         productId,
                         pharmacyId,
+                        pharmacyCoverageId: coverage.id,
                         state,
                         pharmacyProductId,
                         pharmacyProductName,
                         pharmacyWholesaleCost: wholesaleCost,
-                        sig,
+                        sig: trimmedCustomSig,
                         form,
                         rxId
                     })
                 )
             );
 
-            console.log('✅ Created assignments, first assignment data:', {
-                pharmacyProductId: assignments[0].pharmacyProductId,
-                pharmacyProductName: assignments[0].pharmacyProductName,
-                sig: assignments[0].sig,
-                form: assignments[0].form,
-                rxId: assignments[0].rxId,
-                wholesaleCost: assignments[0].pharmacyWholesaleCost
+            console.log('✅ Created pharmacy coverage with assignments:', {
+                coverageId: coverage.id,
+                customName: coverage.customName,
+                statesCount: assignments.length,
+                exampleAssignment: assignments[0] ? {
+                    state: assignments[0].state,
+                    pharmacyProductId: assignments[0].pharmacyProductId,
+                    pharmacyProductName: assignments[0].pharmacyProductName,
+                    wholesaleCost: assignments[0].pharmacyWholesaleCost
+                } : null
             });
 
-            res.status(201).json({ success: true, data: assignments });
+            res.status(201).json({
+                success: true,
+                data: {
+                    coverage,
+                    assignments
+                }
+            });
         } catch (error: any) {
             console.error('Error creating pharmacy assignments:', error);
             res.status(500).json({ success: false, message: error.message || "Failed to create pharmacy assignments" });
@@ -243,7 +317,23 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 return res.status(404).json({ success: false, message: "Assignment not found" });
             }
 
+            const coverageId = assignment.pharmacyCoverageId;
+
             await assignment.destroy();
+
+            if (coverageId) {
+                const remainingAssignments = await PharmacyProduct.count({
+                    where: { pharmacyCoverageId: coverageId }
+                });
+
+                if (remainingAssignments === 0) {
+                    await PharmacyCoverage.destroy({
+                        where: { id: coverageId }
+                    });
+                    console.log(`🗑️ Removed empty pharmacy coverage ${coverageId} after deleting last assignment.`);
+                }
+            }
+
             res.json({ success: true, message: "Pharmacy assignment deleted" });
         } catch (error) {
             console.error('Error deleting pharmacy assignment:', error);
@@ -261,12 +351,25 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
 
             const { productId, pharmacyId } = req.params;
 
+            const coverageIds = await PharmacyCoverage.findAll({
+                where: { productId, pharmacyId },
+                attributes: ['id']
+            });
+
             const deletedCount = await PharmacyProduct.destroy({
                 where: {
                     productId,
                     pharmacyId
                 }
             });
+
+            if (coverageIds.length > 0) {
+                await PharmacyCoverage.destroy({
+                    where: {
+                        id: coverageIds.map(c => c.id)
+                    }
+                });
+            }
 
             res.json({
                 success: true,
@@ -314,14 +417,20 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
             const productIds = autoImportedProducts.map(p => p.id);
             const productNames = autoImportedProducts.map(p => p.name);
 
-            // Delete all pharmacy coverage records for these products
-            const deletedCoverageCount = await PharmacyProduct.destroy({
+            // Delete all pharmacy assignments and coverage records for these products
+            const deletedAssignmentsCount = await PharmacyProduct.destroy({
                 where: {
                     productId: productIds
                 }
             });
 
-            console.log(`✅ Deleted ${deletedCoverageCount} pharmacy coverage records`);
+            const deletedCoverageRows = await PharmacyCoverage.destroy({
+                where: {
+                    productId: productIds
+                }
+            });
+
+            console.log(`✅ Deleted ${deletedAssignmentsCount} pharmacy assignment records and ${deletedCoverageRows} coverage rows`);
 
             // Delete all products
             const deletedProductCount = await Product.destroy({

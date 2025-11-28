@@ -174,6 +174,7 @@ class IronSailOrderService {
 
         // Use SIG from product placeholder first, then pharmacy coverage, then fallback to order notes or default
         const sig = product?.placeholderSig ||
+            coverage?.pharmacyCoverage?.customSig ||
             coverage?.sig ||
             order.doctorNotes ||
             order.notes ||
@@ -211,7 +212,7 @@ class IronSailOrderService {
             patientState: state,
             patientZipCode: zipCode,
             patientCountry: 'USA',
-            productName: coverage?.pharmacyProductName || product?.name || 'Unknown Product',
+            productName: coverage?.pharmacyCoverage?.customName || coverage?.pharmacyProductName || product?.name || 'Unknown Product',
             productSKU: coverage?.pharmacyProductId || product?.pharmacyProductId || '',
             rxId: coverage?.rxId || '',
             medicationForm: coverage?.form || '',

@@ -7,6 +7,7 @@ import TreatmentProducts from './TreatmentProducts';
 import TenantProduct from './TenantProduct';
 import Questionnaire from './Questionnaire';
 import PharmacyProduct from './PharmacyProduct';
+import PharmacyCoverage from './PharmacyCoverage';
 
 export enum PharmacyProvider {
     ABSOLUTERX = 'absoluterx',
@@ -178,6 +179,9 @@ export default class Product extends Entity {
 
     @HasMany(() => PharmacyProduct)
     declare pharmacyProducts: PharmacyProduct[];
+
+    @HasMany(() => PharmacyCoverage)
+    declare pharmacyCoverages: PharmacyCoverage[];
 
     // Auto-generate slug from product name if not provided
     @BeforeValidate

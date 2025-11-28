@@ -9,6 +9,7 @@ import Treatment from '../models/Treatment';
 import ShippingAddress from '../models/ShippingAddress';
 import OrderService from '../services/order.service';
 import PharmacyProduct from '../models/PharmacyProduct';
+import PharmacyCoverage from '../models/PharmacyCoverage';
 import Pharmacy from '../models/Pharmacy';
 import IronSailOrderService from '../services/pharmacy/ironsail-order';
 
@@ -431,6 +432,10 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         model: Pharmacy,
                         as: 'pharmacy',
                         attributes: ['id', 'name', 'slug', 'isActive']
+                    },
+                    {
+                        model: PharmacyCoverage,
+                        as: 'pharmacyCoverage'
                     }
                 ]
             });
@@ -450,6 +455,7 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
 
             // Use SIG from product placeholder first, then pharmacy coverage, then fallback to order notes or default
             const sig = order.tenantProduct?.product?.placeholderSig ||
+                coverage.pharmacyCoverage?.customSig ||
                 coverage.sig ||
                 order.doctorNotes ||
                 order.notes ||
@@ -461,6 +467,8 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 pharmacyProductId: coverage.pharmacyProductId,
                 pharmacyProductName: coverage.pharmacyProductName,
                 sig: sig,
+                customCoverageName: coverage.pharmacyCoverage?.customName,
+                customCoverageSig: coverage.pharmacyCoverage?.customSig,
                 sigSource: coverage.sig ? 'coverage' : order.tenantProduct?.product?.placeholderSig ? 'product' : order.doctorNotes ? 'doctorNotes' : order.notes ? 'orderNotes' : 'default',
                 form: coverage.form,
                 rxId: coverage.rxId,
@@ -482,6 +490,8 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         pharmacyProductName: coverage.pharmacyProductName,
                         pharmacyWholesaleCost: coverage.pharmacyWholesaleCost,
                         sig: sig,
+                        customName: coverage.pharmacyCoverage?.customName,
+                        customSig: coverage.pharmacyCoverage?.customSig,
                         form: coverage.form,
                         rxId: coverage.rxId
                     },
@@ -664,6 +674,10 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         model: Pharmacy,
                         as: 'pharmacy',
                         attributes: ['id', 'name', 'slug', 'isActive']
+                    },
+                    {
+                        model: PharmacyCoverage,
+                        as: 'pharmacyCoverage'
                     }
                 ]
             });
@@ -766,6 +780,10 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         model: Pharmacy,
                         as: 'pharmacy',
                         attributes: ['id', 'name', 'slug', 'isActive']
+                    },
+                    {
+                        model: PharmacyCoverage,
+                        as: 'pharmacyCoverage'
                     }
                 ]
             });
