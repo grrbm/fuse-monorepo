@@ -226,11 +226,7 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   const handleAddAssignment = async () => {
     if (!token || selectedStates.length === 0) return
 
-    const isExistingCoverage = formContext.mode === 'existing'
-    const targetCoverage = formContext.mode === 'existing' ? formContext.coverage : null
-    const targetPharmacyId = isExistingCoverage ? targetCoverage?.pharmacy.id : selectedPharmacy
-
-    if (!targetPharmacyId) {
+    if (!selectedPharmacy) {
       setError("Select a pharmacy before assigning coverage")
       return
     }
@@ -253,15 +249,11 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
       setError(null)
 
       const payload: any = {
-        pharmacyId: targetPharmacyId,
+        pharmacyId: selectedPharmacy,
         states: selectedStates,
         customName: trimmedName,
         customSig: trimmedSig,
         sig: trimmedSig,
-      }
-
-      if (isExistingCoverage && targetCoverage?.coverageId) {
-        payload.coverageId = targetCoverage.coverageId
       }
 
       if (selectedPharmacyProduct) {
@@ -448,11 +440,9 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
           <select
             value={selectedPharmacy}
             onChange={(e) => {
-              if (isExisting) return
               setSelectedPharmacy(e.target.value)
               setSelectedStates([])
             }}
-            disabled={isExisting}
             className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all disabled:bg-[#F3F4F6] disabled:text-[#9CA3AF]"
           >
             <option value="">Choose a pharmacy...</option>
@@ -555,12 +545,10 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                             onChange={() => {
                               setSelectedPharmacyProduct(product)
                               const defaultName = product.nameWithStrength || product.name || ""
-                              if (!customProductName && defaultName) {
+                              if (defaultName) {
                                 setCustomProductName(defaultName)
                               }
-                              if (!customSig && product.sig) {
-                                setCustomSig(product.sig)
-                              }
+                              setCustomSig(product.sig || 'Take as directed by your healthcare provider')
                             }}
                             className="mt-1 w-4 h-4 border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C]"
                           />
