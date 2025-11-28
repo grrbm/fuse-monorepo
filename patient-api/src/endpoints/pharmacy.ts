@@ -237,11 +237,15 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                     });
                 }
 
-                if (coverage.productId !== productId || coverage.pharmacyId !== pharmacyId) {
+                if (coverage.productId !== productId) {
                     return res.status(400).json({
                         success: false,
-                        message: "Coverage does not belong to the specified product or pharmacy"
+                        message: "Coverage does not belong to the specified product"
                     });
+                }
+
+                if (coverage.pharmacyId && coverage.pharmacyId !== pharmacyId) {
+                    console.log(`ℹ️  Adding assignment from pharmacy ${pharmacyId} to coverage ${coverage.id} currently associated with pharmacy ${coverage.pharmacyId}.`);
                 }
 
                 const updates: Partial<PharmacyCoverage> = {};
