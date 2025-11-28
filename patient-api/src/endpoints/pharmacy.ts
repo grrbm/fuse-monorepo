@@ -612,4 +612,20 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
 
             res.json({
                 success: true,
-                message: `
+                message: `Imported ${imported.length} products, skipped ${skipped.length}, encountered ${errors.length} error(s).`,
+                data: {
+                    imported,
+                    skipped,
+                    errors,
+                },
+            });
+
+        } catch (error: any) {
+            console.error('❌ Error deleting auto-imported products:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || "Failed to delete products"
+            });
+        }
+    });
+}
