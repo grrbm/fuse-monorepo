@@ -447,7 +447,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 message: `Deleted ${deletedProductCount} auto-imported products`,
                 data: {
                     deleted: deletedProductCount,
-                    deletedCoverage: deletedCoverageCount,
+                    deletedCoverage: deletedAssignmentsCount,
                     productIds: productIds,
                     productNames: productNames
                 }

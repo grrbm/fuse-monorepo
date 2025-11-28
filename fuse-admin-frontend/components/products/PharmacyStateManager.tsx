@@ -410,7 +410,7 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
             </div>
             <h2 className="text-xl font-semibold text-[#1F2937]">Pharmacy & State Coverage</h2>
           </div>
-          <button 
+          <button
             onClick={() => {
               if (!showAddForm) {
                 resetCoverageForm()
@@ -537,9 +537,8 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                           {filteredPharmacyProducts.map((product) => (
                             <label
                               key={product.id}
-                              className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[#F9FAFB] transition-colors ${
-                                selectedPharmacyProduct?.id === product.id ? 'bg-[#F3F4F6]' : ''
-                              }`}
+                              className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[#F9FAFB] transition-colors ${selectedPharmacyProduct?.id === product.id ? 'bg-[#F3F4F6]' : ''
+                                }`}
                             >
                               <input
                                 type="radio"
@@ -651,7 +650,7 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                   "Assign Pharmacy"
                 )}
               </button>
-              <button 
+              <button
                 onClick={() => {
                   resetCoverageForm()
                   setShowAddForm(false)
