@@ -113,6 +113,10 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   const [customProductName, setCustomProductName] = useState("")
   const [customSig, setCustomSig] = useState("")
   const [formContext, setFormContext] = useState<FormContext>({ mode: 'hidden' })
+  const [editingCoverageId, setEditingCoverageId] = useState<string | null>(null)
+  const [headerNameInput, setHeaderNameInput] = useState("")
+  const [headerSigInput, setHeaderSigInput] = useState("")
+  const [headerSaving, setHeaderSaving] = useState(false)
 
   const resetFormState = () => {
     setSelectedStates([])
@@ -131,16 +135,79 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   }
 
   const openExistingCoverageForm = (coverage: CoverageGroup) => {
+    cancelEditCoverageHeader()
     resetFormState()
-    setSelectedPharmacy(coverage.defaultPharmacyId || coverage.entries[0]?.pharmacy.id || "")
-    setCustomProductName('')
-    setCustomSig('')
+    const fallbackEntry = coverage.entries[0]
+    const fallbackName = coverage.rawCustomName || coverage.coverageName || fallbackEntry?.productName || ''
+    const fallbackSig = coverage.rawCustomSig || coverage.coverageSig || fallbackEntry?.sig || 'Take as directed by your healthcare provider'
+
+    setSelectedPharmacy(coverage.defaultPharmacyId || fallbackEntry?.pharmacy.id || '')
+    setCustomProductName(fallbackName)
+    setCustomSig(fallbackSig)
     setFormContext({ mode: 'existing', coverage })
   }
 
   const closeForm = () => {
     resetFormState()
     setFormContext({ mode: 'hidden' })
+  }
+
+  const startEditCoverageHeader = (coverage: CoverageGroup) => {
+    if (!coverage.coverageId) return
+    closeForm()
+    const fallbackEntry = coverage.entries[0]
+    setEditingCoverageId(coverage.coverageId)
+    setHeaderNameInput(coverage.coverageName || coverage.rawCustomName || fallbackEntry?.productName || '')
+    setHeaderSigInput(coverage.coverageSig || coverage.rawCustomSig || fallbackEntry?.sig || 'Take as directed by your healthcare provider')
+  }
+
+  const cancelEditCoverageHeader = () => {
+    setEditingCoverageId(null)
+    setHeaderNameInput("")
+    setHeaderSigInput("")
+  }
+
+  const saveCoverageHeader = async (coverage: CoverageGroup) => {
+    if (!coverage.coverageId) return
+    if (!token) {
+      setError("Not authenticated")
+      return
+    }
+    const trimmedName = headerNameInput.trim()
+    const trimmedSig = headerSigInput.trim()
+
+    if (!trimmedName || !trimmedSig) {
+      setError("Coverage name and note are required")
+      return
+    }
+
+    try {
+      setHeaderSaving(true)
+      setError(null)
+
+      const response = await fetch(`${baseUrl}/pharmacy-coverage/${coverage.coverageId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ customName: trimmedName, customSig: trimmedSig }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update coverage header')
+      }
+
+      cancelEditCoverageHeader()
+      await fetchData()
+    } catch (err: any) {
+      console.error('Error updating coverage header:', err)
+      setError(err.message)
+    } finally {
+      setHeaderSaving(false)
+    }
   }
 
   useEffect(() => {
@@ -236,7 +303,10 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   )
 
   const handleAddAssignment = async () => {
-    if (!token || selectedStates.length === 0) return
+    if (!token) return
+
+    const isExistingCoverage = formContext.mode === 'existing'
+    const isMetadataOnly = isExistingCoverage && selectedStates.length === 0
 
     if (!selectedPharmacy) {
       setError("Select a pharmacy before assigning coverage")
@@ -253,6 +323,11 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
 
     if (!trimmedSig) {
       setError("Custom SIG is required")
+      return
+    }
+
+    if (!isExistingCoverage && selectedStates.length === 0) {
+      setError("Select at least one state to assign")
       return
     }
 
@@ -646,34 +721,34 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="text-sm font-medium text-[#4B5563] mb-2 block">
-              Custom Product Name
+              Coverage Display Name
             </label>
             <input
               type="text"
               value={customProductName}
               onChange={(e) => setCustomProductName(e.target.value)}
-              placeholder="e.g. NAD+ Wellness Kit"
+              placeholder="e.g. IronSail Weight Loss Coverage"
               className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
               maxLength={120}
             />
             <p className="text-xs text-[#9CA3AF] mt-1">
-              Displayed on the coverage card. Keep it short and descriptive.
+              Displayed on the coverage card header. Keep it short and descriptive.
             </p>
           </div>
           <div>
             <label className="text-sm font-medium text-[#4B5563] mb-2 block">
-              Custom SIG (Dispensing Instructions)
+              Coverage Note / SIG
             </label>
             <textarea
               value={customSig}
               onChange={(e) => setCustomSig(e.target.value)}
-              placeholder="e.g. Take 1 capsule daily with food."
+              placeholder="e.g. Take as directed by your healthcare provider"
               rows={3}
               className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all resize-none"
               maxLength={500}
             />
             <p className="text-xs text-[#9CA3AF] mt-1">
-              This will appear on the coverage card and is saved with the assignment.
+              This will appear below the coverage title and is saved with the coverage.
             </p>
           </div>
         </div>
@@ -775,51 +850,113 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
             const isEditingThisCoverage =
               formContext.mode === 'existing' && formContext.coverage.key === group.key
 
-            const totalStates = group.entries.reduce((acc, entry) => acc + entry.states.length, 0)
-            const coverageTitle = group.coverageName || group.entries[0]?.productName || 'Coverage'
-            const defaultPharmacyName = group.entries[0]?.pharmacy.name
+            const firstEntry = group.entries[0]
+            const coverageTitle = group.coverageName || firstEntry?.productName || firstEntry?.pharmacy.name || 'Coverage'
+            const totalStates = group.entries.reduce((count, entry) => count + entry.states.length, 0)
+            const uniquePharmacies = Array.from(new Set(group.entries.map(entry => entry.pharmacy.name)))
+            const defaultPharmacyName = uniquePharmacies.join(', ')
+            const isEditingHeader = editingCoverageId === group.coverageId
 
             return (
               <div key={group.key} className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
                 <div className="p-6 pb-4 border-b border-[#E5E7EB] flex items-start justify-between">
-                  <div>
-                    <h4 className="text-lg font-semibold text-[#1F2937]">{coverageTitle}</h4>
-                    {group.coverageSig && (
-                      <p className="text-sm text-[#6B7280] mt-1">
-                        Coverage note: <span className="italic text-[#4B5563]">{group.coverageSig}</span>
-                      </p>
+                  <div className="flex-1 pr-4">
+                    {isEditingHeader ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-sm font-medium text-[#4B5563] mb-2 block">Coverage Display Name</label>
+                          <input
+                            type="text"
+                            value={headerNameInput}
+                            onChange={(e) => setHeaderNameInput(e.target.value)}
+                            placeholder="e.g. IronSail Weight Loss Coverage"
+                            className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                            maxLength={120}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-[#4B5563] mb-2 block">Coverage Note / SIG</label>
+                          <textarea
+                            value={headerSigInput}
+                            onChange={(e) => setHeaderSigInput(e.target.value)}
+                            placeholder="e.g. Take as directed by your healthcare provider"
+                            rows={3}
+                            className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all resize-none"
+                            maxLength={500}
+                          />
+                        </div>
+                        <p className="text-xs text-[#9CA3AF]">
+                          Applies to this coverage header. Product entries keep their own details below.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <h4 className="text-lg font-semibold text-[#1F2937]">{coverageTitle}</h4>
+                        <p className="text-sm text-[#6B7280] mt-1">
+                          Pharmacies: <span className="font-medium text-[#1F2937]">{defaultPharmacyName || 'N/A'}</span> • {totalStates} states covered
+                        </p>
+                        {group.coverageSig && (
+                          <p className="text-sm text-[#4B5563] mt-2 italic">
+                            Coverage note: {group.coverageSig}
+                          </p>
+                        )}
+                      </>
                     )}
-                    <p className="text-sm text-[#6B7280] mt-1">
-                      Total states covered: {totalStates}
-                    </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => openExistingCoverageForm(group)}
-                      disabled={!group.coverageId}
-                      className={`px-4 py-2 rounded-full border border-[#4FA59C] text-[#4FA59C] transition-all text-sm font-medium ${group.coverageId ? 'hover:bg-[#ECFDF5]' : 'opacity-50 cursor-not-allowed'}`}
-                    >
-                      Add more states/products
-                    </button>
-                    <button
-                      onClick={() =>
-                        handleRemoveCoverageGroup({
-                          coverageId: group.coverageId,
-                          pharmacyId: group.defaultPharmacyId || group.entries[0]?.pharmacy.id,
-                          pharmacyName: defaultPharmacyName,
-                          coverageName: group.coverageName || undefined,
-                        })
-                      }
-                      className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-xl transition-all"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {isEditingHeader ? (
+                      <>
+                        <button
+                          onClick={() => saveCoverageHeader(group)}
+                          disabled={headerSaving}
+                          className="px-4 py-2 rounded-full bg-[#4FA59C] text-white hover:bg-[#478F87] transition-all text-sm font-medium disabled:opacity-50"
+                        >
+                          {headerSaving ? 'Saving...' : 'Save header'}
+                        </button>
+                        <button
+                          onClick={cancelEditCoverageHeader}
+                          disabled={headerSaving}
+                          className="px-4 py-2 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => openExistingCoverageForm(group)}
+                          disabled={!group.coverageId}
+                          className={`px-4 py-2 rounded-full border border-[#4FA59C] text-[#4FA59C] transition-all text-sm font-medium ${group.coverageId ? 'hover:bg-[#ECFDF5]' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                          Add states/products
+                        </button>
+                        <button
+                          onClick={() => startEditCoverageHeader(group)}
+                          disabled={!group.coverageId}
+                          className={`px-4 py-2 rounded-full border border-[#E5E7EB] text-[#4B5563] transition-all text-sm font-medium ${group.coverageId ? 'hover:bg-[#F3F4F6]' : 'opacity-50 cursor-not-allowed'}`}
+                        >
+                          Edit name / note
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleRemoveCoverageGroup({
+                              coverageId: group.coverageId,
+                              pharmacyId: group.defaultPharmacyId || firstEntry?.pharmacy.id,
+                              pharmacyName: firstEntry?.pharmacy.name,
+                              coverageName: group.coverageName || undefined,
+                            })
+                          }
+                          className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-xl transition-all"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="p-6 space-y-4">
                   {group.entries.map((entry) => {
                     const priceAssignmentId = entry.states[0]?.assignmentId
-
                     return (
                       <div key={entry.key} className="border border-[#E5E7EB] rounded-xl p-4 space-y-3">
                         <div>

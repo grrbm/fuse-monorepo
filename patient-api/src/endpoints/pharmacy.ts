@@ -81,6 +81,46 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
         }
     });
 
+    // Update coverage metadata (name / SIG)
+    app.patch("/pharmacy-coverage/:coverageId", authenticateJWT, async (req, res) => {
+        try {
+            const currentUser = getCurrentUser(req);
+            if (!currentUser) {
+                return res.status(401).json({ success: false, message: "Not authenticated" });
+            }
+
+            const { coverageId } = req.params;
+            const { customName, customSig } = req.body ?? {};
+
+            const coverage = await PharmacyCoverage.findByPk(coverageId);
+
+            if (!coverage) {
+                return res.status(404).json({ success: false, message: "Pharmacy coverage not found" });
+            }
+
+            const updates: Partial<PharmacyCoverage> = {};
+
+            if (typeof customName === 'string') {
+                updates.customName = customName.trim();
+            }
+
+            if (typeof customSig === 'string') {
+                updates.customSig = customSig.trim();
+            }
+
+            if (Object.keys(updates).length === 0) {
+                return res.status(400).json({ success: false, message: "No valid fields provided" });
+            }
+
+            await coverage.update(updates);
+
+            res.json({ success: true, data: coverage });
+        } catch (error) {
+            console.error('Error updating pharmacy coverage:', error);
+            res.status(500).json({ success: false, message: "Failed to update pharmacy coverage" });
+        }
+    });
+
     // List all pharmacies
     app.get("/pharmacies", authenticateJWT, async (req, res) => {
         try {
@@ -169,15 +209,18 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 customName,
                 customSig,
                 form,
-                rxId
+                rxId,
+                coverageId,
             });
 
-            if (!pharmacyId || !states || !Array.isArray(states) || states.length === 0) {
+            if (!pharmacyId) {
                 return res.status(400).json({
                     success: false,
-                    message: "pharmacyId and states array are required"
+                    message: "pharmacyId is required"
                 });
             }
+
+            const stateArray = Array.isArray(states) ? states : [];
 
             const trimmedCustomName = typeof customName === 'string' ? customName.trim() : '';
             const trimmedCustomSig = typeof customSig === 'string' ? customSig.trim() : '';
@@ -214,7 +257,24 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 if (Object.keys(updates).length > 0) {
                     await coverage.update(updates);
                 }
+
+                if (stateArray.length === 0) {
+                    return res.status(200).json({
+                        success: true,
+                        data: {
+                            coverage,
+                            assignments: []
+                        }
+                    });
+                }
             } else {
+                if (stateArray.length === 0) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "states array is required when creating a new coverage"
+                    });
+                }
+
                 if (!trimmedCustomName || !trimmedCustomSig) {
                     return res.status(400).json({
                         success: false,
@@ -250,7 +310,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
 
             // Create assignments for each state
             const assignments = await Promise.all(
-                states.map(state =>
+                stateArray.map(state =>
                     PharmacyProduct.create({
                         productId,
                         pharmacyId,
@@ -336,7 +396,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 return res.status(404).json({ success: false, message: "Assignment not found" });
             }
 
-            const coverageId = assignment.pharmacyCoverageId;
+            const coverageId = (assignment as any).pharmacyCoverageId as string | undefined;
 
             await assignment.destroy();
 
