@@ -92,7 +92,7 @@ export default class PharmacyProduct extends Model {
     @BelongsTo(() => Pharmacy)
     declare pharmacy: Pharmacy;
 
-    @BelongsTo(() => PharmacyCoverage)
+    @BelongsTo(() => PharmacyCoverage, { onDelete: 'CASCADE' })
     declare pharmacyCoverage?: PharmacyCoverage;
 }
 

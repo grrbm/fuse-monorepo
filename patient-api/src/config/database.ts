@@ -340,6 +340,37 @@ export async function initializeDatabase() {
       console.error('❌ Error ensuring GlobalFees:', error);
     }
 
+    // Ensure PharmacyProduct -> PharmacyCoverage cascade delete
+    try {
+      console.log('🔄 Ensuring PharmacyProduct → PharmacyCoverage cascade behavior...');
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.table_constraints tc
+            WHERE tc.constraint_name = 'PharmacyProduct_pharmacyCoverageId_fkey'
+              AND tc.table_name = 'PharmacyProduct'
+              AND tc.constraint_type = 'FOREIGN KEY'
+          ) THEN
+            ALTER TABLE "PharmacyProduct"
+              DROP CONSTRAINT "PharmacyProduct_pharmacyCoverageId_fkey";
+          END IF;
+        END
+        $$;
+      `);
+
+      await sequelize.query(`
+        ALTER TABLE "PharmacyProduct"
+        ADD CONSTRAINT "PharmacyProduct_pharmacyCoverageId_fkey"
+        FOREIGN KEY ("pharmacyCoverageId") REFERENCES "PharmacyCoverage" ("id") ON DELETE CASCADE;
+      `);
+
+      console.log('✅ Cascade delete enforced for PharmacyCoverage → PharmacyProduct');
+    } catch (error) {
+      console.error('❌ Error enforcing cascade delete for PharmacyCoverage → PharmacyProduct:', error);
+    }
+
     // Backfill UserRoles table from deprecated User.role field
     try {
       console.log('🔄 Backfilling UserRoles table from User.role field...');

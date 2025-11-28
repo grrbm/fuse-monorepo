@@ -48,7 +48,7 @@ export default class PharmacyCoverage extends Model {
     })
     declare customSig: string;
 
-    @HasMany(() => PharmacyProduct)
+    @HasMany(() => PharmacyProduct, { onDelete: 'CASCADE', hooks: true })
     declare assignments: PharmacyProduct[];
 }
 
