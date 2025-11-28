@@ -29,6 +29,8 @@ interface Product {
   isActive: boolean
   createdAt: string
   imageUrl?: string
+  brandId?: string | null
+  brandName?: string
 }
 
 interface PharmacyVendor {
@@ -769,6 +771,13 @@ export default function Products() {
                       <div className="flex-1 min-w-0">
                         <h3 className="text-lg font-semibold text-[#1F2937] mb-1 truncate">{product.name}</h3>
                         <p className="text-sm text-[#6B7280] line-clamp-2">{product.description}</p>
+                        {product.brandId && (
+                          <div className="mt-2">
+                            <span className="inline-flex items-center px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-full border border-purple-200">
+                              Custom product from {product.brandName || 'Brand'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       {!product.isActive && (
                         <span className="px-3 py-1 bg-[#FEF3C7] text-[#92400E] text-xs font-medium rounded-full border border-[#FDE68A] whitespace-nowrap">

@@ -4,6 +4,8 @@ import { Op } from 'sequelize'
 import { getProductWithQuestionnaires, listProductsByClinic } from './db/product'
 import { getUser } from './db/user'
 import type { ProductCreateInput, ProductUpdateInput } from '@fuse/validators'
+import User from '../models/User'
+import Clinic from '../models/Clinic'
 
 /**
  * Helper function to serialize product data, converting DECIMAL fields from strings to numbers
@@ -14,6 +16,7 @@ type SerializedProduct = ReturnType<Product['toJSON']> & {
     pharmacyWholesaleCost?: number
     suggestedRetailPrice?: number
     price: number
+    brandName?: string
 }
 
 function serializeProduct(product: Product): SerializedProduct {
@@ -21,6 +24,11 @@ function serializeProduct(product: Product): SerializedProduct {
     const categories = Array.isArray((plain as any).categories)
         ? ((plain as any).categories as string[]).filter(Boolean)
         : []
+    
+    // Extract brand name from the clinic if available
+    const brandData = (plain as any).brand
+    const brandName = brandData?.clinic?.name || null
+    
     return {
         ...plain,
         categories,
@@ -28,6 +36,7 @@ function serializeProduct(product: Product): SerializedProduct {
         pharmacyWholesaleCost: plain.pharmacyWholesaleCost ? parseFloat(plain.pharmacyWholesaleCost as any) : undefined,
         suggestedRetailPrice: plain.suggestedRetailPrice ? parseFloat(plain.suggestedRetailPrice as any) : undefined,
         price: plain.price ? parseFloat(plain.price as any) : plain.price,
+        brandName,
     }
 }
 
@@ -75,6 +84,22 @@ class ProductService {
             offset,
             order: [['createdAt', 'DESC']],
             distinct: true,
+            include: [
+                {
+                    model: User,
+                    as: 'brand',
+                    required: false,
+                    attributes: ['id', 'firstName', 'lastName', 'clinicId'],
+                    include: [
+                        {
+                            model: Clinic,
+                            as: 'clinic',
+                            required: false,
+                            attributes: ['id', 'name']
+                        }
+                    ]
+                }
+            ]
         })
 
         return {

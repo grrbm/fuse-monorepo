@@ -1,4 +1,4 @@
-import { Table, Column, DataType, BelongsToMany, HasMany, BeforeValidate } from 'sequelize-typescript';
+import { Table, Column, DataType, BelongsToMany, HasMany, BeforeValidate, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import Entity from './Entity';
 import Prescription from './Prescription';
 import PrescriptionProducts from './PrescriptionProducts';
@@ -8,6 +8,7 @@ import TenantProduct from './TenantProduct';
 import Questionnaire from './Questionnaire';
 import PharmacyProduct from './PharmacyProduct';
 import PharmacyCoverage from './PharmacyCoverage';
+import User from './User';
 
 export enum PharmacyProvider {
     ABSOLUTERX = 'absoluterx',
@@ -153,11 +154,15 @@ export default class Product extends Entity {
     })
     declare mdCaseId?: string;
 
+    @ForeignKey(() => User)
     @Column({
         type: DataType.UUID,
         allowNull: true,
     })
     declare brandId?: string;
+
+    @BelongsTo(() => User)
+    declare brand?: User;
 
     @BelongsToMany(() => Prescription, () => PrescriptionProducts)
     declare prescriptions: Prescription[];
