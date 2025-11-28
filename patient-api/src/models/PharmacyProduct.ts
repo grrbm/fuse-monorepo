@@ -10,8 +10,8 @@ import Product from './Product';
     indexes: [
         {
             unique: true,
-            fields: ['productId', 'state'],
-            name: 'unique_product_state'
+            fields: ['pharmacyCoverageId', 'state'],
+            name: 'unique_coverage_state'
         }
     ]
 })

@@ -286,13 +286,32 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
     fetchPharmacyProducts()
   }, [selectedPharmacy, selectedStates, token, pharmacies, baseUrl])
 
-  const assignedStates = assignments.map(a => a.state)
-  const availableStates = US_STATES.filter(s => !assignedStates.includes(s.code))
+  const assignedStatesByCoverage: Record<string, string[]> = {}
+  assignments.forEach((assignment) => {
+    const coverageId = assignment.pharmacyCoverageId || 'legacy'
+    if (!assignedStatesByCoverage[coverageId]) {
+      assignedStatesByCoverage[coverageId] = []
+    }
+    assignedStatesByCoverage[coverageId].push(assignment.state)
+  })
+
+  const getAvailableStatesForCoverage = (coverageKey?: string | null) => {
+    const coverageId = coverageKey || 'legacy'
+    const takenStates = assignedStatesByCoverage[coverageId] || []
+    return US_STATES.filter((state) => !takenStates.includes(state.code))
+  }
+
+  const getAvailableStatesForPharmacy = (coverageKey?: string | null, pharmacyId?: string | null) => {
+    if (!pharmacyId) return []
+    const coverageStates = getAvailableStatesForCoverage(coverageKey)
+    const pharmacy = pharmacies.find((p) => p.id === pharmacyId)
+    if (!pharmacy) return []
+    return coverageStates.filter((state) => pharmacy.supportedStates.includes(state.code))
+  }
+
+  const activeCoverageKey = formContext.mode === 'existing' ? formContext.coverage.coverageId || formContext.coverage.key : null
   const availableStatesForSelectedPharmacy = selectedPharmacy
-    ? availableStates.filter(s => {
-      const pharmacy = pharmacies.find(p => p.id === selectedPharmacy)
-      return pharmacy?.supportedStates.includes(s.code)
-    })
+    ? getAvailableStatesForPharmacy(activeCoverageKey, selectedPharmacy)
     : []
 
   // Filter pharmacy products by search query

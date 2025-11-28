@@ -371,6 +371,49 @@ export async function initializeDatabase() {
       console.error('❌ Error enforcing cascade delete for PharmacyCoverage → PharmacyProduct:', error);
     }
 
+    // Ensure unique index for coverage/state combinations
+    try {
+      console.log('🔄 Ensuring PharmacyProduct coverage/state uniqueness constraint...');
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND indexname = 'unique_product_state'
+          ) THEN
+            DROP INDEX "unique_product_state";
+          END IF;
+        END
+        $$;
+      `);
+
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND indexname = 'unique_coverage_state'
+          ) THEN
+            DROP INDEX "unique_coverage_state";
+          END IF;
+        END
+        $$;
+      `);
+
+      await sequelize.query(`
+        CREATE UNIQUE INDEX "unique_coverage_state"
+        ON "PharmacyProduct" ("pharmacyCoverageId", "state");
+      `);
+
+      console.log('✅ Coverage/state uniqueness constraint ensured');
+    } catch (error) {
+      console.error('❌ Error ensuring coverage/state uniqueness constraint:', error);
+    }
+
     // Backfill UserRoles table from deprecated User.role field
     try {
       console.log('🔄 Backfilling UserRoles table from User.role field...');
