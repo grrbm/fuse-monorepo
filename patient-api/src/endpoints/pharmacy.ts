@@ -156,7 +156,8 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 pharmacyProductName,
                 pharmacyWholesaleCost,
                 form,
-                rxId
+                rxId,
+                coverageId,
             } = req.body;
 
             console.log('📋 Creating pharmacy assignment with data:', {
@@ -181,35 +182,53 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
             const trimmedCustomName = typeof customName === 'string' ? customName.trim() : '';
             const trimmedCustomSig = typeof customSig === 'string' ? customSig.trim() : '';
 
-            if (!trimmedCustomName || !trimmedCustomSig) {
-                return res.status(400).json({
-                    success: false,
-                    message: "customName and customSig are required"
-                });
-            }
+            let coverage: PharmacyCoverage | null = null;
 
-            // Check for existing assignments in these states
-            const existingAssignments = await PharmacyProduct.findAll({
-                where: {
-                    productId,
-                    state: states
+            if (coverageId) {
+                coverage = await PharmacyCoverage.findByPk(coverageId);
+
+                if (!coverage) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Pharmacy coverage not found"
+                    });
                 }
-            });
 
-            if (existingAssignments.length > 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Some states are already assigned to a pharmacy`,
-                    conflicts: existingAssignments.map(a => a.state)
+                if (coverage.productId !== productId || coverage.pharmacyId !== pharmacyId) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Coverage does not belong to the specified product or pharmacy"
+                    });
+                }
+
+                const updates: Partial<PharmacyCoverage> = {};
+
+                if (trimmedCustomName && trimmedCustomName !== coverage.customName) {
+                    updates.customName = trimmedCustomName;
+                }
+
+                if (trimmedCustomSig && trimmedCustomSig !== coverage.customSig) {
+                    updates.customSig = trimmedCustomSig;
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    await coverage.update(updates);
+                }
+            } else {
+                if (!trimmedCustomName || !trimmedCustomSig) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "customName and customSig are required"
+                    });
+                }
+
+                coverage = await PharmacyCoverage.create({
+                    productId,
+                    pharmacyId,
+                    customName: trimmedCustomName,
+                    customSig: trimmedCustomSig,
                 });
             }
-
-            const coverage = await PharmacyCoverage.create({
-                productId,
-                pharmacyId,
-                customName: trimmedCustomName,
-                customSig: trimmedCustomSig,
-            });
 
             // HACK: For AbsoluteRX, try to find the price from existing Product model
             let wholesaleCost = pharmacyWholesaleCost;
@@ -240,7 +259,7 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                         pharmacyProductId,
                         pharmacyProductName,
                         pharmacyWholesaleCost: wholesaleCost,
-                        sig: trimmedCustomSig,
+                        sig: trimmedCustomSig || coverage.customSig,
                         form,
                         rxId
                     })
@@ -593,28 +612,4 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
 
             res.json({
                 success: true,
-                message: `Imported ${imported.length} products`,
-                data: {
-                    imported,
-                    skipped,
-                    errors,
-                    summary: {
-                        total: spreadsheetProducts.length,
-                        imported: imported.length,
-                        skipped: skipped.length,
-                        errors: errors.length
-                    }
-                }
-            });
-
-        } catch (error: any) {
-            console.error('❌ Error importing IronSail products:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message || "Failed to import products"
-            });
-        }
-    });
-
-}
-
+                message: `

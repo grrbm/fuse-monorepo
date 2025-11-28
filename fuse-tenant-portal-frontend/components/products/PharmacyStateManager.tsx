@@ -70,7 +70,14 @@ interface CoverageGroup {
   coverageName: string
   coverageSig?: string
   assignments: PharmacyAssignment[]
+  rawCustomName?: string | null
+  rawCustomSig?: string | null
 }
+
+type FormContext =
+  | { mode: 'hidden' }
+  | { mode: 'new' }
+  | { mode: 'existing'; coverage: CoverageGroup }
 
 interface PharmacyStateManagerProps {
   productId: string
@@ -86,7 +93,6 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   const [assignments, setAssignments] = useState<PharmacyAssignment[]>([])
   const [selectedStates, setSelectedStates] = useState<string[]>([])
   const [selectedPharmacy, setSelectedPharmacy] = useState<string>("")
-  const [showAddForm, setShowAddForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pharmacyProducts, setPharmacyProducts] = useState<PharmacyProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(false)
@@ -94,8 +100,9 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   const [productSearchQuery, setProductSearchQuery] = useState("")
   const [customProductName, setCustomProductName] = useState("")
   const [customSig, setCustomSig] = useState("")
+  const [formContext, setFormContext] = useState<FormContext>({ mode: 'hidden' })
 
-  const resetCoverageForm = () => {
+  const resetFormState = () => {
     setSelectedStates([])
     setSelectedPharmacy("")
     setSelectedPharmacyProduct(null)
@@ -104,6 +111,24 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
     setCustomProductName("")
     setCustomSig("")
     setError(null)
+  }
+
+  const openNewCoverageForm = () => {
+    resetFormState()
+    setFormContext({ mode: 'new' })
+  }
+
+  const openExistingCoverageForm = (coverage: CoverageGroup) => {
+    resetFormState()
+    setSelectedPharmacy(coverage.pharmacy.id)
+    setCustomProductName(coverage.rawCustomName ?? coverage.coverageName)
+    setCustomSig(coverage.rawCustomSig ?? coverage.coverageSig ?? "")
+    setFormContext({ mode: 'existing', coverage })
+  }
+
+  const closeForm = () => {
+    resetFormState()
+    setFormContext({ mode: 'hidden' })
   }
 
   useEffect(() => {
@@ -199,7 +224,16 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
   )
 
   const handleAddAssignment = async () => {
-    if (!token || !selectedPharmacy || selectedStates.length === 0) return
+    if (!token || selectedStates.length === 0) return
+
+    const isExistingCoverage = formContext.mode === 'existing'
+    const targetCoverage = formContext.mode === 'existing' ? formContext.coverage : null
+    const targetPharmacyId = isExistingCoverage ? targetCoverage?.pharmacy.id : selectedPharmacy
+
+    if (!targetPharmacyId) {
+      setError("Select a pharmacy before assigning coverage")
+      return
+    }
 
     const trimmedName = customProductName.trim()
     const trimmedSig = customSig.trim()
@@ -219,13 +253,16 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
       setError(null)
 
       const payload: any = {
-        pharmacyId: selectedPharmacy,
+        pharmacyId: targetPharmacyId,
         states: selectedStates,
         customName: trimmedName,
         customSig: trimmedSig,
+        sig: trimmedSig,
       }
 
-      payload.sig = trimmedSig
+      if (isExistingCoverage && targetCoverage?.coverageId) {
+        payload.coverageId = targetCoverage.coverageId
+      }
 
       if (selectedPharmacyProduct) {
         payload.pharmacyProductId = selectedPharmacyProduct.sku.toString()
@@ -260,8 +297,7 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
         throw new Error(data.message || "Failed to assign pharmacy")
       }
 
-      resetCoverageForm()
-      setShowAddForm(false)
+      closeForm()
       await fetchData()
     } catch (err: any) {
       console.error("Error adding assignment:", err)
@@ -371,13 +407,18 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
     const key = coverageId ?? `legacy-${assignment.pharmacyId}-${assignment.pharmacyProductId || 'no-product'}-${assignment.sig || ''}`
 
     if (!acc[key]) {
+      const displayName = coverage?.customName || assignment.pharmacyProductName || `${assignment.pharmacy.name} Coverage`
+      const displaySig = coverage?.customSig || assignment.sig || ''
+
       acc[key] = {
         key,
         coverageId,
         pharmacy: assignment.pharmacy,
-        coverageName: coverage?.customName || assignment.pharmacyProductName || `${assignment.pharmacy.name} Coverage`,
-        coverageSig: coverage?.customSig || assignment.sig || '',
-        assignments: []
+        coverageName: displayName,
+        coverageSig: displaySig,
+        assignments: [],
+        rawCustomName: coverage?.customName ?? null,
+        rawCustomSig: coverage?.customSig ?? null,
       }
     }
 
@@ -390,6 +431,244 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
     assignments: [...group.assignments].sort((a, b) => a.state.localeCompare(b.state))
   })).sort((a, b) => a.coverageName.localeCompare(b.coverageName))
 
+  const renderCoverageForm = (embedded: boolean) => {
+    if (formContext.mode === 'hidden') {
+      return null
+    }
+
+    const isExisting = formContext.mode === 'existing'
+    const wrapperClasses = embedded
+      ? "mt-4 p-6 border border-dashed border-[#4FA59C] rounded-2xl bg-[#F9FAFB] space-y-4"
+      : "p-6 border border-[#E5E7EB] rounded-2xl space-y-4 bg-[#F9FAFB]"
+
+    return (
+      <div className={wrapperClasses}>
+        <div>
+          <label className="text-sm font-medium text-[#4B5563] mb-2 block">Select Pharmacy</label>
+          <select
+            value={selectedPharmacy}
+            onChange={(e) => {
+              if (isExisting) return
+              setSelectedPharmacy(e.target.value)
+              setSelectedStates([])
+            }}
+            disabled={isExisting}
+            className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all disabled:bg-[#F3F4F6] disabled:text-[#9CA3AF]"
+          >
+            <option value="">Choose a pharmacy...</option>
+            {pharmacies.map((pharmacy) => (
+              <option key={pharmacy.id} value={pharmacy.id}>
+                {pharmacy.name} ({pharmacy.supportedStates.length} states)
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedPharmacy && (
+          <div>
+            <label className="text-sm font-medium text-[#4B5563] mb-2 block">
+              Select States (available for this pharmacy)
+            </label>
+            <div className="max-h-48 overflow-y-auto border border-[#E5E7EB] rounded-xl p-3 bg-white">
+              {availableStatesForSelectedPharmacy.length === 0 ? (
+                <p className="text-sm text-[#6B7280] p-2">
+                  All states supported by this pharmacy are already assigned.
+                </p>
+              ) : (
+                <>
+                  <label className="flex items-center gap-2 text-sm font-medium cursor-pointer hover:bg-[#F3F4F6] p-2 rounded-xl mb-2 border-b border-[#E5E7EB]">
+                    <input
+                      type="checkbox"
+                      checked={selectedStates.length === availableStatesForSelectedPharmacy.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedStates(availableStatesForSelectedPharmacy.map(s => s.code))
+                        } else {
+                          setSelectedStates([])
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C] focus:ring-2 focus:ring-opacity-50"
+                    />
+                    <span className="text-[#1F2937]">Select All ({availableStatesForSelectedPharmacy.length} states)</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {availableStatesForSelectedPharmacy.map((state) => (
+                      <label key={state.code} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[#F3F4F6] p-2 rounded-xl transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={selectedStates.includes(state.code)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedStates([...selectedStates, state.code])
+                            } else {
+                              setSelectedStates(selectedStates.filter(s => s !== state.code))
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C] focus:ring-2 focus:ring-opacity-50"
+                        />
+                        <span className="text-[#1F2937]">{state.code}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {selectedPharmacy && selectedStates.length > 0 && (
+          <div>
+            <label className="text-sm font-medium text-[#4B5563] mb-2 block">
+              Select Pharmacy Product (Optional)
+            </label>
+            {loadingProducts ? (
+              <div className="flex items-center justify-center p-4 border border-[#E5E7EB] rounded-xl bg-white">
+                <Loader2 className="h-5 w-5 animate-spin text-[#4FA59C] mr-2" />
+                <span className="text-sm text-[#6B7280]">Loading products...</span>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  placeholder="Search products by name or SKU..."
+                  value={productSearchQuery}
+                  onChange={(e) => setProductSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] mb-2 focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                />
+                <div className="max-h-64 overflow-y-auto border border-[#E5E7EB] rounded-xl bg-white">
+                  {filteredPharmacyProducts.length === 0 ? (
+                    <p className="text-sm text-[#6B7280] p-4 text-center">
+                      {productSearchQuery ? "No products found matching your search." : "No products available."}
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-[#E5E7EB]">
+                      {filteredPharmacyProducts.map((product) => (
+                        <label
+                          key={product.id}
+                          className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[#F9FAFB] transition-colors ${selectedPharmacyProduct?.id === product.id ? 'bg-[#F3F4F6]' : ''
+                            }`}
+                        >
+                          <input
+                            type="radio"
+                            name="pharmacyProduct"
+                            checked={selectedPharmacyProduct?.id === product.id}
+                            onChange={() => {
+                              setSelectedPharmacyProduct(product)
+                              const defaultName = product.nameWithStrength || product.name || ""
+                              if (!customProductName && defaultName) {
+                                setCustomProductName(defaultName)
+                              }
+                              if (!customSig && product.sig) {
+                                setCustomSig(product.sig)
+                              }
+                            }}
+                            className="mt-1 w-4 h-4 border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C]"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm text-[#1F2937]">
+                              {product.nameWithStrength || product.name}
+                            </div>
+                            <div className="text-xs text-[#9CA3AF] mt-1">
+                              SKU: {product.sku}
+                              {product.dispense && ` • ${product.dispense}`}
+                              {product.wholesalePrice && ` • $${product.wholesalePrice}`}
+                            </div>
+                            {product.sig && (
+                              <div className="text-xs text-[#6B7280] mt-1 italic">
+                                SIG: {product.sig}
+                              </div>
+                            )}
+                            {product.label && (
+                              <div className="text-xs text-[#9CA3AF] mt-1">
+                                {product.label}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {selectedPharmacyProduct && (
+                  <button
+                    onClick={() => setSelectedPharmacyProduct(null)}
+                    className="mt-2 px-4 py-2 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
+                  >
+                    Clear Selection
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="text-sm font-medium text-[#4B5563] mb-2 block">
+              Custom Product Name
+            </label>
+            <input
+              type="text"
+              value={customProductName}
+              onChange={(e) => setCustomProductName(e.target.value)}
+              placeholder="e.g. NAD+ Wellness Kit"
+              className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+              maxLength={120}
+            />
+            <p className="text-xs text-[#9CA3AF] mt-1">
+              Displayed on the coverage card. Keep it short and descriptive.
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-[#4B5563] mb-2 block">
+              Custom SIG (Dispensing Instructions)
+            </label>
+            <textarea
+              value={customSig}
+              onChange={(e) => setCustomSig(e.target.value)}
+              placeholder="e.g. Take 1 capsule daily with food."
+              rows={3}
+              className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all resize-none"
+              maxLength={500}
+            />
+            <p className="text-xs text-[#9CA3AF] mt-1">
+              This will appear on the coverage card and is saved with the assignment.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleAddAssignment}
+            disabled={
+              !selectedPharmacy ||
+              selectedStates.length === 0 ||
+              !customProductName.trim() ||
+              !customSig.trim() ||
+              saving
+            }
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Assigning...
+              </>
+            ) : (
+              "Assign Pharmacy"
+            )}
+          </button>
+          <button
+            onClick={closeForm}
+            className="px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
@@ -400,404 +679,174 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
     )
   }
 
+  const isNewFormOpen = formContext.mode === 'new'
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
-      <div className="p-6 pb-4 border-b border-[#E5E7EB]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-[#F3F4F6] rounded-xl p-2">
-              <MapPin className="h-5 w-5 text-[#4FA59C]" />
+    <div className="space-y-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+        <div className="p-6 pb-4 border-b border-[#E5E7EB]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-[#F3F4F6] rounded-xl p-2">
+                <MapPin className="h-5 w-5 text-[#4FA59C]" />
+              </div>
+              <h2 className="text-xl font-semibold text-[#1F2937]">Pharmacy & State Coverage</h2>
             </div>
-            <h2 className="text-xl font-semibold text-[#1F2937]">Pharmacy & State Coverage</h2>
+            <button
+              onClick={() => {
+                if (formContext.mode === 'new') {
+                  closeForm()
+                } else {
+                  openNewCoverageForm()
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              {formContext.mode === 'new' ? 'Close Form' : 'Add Coverage'}
+            </button>
           </div>
-          <button 
-            onClick={() => {
-              if (!showAddForm) {
-                resetCoverageForm()
-                setShowAddForm(true)
-              } else {
-                setShowAddForm(false)
-              }
-            }}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
-          >
-            <Plus className="h-4 w-4" />
-            Add Coverage
-          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          {error && (
+            <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-sm shadow-sm">
+              {error}
+            </div>
+          )}
+
+          {isNewFormOpen && renderCoverageForm(false)}
         </div>
       </div>
-      <div className="p-6 space-y-4">
-        {error && (
-          <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-sm shadow-sm">
-            {error}
-          </div>
-        )}
 
-        {/* Add Assignment Form */}
-        {showAddForm && (
-          <div className="p-6 border border-[#E5E7EB] rounded-2xl space-y-4 bg-[#F9FAFB]">
-            <div>
-              <label className="text-sm font-medium text-[#4B5563] mb-2 block">Select Pharmacy</label>
-              <select
-                value={selectedPharmacy}
-                onChange={(e) => {
-                  setSelectedPharmacy(e.target.value)
-                  setSelectedStates([]) // Reset states when pharmacy changes
-                }}
-                className="w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-              >
-                <option value="">Choose a pharmacy...</option>
-                {pharmacies.map((pharmacy) => (
-                  <option key={pharmacy.id} value={pharmacy.id}>
-                    {pharmacy.name} ({pharmacy.supportedStates.length} states)
-                  </option>
-                ))}
-              </select>
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-[#9CA3AF] uppercase tracking-wider">Current Coverage</h3>
+        {sortedCoverageGroups.length === 0 ? (
+          <div className="text-center p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl bg-[#F9FAFB]">
+            <div className="bg-white rounded-full p-4 mx-auto w-fit mb-3">
+              <Building2 className="h-8 w-8 text-[#9CA3AF]" />
             </div>
+            <p className="text-sm text-[#6B7280]">
+              No pharmacy coverage assigned yet. Add coverage to make this product available in specific states.
+            </p>
+          </div>
+        ) : (
+          sortedCoverageGroups.map((group) => {
+            const firstAssignment = group.assignments[0]
+            const isEditingThisCoverage =
+              formContext.mode === 'existing' && formContext.coverage.key === group.key
 
-            {selectedPharmacy && (
-              <div>
-                <label className="text-sm font-medium text-[#4B5563] mb-2 block">
-                  Select States (available for this pharmacy)
-                </label>
-                <div className="max-h-48 overflow-y-auto border border-[#E5E7EB] rounded-xl p-3 bg-white">
-                  {availableStatesForSelectedPharmacy.length === 0 ? (
-                    <p className="text-sm text-[#6B7280] p-2">
-                      All states supported by this pharmacy are already assigned.
+            return (
+              <div key={group.key} className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
+                <div className="p-6 pb-4 border-b border-[#E5E7EB] flex items-start justify-between">
+                  <div>
+                    <h4 className="text-lg font-semibold text-[#1F2937]">{group.coverageName}</h4>
+                    <p className="text-sm text-[#6B7280] mt-1">
+                      Managed by <span className="font-medium text-[#1F2937]">{group.pharmacy.name}</span> • {group.assignments.length} states covered
                     </p>
-                  ) : (
-                    <>
-                      <label className="flex items-center gap-2 text-sm font-medium cursor-pointer hover:bg-[#F3F4F6] p-2 rounded-xl mb-2 border-b border-[#E5E7EB]">
-                        <input
-                          type="checkbox"
-                          checked={selectedStates.length === availableStatesForSelectedPharmacy.length}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedStates(availableStatesForSelectedPharmacy.map(s => s.code))
-                            } else {
-                              setSelectedStates([])
-                            }
-                          }}
-                          className="w-4 h-4 rounded border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C] focus:ring-2 focus:ring-opacity-50"
-                        />
-                        <span className="text-[#1F2937]">Select All ({availableStatesForSelectedPharmacy.length} states)</span>
-                      </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {availableStatesForSelectedPharmacy.map((state) => (
-                          <label key={state.code} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[#F3F4F6] p-2 rounded-xl transition-colors">
-                            <input
-                              type="checkbox"
-                              checked={selectedStates.includes(state.code)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedStates([...selectedStates, state.code])
-                                } else {
-                                  setSelectedStates(selectedStates.filter(s => s !== state.code))
-                                }
-                              }}
-                              className="w-4 h-4 rounded border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C] focus:ring-2 focus:ring-opacity-50"
-                            />
-                            <span className="text-[#1F2937]">{state.code}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Pharmacy Product Selector */}
-            {selectedPharmacy && selectedStates.length > 0 && (
-              <div>
-                <label className="text-sm font-medium text-[#4B5563] mb-2 block">
-                  Select Pharmacy Product (Optional)
-                </label>
-                {loadingProducts ? (
-                  <div className="flex items-center justify-center p-4 border border-[#E5E7EB] rounded-xl bg-white">
-                    <Loader2 className="h-5 w-5 animate-spin text-[#4FA59C] mr-2" />
-                    <span className="text-sm text-[#6B7280]">Loading products...</span>
+                    {group.coverageSig && (
+                      <p className="text-sm text-[#4B5563] mt-2 italic">
+                        SIG: {group.coverageSig}
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <>
-                    <input
-                      type="text"
-                      placeholder="Search products by name or SKU..."
-                      value={productSearchQuery}
-                      onChange={(e) => setProductSearchQuery(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] mb-2 focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                    />
-                    <div className="max-h-64 overflow-y-auto border border-[#E5E7EB] rounded-xl bg-white">
-                      {filteredPharmacyProducts.length === 0 ? (
-                        <p className="text-sm text-[#6B7280] p-4 text-center">
-                          {productSearchQuery ? "No products found matching your search." : "No products available."}
-                        </p>
-                      ) : (
-                        <div className="divide-y divide-[#E5E7EB]">
-                          {filteredPharmacyProducts.map((product) => (
-                            <label
-                              key={product.id}
-                              className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-[#F9FAFB] transition-colors ${
-                                selectedPharmacyProduct?.id === product.id ? 'bg-[#F3F4F6]' : ''
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name="pharmacyProduct"
-                                checked={selectedPharmacyProduct?.id === product.id}
-                                onChange={() => {
-                                  setSelectedPharmacyProduct(product)
-                                  const defaultName = product.nameWithStrength || product.name || ""
-                                  if (!customProductName && defaultName) {
-                                    setCustomProductName(defaultName)
-                                  }
-                                  if (!customSig && product.sig) {
-                                    setCustomSig(product.sig)
-                                  }
-                                }}
-                                className="mt-1 w-4 h-4 border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C]"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm text-[#1F2937]">
-                                  {product.nameWithStrength || product.name}
-                                </div>
-                                <div className="text-xs text-[#9CA3AF] mt-1">
-                                  SKU: {product.sku}
-                                  {product.dispense && ` • ${product.dispense}`}
-                                  {product.wholesalePrice && ` • $${product.wholesalePrice}`}
-                                </div>
-                                {product.sig && (
-                                  <div className="text-xs text-[#6B7280] mt-1 italic">
-                                    SIG: {product.sig}
-                                  </div>
-                                )}
-                                {product.label && (
-                                  <div className="text-xs text-[#9CA3AF] mt-1">
-                                    {product.label}
-                                  </div>
-                                )}
-                              </div>
-                            </label>
-                          ))}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openExistingCoverageForm(group)}
+                      disabled={!group.coverageId}
+                      className={`px-4 py-2 rounded-full border border-[#4FA59C] text-[#4FA59C] transition-all text-sm font-medium ${group.coverageId ? 'hover:bg-[#ECFDF5]' : 'opacity-50 cursor-not-allowed'
+                        }`}
+                    >
+                      Add more states/products
+                    </button>
+                    <button
+                      onClick={() =>
+                        handleRemoveCoverageGroup({
+                          coverageId: group.coverageId,
+                          pharmacyId: group.pharmacy.id,
+                          pharmacyName: group.pharmacy.name,
+                          coverageName: group.coverageName,
+                        })
+                      }
+                      className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-xl transition-all"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6 space-y-3">
+                  {firstAssignment?.pharmacyProductName && (
+                    <div className="space-y-1">
+                      <div className="text-sm">
+                        <span className="text-[#9CA3AF]">Pharmacy Product: </span>
+                        <span className="font-medium text-[#1F2937]">{firstAssignment.pharmacyProductName}</span>
+                        {firstAssignment.pharmacyProductId && (
+                          <span className="text-[#9CA3AF] ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
+                        )}
+                      </div>
+                      {group.pharmacy.slug === 'ironsail' && firstAssignment.form && (
+                        <div className="text-sm">
+                          <span className="text-[#9CA3AF]">Medication Form: </span>
+                          <span className="text-[#1F2937]">{firstAssignment.form}</span>
+                        </div>
+                      )}
+                      {group.pharmacy.slug === 'ironsail' && firstAssignment.rxId && (
+                        <div className="text-sm">
+                          <span className="text-[#9CA3AF]">RX ID: </span>
+                          <span className="text-[#1F2937] font-mono">{firstAssignment.rxId}</span>
                         </div>
                       )}
                     </div>
-                    {selectedPharmacyProduct && (
-                      <button
-                        onClick={() => setSelectedPharmacyProduct(null)}
-                        className="mt-2 px-4 py-2 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
-                      >
-                        Clear Selection
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
+                  )}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-sm font-medium text-[#4B5563] mb-2 block">
-                  Custom Product Name
-                </label>
-                <input
-                  type="text"
-                  value={customProductName}
-                  onChange={(e) => setCustomProductName(e.target.value)}
-                  placeholder="e.g. NAD+ Wellness Kit"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                  maxLength={120}
-                />
-                <p className="text-xs text-[#9CA3AF] mt-1">
-                  Displayed on the coverage card. Keep it short and descriptive.
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-[#4B5563] mb-2 block">
-                  Custom SIG (Dispensing Instructions)
-                </label>
-                <textarea
-                  value={customSig}
-                  onChange={(e) => setCustomSig(e.target.value)}
-                  placeholder="e.g. Take 1 capsule daily with food."
-                  rows={3}
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all resize-none"
-                  maxLength={500}
-                />
-                <p className="text-xs text-[#9CA3AF] mt-1">
-                  This will appear on the coverage card and is saved with the assignment.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleAddAssignment}
-                disabled={
-                  !selectedPharmacy ||
-                  selectedStates.length === 0 ||
-                  !customProductName.trim() ||
-                  !customSig.trim() ||
-                  saving
-                }
-                className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Assigning...
-                  </>
-                ) : (
-                  "Assign Pharmacy"
-                )}
-              </button>
-              <button 
-                onClick={() => {
-                  resetCoverageForm()
-                  setShowAddForm(false)
-                }}
-                className="px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Current Assignments */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-[#9CA3AF] uppercase tracking-wider">Current Coverage</h3>
-          {sortedCoverageGroups.length === 0 ? (
-            <div className="text-center p-8 border-2 border-dashed border-[#E5E7EB] rounded-2xl bg-[#F9FAFB]">
-              <div className="bg-white rounded-full p-4 mx-auto w-fit mb-3">
-                <Building2 className="h-8 w-8 text-[#9CA3AF]" />
-              </div>
-              <p className="text-sm text-[#6B7280]">
-                No pharmacy coverage assigned yet. Add coverage to make this product available in specific states.
-              </p>
-            </div>
-          ) : (
-            <>
-              {sortedCoverageGroups.map((group) => {
-                const firstAssignment = group.assignments[0]
-                const states = group.assignments.map(a => a.state)
-
-                return (
-                  <div key={group.key} className="p-5 border border-[#E5E7EB] rounded-2xl bg-white hover:shadow-md transition-all">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-[#1F2937] text-base">{group.coverageName}</h4>
-                        <p className="text-sm text-[#6B7280] mt-0.5">
-                          Managed by <span className="font-medium text-[#1F2937]">{group.pharmacy.name}</span> • {states.length} states covered
-                        </p>
-                        <div className="mt-3 space-y-2">
-                          {group.coverageSig && (
-                            <div className="text-sm">
-                              <span className="text-[#9CA3AF]">SIG: </span>
-                              <span className="text-[#1F2937] italic">{group.coverageSig}</span>
-                            </div>
-                          )}
-
-                          {firstAssignment?.pharmacyProductName && (
-                            <div className="space-y-1">
-                              <div className="text-sm">
-                                <span className="text-[#9CA3AF]">Pharmacy Product: </span>
-                                <span className="font-medium text-[#1F2937]">{firstAssignment.pharmacyProductName}</span>
-                                {firstAssignment.pharmacyProductId && (
-                                  <span className="text-[#9CA3AF] ml-2">(SKU: {firstAssignment.pharmacyProductId})</span>
-                                )}
-                              </div>
-                              {group.pharmacy.slug === 'ironsail' && firstAssignment.form && (
-                                <div className="text-sm">
-                                  <span className="text-[#9CA3AF]">Medication Form: </span>
-                                  <span className="text-[#1F2937]">{firstAssignment.form}</span>
-                                </div>
-                              )}
-                              {group.pharmacy.slug === 'ironsail' && firstAssignment.rxId && (
-                                <div className="text-sm">
-                                  <span className="text-[#9CA3AF]">RX ID: </span>
-                                  <span className="text-[#1F2937] font-mono">{firstAssignment.rxId}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {firstAssignment && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[#9CA3AF] text-sm">Wholesale Price:</span>
-                              <div className="flex items-center gap-1">
-                                <span className="text-sm text-[#4B5563]">$</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="0.00"
-                                  className="w-24 h-8 text-sm px-3 py-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                                  defaultValue={firstAssignment.pharmacyWholesaleCost || ""}
-                                  onBlur={(e) => {
-                                    const customPrice = parseFloat(e.target.value)
-                                    if (!isNaN(customPrice) && customPrice > 0) {
-                                      handleUpdateCustomPrice(firstAssignment.id, customPrice)
-                                    }
-                                  }}
-                                />
-                              </div>
-                              {firstAssignment.pharmacyWholesaleCost && (
-                                <span className="inline-block px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs">From Spreadsheet</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                  {firstAssignment && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#9CA3AF] text-sm">Wholesale Price:</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-[#4B5563]">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          className="w-24 h-8 text-sm px-3 py-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                          defaultValue={firstAssignment.pharmacyWholesaleCost || ""}
+                          onBlur={(e) => {
+                            const customPrice = parseFloat(e.target.value)
+                            if (!isNaN(customPrice) && customPrice > 0) {
+                              handleUpdateCustomPrice(firstAssignment.id, customPrice)
+                            }
+                          }}
+                        />
                       </div>
-                      <button
-                        onClick={() =>
-                          handleRemoveCoverageGroup({
-                            coverageId: group.coverageId,
-                            pharmacyId: group.pharmacy.id,
-                            pharmacyName: group.pharmacy.name,
-                            coverageName: group.coverageName,
-                          })
-                        }
-                        className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-xl transition-all"
+                      {firstAssignment.pharmacyWholesaleCost && (
+                        <span className="inline-block px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs">From Spreadsheet</span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    {group.assignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        className="group relative inline-flex items-center gap-1 px-3 py-1.5 bg-[#F3F4F6] text-[#4B5563] rounded-full border border-[#E5E7EB] text-xs font-medium hover:bg-white hover:border-[#4FA59C] transition-all"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {group.assignments.map((assignment) => (
-                        <div
-                          key={assignment.id}
-                          className="group relative inline-flex items-center gap-1 px-3 py-1.5 bg-[#F3F4F6] text-[#4B5563] rounded-full border border-[#E5E7EB] text-xs font-medium hover:bg-white hover:border-[#4FA59C] transition-all"
+                        <span>{assignment.state}</span>
+                        <button
+                          onClick={() => handleRemoveAssignment(assignment.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity ml-1"
                         >
-                          <span>{assignment.state}</span>
-                          <button
-                            onClick={() => handleRemoveAssignment(assignment.id)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-1"
-                          >
-                            <Trash2 className="h-3 w-3 text-[#EF4444]" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                          <Trash2 className="h-3 w-3 text-[#EF4444]" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                )
-              })}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetCoverageForm()
-                    setShowAddForm(true)
-                  }}
-                  className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full border border-dashed border-[#4FA59C] text-[#4FA59C] hover:bg-[#ECFDF5] hover:border-[#22C55E] hover:text-[#166534] text-sm font-medium transition-all"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add 1 more product
-                </button>
+
+                  {isEditingThisCoverage && renderCoverageForm(true)}
+                </div>
               </div>
-            </>
-          )}
-        </div>
+            )
+          })
+        )}
       </div>
     </div>
   )
