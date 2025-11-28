@@ -659,7 +659,7 @@ export default function Products() {
                 onClick={handleCreateProduct}
                 className="rounded-full px-6 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all"
               >
-                <Plus className="mr-2 h-5 w-5" /> Add Product
+                <Plus className="mr-2 h-5 w-5" /> Product Builder
               </Button>
             </div>
           </div>
@@ -677,8 +677,8 @@ export default function Products() {
             <button
               onClick={() => setActiveTab('selected')}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === 'selected'
-                  ? 'bg-[#4FA59C] text-white shadow-sm'
-                  : 'text-[#6B7280] hover:bg-[#F3F4F6]'
+                ? 'bg-[#4FA59C] text-white shadow-sm'
+                : 'text-[#6B7280] hover:bg-[#F3F4F6]'
                 }`}
             >
               Selected Products
@@ -686,8 +686,8 @@ export default function Products() {
             <button
               onClick={() => setActiveTab('all')}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === 'all'
-                  ? 'bg-[#4FA59C] text-white shadow-sm'
-                  : 'text-[#6B7280] hover:bg-[#F3F4F6]'
+                ? 'bg-[#4FA59C] text-white shadow-sm'
+                : 'text-[#6B7280] hover:bg-[#F3F4F6]'
                 }`}
             >
               All Products
@@ -751,9 +751,9 @@ export default function Products() {
                   {/* Product Image Header */}
                   {product.imageUrl && (
                     <div className="w-full h-48 overflow-hidden bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                      <img 
-                        src={product.imageUrl} 
-                        alt={product.name} 
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
@@ -763,7 +763,7 @@ export default function Products() {
                       <ImageIcon className="h-16 w-16 text-[#D1D5DB]" />
                     </div>
                   )}
-                  
+
                   <div className="p-6 space-y-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
