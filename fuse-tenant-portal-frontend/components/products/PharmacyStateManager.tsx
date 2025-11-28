@@ -673,10 +673,12 @@ export function PharmacyStateManager({ productId }: PharmacyStateManagerProps) {
                             onChange={() => {
                               setSelectedPharmacyProduct(product)
                               const defaultName = product.nameWithStrength || product.name || ""
-                              if (defaultName) {
+                              if (defaultName && customProductName.trim().length === 0) {
                                 setCustomProductName(defaultName)
                               }
-                              setCustomSig(product.sig || 'Take as directed by your healthcare provider')
+                              if (customSig.trim().length === 0) {
+                                setCustomSig(product.sig || 'Take as directed by your healthcare provider')
+                              }
                             }}
                             className="mt-1 w-4 h-4 border-[#E5E7EB] text-[#4FA59C] focus:ring-[#4FA59C]"
                           />
