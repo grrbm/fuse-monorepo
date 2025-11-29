@@ -2463,22 +2463,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             questionnaireProducts={questionnaire.treatment?.products}
                             selectedProducts={selectedProducts}
                             treatmentName={treatmentName ?? productName ?? ''}
+                            pharmacyCoverages={pharmacyCoverages}
                           />
-
-                          {/* Display pharmacy coverages if multiple exist */}
-                          {pharmacyCoverages.length > 1 && (
-                            <div className="border-t border-gray-200 pt-6">
-                              <h3 className="text-lg font-semibold text-gray-900 mb-4">Contains products:</h3>
-                              <div className="space-y-3">
-                                {pharmacyCoverages.map((coverage) => (
-                                  <div key={coverage.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                                    <h4 className="font-semibold text-gray-900 mb-1">{coverage.customName}</h4>
-                                    <p className="text-sm text-gray-600">Note: {coverage.customSig}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
 
                           {paymentStatus === 'succeeded' && (
                             <div className="pt-2">

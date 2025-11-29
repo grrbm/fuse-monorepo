@@ -112,6 +112,17 @@ export interface PlanOption {
     features?: string[];
 }
 
+export interface PharmacyCoverage {
+    id: string;
+    customName: string;
+    customSig: string;
+    pharmacy?: {
+        id: string;
+        name: string;
+        slug: string;
+    };
+}
+
 export interface CheckoutViewProps {
     plans: PlanOption[];
     selectedPlan: string;
@@ -129,6 +140,7 @@ export interface CheckoutViewProps {
     questionnaireProducts?: Product[];
     selectedProducts: Record<string, number>;
     treatmentName: string;
+    pharmacyCoverages?: PharmacyCoverage[];
 }
 
 

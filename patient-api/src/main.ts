@@ -11287,6 +11287,52 @@ app.get("/public/questionnaires/first-user-profile", async (_req, res) => {
   }
 });
 
+// Public: get tenant product by ID
+app.get("/tenant-products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('🏢 [PUBLIC] Fetching tenant product:', id);
+
+    const tenantProduct = await TenantProduct.findByPk(id, {
+      include: [
+        { model: Product, as: 'product' },
+        { model: Questionnaire, as: 'questionnaire' }
+      ]
+    });
+
+    if (!tenantProduct) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant product not found'
+      });
+    }
+
+    console.log('🏢 [PUBLIC] Found tenant product, productId:', tenantProduct.productId);
+
+    res.json({
+      success: true,
+      data: {
+        id: tenantProduct.id,
+        productId: tenantProduct.productId,
+        clinicId: tenantProduct.clinicId,
+        questionnaireId: tenantProduct.questionnaireId,
+        price: tenantProduct.price,
+        stripeProductId: tenantProduct.stripeProductId,
+        stripePriceId: tenantProduct.stripePriceId,
+        product: tenantProduct.product,
+        questionnaire: tenantProduct.questionnaire
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ [PUBLIC] Error fetching tenant product:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch tenant product'
+    });
+  }
+});
+
 // Public: get pharmacy coverages for a product
 app.get("/public/products/:productId/pharmacy-coverages", async (req, res) => {
   try {
