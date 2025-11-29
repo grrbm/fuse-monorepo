@@ -589,7 +589,7 @@ export default function Forms() {
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <h3 className="text-lg font-semibold text-[#1F2937]">{template.title || "Untitled Template"}</h3>
-                              {template.description && (
+                              {template.description && !template.description.startsWith('Questionnaire for') && (
                                 <p className="text-sm text-[#6B7280] mt-2">{template.description}</p>
                               )}
                             </div>
