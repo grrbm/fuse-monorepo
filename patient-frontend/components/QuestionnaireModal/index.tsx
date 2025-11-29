@@ -77,6 +77,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [accountCreated, setAccountCreated] = React.useState(false);
   const [patientName, setPatientName] = React.useState<string>('');
   const [patientFirstName, setPatientFirstName] = React.useState<string>('');
+  const [pharmacyCoverages, setPharmacyCoverages] = React.useState<any[]>([]);
 
   // Sign-in/Sign-up toggle
   const [isSignInMode, setIsSignInMode] = React.useState(false);
@@ -737,6 +738,48 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       fetchCustomColor();
     }
   }, [questionnaireId, domainClinic?.id, isOpen]);
+
+  // Fetch pharmacy coverages for the product
+  React.useEffect(() => {
+    const fetchPharmacyCoverages = async () => {
+      if (!isOpen || !tenantProductId) {
+        return;
+      }
+
+      try {
+        console.log('💊 [PHARMACY COVERAGE] Fetching coverages for tenantProductId:', tenantProductId);
+
+        // Fetch the tenant product to get the base productId
+        const productRes = await fetch(`/api/public/tenant-products/${tenantProductId}`);
+        const productData = await productRes.json();
+
+        if (!productRes.ok || !productData?.success || !productData?.data?.productId) {
+          console.log('⚠️ [PHARMACY COVERAGE] Could not get base productId');
+          return;
+        }
+
+        const baseProductId = productData.data.productId;
+        console.log('💊 [PHARMACY COVERAGE] Base productId:', baseProductId);
+
+        // Fetch pharmacy coverages directly
+        const coverageRes = await fetch(`/api/public/products/${baseProductId}/pharmacy-coverages`);
+        const coverageData = await coverageRes.json();
+
+        if (coverageRes.ok && coverageData?.success && Array.isArray(coverageData?.data)) {
+          console.log('💊 [PHARMACY COVERAGE] Found coverages:', coverageData.data);
+          setPharmacyCoverages(coverageData.data);
+        } else {
+          console.log('⚠️ [PHARMACY COVERAGE] No coverages found');
+          setPharmacyCoverages([]);
+        }
+      } catch (error) {
+        console.error('❌ [PHARMACY COVERAGE] Error fetching:', error);
+        setPharmacyCoverages([]);
+      }
+    };
+
+    fetchPharmacyCoverages();
+  }, [isOpen, tenantProductId]);
 
   // Track form view when modal opens
   React.useEffect(() => {
@@ -2421,6 +2464,21 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             selectedProducts={selectedProducts}
                             treatmentName={treatmentName ?? productName ?? ''}
                           />
+
+                          {/* Display pharmacy coverages if multiple exist */}
+                          {pharmacyCoverages.length > 1 && (
+                            <div className="border-t border-gray-200 pt-6">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-4">Contains products:</h3>
+                              <div className="space-y-3">
+                                {pharmacyCoverages.map((coverage) => (
+                                  <div key={coverage.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                    <h4 className="font-semibold text-gray-900 mb-1">{coverage.customName}</h4>
+                                    <p className="text-sm text-gray-600">Note: {coverage.customSig}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           {paymentStatus === 'succeeded' && (
                             <div className="pt-2">
