@@ -164,11 +164,13 @@ class ProductService {
                     ? [legacyCategory].filter(Boolean)
                     : []
 
+            // Only set brandId if explicitly provided in the input
+            // Don't automatically assign based on user role - let the caller decide
             const product = await Product.create({
                 ...restInput,
                 categories,
                 isActive: input.isActive ?? true,
-                brandId: user.hasRoleSync('brand') ? userId : undefined,
+                brandId: (restInput as any).brandId || null,
             })
 
             // If there are requiredDoctorQuestions, create a FormSectionTemplate
