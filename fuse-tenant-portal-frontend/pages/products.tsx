@@ -389,6 +389,30 @@ export default function Products() {
     }
   }
 
+  const handleQuickActivate = async (product: Product) => {
+    if (!token) return
+
+    try {
+      const response = await fetch(`${baseUrl}/products-management/${product.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isActive: true }),
+      })
+
+      if (!response.ok) throw new Error("Failed to activate product")
+
+      const data = await response.json()
+      setSaveMessage(data.message || "Product activated successfully")
+      fetchProducts()
+    } catch (error: any) {
+      console.error("❌ Error activating product:", error)
+      setSaveMessage(error.message)
+    }
+  }
+
   const getProductCategories = (product: Product): string[] => {
     if (Array.isArray(product.categories) && product.categories.length > 0) {
       return product.categories
@@ -889,12 +913,20 @@ export default function Products() {
                             Configure
                           </button>
                           {activeTab === 'all' && (
-                            <button
-                              onClick={() => handlePermanentDelete(product)}
-                              className="rounded-full px-4 py-2.5 bg-[#EF4444] text-white text-sm font-medium hover:bg-[#DC2626] transition-all"
-                            >
-                              Delete
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleQuickActivate(product)}
+                                className="rounded-full px-4 py-2.5 bg-[#10B981] text-white text-sm font-medium hover:bg-[#059669] transition-all"
+                              >
+                                Activate
+                              </button>
+                              <button
+                                onClick={() => handlePermanentDelete(product)}
+                                className="rounded-full px-4 py-2.5 bg-[#EF4444] text-white text-sm font-medium hover:bg-[#DC2626] transition-all"
+                              >
+                                Delete
+                              </button>
+                            </>
                           )}
                         </>
                       )}
