@@ -40,45 +40,51 @@ class IronSailOrderService {
 
     async createOrder(order: Order, coverage?: PharmacyProduct) {
         try {
-            console.log(`🚢 [IronSail] Processing order ${order.orderNumber}`);
+            const coverageName = coverage?.pharmacyCoverage?.customName || 'Product';
+            console.log(`🚢 [IronSail] Processing order ${order.orderNumber} for coverage: ${coverageName}`);
 
             // Extract order data
             const orderData = this.extractOrderData(order, coverage);
 
             // 1. Generate PDF
-            console.log(`📄 [IronSail] Generating PDF for order ${order.orderNumber}`);
+            console.log(`📄 [IronSail] Generating PDF for order ${order.orderNumber} - ${coverageName}`);
             const pdfBuffer = await this.generatePDF(orderData);
             console.log(`✅ [IronSail] PDF generated successfully (${pdfBuffer.length} bytes)`);
 
             // 2. Send email with PDF attachment
-            console.log(`📧 [IronSail] Sending email for order ${order.orderNumber}`);
+            console.log(`📧 [IronSail] Sending email for order ${order.orderNumber} - ${coverageName}`);
             try {
-                await this.sendEmail(orderData, pdfBuffer);
-                console.log(`✅ [IronSail] Email sent successfully`);
+                await this.sendEmail(orderData, pdfBuffer, coverageName);
+                console.log(`✅ [IronSail] Email sent successfully for ${coverageName}`);
             } catch (emailError) {
-                console.error(`❌ [IronSail] Email send failed:`, emailError);
+                console.error(`❌ [IronSail] Email send failed for ${coverageName}:`, emailError);
                 throw new Error(`Email send failed: ${emailError instanceof Error ? emailError.message : 'Unknown error'}`);
             }
 
             // 3. Write to Google Spreadsheet
-            console.log(`📊 [IronSail] Writing to spreadsheet for order ${order.orderNumber}`);
+            console.log(`📊 [IronSail] Writing to spreadsheet for order ${order.orderNumber} - ${coverageName}`);
             try {
                 await this.writeToSpreadsheet(orderData);
-                console.log(`✅ [IronSail] Spreadsheet updated successfully`);
+                console.log(`✅ [IronSail] Spreadsheet updated successfully for ${coverageName}`);
             } catch (spreadsheetError) {
-                console.error(`❌ [IronSail] Spreadsheet write failed:`, spreadsheetError);
+                console.error(`❌ [IronSail] Spreadsheet write failed for ${coverageName}:`, spreadsheetError);
                 throw new Error(`Spreadsheet write failed: ${spreadsheetError instanceof Error ? spreadsheetError.message : 'Unknown error'}`);
             }
 
-            // 4. Create ShippingOrder record
-            console.log(`📋 [IronSail] Creating ShippingOrder record`);
+            // 4. Create ShippingOrder record (include coverage ID if available for uniqueness)
+            console.log(`📋 [IronSail] Creating ShippingOrder record for ${coverageName}`);
+            const coverageId = coverage?.pharmacyCoverageId || coverage?.id;
+            const pharmacyOrderId = coverageId
+                ? `IRONSAIL-${order.orderNumber}-${coverageId.substring(0, 8)}`
+                : `IRONSAIL-${order.orderNumber}`;
+
             await ShippingOrder.create({
                 orderId: order.id,
                 shippingAddressId: order.shippingAddressId,
                 status: OrderShippingStatus.PROCESSING,
-                pharmacyOrderId: `IRONSAIL-${order.orderNumber}`
+                pharmacyOrderId: pharmacyOrderId
             });
-            console.log(`✅ [IronSail] ShippingOrder record created`);
+            console.log(`✅ [IronSail] ShippingOrder record created with ID: ${pharmacyOrderId}`);
 
             console.log(`✅ [IronSail] Order ${order.orderNumber} processed successfully`);
 
@@ -104,13 +110,14 @@ class IronSailOrderService {
     // Public method to retry email send for an order
     async retrySendEmail(order: Order, coverage?: PharmacyProduct) {
         try {
-            console.log(`📧 [IronSail] Retrying email send for order ${order.orderNumber}`);
+            const coverageName = coverage?.pharmacyCoverage?.customName || 'Product';
+            console.log(`📧 [IronSail] Retrying email send for order ${order.orderNumber} - ${coverageName}`);
 
             const orderData = this.extractOrderData(order, coverage);
             const pdfBuffer = await this.generatePDF(orderData);
 
-            await this.sendEmail(orderData, pdfBuffer);
-            console.log(`✅ [IronSail] Email retry successful for ${order.orderNumber}`);
+            await this.sendEmail(orderData, pdfBuffer, coverageName);
+            console.log(`✅ [IronSail] Email retry successful for ${order.orderNumber} - ${coverageName}`);
 
             return {
                 success: true,
@@ -344,7 +351,7 @@ class IronSailOrderService {
         });
     }
 
-    private async sendEmail(data: IronSailOrderData, pdfBuffer: Buffer): Promise<void> {
+    private async sendEmail(data: IronSailOrderData, pdfBuffer: Buffer, coverageIdentifier?: string): Promise<void> {
         const recipientEmail = process.env.IRONSAIL_FUSE_PRODUCTS_DESTINATION_EMAIL_ADDRESS || 'orders@ironsail.com';
         const patientFullName = `${data.patientFirstName} ${data.patientLastName}`.trim();
 
@@ -353,11 +360,14 @@ class IronSailOrderService {
             .filter(email => email.toLowerCase() !== recipientEmail.toLowerCase())
             .map(email => ({ email }));
 
+        // Add coverage identifier to subject if provided (for multi-coverage products)
+        const subjectSuffix = coverageIdentifier ? ` - ${coverageIdentifier}` : '';
+
         const msg: any = {
             to: recipientEmail,
             from: 'noreply@fusehealth.com',
             ...(bccEmails.length > 0 && { bcc: bccEmails }), // Only add BCC if there are emails
-            subject: `New Prescription Order ${data.orderNumber} - ${patientFullName}`,
+            subject: `New Prescription Order ${data.orderNumber}${subjectSuffix} - ${patientFullName}`,
             html: `
         <h2>New Electronic Prescription Order from FUSE HEALTH INC</h2>
         <p><strong>Order Number:</strong> ${data.orderNumber}</p>
