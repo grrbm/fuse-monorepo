@@ -885,13 +885,16 @@ export default function Products() {
 
                     <div className="space-y-3">
                       {/* Pharmacy Coverages - Show if bundle has multiple medications */}
-                      {product.pharmacyCoverages && product.pharmacyCoverages.length > 0 ? (
-                        <div className="bg-[#F0F9FF] rounded-xl p-2.5 border border-[#BAE6FD]">
-                          <p className="text-[10px] font-semibold text-[#0369A1] mb-1.5 uppercase tracking-wide">
-                            {product.pharmacyCoverages.length > 1 ? `Bundle (${product.pharmacyCoverages.length} medications)` : 'Medication'}
-                          </p>
-                          <div className="space-y-1">
-                            {product.pharmacyCoverages.map((coverage, idx) => (
+                      <div className="bg-[#F0F9FF] rounded-xl p-2.5 border border-[#BAE6FD]">
+                        <p className="text-[10px] font-semibold text-[#0369A1] mb-1.5 uppercase tracking-wide">
+                          {product.pharmacyCoverages && product.pharmacyCoverages.length > 1
+                            ? `Bundle (${product.pharmacyCoverages.length} medications)`
+                            : 'Single Medication'}
+                        </p>
+
+                        <div className="space-y-1">
+                          {product.pharmacyCoverages && product.pharmacyCoverages.length > 0 ? (
+                            product.pharmacyCoverages.map((coverage, idx) => (
                               <div key={coverage.id} className="text-xs">
                                 <p className="font-semibold text-[#0C4A6E] leading-tight">
                                   • {coverage.customName || coverage.pharmacyProduct?.pharmacyProductName || 'Product'}
@@ -902,15 +905,27 @@ export default function Products() {
                                   </p>
                                 )}
                               </div>
-                            ))}
-                          </div>
+                            ))
+                          ) : (
+                            <>
+                              <div className="text-xs">
+                                <p className="font-semibold text-[#0C4A6E] leading-tight">
+                                  • {product.name}
+                                </p>
+                                {product.placeholderSig && (
+                                  <p className="text-[10px] text-[#64748B] leading-tight ml-2 truncate" title={product.placeholderSig}>
+                                    {product.placeholderSig}
+                                  </p>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </div>
-                      ) : (
-                        <div className="h-[72px]"></div>
-                      )}
+                      </div>
+                      {product.pharmacyCoverages && product.pharmacyCoverages.length <= 1 && <div className="h-[32px]"></div>}
 
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Product Questions</label>
+                        <label className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Medical Questions</label>
                         <select
                           value=""
                           onChange={(e) => handleAttachFormToProduct(product.id, e.target.value)}

@@ -5107,7 +5107,19 @@ app.get("/orders", authenticateJWT, async (req, res) => {
         {
           model: OrderItem,
           as: 'orderItems',
-          include: [{ model: Product, as: 'product' }]
+          include: [
+            {
+              model: Product,
+              as: 'product',
+              include: [
+                {
+                  model: PharmacyCoverage,
+                  as: 'pharmacyCoverages',
+                  required: false
+                }
+              ]
+            }
+          ]
         },
         {
           model: Payment,
