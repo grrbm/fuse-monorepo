@@ -2116,10 +2116,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       });
 
       const requestBody: any = {
-        tenantProductId: tenantProductId,
-        stripePriceId: stripePriceId || undefined, // Let backend create if missing
-        userDetails: userDetails,
-        questionnaireAnswers: questionnaireAnswers, // This is now the structured format
+          tenantProductId: tenantProductId,
+          stripePriceId: stripePriceId || undefined, // Let backend create if missing
+          userDetails: userDetails,
+          questionnaireAnswers: questionnaireAnswers, // This is now the structured format
         shippingInfo: shippingInfo,
         clinicName: domainClinic?.name // For dynamic statement descriptor
       };

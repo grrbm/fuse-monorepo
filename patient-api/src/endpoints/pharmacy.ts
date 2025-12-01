@@ -234,8 +234,8 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                     return res.status(404).json({
                         success: false,
                         message: "Pharmacy coverage not found"
-                    });
-                }
+                });
+            }
 
                 if (coverage.productId !== productId) {
                     return res.status(400).json({
@@ -280,8 +280,8 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 }
 
                 if (!trimmedCustomName || !trimmedCustomSig) {
-                    return res.status(400).json({
-                        success: false,
+                return res.status(400).json({
+                    success: false,
                         message: "customName and customSig are required"
                     });
                 }
@@ -336,9 +336,9 @@ export function registerPharmacyEndpoints(app: Express, authenticateJWT: any, ge
                 statesCount: assignments.length,
                 exampleAssignment: assignments[0] ? {
                     state: assignments[0].state,
-                    pharmacyProductId: assignments[0].pharmacyProductId,
-                    pharmacyProductName: assignments[0].pharmacyProductName,
-                    wholesaleCost: assignments[0].pharmacyWholesaleCost
+                pharmacyProductId: assignments[0].pharmacyProductId,
+                pharmacyProductName: assignments[0].pharmacyProductName,
+                wholesaleCost: assignments[0].pharmacyWholesaleCost
                 } : null
             });
 

@@ -381,8 +381,8 @@ export default function Forms() {
                 Configure product-specific forms and manage standardized question templates.
               </p>
             </div>
-            <button
-              onClick={refresh}
+            <button 
+              onClick={refresh} 
               disabled={loading}
               className="rounded-full px-6 py-2.5 border border-[#E5E7EB] text-[#4B5563] hover:bg-[#F3F4F6] transition-all text-sm font-medium flex items-center gap-2 disabled:opacity-50"
             >
@@ -395,36 +395,36 @@ export default function Forms() {
             <button
               onClick={() => setActiveTab("products")}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === "products"
-                ? "bg-[#4FA59C] text-white shadow-sm"
-                : "text-[#6B7280] hover:bg-[#F3F4F6]"
-                }`}
+                  ? "bg-[#4FA59C] text-white shadow-sm"
+                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
+              }`}
             >
               Medical Questions Templates
             </button>
             <button
               onClick={() => setActiveTab("templates")}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === "templates"
-                ? "bg-[#4FA59C] text-white shadow-sm"
-                : "text-[#6B7280] hover:bg-[#F3F4F6]"
-                }`}
+                  ? "bg-[#4FA59C] text-white shadow-sm"
+                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
+              }`}
             >
               Standardized Questions
             </button>
             <button
               onClick={() => setActiveTab("account")}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === "account"
-                ? "bg-[#4FA59C] text-white shadow-sm"
-                : "text-[#6B7280] hover:bg-[#F3F4F6]"
-                }`}
+                  ? "bg-[#4FA59C] text-white shadow-sm"
+                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
+              }`}
             >
               Account Questions
             </button>
             <button
               onClick={() => setActiveTab("structure")}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === "structure"
-                ? "bg-[#4FA59C] text-white shadow-sm"
-                : "text-[#6B7280] hover:bg-[#F3F4F6]"
-                }`}
+                  ? "bg-[#4FA59C] text-white shadow-sm"
+                  : "text-[#6B7280] hover:bg-[#F3F4F6]"
+              }`}
             >
               Global Structure
             </button>
@@ -504,7 +504,7 @@ export default function Forms() {
                       Clear Filters
                     </button>
                   )}
-                  <button
+                    <button 
                     onClick={async () => {
                       if (!token) return
                       setCreating(true)
@@ -543,7 +543,7 @@ export default function Forms() {
                   >
                     <Plus className="h-5 w-5" />
                     {creating ? 'Creating...' : 'Create New Template'}
-                  </button>
+                    </button>
                 </div>
               </div>
 
@@ -573,16 +573,16 @@ export default function Forms() {
                 })
 
                 return filtered.length === 0 ? (
-                  <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-16">
-                    <div className="flex flex-col items-center justify-center text-[#6B7280]">
-                      <div className="bg-[#F3F4F6] rounded-full p-6 mb-4">
-                        <Search className="h-12 w-12 text-[#9CA3AF]" />
-                      </div>
-                      <p className="text-lg text-[#4B5563]">No templates found matching your filters.</p>
+                <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-16">
+                  <div className="flex flex-col items-center justify-center text-[#6B7280]">
+                    <div className="bg-[#F3F4F6] rounded-full p-6 mb-4">
+                      <Search className="h-12 w-12 text-[#9CA3AF]" />
                     </div>
+                      <p className="text-lg text-[#4B5563]">No templates found matching your filters.</p>
                   </div>
-                ) : (
-                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                </div>
+              ) : (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {filtered.map((template: any) => (
                       <div key={template.id} className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden hover:shadow-md hover:border-[#4FA59C] transition-all">
                         <div className="p-6 pb-4 border-b border-[#E5E7EB]">
@@ -591,7 +591,7 @@ export default function Forms() {
                               <h3 className="text-lg font-semibold text-[#1F2937]">{template.title || "Untitled Template"}</h3>
                               {template.description && !template.description.startsWith('Questionnaire for') && (
                                 <p className="text-sm text-[#6B7280] mt-2">{template.description}</p>
-                              )}
+                                )}
                             </div>
                           </div>
                         </div>
@@ -605,7 +605,7 @@ export default function Forms() {
                               <Edit3 className="h-4 w-4" />
                               Edit Template
                             </button>
-                            <button
+                              <button
                               className="px-4 py-2.5 rounded-full border border-[#E5E7EB] text-[#EF4444] hover:bg-[#FEF2F2] text-sm font-medium transition-all"
                               onClick={async () => {
                                 if (!token) return
@@ -636,12 +636,12 @@ export default function Forms() {
                               }}
                             >
                               <Trash2 className="h-4 w-4" />
-                            </button>
+                              </button>
                           </div>
                         </div>
                       </div>
                     ))}
-                  </div>
+                </div>
                 )
               })()}
             </>
@@ -778,7 +778,7 @@ export default function Forms() {
                   </p>
                   {accountQuestionnaire ? (
                     <div className="grid grid-cols-2 gap-3">
-                      <button
+                      <button 
                         onClick={() => router.push(`/forms/editor/${accountQuestionnaire.id}`)}
                         className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all text-sm font-medium"
                       >
@@ -1022,7 +1022,7 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
 
   const handleSaveStructure = async () => {
     if (!token) return
-
+    
     setSaving(true)
     try {
       const newStructure: GlobalStructure = {
@@ -1070,7 +1070,7 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
 
     try {
       const updatedStructures = structures.filter(s => s.id !== id)
-
+      
       // Save to backend
       const response = await fetch(`${baseUrl}/global-form-structures`, {
         method: 'POST',
@@ -1267,70 +1267,70 @@ function GlobalStructureTab({ baseUrl, token }: { baseUrl: string, token: string
               <div>
                 <h3 className="text-lg font-semibold text-[#1F2937] mb-3">Form Sections</h3>
 
-                <div className="p-6 space-y-3">
-                  {sections.map((section, index) => (
-                    <div
-                      key={section.id}
-                      draggable
-                      onDragStart={() => handleDragStart(index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDragEnd={handleDragEnd}
+        <div className="p-6 space-y-3">
+          {sections.map((section, index) => (
+            <div
+              key={section.id}
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragEnd={handleDragEnd}
                       className={`bg-white border-2 rounded-xl p-5 transition-all cursor-move ${draggedIndex === index ? 'border-[#4FA59C] shadow-lg scale-105' : 'border-[#E5E7EB] hover:border-[#D1D5DB]'
-                        } ${!section.enabled ? 'opacity-60' : ''}`}
-                    >
-                      <div className="flex items-start gap-4">
-                        {/* Drag Handle */}
-                        <div className="flex-shrink-0 mt-1">
-                          <GripVertical className="h-5 w-5 text-[#9CA3AF]" />
-                        </div>
+              } ${!section.enabled ? 'opacity-60' : ''}`}
+            >
+              <div className="flex items-start gap-4">
+                {/* Drag Handle */}
+                <div className="flex-shrink-0 mt-1">
+                  <GripVertical className="h-5 w-5 text-[#9CA3AF]" />
+                </div>
 
-                        {/* Icon */}
-                        <div className="flex-shrink-0">
-                          <div className="w-12 h-12 bg-[#F3F4F6] rounded-xl flex items-center justify-center text-2xl">
-                            {section.icon}
-                          </div>
-                        </div>
+                {/* Icon */}
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-[#F3F4F6] rounded-xl flex items-center justify-center text-2xl">
+                    {section.icon}
+                  </div>
+                </div>
 
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 mb-1">
-                            <h3 className="font-semibold text-[#1F2937]">{section.label}</h3>
-                            <span className="px-2 py-0.5 bg-[#F3F4F6] text-[#6B7280] rounded-full text-xs font-medium">
-                              Step {index + 1}
-                            </span>
-                          </div>
-                          <p className="text-sm text-[#6B7280]">{section.description}</p>
-
-                          {/* Section-specific info */}
-                          {section.type === 'category_questions' && (
-                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-purple-50 border border-purple-200 rounded-lg">
-                              <span className="text-xs text-purple-700">✨ Supports Variants (Variant 1, Variant 2)</span>
-                            </div>
-                          )}
-                          {(section.type === 'account_creation' || section.type === 'checkout') && (
-                            <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-lg">
-                              <span className="text-xs text-green-700">🔒 Auto-injected by system</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Toggle */}
-                        <div className="flex-shrink-0">
-                          <button
-                            onClick={() => toggleSection(section.id)}
-                            disabled={section.type === 'account_creation' || section.type === 'checkout'}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${section.enabled ? 'bg-[#4FA59C]' : 'bg-gray-300'
-                              }`}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${section.enabled ? 'translate-x-6' : 'translate-x-1'
-                                }`}
-                            />
-                          </button>
-                        </div>
-                      </div>
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-1">
+                    <h3 className="font-semibold text-[#1F2937]">{section.label}</h3>
+                    <span className="px-2 py-0.5 bg-[#F3F4F6] text-[#6B7280] rounded-full text-xs font-medium">
+                      Step {index + 1}
+                    </span>
+                  </div>
+                  <p className="text-sm text-[#6B7280]">{section.description}</p>
+                  
+                  {/* Section-specific info */}
+                  {section.type === 'category_questions' && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-purple-50 border border-purple-200 rounded-lg">
+                      <span className="text-xs text-purple-700">✨ Supports Variants (Variant 1, Variant 2)</span>
                     </div>
-                  ))}
+                  )}
+                  {(section.type === 'account_creation' || section.type === 'checkout') && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded-lg">
+                      <span className="text-xs text-green-700">🔒 Auto-injected by system</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Toggle */}
+                <div className="flex-shrink-0">
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    disabled={section.type === 'account_creation' || section.type === 'checkout'}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${section.enabled ? 'bg-[#4FA59C]' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${section.enabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
                 </div>
               </div>
 

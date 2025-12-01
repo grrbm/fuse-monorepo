@@ -1995,7 +1995,7 @@ export default function TemplateEditor() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-between group">
-                        <p className="font-semibold text-foreground text-base">{template.title}</p>
+                    <p className="font-semibold text-foreground text-base">{template.title}</p>
                         <button
                           onClick={() => {
                             setTempTemplateName(template.title)

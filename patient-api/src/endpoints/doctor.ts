@@ -458,13 +458,13 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
 
             // Map all coverages to response format
             const coverageData = activeCoverages.map(coverage => {
-                // Use SIG from product placeholder first, then pharmacy coverage, then fallback to order notes or default
-                const sig = order.tenantProduct?.product?.placeholderSig ||
+            // Use SIG from product placeholder first, then pharmacy coverage, then fallback to order notes or default
+            const sig = order.tenantProduct?.product?.placeholderSig ||
                     coverage.pharmacyCoverage?.customSig ||
-                    coverage.sig ||
-                    order.doctorNotes ||
-                    order.notes ||
-                    'Take as directed by your healthcare provider';
+                coverage.sig ||
+                order.doctorNotes ||
+                order.notes ||
+                'Take as directed by your healthcare provider';
 
                 return {
                     id: coverage.id,
@@ -700,7 +700,7 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             const results: any[] = [];
             
             for (const coverage of ironSailCoverages) {
-                const result = await ironSailService.retrySendEmail(order, coverage);
+            const result = await ironSailService.retrySendEmail(order, coverage);
                 results.push({
                     coverageName: coverage.pharmacyCoverage?.customName || 'Product',
                     ...result
@@ -817,7 +817,7 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             const results: any[] = [];
             
             for (const coverage of ironSailCoverages) {
-                const result = await ironSailService.retryWriteToSpreadsheet(order, coverage);
+            const result = await ironSailService.retryWriteToSpreadsheet(order, coverage);
                 results.push({
                     coverageName: coverage.pharmacyCoverage?.customName || 'Product',
                     ...result

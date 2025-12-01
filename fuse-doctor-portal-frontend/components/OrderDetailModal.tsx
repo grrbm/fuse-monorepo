@@ -256,60 +256,60 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                             <div className="space-y-4">
                                 {pharmacyCoverages.map((pharmacyCoverage, index) => (
                                     <div key={index} className="bg-green-50 border border-green-200 p-4 rounded-lg">
-                                        <div className="flex items-center mb-2">
-                                            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                <div className="flex items-center mb-2">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
                                             <p className="text-green-800 font-semibold">
                                                 Coverage Available {pharmacyCoverages.length > 1 ? `(${index + 1}/${pharmacyCoverages.length})` : ''}
                                             </p>
-                                        </div>
-                                        <div className="space-y-2 text-sm">
+                                </div>
+                                <div className="space-y-2 text-sm">
                                             {pharmacyCoverage.coverage.customName && (
                                                 <div>
                                                     <span className="text-gray-600">Product Name:</span>{' '}
                                                     <span className="font-semibold text-gray-900">{pharmacyCoverage.coverage.customName}</span>
                                                 </div>
                                             )}
-                                            <div>
-                                                <span className="text-gray-600">Pharmacy:</span>{' '}
-                                                <span className="font-medium text-gray-900">{pharmacyCoverage.pharmacy.name}</span>
-                                            </div>
-                                            {pharmacyCoverage.coverage.pharmacyProductName && (
-                                                <div>
-                                                    <span className="text-gray-600">Pharmacy Product:</span>{' '}
-                                                    <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.pharmacyProductName}</span>
-                                                </div>
-                                            )}
-                                            {pharmacyCoverage.coverage.pharmacyProductId && (
-                                                <div>
-                                                    <span className="text-gray-600">SKU:</span>{' '}
-                                                    <span className="font-mono text-sm text-gray-900">{pharmacyCoverage.coverage.pharmacyProductId}</span>
-                                                </div>
-                                            )}
-                                            {pharmacyCoverage.coverage.sig && (
-                                                <div>
-                                                    <span className="text-gray-600">SIG:</span>{' '}
-                                                    <span className="font-medium text-gray-900 italic">{pharmacyCoverage.coverage.sig}</span>
-                                                </div>
-                                            )}
-                                            {pharmacyCoverage.coverage.form && (
-                                                <div>
-                                                    <span className="text-gray-600">Medication Form:</span>{' '}
-                                                    <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.form}</span>
-                                                </div>
-                                            )}
-                                            {pharmacyCoverage.coverage.rxId && (
-                                                <div>
-                                                    <span className="text-gray-600">RX ID:</span>{' '}
-                                                    <span className="font-mono text-sm text-gray-900">{pharmacyCoverage.coverage.rxId}</span>
-                                                </div>
-                                            )}
-                                            {pharmacyCoverage.coverage.pharmacyWholesaleCost && (
-                                                <div>
-                                                    <span className="text-gray-600">Wholesale Cost:</span>{' '}
-                                                    <span className="font-medium text-gray-900">${pharmacyCoverage.coverage.pharmacyWholesaleCost}</span>
-                                                </div>
-                                            )}
+                                    <div>
+                                        <span className="text-gray-600">Pharmacy:</span>{' '}
+                                        <span className="font-medium text-gray-900">{pharmacyCoverage.pharmacy.name}</span>
+                                    </div>
+                                    {pharmacyCoverage.coverage.pharmacyProductName && (
+                                        <div>
+                                            <span className="text-gray-600">Pharmacy Product:</span>{' '}
+                                            <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.pharmacyProductName}</span>
                                         </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.pharmacyProductId && (
+                                        <div>
+                                            <span className="text-gray-600">SKU:</span>{' '}
+                                            <span className="font-mono text-sm text-gray-900">{pharmacyCoverage.coverage.pharmacyProductId}</span>
+                                        </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.sig && (
+                                        <div>
+                                            <span className="text-gray-600">SIG:</span>{' '}
+                                            <span className="font-medium text-gray-900 italic">{pharmacyCoverage.coverage.sig}</span>
+                                        </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.form && (
+                                        <div>
+                                            <span className="text-gray-600">Medication Form:</span>{' '}
+                                            <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.form}</span>
+                                        </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.rxId && (
+                                        <div>
+                                            <span className="text-gray-600">RX ID:</span>{' '}
+                                            <span className="font-mono text-sm text-gray-900">{pharmacyCoverage.coverage.rxId}</span>
+                                        </div>
+                                    )}
+                                    {pharmacyCoverage.coverage.pharmacyWholesaleCost && (
+                                        <div>
+                                            <span className="text-gray-600">Wholesale Cost:</span>{' '}
+                                            <span className="font-medium text-gray-900">${pharmacyCoverage.coverage.pharmacyWholesaleCost}</span>
+                                        </div>
+                                    )}
+                                </div>
                                     </div>
                                 ))}
                             </div>

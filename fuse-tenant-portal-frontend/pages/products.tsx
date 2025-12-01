@@ -31,6 +31,16 @@ interface Product {
   imageUrl?: string
   brandId?: string | null
   brandName?: string
+  pharmacyCoverages?: PharmacyCoverage[]
+}
+
+interface PharmacyCoverage {
+  id: string
+  customName: string
+  customSig: string
+  pharmacyProduct?: {
+    pharmacyProductName: string
+  }
 }
 
 interface PharmacyVendor {
@@ -140,7 +150,30 @@ export default function Products() {
         return 0
       })
 
-      setProducts(sortedProducts)
+      // Fetch pharmacy coverages for each product
+      const productsWithCoverages = await Promise.all(
+        sortedProducts.map(async (product) => {
+          try {
+            const coverageRes = await fetch(`${baseUrl}/public/products/${product.id}/pharmacy-coverages`)
+            if (coverageRes.ok) {
+              const coverageData = await coverageRes.json()
+              const coverages = coverageData.data || []
+              console.log(`✅ Fetched ${coverages.length} coverages for product ${product.id}:`, product.name)
+              return {
+                ...product,
+                pharmacyCoverages: coverages
+              }
+            } else {
+              console.warn(`⚠️ Failed to fetch coverages for product ${product.id}: ${coverageRes.status}`)
+            }
+          } catch (error) {
+            console.error(`❌ Error fetching coverages for product ${product.id}:`, error)
+          }
+          return product
+        })
+      )
+
+      setProducts(productsWithCoverages)
     } catch (error: any) {
       console.error("❌ Error fetching products:", error)
       setSaveMessage(error.message)
@@ -743,8 +776,8 @@ export default function Products() {
             <button
               onClick={() => setActiveTab('selected')}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === 'selected'
-                ? 'bg-[#4FA59C] text-white shadow-sm'
-                : 'text-[#6B7280] hover:bg-[#F3F4F6]'
+                  ? 'bg-[#4FA59C] text-white shadow-sm'
+                  : 'text-[#6B7280] hover:bg-[#F3F4F6]'
                 }`}
             >
               Selected Products
@@ -752,8 +785,8 @@ export default function Products() {
             <button
               onClick={() => setActiveTab('all')}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === 'all'
-                ? 'bg-[#4FA59C] text-white shadow-sm'
-                : 'text-[#6B7280] hover:bg-[#F3F4F6]'
+                  ? 'bg-[#4FA59C] text-white shadow-sm'
+                  : 'text-[#6B7280] hover:bg-[#F3F4F6]'
                 }`}
             >
               All Products
@@ -817,9 +850,9 @@ export default function Products() {
                   {/* Product Image Header */}
                   {product.imageUrl && (
                     <div className="w-full h-48 overflow-hidden bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
+                      <img 
+                        src={product.imageUrl} 
+                        alt={product.name} 
                         className="w-full h-full object-cover"
                       />
                     </div>
@@ -829,7 +862,7 @@ export default function Products() {
                       <ImageIcon className="h-16 w-16 text-[#D1D5DB]" />
                     </div>
                   )}
-
+                  
                   <div className="p-6 space-y-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -851,6 +884,29 @@ export default function Products() {
                     </div>
 
                     <div className="space-y-3">
+                      {/* Pharmacy Coverages - Show if bundle has multiple medications */}
+                      {product.pharmacyCoverages && product.pharmacyCoverages.length > 0 && (
+                        <div className="bg-[#F0F9FF] rounded-xl p-3 border border-[#BAE6FD]">
+                          <p className="text-xs font-medium text-[#0369A1] mb-2 uppercase tracking-wide">
+                            {product.pharmacyCoverages.length > 1 ? 'Bundle Contains:' : 'Medication:'}
+                          </p>
+                          <div className="space-y-2">
+                            {product.pharmacyCoverages.map((coverage, idx) => (
+                              <div key={coverage.id} className="bg-white rounded-lg p-2.5 border border-[#E0F2FE]">
+                                <p className="text-sm font-semibold text-[#0C4A6E] mb-0.5">
+                                  {coverage.customName || coverage.pharmacyProduct?.pharmacyProductName || 'Product'}
+                                </p>
+                                {coverage.customSig && (
+                                  <p className="text-xs text-[#475569] leading-relaxed">
+                                    <span className="font-medium">SIG:</span> {coverage.customSig}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="space-y-1.5">
                         <label className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Product Questions</label>
                         <select
@@ -896,22 +952,22 @@ export default function Products() {
                               Delete
                             </button>
                           ) : (
-                            <button
-                              onClick={() => handleToggleActive(product)}
-                              className="rounded-full px-4 py-2.5 border border-[#E5E7EB] text-[#EF4444] text-sm font-medium hover:bg-[#FEF2F2] transition-all"
-                            >
-                              Deactivate
-                            </button>
+                          <button
+                            onClick={() => handleToggleActive(product)}
+                            className="rounded-full px-4 py-2.5 border border-[#E5E7EB] text-[#EF4444] text-sm font-medium hover:bg-[#FEF2F2] transition-all"
+                          >
+                            Deactivate
+                          </button>
                           )}
                         </>
                       ) : (
                         <>
-                          <button
-                            onClick={() => handleToggleActive(product)}
-                            className="flex-1 rounded-full px-4 py-2.5 bg-[#4FA59C] text-white text-sm font-medium shadow-sm hover:bg-[#478F87] transition-all"
-                          >
-                            Configure
-                          </button>
+                        <button
+                          onClick={() => handleToggleActive(product)}
+                          className="flex-1 rounded-full px-4 py-2.5 bg-[#4FA59C] text-white text-sm font-medium shadow-sm hover:bg-[#478F87] transition-all"
+                        >
+                          Configure
+                        </button>
                           {activeTab === 'all' && (
                             <>
                               <button

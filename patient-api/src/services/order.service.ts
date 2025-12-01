@@ -337,19 +337,19 @@ class OrderService {
                 // Create pharmacy orders for each coverage
                 for (const coverage of activeCoverages) {
                     console.log(`🏥 [Approve] Processing pharmacy: ${coverage.pharmacy.name} (${coverage.pharmacy.slug})`);
-                    try {
-                        const pharmacyService = new PharmacyService()
+                try {
+                    const pharmacyService = new PharmacyService()
                         console.log(`🚀 [Approve] Calling createPharmacyOrder for ${coverage.pharmacy.name}...`);
-                        const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
+                    const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
                         console.log(`✅ [Approve] Pharmacy order creation result for ${coverage.pharmacy.name}:`, result);
-                        if (result && result.success) {
+                    if (result && result.success) {
                             console.log(`✅ [Approve] Pharmacy order created successfully for ${coverage.pharmacy.name}`);
-                        } else {
+                    } else {
                             console.error(`⚠️ [Approve] Pharmacy order creation returned failure for ${coverage.pharmacy.name}:`, result);
-                        }
-                    } catch (pharmacyError) {
+                    }
+                } catch (pharmacyError) {
                         console.error(`❌ [Approve] Failed to create pharmacy order for ${coverage.pharmacy.name}:`, pharmacyError);
-                        console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
+                    console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                         // Don't fail the approval - order is already paid, continue with other pharmacies
                     }
                 }
@@ -426,19 +426,19 @@ class OrderService {
                     
                     for (const coverage of activeCoverages) {
                         console.log(`🏥 [Approve] Processing pharmacy: ${coverage.pharmacy.name} (${coverage.pharmacy.slug})`);
-                        try {
-                            const pharmacyService = new PharmacyService()
+                    try {
+                        const pharmacyService = new PharmacyService()
                             console.log(`🚀 [Approve] Calling createPharmacyOrder for ${coverage.pharmacy.name}...`);
-                            const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
+                        const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
                             console.log(`✅ [Approve] Pharmacy order creation result for ${coverage.pharmacy.name}:`, result);
-                            if (result && result.success) {
+                        if (result && result.success) {
                                 console.log(`✅ [Approve] Pharmacy order created successfully for ${coverage.pharmacy.name}`);
-                            } else {
+                        } else {
                                 console.error(`⚠️ [Approve] Pharmacy order creation returned failure for ${coverage.pharmacy.name}:`, result);
-                            }
-                        } catch (pharmacyError) {
+                        }
+                    } catch (pharmacyError) {
                             console.error(`❌ [Approve] Failed to create pharmacy order for ${coverage.pharmacy.name}:`, pharmacyError);
-                            console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
+                        console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                             // Don't fail the approval - order is paid and approved, continue with other pharmacies
                         }
                     }
@@ -507,19 +507,19 @@ class OrderService {
                             
                             for (const coverage of activeCoverages) {
                                 console.log(`🏥 [Approve] Processing pharmacy: ${coverage.pharmacy.name} (${coverage.pharmacy.slug})`);
-                                try {
-                                    const pharmacyService = new PharmacyService();
+                            try {
+                                const pharmacyService = new PharmacyService();
                                     console.log(`🚀 [Approve] Calling createPharmacyOrder for ${coverage.pharmacy.name}...`);
-                                    const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage);
+                                const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage);
                                     console.log(`✅ [Approve] Pharmacy order creation result for ${coverage.pharmacy.name}:`, result);
-                                    if (result && result.success) {
+                                if (result && result.success) {
                                         console.log(`✅ [Approve] Pharmacy order created successfully for ${coverage.pharmacy.name}`);
-                                    } else {
+                                } else {
                                         console.error(`⚠️ [Approve] Pharmacy order creation returned failure for ${coverage.pharmacy.name}:`, result);
-                                    }
-                                } catch (pharmacyError) {
+                                }
+                            } catch (pharmacyError) {
                                     console.error(`❌ [Approve] Failed to create pharmacy order for ${coverage.pharmacy.name}:`, pharmacyError);
-                                    console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
+                                console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                                     // Don't fail the approval - order is paid, continue with other pharmacies
                                 }
                             }
