@@ -35,6 +35,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     questionnaireProducts,
     selectedProducts,
     treatmentName,
+    pharmacyCoverages = [],
 }) => {
     const selectedPlanData = plans.find((plan) => plan.id === selectedPlan);
 
@@ -120,6 +121,21 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                                                         <span>{feature}</span>
                                                     </div>
                                                 ))}
+                                                
+                                                {/* Display pharmacy coverages if multiple exist */}
+                                                {pharmacyCoverages && pharmacyCoverages.length > 1 && (
+                                                    <div className="mt-4 pt-4 border-t border-gray-200">
+                                                        <div className="font-medium mb-2">Contains products:</div>
+                                                        <div className="space-y-2">
+                                                            {pharmacyCoverages.map((coverage) => (
+                                                                <div key={coverage.id} className="pl-2">
+                                                                    <div className="font-medium text-gray-900">{coverage.customName}</div>
+                                                                    <div className="text-xs text-gray-500">Note: {coverage.customSig}</div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

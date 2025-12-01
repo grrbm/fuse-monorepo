@@ -12,6 +12,9 @@ import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
 import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
+import Pharmacy from "./models/Pharmacy";
+import PharmacyCoverage from "./models/PharmacyCoverage";
+import PharmacyProduct from "./models/PharmacyProduct";
 import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
 import TierConfiguration from "./models/TierConfiguration";
@@ -5104,7 +5107,19 @@ app.get("/orders", authenticateJWT, async (req, res) => {
         {
           model: OrderItem,
           as: 'orderItems',
-          include: [{ model: Product, as: 'product' }]
+          include: [
+            {
+              model: Product,
+              as: 'product',
+              include: [
+                {
+                  model: PharmacyCoverage,
+                  as: 'pharmacyCoverages',
+                  required: false
+                }
+              ]
+            }
+          ]
         },
         {
           model: Payment,
@@ -11282,6 +11297,100 @@ app.get("/public/questionnaires/first-user-profile", async (_req, res) => {
   } catch (error) {
     console.error('❌ Error fetching first user_profile questionnaire:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch user_profile questionnaire' });
+  }
+});
+
+// Public: get tenant product by ID
+app.get("/tenant-products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('🏢 [PUBLIC] Fetching tenant product:', id);
+
+    const tenantProduct = await TenantProduct.findByPk(id, {
+      include: [
+        { model: Product, as: 'product' },
+        { model: Questionnaire, as: 'questionnaire' }
+      ]
+    });
+
+    if (!tenantProduct) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant product not found'
+      });
+    }
+
+    console.log('🏢 [PUBLIC] Found tenant product, productId:', tenantProduct.productId);
+
+    res.json({
+      success: true,
+      data: {
+        id: tenantProduct.id,
+        productId: tenantProduct.productId,
+        clinicId: tenantProduct.clinicId,
+        questionnaireId: tenantProduct.questionnaireId,
+        price: tenantProduct.price,
+        stripeProductId: tenantProduct.stripeProductId,
+        stripePriceId: tenantProduct.stripePriceId,
+        product: tenantProduct.product,
+        questionnaire: tenantProduct.questionnaire
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ [PUBLIC] Error fetching tenant product:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch tenant product'
+    });
+  }
+});
+
+// Public: get pharmacy coverages for a product
+app.get("/public/products/:productId/pharmacy-coverages", async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    console.log('💊 [PUBLIC] Fetching pharmacy coverages for product:', productId);
+
+    // Fetch all pharmacy coverages for this product
+    const coverages = await PharmacyCoverage.findAll({
+      where: { productId },
+      include: [
+        {
+          model: Pharmacy,
+          as: 'pharmacy',
+          attributes: ['id', 'name', 'slug']
+        },
+        {
+          model: PharmacyProduct,
+          as: 'assignments',
+          attributes: ['id', 'pharmacyProductName']
+        }
+      ],
+      order: [['customName', 'ASC']]
+    });
+
+    console.log('💊 [PUBLIC] Found coverages:', coverages.length);
+
+    res.json({
+      success: true,
+      data: coverages.map(c => ({
+        id: c.id,
+        customName: c.customName,
+        customSig: c.customSig,
+        pharmacy: c.pharmacy,
+        pharmacyProduct: c.assignments && c.assignments.length > 0 ? {
+          pharmacyProductName: c.assignments[0].pharmacyProductName
+        } : null
+      }))
+    });
+  } catch (error: any) {
+    console.error('❌ [PUBLIC] Error fetching pharmacy coverages:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch pharmacy coverages'
+    });
   }
 });
 

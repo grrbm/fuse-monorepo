@@ -34,6 +34,7 @@ import Sale from '../models/Sale';
 import DoctorPatientChats from '../models/DoctorPatientChats';
 import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
+import PharmacyCoverage from '../models/PharmacyCoverage';
 import TenantCustomFeatures from '../models/TenantCustomFeatures';
 import TierConfiguration from '../models/TierConfiguration';
 import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
@@ -99,7 +100,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
-    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
+    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyCoverage, PharmacyProduct,
     TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily,
     MessageTemplate, Sequence, SequenceRun, Tag, UserTag, GlobalFees, UserRoles
   ],
@@ -337,6 +338,80 @@ export async function initializeDatabase() {
       }
     } catch (error) {
       console.error('❌ Error ensuring GlobalFees:', error);
+    }
+
+    // Ensure PharmacyProduct -> PharmacyCoverage cascade delete
+    try {
+      console.log('🔄 Ensuring PharmacyProduct → PharmacyCoverage cascade behavior...');
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.table_constraints tc
+            WHERE tc.constraint_name = 'PharmacyProduct_pharmacyCoverageId_fkey'
+              AND tc.table_name = 'PharmacyProduct'
+              AND tc.constraint_type = 'FOREIGN KEY'
+          ) THEN
+            ALTER TABLE "PharmacyProduct"
+              DROP CONSTRAINT "PharmacyProduct_pharmacyCoverageId_fkey";
+          END IF;
+        END
+        $$;
+      `);
+
+      await sequelize.query(`
+        ALTER TABLE "PharmacyProduct"
+        ADD CONSTRAINT "PharmacyProduct_pharmacyCoverageId_fkey"
+        FOREIGN KEY ("pharmacyCoverageId") REFERENCES "PharmacyCoverage" ("id") ON DELETE CASCADE;
+      `);
+
+      console.log('✅ Cascade delete enforced for PharmacyCoverage → PharmacyProduct');
+    } catch (error) {
+      console.error('❌ Error enforcing cascade delete for PharmacyCoverage → PharmacyProduct:', error);
+    }
+
+    // Ensure unique index for coverage/state combinations
+    try {
+      console.log('🔄 Ensuring PharmacyProduct coverage/state uniqueness constraint...');
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND indexname = 'unique_product_state'
+          ) THEN
+            DROP INDEX "unique_product_state";
+          END IF;
+        END
+        $$;
+      `);
+
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND indexname = 'unique_coverage_state'
+          ) THEN
+            DROP INDEX "unique_coverage_state";
+          END IF;
+        END
+        $$;
+      `);
+
+      await sequelize.query(`
+        CREATE UNIQUE INDEX "unique_coverage_state"
+        ON "PharmacyProduct" ("pharmacyCoverageId", "state");
+      `);
+
+      console.log('✅ Coverage/state uniqueness constraint ensured');
+    } catch (error) {
+      console.error('❌ Error ensuring coverage/state uniqueness constraint:', error);
     }
 
     // Backfill UserRoles table from deprecated User.role field

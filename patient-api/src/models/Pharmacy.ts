@@ -1,6 +1,7 @@
 import { Table, Column, DataType, HasMany, BeforeValidate } from 'sequelize-typescript';
 import Entity from './Entity';
 import PharmacyProduct from './PharmacyProduct';
+import PharmacyCoverage from './PharmacyCoverage';
 
 export enum USState {
     AL = 'AL', AK = 'AK', AZ = 'AZ', AR = 'AR', CA = 'CA',
@@ -63,6 +64,9 @@ export default class Pharmacy extends Entity {
 
     @HasMany(() => PharmacyProduct)
     declare pharmacyProducts: PharmacyProduct[];
+
+    @HasMany(() => PharmacyCoverage)
+    declare pharmacyCoverages: PharmacyCoverage[];
 
     // Auto-generate slug from name if not provided
     @BeforeValidate

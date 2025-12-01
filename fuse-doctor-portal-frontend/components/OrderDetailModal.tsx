@@ -20,7 +20,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
     const [notes, setNotes] = useState('');
     const [submittingNotes, setSubmittingNotes] = useState(false);
     const [approving, setApproving] = useState(false);
-    const [pharmacyCoverage, setPharmacyCoverage] = useState<any>(null);
+    const [pharmacyCoverages, setPharmacyCoverages] = useState<any[]>([]);
     const [loadingCoverage, setLoadingCoverage] = useState(false);
     const [coverageError, setCoverageError] = useState<string | null>(null);
     const [retryingEmail, setRetryingEmail] = useState(false);
@@ -52,16 +52,16 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
             const response = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/doctor/orders/${order.id}/pharmacy-coverage`);
             const data = await response.json();
 
-            if (data.success && data.hasCoverage) {
-                setPharmacyCoverage(data.data);
+            if (data.success && data.hasCoverage && data.data.coverages) {
+                setPharmacyCoverages(data.data.coverages);
             } else {
                 setCoverageError(data.error || 'No pharmacy coverage found');
-                setPharmacyCoverage(null);
+                setPharmacyCoverages([]);
             }
         } catch (error) {
             console.error('Failed to fetch pharmacy coverage:', error);
             setCoverageError('Failed to check pharmacy coverage');
-            setPharmacyCoverage(null);
+            setPharmacyCoverages([]);
         } finally {
             setLoadingCoverage(false);
         }
@@ -252,20 +252,26 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                                     Please ensure the product has pharmacy coverage configured for the patient's state before approving this order.
                                 </p>
                             </div>
-                        ) : pharmacyCoverage ? (
-                            <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                        ) : pharmacyCoverages.length > 0 ? (
+                            <div className="space-y-4">
+                                {pharmacyCoverages.map((pharmacyCoverage, index) => (
+                                    <div key={index} className="bg-green-50 border border-green-200 p-4 rounded-lg">
                                 <div className="flex items-center mb-2">
                                     <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                                    <p className="text-green-800 font-semibold">Coverage Available</p>
+                                            <p className="text-green-800 font-semibold">
+                                                Coverage Available {pharmacyCoverages.length > 1 ? `(${index + 1}/${pharmacyCoverages.length})` : ''}
+                                            </p>
                                 </div>
                                 <div className="space-y-2 text-sm">
+                                            {pharmacyCoverage.coverage.customName && (
+                                                <div>
+                                                    <span className="text-gray-600">Product Name:</span>{' '}
+                                                    <span className="font-semibold text-gray-900">{pharmacyCoverage.coverage.customName}</span>
+                                                </div>
+                                            )}
                                     <div>
                                         <span className="text-gray-600">Pharmacy:</span>{' '}
                                         <span className="font-medium text-gray-900">{pharmacyCoverage.pharmacy.name}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-gray-600">State:</span>{' '}
-                                        <span className="font-medium text-gray-900">{pharmacyCoverage.coverage.state}</span>
                                     </div>
                                     {pharmacyCoverage.coverage.pharmacyProductName && (
                                         <div>
@@ -304,6 +310,8 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                                         </div>
                                     )}
                                 </div>
+                                    </div>
+                                ))}
                             </div>
                         ) : null}
                     </section>
@@ -469,17 +477,17 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                         <div className="flex gap-2">
                             <button
                                 onClick={handleRetryEmail}
-                                disabled={retryingEmail || !pharmacyCoverage || pharmacyCoverage.pharmacy?.slug !== 'ironsail'}
+                                disabled={retryingEmail || pharmacyCoverages.length === 0 || !pharmacyCoverages.some(c => c.pharmacy?.slug === 'ironsail')}
                                 className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={pharmacyCoverage?.pharmacy?.slug !== 'ironsail' ? 'Only available for IronSail orders' : 'Retry sending email to pharmacy'}
+                                title={!pharmacyCoverages.some(c => c.pharmacy?.slug === 'ironsail') ? 'Only available for IronSail orders' : 'Retry sending email to pharmacy'}
                             >
                                 {retryingEmail ? 'Sending...' : '📧 Retry Email'}
                             </button>
                             <button
                                 onClick={handleRetrySpreadsheet}
-                                disabled={retryingSpreadsheet || !pharmacyCoverage || pharmacyCoverage.pharmacy?.slug !== 'ironsail'}
+                                disabled={retryingSpreadsheet || pharmacyCoverages.length === 0 || !pharmacyCoverages.some(c => c.pharmacy?.slug === 'ironsail')}
                                 className="px-3 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={pharmacyCoverage?.pharmacy?.slug !== 'ironsail' ? 'Only available for IronSail orders' : 'Retry adding order to spreadsheet'}
+                                title={!pharmacyCoverages.some(c => c.pharmacy?.slug === 'ironsail') ? 'Only available for IronSail orders' : 'Retry adding order to spreadsheet'}
                             >
                                 {retryingSpreadsheet ? 'Adding...' : '📊 Retry Spreadsheet'}
                             </button>
@@ -495,7 +503,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onApprove, onNotesAdd
                             </button>
                             <button
                                 onClick={handleApprove}
-                                disabled={approving || loadingCoverage || !!coverageError || !pharmacyCoverage}
+                                disabled={approving || loadingCoverage || !!coverageError || pharmacyCoverages.length === 0}
                                 className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                 title={coverageError ? 'Cannot approve: ' + coverageError : ''}
                             >

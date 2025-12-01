@@ -39,6 +39,16 @@ interface Product {
         id: string
         name: string
     }>
+    pharmacyCoverages?: PharmacyCoverage[]
+}
+
+interface PharmacyCoverage {
+    id: string
+    customName: string
+    customSig: string
+    pharmacyProduct?: {
+        pharmacyProductName: string
+    }
 }
 
 const PRODUCT_CATEGORIES = [
@@ -156,7 +166,28 @@ export default function Products() {
 
             clearTimeout(timeoutId)
             console.log('✅ Loaded products (combined):', combined.length)
-            setAllProducts(combined)
+            
+            // Fetch pharmacy coverages for each product
+            const productsWithCoverages = await Promise.all(
+                combined.map(async (product) => {
+                    try {
+                        const coverageRes = await fetch(`${baseUrl}/public/products/${product.id}/pharmacy-coverages`)
+                        if (coverageRes.ok) {
+                            const coverageData = await coverageRes.json()
+                            const coverages = coverageData.data || []
+                            return {
+                                ...product,
+                                pharmacyCoverages: coverages
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`❌ Error fetching coverages for product ${product.id}:`, error)
+                    }
+                    return product
+                })
+            )
+            
+            setAllProducts(productsWithCoverages)
         } catch (err: any) {
             console.error('❌ Failed to load products:', err)
             setError(err?.message || 'Failed to load products')
@@ -1037,9 +1068,20 @@ export default function Products() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <p className="text-sm text-muted-foreground truncate">
-                                                        {product.placeholderSig || 'No Placeholder Sig specified'}
-                                                    </p>
+                                                    {product.pharmacyCoverages && product.pharmacyCoverages.length > 0 ? (
+                                                        <div className="text-xs text-muted-foreground space-y-0.5">
+                                                            {product.pharmacyCoverages.map((coverage, idx) => (
+                                                                <div key={coverage.id} className="truncate">
+                                                                    <span className="font-medium text-gray-700">{coverage.customName || coverage.pharmacyProduct?.pharmacyProductName || 'Product'}</span>
+                                                                    {coverage.customSig && <span className="text-gray-500"> - {coverage.customSig}</span>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-sm text-muted-foreground truncate">
+                                                            {product.placeholderSig || 'No Placeholder Sig specified'}
+                                                        </p>
+                                                    )}
                                                 </div>
 
                                                 {/* Category Badge */}

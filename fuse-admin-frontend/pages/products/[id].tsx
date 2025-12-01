@@ -33,6 +33,16 @@ interface Product {
     pharmacyWholesaleCost?: number
     suggestedRetailPrice?: number
     slug?: string | null
+    pharmacyCoverages?: PharmacyCoverage[]
+}
+
+interface PharmacyCoverage {
+    id: string
+    customName: string
+    customSig: string
+    pharmacyProduct?: {
+        pharmacyProductName: string
+    }
 }
 
 interface TenantProductData {
@@ -210,7 +220,20 @@ export default function ProductDetail() {
                 if (response.ok) {
                     const data = await response.json()
                     if (data.success) {
-                        setProduct(data.data)
+                        const productData = data.data
+                        
+                        // Fetch pharmacy coverages for this product
+                        try {
+                            const coverageRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/public/products/${id}/pharmacy-coverages`)
+                            if (coverageRes.ok) {
+                                const coverageData = await coverageRes.json()
+                                productData.pharmacyCoverages = coverageData.data || []
+                            }
+                        } catch (error) {
+                            console.error('Failed to fetch pharmacy coverages:', error)
+                        }
+                        
+                        setProduct(productData)
                     } else {
                         setError(data.message || 'Failed to load product')
                     }
@@ -788,6 +811,29 @@ export default function ProductDetail() {
                                     <div className="mt-4 pt-4 border-t border-border inline-block">
                                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Placeholder Sig</span>
                                         <p className="text-sm mt-1 font-medium">{product.placeholderSig}</p>
+                                    </div>
+                                )}
+                                
+                                {/* Pharmacy Coverages */}
+                                {product?.pharmacyCoverages && product.pharmacyCoverages.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-border">
+                                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                            {product.pharmacyCoverages.length > 1 ? 'Bundle Medications' : 'Medication'}
+                                        </span>
+                                        <div className="mt-3 space-y-2">
+                                            {product.pharmacyCoverages.map((coverage) => (
+                                                <div key={coverage.id} className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                                                    <p className="text-sm font-semibold text-blue-900 mb-0.5">
+                                                        {coverage.customName || coverage.pharmacyProduct?.pharmacyProductName || 'Product'}
+                                                    </p>
+                                                    {coverage.customSig && (
+                                                        <p className="text-xs text-blue-700">
+                                                            <span className="font-medium">SIG:</span> {coverage.customSig}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>
