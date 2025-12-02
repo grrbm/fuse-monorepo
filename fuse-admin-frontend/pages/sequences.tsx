@@ -34,7 +34,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 const TRIGGER_OPTIONS = [
     { value: 'checkout_completed', label: 'Checkout Completed' },
     { value: 'protocol_start', label: 'Protocol Start' },
-    { value: 'prescription_expiring', label: 'Prescription Expiring' },
+    { value: 'prescription_expired', label: 'Prescription Expired' },
     { value: 'manual', label: 'Manual Trigger' }
 ]
 

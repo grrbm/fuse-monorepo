@@ -118,13 +118,24 @@ export default class SequenceTriggerService {
     prescriptionId: string,
     prescriptionName: string,
     expiresAt: Date,
-    doctorName?: string
+    doctorName?: string,
+    userDetails?: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phoneNumber?: string;
+    }
   ): Promise<number> {
     return this.triggerSequencesForEvent('prescription_expired', userId, clinicId, {
       prescriptionId,
       prescriptionName,
       expiresAt: expiresAt.toISOString(),
-      doctorName: doctorName || 'Your Doctor'
+      doctorName: doctorName || 'Your Doctor',
+      ...(userDetails && {
+        userDetails,
+        patientFirstName: userDetails.firstName,
+        patientName: `${userDetails.firstName} ${userDetails.lastName}`.trim()
+      })
     });
   }
 }

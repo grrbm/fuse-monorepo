@@ -87,7 +87,7 @@ export default class PrescriptionExpirationWorker {
           {
             model: User,
             as: 'patient',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'clinicId'],
+            attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'clinicId'],
             required: true
           },
           {
@@ -139,7 +139,13 @@ export default class PrescriptionExpirationWorker {
             prescription.id,
             prescription.name,
             prescription.expiresAt,
-            doctorName
+            doctorName,
+            {
+              firstName: patient.firstName,
+              lastName: patient.lastName,
+              email: patient.email,
+              phoneNumber: patient.phoneNumber
+            }
           );
 
           if (sequencesTriggered > 0) {
