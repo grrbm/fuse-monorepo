@@ -15,6 +15,8 @@ import ShippingAddress from "./models/ShippingAddress";
 import Pharmacy from "./models/Pharmacy";
 import PharmacyCoverage from "./models/PharmacyCoverage";
 import PharmacyProduct from "./models/PharmacyProduct";
+import Prescription from "./models/Prescription";
+import PrescriptionProducts from "./models/PrescriptionProducts";
 import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
 import TierConfiguration from "./models/TierConfiguration";
@@ -5309,10 +5311,40 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Fetch prescriptions for this order (created around the same time)
+    const prescriptions = await Prescription.findAll({
+      where: {
+        patientId: order.userId,
+        name: {
+          [Op.like]: `%${order.orderNumber}%`
+        }
+      },
+      include: [
+        {
+          model: PrescriptionProducts,
+          as: 'prescriptionProducts',
+          include: [
+            {
+              model: Product,
+              as: 'product'
+            }
+          ]
+        },
+        {
+          model: User,
+          as: 'doctor',
+          attributes: ['id', 'firstName', 'lastName']
+        }
+      ]
+    });
+
     console.log('✅ [ORDERS/:ID] Order successfully retrieved and returned');
     res.status(200).json({
       success: true,
-      data: order
+      data: {
+        ...order.toJSON(),
+        prescriptions
+      }
     });
 
   } catch (error) {

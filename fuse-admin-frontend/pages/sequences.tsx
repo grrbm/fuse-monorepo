@@ -34,7 +34,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 const TRIGGER_OPTIONS = [
     { value: 'checkout_completed', label: 'Checkout Completed' },
     { value: 'protocol_start', label: 'Protocol Start' },
-    { value: 'prescription_expiring', label: 'Prescription Expiring' },
+    { value: 'prescription_expired', label: 'Prescription Expired' },
     { value: 'manual', label: 'Manual Trigger' }
 ]
 
@@ -1444,6 +1444,36 @@ export default function Flows() {
                                                         <p className="text-sm text-muted-foreground mb-4">
                                                             {sequence.description}
                                                         </p>
+                                                        
+                                                        {/* Trigger Selector */}
+                                                        <div className="mb-4">
+                                                            <label className="text-xs text-muted-foreground block mb-1">Trigger Event</label>
+                                                            <select
+                                                                value={sequence.triggerEvent}
+                                                                onChange={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    const newTrigger = e.target.value;
+                                                                    if (!newTrigger || newTrigger === sequence.triggerEvent) return;
+                                                                    
+                                                                    try {
+                                                                        await updateSequenceOnServer(sequence.id, {
+                                                                            triggerEvent: newTrigger
+                                                                        });
+                                                                        success(`Trigger updated to ${TRIGGER_OPTIONS.find(t => t.value === newTrigger)?.label}`);
+                                                                    } catch (error) {
+                                                                        showError("Failed to update trigger");
+                                                                    }
+                                                                }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="w-full max-w-xs px-3 py-2 text-sm border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                                            >
+                                                                {TRIGGER_OPTIONS.map(option => (
+                                                                    <option key={option.value} value={option.value}>
+                                                                        {option.label}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
                                                         
                                                         {/* Stats */}
                                                         <div className="flex gap-6 text-sm">

@@ -2,6 +2,7 @@ import cron, { ScheduledTask } from 'node-cron';
 import { Op } from 'sequelize';
 import Prescription from '../../models/Prescription';
 import User from '../../models/User';
+import SequenceRun from '../../models/SequenceRun';
 import SequenceTriggerService from './SequenceTriggerService';
 
 /**
@@ -87,7 +88,7 @@ export default class PrescriptionExpirationWorker {
           {
             model: User,
             as: 'patient',
-            attributes: ['id', 'firstName', 'lastName', 'email', 'clinicId'],
+            attributes: ['id', 'firstName', 'lastName', 'email', 'phoneNumber', 'clinicId'],
             required: true
           },
           {
@@ -124,6 +125,26 @@ export default class PrescriptionExpirationWorker {
             continue;
           }
 
+          // Check if a sequence has already been triggered for this prescription
+          // Query JSONB payload for prescriptionId using Sequelize's literal syntax
+          const existingRun = await SequenceRun.findOne({
+            where: {
+              triggerEvent: 'prescription_expired',
+              clinicId: patient.clinicId,
+              // Check if payload->>'prescriptionId' matches
+              payload: {
+                prescriptionId: prescription.id
+              } as any
+            }
+          });
+
+          if (existingRun) {
+            console.log(
+              `ℹ️ Skipping prescription ${prescription.name} - sequence already triggered (run: ${existingRun.id})`
+            );
+            continue;
+          }
+
           const doctorName = doctor
             ? `${doctor.firstName} ${doctor.lastName}`
             : 'Your Doctor';
@@ -139,7 +160,13 @@ export default class PrescriptionExpirationWorker {
             prescription.id,
             prescription.name,
             prescription.expiresAt,
-            doctorName
+            doctorName,
+            {
+              firstName: patient.firstName,
+              lastName: patient.lastName,
+              email: patient.email,
+              phoneNumber: patient.phoneNumber
+            }
           );
 
           if (sequencesTriggered > 0) {

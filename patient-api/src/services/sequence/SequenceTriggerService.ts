@@ -24,14 +24,20 @@ export default class SequenceTriggerService {
     try {
       console.log(`🎯 Triggering sequences for event: ${eventName}, user: ${userId}`);
 
-      // Find all active sequences with this trigger event
-      const sequences = await Sequence.findAll({
+      // Find all active sequences for this clinic
+      const allSequences = await Sequence.findAll({
         where: {
           clinicId,
-          triggerEvent: eventName,
           status: 'active',
           isActive: true
         }
+      });
+
+      // Filter sequences by trigger event (JSONB field)
+      const sequences = allSequences.filter(sequence => {
+        const triggerData = sequence.trigger as Record<string, unknown>;
+        const triggerEvent = (triggerData.event || triggerData.eventKey || triggerData.type) as string | undefined;
+        return triggerEvent === eventName;
       });
 
       if (sequences.length === 0) {
@@ -90,19 +96,15 @@ export default class SequenceTriggerService {
   }
 
   /**
-   * Trigger sequences for protocol start (when patient starts a treatment)
+   * Trigger sequences for protocol start (when patient completes an order)
    */
   async triggerProtocolStart(
     userId: string,
     clinicId: string,
-    treatmentId: string,
-    treatmentName: string,
-    orderNumber?: string
+    orderNumber: string
   ): Promise<number> {
     return this.triggerSequencesForEvent('protocol_start', userId, clinicId, {
-      treatmentId,
-      treatmentName,
-      orderNumber: orderNumber || '',
+      orderNumber,
       orderDate: new Date().toISOString()
     });
   }
@@ -116,13 +118,24 @@ export default class SequenceTriggerService {
     prescriptionId: string,
     prescriptionName: string,
     expiresAt: Date,
-    doctorName?: string
+    doctorName?: string,
+    userDetails?: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phoneNumber?: string;
+    }
   ): Promise<number> {
     return this.triggerSequencesForEvent('prescription_expired', userId, clinicId, {
       prescriptionId,
       prescriptionName,
       expiresAt: expiresAt.toISOString(),
-      doctorName: doctorName || 'Your Doctor'
+      doctorName: doctorName || 'Your Doctor',
+      ...(userDetails && {
+        userDetails,
+        patientFirstName: userDetails.firstName,
+        patientName: `${userDetails.firstName} ${userDetails.lastName}`.trim()
+      })
     });
   }
 }
