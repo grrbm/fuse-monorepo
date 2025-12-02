@@ -2,6 +2,7 @@ import cron, { ScheduledTask } from 'node-cron';
 import { Op } from 'sequelize';
 import Prescription from '../../models/Prescription';
 import User from '../../models/User';
+import SequenceRun from '../../models/SequenceRun';
 import SequenceTriggerService from './SequenceTriggerService';
 
 /**
@@ -121,6 +122,26 @@ export default class PrescriptionExpirationWorker {
 
           if (!patient || !patient.clinicId) {
             console.warn(`⚠️ Prescription ${prescription.id} has no valid patient or clinic`);
+            continue;
+          }
+
+          // Check if a sequence has already been triggered for this prescription
+          // Query JSONB payload for prescriptionId using Sequelize's literal syntax
+          const existingRun = await SequenceRun.findOne({
+            where: {
+              triggerEvent: 'prescription_expired',
+              clinicId: patient.clinicId,
+              // Check if payload->>'prescriptionId' matches
+              payload: {
+                prescriptionId: prescription.id
+              } as any
+            }
+          });
+
+          if (existingRun) {
+            console.log(
+              `ℹ️ Skipping prescription ${prescription.name} - sequence already triggered (run: ${existingRun.id})`
+            );
             continue;
           }
 
