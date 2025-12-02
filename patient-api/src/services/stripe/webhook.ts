@@ -49,7 +49,7 @@ async function triggerCheckoutSequence(order: Order): Promise<void> {
 
         // Get user details for the sequence
         const user = await User.findByPk(order.userId);
-        
+
         // Build payload with user and order data
         const payload = {
             orderId: order.id,
@@ -86,7 +86,7 @@ async function triggerCheckoutSequence(order: Order): Promise<void> {
         const { default: SequenceRunWorker } = await import('../sequence/SequenceRunWorker');
         const worker = new SequenceRunWorker();
         await worker.enqueueRun(sequenceRun.id);
-        
+
     } catch (error) {
         console.error('❌ Error triggering checkout sequence:', error);
         // Don't fail the payment webhook if sequence fails
@@ -149,32 +149,55 @@ export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.Payment
 
     // CASE 1: Treatment order payment
     if (payment.orderId && payment.order) {
+        const previousStatus = payment.order.status;
         await payment.order.updateStatus(OrderStatus.PAID);
         console.log('✅ Order updated to paid status:', payment.order.orderNumber);
-        
-        // Trigger checkout sequence
-        await triggerCheckoutSequence(payment.order);
-        
-        // Trigger protocol_start sequence if order has a treatment
-        if (payment.order.treatmentId && payment.order.clinicId) {
+
+        // Only trigger checkout_completed sequence if this is the FIRST time payment succeeds
+        // (not when capturing a previously authorized payment)
+        const isManualCapture = previousStatus === OrderStatus.AMOUNT_CAPTURABLE_UPDATED;
+
+        if (!isManualCapture) {
+            // First time payment succeeds (immediate capture or automatic)
+            await triggerCheckoutSequence(payment.order);
+        } else {
+            console.log('ℹ️ Skipping checkout sequence (manual capture from previously authorized payment)');
+        }
+
+        // Trigger protocol_start sequence for the order (only on manual capture)
+        if (isManualCapture && payment.order.clinicId) {
             try {
                 const sequenceTrigger = new SequenceTriggerService();
-                const treatment = await Treatment.findByPk(payment.order.treatmentId);
                 const user = await User.findByPk(payment.order.userId);
-                
-                if (treatment && user) {
-                    console.log('🎯 Triggering protocol_start for treatment:', treatment.name);
-                    
-                    const triggeredCount = await sequenceTrigger.triggerProtocolStart(
+
+                if (user) {
+                    console.log('🎯 Triggering protocol_start for order:', payment.order.orderNumber);
+
+                    // Build payload with user details (same as checkout_completed)
+                    const payload = {
+                        orderNumber: payment.order.orderNumber,
+                        orderDate: payment.order.createdAt,
+                        orderId: payment.order.id,
+                        totalAmount: payment.order.totalAmount,
+                        userDetails: {
+                            firstName: user.firstName,
+                            lastName: user.lastName,
+                            email: user.email,
+                            phoneNumber: user.phoneNumber
+                        },
+                        patientFirstName: user.firstName,
+                        patientName: `${user.firstName} ${user.lastName}`.trim()
+                    };
+
+                    const triggeredCount = await sequenceTrigger.triggerSequencesForEvent(
+                        'protocol_start',
                         user.id,
                         payment.order.clinicId,
-                        treatment.id,
-                        treatment.name,
-                        payment.order.orderNumber
+                        payload
                     );
-                    
+
                     if (triggeredCount > 0) {
-                        console.log(`✅ Protocol start triggered: ${triggeredCount} sequence(s) for treatment "${treatment.name}"`);
+                        console.log(`✅ Protocol start triggered: ${triggeredCount} sequence(s) for order "${payment.order.orderNumber}"`);
                     } else {
                         console.log('ℹ️ No active sequences found for protocol_start trigger');
                     }
@@ -184,7 +207,7 @@ export const handlePaymentIntentSucceeded = async (paymentIntent: Stripe.Payment
                 // Don't fail the webhook if sequence trigger fails
             }
         }
-        
+
         return;
     }
 
