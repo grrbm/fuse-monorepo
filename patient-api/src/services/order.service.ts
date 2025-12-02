@@ -19,6 +19,8 @@ import WebSocketService from "./websocket.service";
 import PharmacyProduct from "../models/PharmacyProduct";
 import Pharmacy from "../models/Pharmacy";
 import PharmacyCoverage from "../models/PharmacyCoverage";
+import Prescription from "../models/Prescription";
+import PrescriptionProducts from "../models/PrescriptionProducts";
 
 
 interface ListOrdersByClinicResult {
@@ -333,25 +335,32 @@ class OrderService {
             if (order.status === OrderStatus.PAID) {
                 // Order is already paid, send to ALL pharmacies
                 console.log(`📦 [Approve] Order already paid, sending to ${activeCoverages.length} pharmacy(ies): ${order.orderNumber}`);
-                
+
                 // Create pharmacy orders for each coverage
+                const successfulCoverages: any[] = [];
                 for (const coverage of activeCoverages) {
                     console.log(`🏥 [Approve] Processing pharmacy: ${coverage.pharmacy.name} (${coverage.pharmacy.slug})`);
-                try {
-                    const pharmacyService = new PharmacyService()
+                    try {
+                        const pharmacyService = new PharmacyService()
                         console.log(`🚀 [Approve] Calling createPharmacyOrder for ${coverage.pharmacy.name}...`);
-                    const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
+                        const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
                         console.log(`✅ [Approve] Pharmacy order creation result for ${coverage.pharmacy.name}:`, result);
-                    if (result && result.success) {
+                        if (result && result.success) {
                             console.log(`✅ [Approve] Pharmacy order created successfully for ${coverage.pharmacy.name}`);
-                    } else {
+                            successfulCoverages.push(coverage);
+                        } else {
                             console.error(`⚠️ [Approve] Pharmacy order creation returned failure for ${coverage.pharmacy.name}:`, result);
-                    }
-                } catch (pharmacyError) {
+                        }
+                    } catch (pharmacyError) {
                         console.error(`❌ [Approve] Failed to create pharmacy order for ${coverage.pharmacy.name}:`, pharmacyError);
-                    console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
+                        console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                         // Don't fail the approval - order is already paid, continue with other pharmacies
                     }
+                }
+
+                // Create prescription after successful pharmacy orders
+                if (successfulCoverages.length > 0) {
+                    await this.createPrescriptionForOrder(order, successfulCoverages);
                 }
             } else if ((order.status === OrderStatus.PENDING || order.status === OrderStatus.PROCESSING || order.status === OrderStatus.AMOUNT_CAPTURABLE_UPDATED) && order.payment?.stripePaymentIntentId) {
                 // Get payment intent ID from Payment model (single source of truth)
@@ -423,24 +432,31 @@ class OrderService {
 
                     // Send to ALL pharmacies after payment is captured
                     console.log(`🏥 [Approve] Sending to ${activeCoverages.length} pharmacy(ies) after payment capture...`);
-                    
+
+                    const successfulCoverages: any[] = [];
                     for (const coverage of activeCoverages) {
                         console.log(`🏥 [Approve] Processing pharmacy: ${coverage.pharmacy.name} (${coverage.pharmacy.slug})`);
-                    try {
-                        const pharmacyService = new PharmacyService()
+                        try {
+                            const pharmacyService = new PharmacyService()
                             console.log(`🚀 [Approve] Calling createPharmacyOrder for ${coverage.pharmacy.name}...`);
-                        const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
+                            const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage)
                             console.log(`✅ [Approve] Pharmacy order creation result for ${coverage.pharmacy.name}:`, result);
-                        if (result && result.success) {
+                            if (result && result.success) {
                                 console.log(`✅ [Approve] Pharmacy order created successfully for ${coverage.pharmacy.name}`);
-                        } else {
+                                successfulCoverages.push(coverage);
+                            } else {
                                 console.error(`⚠️ [Approve] Pharmacy order creation returned failure for ${coverage.pharmacy.name}:`, result);
-                        }
-                    } catch (pharmacyError) {
+                            }
+                        } catch (pharmacyError) {
                             console.error(`❌ [Approve] Failed to create pharmacy order for ${coverage.pharmacy.name}:`, pharmacyError);
-                        console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
+                            console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                             // Don't fail the approval - order is paid and approved, continue with other pharmacies
                         }
+                    }
+
+                    // Create prescription after successful pharmacy orders
+                    if (successfulCoverages.length > 0) {
+                        await this.createPrescriptionForOrder(order, successfulCoverages);
                     }
                 } catch (error: any) {
                     console.error(`❌ [Approve] Failed to capture payment for order ${orderId}:`, error);
@@ -504,22 +520,22 @@ class OrderService {
 
                             // Send to ALL pharmacies
                             console.log(`🏥 [Approve] Sending to ${activeCoverages.length} pharmacy(ies) (payment already captured)...`);
-                            
+
                             for (const coverage of activeCoverages) {
                                 console.log(`🏥 [Approve] Processing pharmacy: ${coverage.pharmacy.name} (${coverage.pharmacy.slug})`);
-                            try {
-                                const pharmacyService = new PharmacyService();
+                                try {
+                                    const pharmacyService = new PharmacyService();
                                     console.log(`🚀 [Approve] Calling createPharmacyOrder for ${coverage.pharmacy.name}...`);
-                                const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage);
+                                    const result = await pharmacyService.createPharmacyOrder(order, coverage.pharmacy.slug, coverage);
                                     console.log(`✅ [Approve] Pharmacy order creation result for ${coverage.pharmacy.name}:`, result);
-                                if (result && result.success) {
+                                    if (result && result.success) {
                                         console.log(`✅ [Approve] Pharmacy order created successfully for ${coverage.pharmacy.name}`);
-                                } else {
+                                    } else {
                                         console.error(`⚠️ [Approve] Pharmacy order creation returned failure for ${coverage.pharmacy.name}:`, result);
-                                }
-                            } catch (pharmacyError) {
+                                    }
+                                } catch (pharmacyError) {
                                     console.error(`❌ [Approve] Failed to create pharmacy order for ${coverage.pharmacy.name}:`, pharmacyError);
-                                console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
+                                    console.error(`❌ [Approve] Error stack:`, pharmacyError instanceof Error ? pharmacyError.stack : 'No stack trace');
                                     // Don't fail the approval - order is paid, continue with other pharmacies
                                 }
                             }
@@ -611,6 +627,77 @@ class OrderService {
                 message: "Failed to save doctor notes",
                 error: error instanceof Error ? error.message : 'Unknown error occurred'
             };
+        }
+    }
+
+    /**
+     * Create prescriptions for an approved order with pharmacy coverages
+     * Creates ONE prescription per medication/coverage
+     * @param order The approved order
+     * @param coverages Array of successful pharmacy coverages
+     */
+    private async createPrescriptionForOrder(order: Order, coverages: any[]): Promise<void> {
+        try {
+            console.log(`💊 [Prescription] Creating ${coverages.length} prescription(s) for order: ${order.orderNumber}`);
+
+            // Get doctor ID (physician) from order
+            const doctorId = order.physicianId || order.user?.clinicId; // Fallback to clinic if no specific physician
+
+            if (!doctorId) {
+                console.warn(`⚠️ [Prescription] No doctor ID found for order ${order.orderNumber}, skipping prescription creation`);
+                return;
+            }
+
+            // Set expiration date to 1 month from now
+            const expiresAt = new Date();
+            expiresAt.setMonth(expiresAt.getMonth() + 1);
+
+            // Create ONE prescription for EACH coverage (medication)
+            for (const coverage of coverages) {
+                try {
+                    // Get medication name from coverage
+                    const medicationName = coverage.pharmacyCoverage?.customName ||
+                        coverage.pharmacyProductName ||
+                        'Medication';
+
+                    // Create a prescription for this specific medication
+                    const prescription = await Prescription.create({
+                        name: `${medicationName} - ${order.orderNumber}`,
+                        expiresAt,
+                        writtenAt: new Date(),
+                        patientId: order.userId,
+                        doctorId
+                    });
+
+                    console.log(`✅ [Prescription] Created prescription for ${medicationName}: ${prescription.id}`);
+
+                    // Get product ID from coverage
+                    const productId = coverage.productId || order.tenantProduct?.productId;
+
+                    if (!productId) {
+                        console.warn(`⚠️ [Prescription] No product ID found for coverage ${medicationName}, skipping product link`);
+                        continue;
+                    }
+
+                    // Create PrescriptionProducts entry for this medication
+                    await PrescriptionProducts.create({
+                        prescriptionId: prescription.id,
+                        productId,
+                        quantity: 1, // Default quantity
+                        pharmacyProductId: coverage.pharmacyProductId || coverage.id
+                    });
+
+                    console.log(`✅ [Prescription] Linked product ${productId} to prescription ${prescription.id}`);
+                } catch (coverageError) {
+                    console.error(`❌ [Prescription] Failed to create prescription for coverage:`, coverageError);
+                    // Continue with other coverages
+                }
+            }
+
+            console.log(`✅ [Prescription] Successfully created ${coverages.length} prescription(s) for order ${order.orderNumber}`);
+        } catch (error) {
+            console.error(`❌ [Prescription] Failed to create prescriptions for order ${order.orderNumber}:`, error);
+            // Don't fail the approval process if prescription creation fails
         }
     }
 
