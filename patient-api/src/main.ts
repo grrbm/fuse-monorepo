@@ -791,6 +791,9 @@ app.get("/auth/google/callback", async (req, res) => {
     // Create JWT token
     const token = createJWTToken(user);
 
+    // HIPAA Audit: Log Google OAuth login
+    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
+
     console.log('✅ User signed in via Google:', user.email);
 
     // Redirect back to frontend with token and flag to skip account creation step
@@ -864,6 +867,9 @@ app.post("/auth/google", async (req, res) => {
 
     // Create JWT token
     const token = createJWTToken(user);
+
+    // HIPAA Audit: Log Google login
+    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
 
     console.log('✅ User signed in via Google:', user.email);
 
@@ -1197,6 +1203,9 @@ app.get("/auth/verify-email", async (req, res) => {
 
     // Create JWT token for automatic login
     const authToken = createJWTToken(user);
+
+    // HIPAA Audit: Log email verification and auto-login
+    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
 
     res.status(200).json({
       success: true,
@@ -8429,6 +8438,13 @@ app.post("/messages", authenticateJWT, async (req, res) => {
 
     const message = await MessageService.createMessageForUser(currentUser.id, payload);
 
+    // HIPAA Audit: Log message creation
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.CREATE,
+      resourceType: AuditResourceType.MESSAGE,
+      resourceId: message?.id,
+    });
+
     res.json({
       success: true,
       message: "Message sent successfully",
@@ -8531,6 +8547,14 @@ app.post("/md-files", authenticateJWT, upload.single('file'), async (req, res) =
       req.file.mimetype
     );
 
+    // HIPAA Audit: Log medical document upload
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.CREATE,
+      resourceType: AuditResourceType.DOCUMENT,
+      resourceId: file?.id,
+      details: { fileName: req.file.originalname, mimeType: req.file.mimetype },
+    });
+
     res.json({
       success: true,
       message: "File uploaded successfully",
@@ -8557,6 +8581,13 @@ app.get("/md-files/:fileId", authenticateJWT, async (req, res) => {
     }
 
     const file = await MDFilesService.getFile(fileId);
+
+    // HIPAA Audit: Log medical document access
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.DOCUMENT,
+      resourceId: fileId,
+    });
 
     res.json({
       success: true,
@@ -8907,6 +8938,14 @@ app.get("/md-files/:fileId/download", authenticateJWT, async (req, res) => {
 
     // Download file content
     const fileBuffer = await MDFilesService.downloadFile(fileId);
+
+    // HIPAA Audit: Log medical document download
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.EXPORT,
+      resourceType: AuditResourceType.DOCUMENT,
+      resourceId: fileId,
+      details: { fileName: fileInfo.name, download: true },
+    });
 
     res.set({
       'Content-Type': fileInfo.mime_type,

@@ -748,6 +748,15 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             }
 
             const allSucceeded = results.every((r: any) => r.success);
+
+            // HIPAA Audit: Log email retry (sending patient documents)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.EMAIL_SENT,
+                resourceType: AuditResourceType.ORDER,
+                resourceId: orderId,
+                details: { retryEmail: true, coverageCount: results.length, success: allSucceeded },
+            });
+
             res.json({
                 success: allSucceeded,
                 message: allSucceeded 
@@ -865,6 +874,15 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             }
 
             const allSucceeded = results.every((r: any) => r.success);
+
+            // HIPAA Audit: Log spreadsheet update (patient records)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.EXPORT,
+                resourceType: AuditResourceType.ORDER,
+                resourceId: orderId,
+                details: { retrySpreadsheet: true, coverageCount: results.length, success: allSucceeded },
+            });
+
             res.json({
                 success: allSucceeded,
                 message: allSucceeded 
