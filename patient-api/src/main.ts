@@ -28,6 +28,7 @@ import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./c
 import Stripe from "stripe";
 import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
+import { AuditService, AuditAction, AuditResourceType } from "./services/audit.service";
 import TreatmentService from "./services/treatment.service";
 import PaymentService from "./services/payment.service";
 import ClinicService from "./services/clinic.service";
@@ -888,6 +889,8 @@ app.post("/auth/signin", async (req, res) => {
     // Find user by email
     const user = await User.findByEmail(email);
     if (!user) {
+      // HIPAA Audit: Log failed login attempt (user not found)
+      await AuditService.logLoginFailed(req, email, 'User not found');
       return res.status(401).json({
         success: false,
         message: "Invalid email or password"
@@ -900,6 +903,8 @@ app.post("/auth/signin", async (req, res) => {
     // Validate password (permanent or temporary)
     const isValidPassword = await user.validateAnyPassword(password);
     if (!isValidPassword) {
+      // HIPAA Audit: Log failed login attempt (wrong password)
+      await AuditService.logLoginFailed(req, email, 'Invalid password');
       return res.status(401).json({
         success: false,
         message: "Invalid email or password"
@@ -908,6 +913,8 @@ app.post("/auth/signin", async (req, res) => {
 
     // Check if user account is activated
     if (!user.activated) {
+      // HIPAA Audit: Log failed login attempt (not activated)
+      await AuditService.logLoginFailed(req, email, 'Account not activated');
       return res.status(401).json({
         success: false,
         message: "Please check your email and activate your account before signing in.",
@@ -920,6 +927,9 @@ app.post("/auth/signin", async (req, res) => {
 
     // Create JWT token
     const token = createJWTToken(user);
+
+    // HIPAA Audit: Log successful login
+    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
 
     console.log('JWT token created for user:', user.email); // Safe to log email for development
 
@@ -5076,6 +5086,17 @@ app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 
     const validCustomers = customers.filter(c => c !== null);
 
+    // HIPAA Audit: Log bulk PHI access (viewing all patients in a clinic)
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.PATIENT,
+      details: {
+        bulkAccess: true,
+        clinicId,
+        patientCount: validCustomers.length
+      },
+    });
+
     res.status(200).json({
       success: true,
       data: validCustomers
@@ -5336,6 +5357,9 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
         }
       ]
     });
+
+    // HIPAA Audit: Log PHI access (order contains patient name, address, medications)
+    await AuditService.logOrderView(req, order.id);
 
     console.log('✅ [ORDERS/:ID] Order successfully retrieved and returned');
     res.status(200).json({
@@ -8147,6 +8171,8 @@ app.put("/patient", authenticateJWT, async (req, res) => {
     const result = await userService.updateUserPatient(currentUser.id, data, address);
 
     if (result.success) {
+      // HIPAA Audit: Log PHI modification (patient updating their own profile)
+      await AuditService.logPatientUpdate(req, currentUser.id, Object.keys(data));
       res.status(200).json(result);
     } else {
       res.status(400).json(result.error);
@@ -9826,6 +9852,9 @@ async function startServer() {
         patient: patient ? patient.toJSON() : null
       };
 
+      // HIPAA Audit: Log PHI access (chat messages may contain health information)
+      await AuditService.logMessageView(req, chatId, chat.patientId);
+
       res.json({
         success: true,
         data: chatWithPatient
@@ -10238,6 +10267,9 @@ async function startServer() {
         ...chat.toJSON(),
         doctor: doctor ? doctor.toJSON() : null
       };
+
+      // HIPAA Audit: Log PHI access (patient viewing their chat which may contain health info)
+      await AuditService.logMessageView(req, chat.id, currentUser.id);
 
       res.json({
         success: true,
