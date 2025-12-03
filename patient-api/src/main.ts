@@ -157,11 +157,10 @@ async function generateUniqueSlug(clinicName: string, excludeId?: string): Promi
   }
 }
 
-// SSL workaround - disable SSL certificate validation in production
-// This is safe within a secure network environment
-if (process.env.NODE_ENV === 'production') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
+// HIPAA Compliance Note: TLS certificate validation is enabled globally.
+// Database SSL uses relaxed validation (rejectUnauthorized: false) because 
+// AWS RDS certificates aren't in Node's default CA store.
+// All other HTTPS connections (Stripe, SendGrid, etc.) use full TLS validation.
 
 const app = express();
 

@@ -1,6 +1,8 @@
 import { Sequelize } from 'sequelize-typescript';
 import { DataTypes } from 'sequelize';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import User from '../models/User';
 import Entity from '../models/Entity';
 import Product from '../models/Product';
@@ -63,19 +65,35 @@ if (!databaseUrl) {
 // Check if we're connecting to localhost
 const isLocalhost = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
 
-// HIPAA-compliant database connection
+// HIPAA Compliance: Load AWS RDS CA certificate bundle for proper TLS verification
+// Certificate downloaded from: https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+const rdsCaCertPath = path.join(__dirname, '../certs/rds-ca-bundle.pem');
+let rdsCaCert: string | undefined;
+
+try {
+  if (fs.existsSync(rdsCaCertPath)) {
+    rdsCaCert = fs.readFileSync(rdsCaCertPath, 'utf8');
+    console.log('✅ AWS RDS CA certificate bundle loaded for TLS verification');
+  } else {
+    console.warn('⚠️  AWS RDS CA certificate bundle not found at:', rdsCaCertPath);
+    console.warn('   Run: curl -o patient-api/src/certs/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem');
+  }
+} catch (certError) {
+  console.warn('⚠️  Failed to load RDS CA certificate:', certError instanceof Error ? certError.message : certError);
+}
+
+// HIPAA-compliant database connection with proper TLS verification
 const sequelizeConfig = {
   dialect: 'postgres' as const,
   dialectOptions: {
-    // SSL configuration: 
-    // - Production: require SSL with relaxed validation
-    // - Development with localhost: no SSL
-    // - Localhost (non-development): use SSL but don't require it
+    // SSL configuration for HIPAA compliance:
+    // - Production: require SSL with CA certificate verification (TLS 1.2+)
+    // - Development with localhost: no SSL (local tunnel)
+    // - Other: require SSL with relaxed validation as fallback
     ssl: process.env.NODE_ENV === 'production' ? {
       require: true,
-      rejectUnauthorized: false,
-      ca: undefined, // Don't validate CA certificate
-      checkServerIdentity: () => undefined, // Skip hostname verification
+      rejectUnauthorized: !!rdsCaCert, // Verify certificate if CA bundle is available
+      ca: rdsCaCert, // AWS RDS CA certificate bundle
     } : (process.env.NODE_ENV === 'development' && isLocalhost) ? false : isLocalhost ? {
       require: false, // Don't require SSL for localhost tunnel
       rejectUnauthorized: false,

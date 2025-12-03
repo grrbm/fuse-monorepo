@@ -66,6 +66,7 @@ export async function uploadToS3(
       Key: key,
       Body: fileBuffer,
       ContentType: contentType,
+      ServerSideEncryption: 'AES256', // HIPAA: Ensure AES-256 encryption at rest
       // ACL: "public-read", // Make file publicly readable - Commented out due to bucket ACL restrictions
     });
 
