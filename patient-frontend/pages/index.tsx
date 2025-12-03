@@ -8,17 +8,50 @@ import { MessengerPage } from "../components/messenger-page";
 import { TreatmentsPage } from "../components/treatments-page";
 import { AccountPage } from "../components/account-page";
 import { BrandingPage } from "../components/branding-page";
+import { SupportChat } from "../components/support-chat";
+import { SupportBubble } from "../components/support-bubble";
 import { Button, Avatar } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "../contexts/AuthContext";
 import { getAvatarEmoji } from "../lib/avatarUtils";
+import { apiCall } from "../lib/api";
 
 function HomePage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = React.useState("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isMobileView, setIsMobileView] = React.useState(false);
+  const [hasTickets, setHasTickets] = React.useState(false);
+  const [checkingTickets, setCheckingTickets] = React.useState(true);
+
+  // Check if user has any tickets
+  const checkHasTickets = React.useCallback(async () => {
+    const token = localStorage.getItem('auth-token');
+    if (!token) return;
+    
+    try {
+      const response = await apiCall('/support/tickets', {
+        method: 'GET',
+      });
+
+      if (response.success && response.data?.data?.tickets) {
+        const ticketCount = response.data.data.tickets.length;
+        setHasTickets(ticketCount > 0);
+      } else {
+        setHasTickets(false);
+      }
+    } catch (error) {
+      console.error('Error checking tickets:', error);
+      setHasTickets(false);
+    } finally {
+      setCheckingTickets(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    checkHasTickets();
+  }, [checkHasTickets]);
 
   // Detect mobile view
   React.useEffect(() => {
@@ -81,7 +114,7 @@ function HomePage() {
           md:translate-x-0 fixed md:relative z-50 h-full transition-transform duration-300 ease-in-out
           md:h-screen md:flex md:flex-col
         `}>
-          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={user} />
+          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={user} hasTickets={hasTickets} />
         </div>
 
         {/* Main Content */}
@@ -102,9 +135,15 @@ function HomePage() {
             {activeTab === "offerings" && <OfferingsPage />}
             {activeTab === "treatments" && <TreatmentsPage />}
             {activeTab === "messenger" && <MessengerPage isMobileView={isMobileView} />}
+            {activeTab === "support" && hasTickets && <SupportChat />}
             {activeTab === "branding" && <BrandingPage />}
             {activeTab === "account" && <AccountPage />}
           </motion.main>
+
+          {/* Support Bubble - Show on all pages except support and messenger tabs */}
+          {activeTab !== "support" && activeTab !== "messenger" && (
+            <SupportBubble onTicketCreated={checkHasTickets} />
+          )}
 
           {/* Mobile Bottom Navigation */}
           <div className="md:hidden flex items-center justify-around border-t border-content3 bg-content1 h-16">
@@ -112,6 +151,7 @@ function HomePage() {
               { id: "dashboard", icon: "lucide:layout-dashboard" },
               { id: "treatments", icon: "lucide:pill" },
               { id: "messenger", icon: "lucide:message-square" },
+              ...(hasTickets ? [{ id: "support", icon: "lucide:headphones" }] : []),
               { id: "account", icon: "lucide:user" }
             ].map((item) => (
               <Button

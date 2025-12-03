@@ -100,6 +100,8 @@ import { templateRoutes } from "./features/templates";
 import { contactRoutes } from "./features/contacts";
 import { tagRoutes } from "./features/tags";
 import { GlobalFees } from "./models/GlobalFees";
+import SupportTicket from "./models/SupportTicket";
+import TicketMessage from "./models/TicketMessage";
 
 // Helper function to fetch global fees from database
 async function getGlobalFees() {
@@ -9692,6 +9694,10 @@ async function startServer() {
   // ============= CONFIG ENDPOINTS =============
   const configRouter = (await import('./endpoints/config')).default;
   app.use('/config', configRouter);
+
+  // ============= SUPPORT TICKETS ENDPOINTS =============
+  const { registerSupportEndpoints } = await import('./endpoints/support');
+  registerSupportEndpoints(app, authenticateJWT, getCurrentUser);
 
   // ============================================
   // DOCTOR-PATIENT CHAT ENDPOINTS

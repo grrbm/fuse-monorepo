@@ -26,9 +26,10 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   user?: User | null;
+  hasTickets?: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user, hasTickets = false }) => {
   const [clinic, setClinic] = React.useState<Clinic | null>(null);
   const [loadingClinic, setLoadingClinic] = React.useState(false);
   const [loadingLogo, setLoadingLogo] = React.useState(false);
@@ -157,6 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
     // { id: "offerings", label: "Offerings", icon: "lucide:list-checks" }, // Hidden
     { id: "treatments", label: "Treatments", icon: "lucide:pill" },
     { id: "messenger", label: "Messenger", icon: "lucide:message-square" },
+    ...(hasTickets ? [{ id: "support", label: "Support", icon: "lucide:headphones" }] : []),
     { id: "account", label: "Account", icon: "lucide:user" },
   ];
 
@@ -269,17 +271,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
         </div>
       </div>
 
-      {/* Help Button - Moved above user profile */}
-      <div className="p-3 border-t border-content3">
-        <Button
-          variant="flat"
-          color="default"
-          className="w-full justify-start"
-          startContent={<Icon icon="lucide:help-circle" className="text-lg text-foreground-500" />}
-        >
-          Help
-        </Button>
-      </div>
     </motion.div>
   );
 };
