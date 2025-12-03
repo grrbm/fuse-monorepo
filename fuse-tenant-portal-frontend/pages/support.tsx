@@ -20,6 +20,8 @@ import {
   Tag,
   Loader2,
   X,
+  Send,
+  ArrowRight,
 } from "lucide-react"
 
 interface Ticket {
@@ -45,6 +47,21 @@ interface Ticket {
   assignedTeam?: string
   messageCount: number
   tags?: string[]
+  messages?: TicketMessage[]
+}
+
+interface TicketMessage {
+  id: string
+  message: string
+  senderType: "user" | "support" | "system"
+  sender: {
+    id: string
+    firstName: string
+    lastName: string
+    email: string
+  }
+  createdAt: string
+  read: boolean
 }
 
 
@@ -88,6 +105,17 @@ export default function Support() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [newMessage, setNewMessage] = useState("")
+  const [sending, setSending] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const selectedTicketRef = useRef<Ticket | null>(null)
+  
+  // Keep ref updated with current selected ticket
+  useEffect(() => {
+    selectedTicketRef.current = selectedTicket
+  }, [selectedTicket])
 
   // Fetch tickets
   const fetchTickets = async () => {
@@ -115,20 +143,189 @@ export default function Support() {
     }
   }
 
+  // Fetch ticket details with messages
+  const fetchTicketDetails = async (ticketId: string, silent = false) => {
+    if (!token) return
+    
+    // Only show loading state if it's not a silent update (background refresh)
+    if (!silent) {
+      setLoadingMessages(true)
+    }
+
+    try {
+      const response = await fetch(`${baseUrl}/support/tickets/${ticketId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!response.ok) throw new Error("Failed to fetch ticket details")
+
+      const data = await response.json()
+      setSelectedTicket(data.data)
+      
+      // Only scroll on initial load, not on silent updates
+      if (!silent) {
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+        }, 100)
+      }
+    } catch (error: any) {
+      console.error("Error fetching ticket details:", error)
+      if (!silent) {
+        toast.error("Failed to load ticket details")
+      }
+    } finally {
+      if (!silent) {
+        setLoadingMessages(false)
+      }
+    }
+  }
+
+  // Send message
+  const sendMessage = async () => {
+    if (!token || !selectedTicket || !newMessage.trim()) return
+    setSending(true)
+
+    const messageContent = newMessage.trim()
+    const tempId = `temp-${Date.now()}`
+    
+    // Optimistic update - add message immediately
+    const optimisticMessage: TicketMessage = {
+      id: tempId,
+      message: messageContent,
+      senderType: "support",
+      sender: {
+        id: "current-user",
+        firstName: "You",
+        lastName: "",
+        email: "",
+      },
+      createdAt: new Date().toISOString(),
+      read: false,
+    }
+
+    // Update local state immediately
+    setSelectedTicket({
+      ...selectedTicket,
+      messages: [...(selectedTicket.messages || []), optimisticMessage],
+      messageCount: selectedTicket.messageCount + 1,
+    })
+    setNewMessage("")
+
+    // Scroll to bottom immediately
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    }, 50)
+
+    try {
+      const response = await fetch(`${baseUrl}/support/tickets/${selectedTicket.id}/messages`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: messageContent,
+          senderType: "support",
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to send message")
+
+      const data = await response.json()
+      
+      // Replace optimistic message with real one from server
+      setSelectedTicket(prev => ({
+        ...prev!,
+        messages: prev!.messages?.map(msg => 
+          msg.id === tempId ? data.data : msg
+        ) || [],
+      }))
+
+      toast.success("Message sent successfully")
+      
+      // Refresh tickets list in background to update message count
+      fetchTickets()
+    } catch (error: any) {
+      console.error("Error sending message:", error)
+      toast.error("Failed to send message")
+      
+      // Remove optimistic message on error
+      setSelectedTicket(prev => ({
+        ...prev!,
+        messages: prev!.messages?.filter(msg => msg.id !== tempId) || [],
+        messageCount: prev!.messageCount - 1,
+      }))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Get next status in workflow
+  const getNextStatus = (currentStatus: string) => {
+    const statusFlow: Record<string, { next: string; label: string } | null> = {
+      new: { next: "in_progress", label: "In Progress" },
+      in_progress: { next: "resolved", label: "Resolved" },
+      resolved: { next: "closed", label: "Closed" },
+      closed: null,
+    }
+    return statusFlow[currentStatus]
+  }
+
+  // Update ticket status
+  const updateTicketStatus = async () => {
+    if (!token || !selectedTicket) return
+    
+    const nextStatusInfo = getNextStatus(selectedTicket.status)
+    if (!nextStatusInfo) return
+
+    const previousStatus = selectedTicket.status
+    setUpdatingStatus(true)
+
+    // Optimistic update - change status immediately
+    setSelectedTicket({
+      ...selectedTicket,
+      status: nextStatusInfo.next as any,
+    })
+
+    try {
+      const response = await fetch(`${baseUrl}/support/tickets/${selectedTicket.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: nextStatusInfo.next,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to update ticket status")
+
+      toast.success(`Ticket marked as ${nextStatusInfo.label}`)
+      
+      // Refresh tickets list in background
+      fetchTickets()
+    } catch (error: any) {
+      console.error("Error updating ticket status:", error)
+      toast.error("Failed to update ticket status")
+      
+      // Revert to previous status on error
+      setSelectedTicket(prev => ({
+        ...prev!,
+        status: previousStatus,
+      }))
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
   useEffect(() => {
     fetchTickets()
   }, [token, filterStatus])
 
   // WebSocket connection for real-time updates
   useEffect(() => {
-    if (!token) {
-      console.warn('⚠️ [Support] No token available for WebSocket connection')
-      return
-    }
-
-    console.log('🔌 [Support] Initializing WebSocket connection')
-    console.log('🔌 [Support] Base URL:', baseUrl)
-    console.log('🔌 [Support] Token available:', !!token)
+    if (!token) return
 
     // Initialize socket connection
     const socket = io(baseUrl, {
@@ -141,57 +338,46 @@ export default function Support() {
 
     socketRef.current = socket
 
-    socket.on('connect', () => {
-      console.log('✅ [Support] Connected to WebSocket for support tickets')
-      console.log('🔌 [Support] Socket ID:', socket.id)
-      console.log('🔌 [Support] Transport:', socket.io.engine.transport.name)
-    })
-
-    socket.on('connect_error', (error) => {
-      console.error('❌ [Support] WebSocket connection error:', error.message)
-      console.error('❌ [Support] Error details:', error)
-    })
-
-    socket.on('disconnect', (reason) => {
-      console.log('🔌 [Support] Disconnected from WebSocket. Reason:', reason)
-    })
-
-    socket.on('error', (error) => {
-      console.error('❌ [Support] WebSocket error:', error)
-    })
-
     // Listen for new tickets
     socket.on('ticket:created', (data) => {
-      console.log('🎫 [Support] New ticket created event received:', data)
       toast.success('New support ticket received!', {
         description: data.title
       })
-      // Refresh tickets list
       fetchTickets()
     })
 
     // Listen for ticket updates
     socket.on('ticket:updated', (data) => {
-      console.log('🎫 [Support] Ticket updated event received:', data)
-      // Refresh tickets list
+      toast.info('Ticket updated')
       fetchTickets()
+      
+      // Update selected ticket status if it's the one being updated
+      const currentTicket = selectedTicketRef.current
+      if (currentTicket && data.ticketId === currentTicket.id) {
+        setSelectedTicket(prev => prev ? { ...prev, status: data.status } : null)
+      }
     })
 
     // Listen for new messages
     socket.on('ticket:message', (data) => {
-      console.log('💬 [Support] New ticket message event received:', data)
-      // Refresh tickets list
       fetchTickets()
-    })
-
-    // Test: Listen to all events
-    socket.onAny((eventName, ...args) => {
-      console.log('📨 [Support] Received event:', eventName, args)
+      
+      // Only fetch details if this is not our own message (to avoid double refresh)
+      // We already optimistically updated our own messages
+      const currentTicket = selectedTicketRef.current
+      if (currentTicket && data.ticketId === currentTicket.id) {
+        // Silently fetch new messages without loading state
+        fetchTicketDetails(currentTicket.id, true)
+        
+        // Scroll to new message after a brief delay
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+        }, 200)
+      }
     })
 
     // Cleanup on unmount
     return () => {
-      console.log('🔌 [Support] Cleaning up WebSocket connection')
       socket.disconnect()
     }
   }, [token, baseUrl])
@@ -215,6 +401,19 @@ export default function Support() {
         ticket.id.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : tickets
+  
+  // Sort tickets by priority: resolved -> in_progress -> new -> closed
+  const sortedTickets = filterStatus === "all" 
+    ? [...filteredTickets].sort((a, b) => {
+        const statusOrder: Record<string, number> = {
+          'resolved': 0,
+          'in_progress': 1,
+          'new': 2,
+          'closed': 3
+        };
+        return (statusOrder[a.status] || 999) - (statusOrder[b.status] || 999);
+      })
+    : filteredTickets
 
   // Statistics
   const stats = {
@@ -244,16 +443,16 @@ export default function Support() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto p-8 space-y-8">
-          {/* Page Header */}
-          <div className="flex justify-between items-start">
-            <div>
-              <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Support Tickets</h1>
-              <p className="text-[#6B7280] text-base">View and manage support requests from patients</p>
+            {/* Page Header */}
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Support Tickets</h1>
+                <p className="text-[#6B7280] text-base">View and manage support requests from patients</p>
+              </div>
             </div>
-          </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide">Total Tickets</h3>
@@ -330,15 +529,15 @@ export default function Support() {
               </button>
 
               <button
-                onClick={() => setFilterStatus("new")}
+                onClick={() => setFilterStatus("resolved")}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  filterStatus === "new"
-                    ? "bg-blue-500 text-white shadow-sm"
-                    : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                  filterStatus === "resolved"
+                    ? "bg-green-500 text-white shadow-sm"
+                    : "bg-green-50 text-green-700 border border-green-200 hover:bg-green-100"
                 }`}
               >
-                <AlertCircle className="h-4 w-4" />
-                New ({tickets.filter(t => t.status === "new").length})
+                <CheckCircle2 className="h-4 w-4" />
+                Resolved ({tickets.filter(t => t.status === "resolved").length})
               </button>
 
               <button
@@ -354,15 +553,15 @@ export default function Support() {
               </button>
 
               <button
-                onClick={() => setFilterStatus("resolved")}
+                onClick={() => setFilterStatus("new")}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  filterStatus === "resolved"
-                    ? "bg-green-500 text-white shadow-sm"
-                    : "bg-green-50 text-green-700 border border-green-200 hover:bg-green-100"
+                  filterStatus === "new"
+                    ? "bg-blue-500 text-white shadow-sm"
+                    : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
                 }`}
               >
-                <CheckCircle2 className="h-4 w-4" />
-                Resolved ({tickets.filter(t => t.status === "resolved").length})
+                <AlertCircle className="h-4 w-4" />
+                New ({tickets.filter(t => t.status === "new").length})
               </button>
 
               <button
@@ -384,7 +583,7 @@ export default function Support() {
           <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
             <div className="p-6 border-b border-[#E5E7EB]">
               <h2 className="text-lg font-semibold text-[#1F2937]">
-                Tickets ({filteredTickets.length})
+                Tickets ({sortedTickets.length})
               </h2>
             </div>
 
@@ -393,7 +592,7 @@ export default function Support() {
                 <Loader2 className="h-12 w-12 text-[#4FA59C] animate-spin mx-auto mb-4" />
                 <p className="text-lg text-[#4B5563]">Loading tickets...</p>
               </div>
-            ) : filteredTickets.length === 0 ? (
+            ) : sortedTickets.length === 0 ? (
               <div className="p-16 text-center">
                 <div className="bg-[#F3F4F6] rounded-full p-6 w-fit mx-auto mb-4">
                   <MessageSquare className="h-12 w-12 text-[#9CA3AF]" />
@@ -403,13 +602,13 @@ export default function Support() {
               </div>
             ) : (
               <div className="divide-y divide-[#E5E7EB]">
-                {filteredTickets.map((ticket) => {
+                {sortedTickets.map((ticket) => {
                   const StatusIcon = statusConfig[ticket.status].icon
                   return (
                     <div
                       key={ticket.id}
                       className="p-6 hover:bg-[#F9FAFB] transition-all cursor-pointer"
-                      onClick={() => setSelectedTicket(ticket)}
+                      onClick={() => fetchTicketDetails(ticket.id)}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0 space-y-3">
@@ -488,74 +687,252 @@ export default function Support() {
         </main>
       </div>
 
-      {/* Ticket Detail Modal */}
+      {/* Modal overlay tipo ClickUp */}
       {selectedTicket && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           onClick={() => setSelectedTicket(null)}
         >
           <div 
-            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-[#E5E7EB]"
+            className="w-full max-w-7xl max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-[#E5E7EB] flex overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-8 space-y-6">
-              <div className="flex items-start justify-between pb-4 border-b border-[#E5E7EB]">
-                <div className="space-y-2">
-                  <span className="text-sm font-mono text-[#9CA3AF] bg-[#F3F4F6] px-3 py-1 rounded-lg">
-                    {selectedTicket.id}
-                  </span>
-                  <h2 className="text-2xl font-semibold text-[#1F2937]">{selectedTicket.title}</h2>
-                </div>
-                <button
-                  onClick={() => setSelectedTicket(null)}
-                  className="rounded-full px-4 py-2 border border-[#E5E7EB] text-[#6B7280] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
-                >
-                  Close
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-3">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${statusConfig[selectedTicket.status].color}`}>
-                    {statusConfig[selectedTicket.status].label}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#F3F4F6] text-[#6B7280]">
-                    {categoryConfig[selectedTicket.category].icon} {categoryConfig[selectedTicket.category].label}
-                  </span>
-                </div>
-
-                <div className="bg-[#F9FAFB] rounded-xl p-6 border border-[#E5E7EB]">
-                  <h3 className="text-sm font-semibold text-[#1F2937] mb-2">Description</h3>
-                  <p className="text-sm text-[#6B7280] leading-relaxed">{selectedTicket.description}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
-                    <p className="text-xs font-medium text-[#9CA3AF] mb-1">Created by</p>
-                    <p className="text-sm font-semibold text-[#1F2937]">{`${selectedTicket.author.firstName} ${selectedTicket.author.lastName}`}</p>
-                    <p className="text-xs text-[#6B7280]">{selectedTicket.author.email}</p>
-                  </div>
-                  <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
-                    <p className="text-xs font-medium text-[#9CA3AF] mb-1">Created at</p>
-                    <p className="text-sm font-semibold text-[#1F2937]">
-                      {new Date(selectedTicket.createdAt).toLocaleDateString('en-US', { 
-                        day: '2-digit', 
-                        month: 'long', 
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
-                  <p className="text-sm text-blue-700">
-                    💡 This is a ticket preview. Full ticket management functionality will be available soon.
-                  </p>
+            {loadingMessages ? (
+              <div className="flex-1 flex items-center justify-center py-20">
+                <div className="text-center">
+                  <Loader2 className="h-12 w-12 text-[#4FA59C] animate-spin mx-auto mb-4" />
+                  <p className="text-lg text-[#4B5563]">Loading ticket details...</p>
                 </div>
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Left Column: Ticket Details */}
+                <div className="w-[55%] flex flex-col border-r border-[#E5E7EB]">
+                  {/* Header */}
+                  <div className="p-8 border-b border-[#E5E7EB]">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${statusConfig[selectedTicket.status].color}`}>
+                            {statusConfig[selectedTicket.status].label}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#F3F4F6] text-[#6B7280]">
+                            {categoryConfig[selectedTicket.category].icon} {categoryConfig[selectedTicket.category].label}
+                          </span>
+                          <span className="text-xs font-mono text-[#9CA3AF] bg-[#F3F4F6] px-2 py-1 rounded">
+                            #{selectedTicket.id.slice(0, 8)}
+                          </span>
+                        </div>
+                        <h1 className="text-2xl font-bold text-[#1F2937] mb-1">
+                          {selectedTicket.title}
+                        </h1>
+                      </div>
+
+                      <button
+                        onClick={() => setSelectedTicket(null)}
+                        className="p-2 text-[#6B7280] hover:text-[#4FA59C] hover:bg-[#F3F4F6] rounded-lg transition-all"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    {/* Mark as Next Status Button */}
+                    {getNextStatus(selectedTicket.status) && (
+                      <button
+                        onClick={updateTicketStatus}
+                        disabled={updatingStatus}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#4FA59C] text-white rounded-lg hover:bg-[#3d8479] transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {updatingStatus ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            Mark as {getNextStatus(selectedTicket.status)?.label}
+                            <ArrowRight className="h-4 w-4" />
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Scrollable Content */}
+                  <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                    {/* Description */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-[#1F2937] mb-2">Description</h3>
+                      <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
+                        <p className="text-sm text-[#6B7280] leading-relaxed">
+                          {selectedTicket.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Ticket Information */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-[#1F2937] mb-3">Ticket Information</h3>
+                      <div className="space-y-3">
+                        <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
+                          <p className="text-xs font-medium text-[#9CA3AF] mb-1">Created by</p>
+                          <p className="text-sm font-semibold text-[#1F2937]">
+                            {selectedTicket.author.firstName} {selectedTicket.author.lastName}
+                          </p>
+                          <p className="text-xs text-[#6B7280]">{selectedTicket.author.email}</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
+                            <p className="text-xs font-medium text-[#9CA3AF] mb-1">Created at</p>
+                            <p className="text-sm font-semibold text-[#1F2937]">
+                              {new Date(selectedTicket.createdAt).toLocaleDateString('en-US', { 
+                                day: '2-digit', 
+                                month: 'short', 
+                                year: 'numeric'
+                              })}
+                            </p>
+                            <p className="text-xs text-[#6B7280]">
+                              {new Date(selectedTicket.createdAt).toLocaleTimeString('en-US', { 
+                                hour: '2-digit', 
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+
+                          <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
+                            <p className="text-xs font-medium text-[#9CA3AF] mb-1">Last updated</p>
+                            <p className="text-sm font-semibold text-[#1F2937]">
+                              {formatDate(selectedTicket.updatedAt)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {(selectedTicket.assignedTo || selectedTicket.assignedTeam) && (
+                          <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
+                            <p className="text-xs font-medium text-[#9CA3AF] mb-1">Assigned to</p>
+                            <p className="text-sm font-semibold text-[#4FA59C]">
+                              {selectedTicket.assignedTo 
+                                ? `${selectedTicket.assignedTo.firstName} ${selectedTicket.assignedTo.lastName}`
+                                : selectedTicket.assignedTeam
+                              }
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tags if any */}
+                    {selectedTicket.tags && selectedTicket.tags.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-semibold text-[#1F2937] mb-3">Tags</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedTicket.tags.map((tag, index) => (
+                            <span 
+                              key={index}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#E5E7EB] text-[#6B7280]"
+                            >
+                              <Tag className="h-3 w-3" />
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column: Comments/Chat */}
+                <div className="w-[45%] flex flex-col bg-[#F9FAFB]">
+                  {/* Comments Header */}
+                  <div className="p-6 border-b border-[#E5E7EB] bg-white">
+                    <div className="flex items-center gap-2">
+                      <MessageCircle className="h-5 w-5 text-[#4FA59C]" />
+                      <h2 className="text-lg font-semibold text-[#1F2937]">
+                        Comments
+                      </h2>
+                      <span className="text-sm text-[#9CA3AF]">
+                        ({selectedTicket.messageCount})
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Messages */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                    {selectedTicket.messages && selectedTicket.messages.length > 0 ? (
+                      selectedTicket.messages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`flex ${msg.senderType === "support" ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[85%] rounded-xl p-4 shadow-sm ${
+                              msg.senderType === "support"
+                                ? "bg-[#4FA59C] text-white"
+                                : msg.senderType === "system"
+                                ? "bg-[#F3F4F6] text-[#6B7280] border border-[#E5E7EB]"
+                                : "bg-white text-[#1F2937] border border-[#E5E7EB]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs font-semibold">
+                                {msg.sender.firstName} {msg.sender.lastName}
+                              </span>
+                              <span className={`text-xs ${msg.senderType === "support" ? "text-white/70" : "text-[#9CA3AF]"}`}>
+                                {formatDate(msg.createdAt)}
+                              </span>
+                            </div>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                              {msg.message}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <MessageCircle className="h-12 w-12 text-[#9CA3AF] mx-auto mb-2" />
+                          <p className="text-sm text-[#6B7280]">No comments yet</p>
+                          <p className="text-xs text-[#9CA3AF] mt-1">Be the first to reply</p>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  {/* Message Input */}
+                  <div className="bg-white border-t border-[#E5E7EB] p-4">
+                    <div className="flex gap-3">
+                      <input
+                        type="text"
+                        placeholder="Write a comment..."
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault()
+                            sendMessage()
+                          }
+                        }}
+                        className="flex-1 px-4 py-2.5 rounded-lg border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                        disabled={sending}
+                      />
+                      <button
+                        onClick={sendMessage}
+                        disabled={sending || !newMessage.trim()}
+                        className="px-5 py-2.5 bg-[#4FA59C] text-white rounded-lg hover:bg-[#3d8479] transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {sending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import { Icon } from "@iconify/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiCall } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
+import { io, Socket } from "socket.io-client";
 
 interface Ticket {
   id: string;
@@ -14,6 +15,11 @@ interface Ticket {
   updatedAt: string;
   messageCount: number;
   messages?: TicketMessage[];
+  author?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  };
 }
 
 interface TicketMessage {
@@ -40,6 +46,7 @@ export const SupportChat: React.FC = () => {
   const [newTicketDescription, setNewTicketDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -58,7 +65,9 @@ export const SupportChat: React.FC = () => {
       });
 
       if (response.success && response.data?.data?.tickets) {
-        const ticketsList = response.data.data.tickets;
+        const allTickets = response.data.data.tickets;
+        // Filter out closed tickets
+        const ticketsList = allTickets.filter((ticket: Ticket) => ticket.status !== "closed");
         setTickets(ticketsList);
         
         // Auto-select first ticket if exists and no ticket is currently selected
@@ -159,6 +168,55 @@ export const SupportChat: React.FC = () => {
   useEffect(() => {
     scrollToBottom();
   }, [selectedTicket?.messages]);
+
+  // WebSocket connection for real-time updates
+  useEffect(() => {
+    const token = localStorage.getItem('auth-token');
+    if (!token) return;
+
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+    // Initialize socket connection
+    const socket = io(baseUrl, {
+      auth: { token },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+    });
+
+    socketRef.current = socket;
+
+    // Listen for new messages
+    socket.on('ticket:message', (data) => {
+      // Refresh tickets list to update message count
+      fetchTickets();
+      
+      // If this message is for the currently selected ticket, reload it
+      if (selectedTicket && data.ticketId === selectedTicket.id) {
+        fetchTicketDetails(selectedTicket.id);
+      }
+    });
+
+    // Listen for ticket updates (status changes)
+    socket.on('ticket:updated', (data) => {
+      fetchTickets();
+      
+      // If the ticket was closed and it's currently selected, deselect it
+      if (selectedTicket && data.ticketId === selectedTicket.id) {
+        if (data.status === 'closed') {
+          setSelectedTicket(null);
+        } else {
+          setSelectedTicket(prev => prev ? { ...prev, status: data.status } : null);
+        }
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      socket.disconnect();
+    };
+  }, [selectedTicket?.id]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -356,10 +414,10 @@ export const SupportChat: React.FC = () => {
                     className="flex justify-end"
                   >
                     <div className="max-w-[70%]">
-                      <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-4 py-3">
-                        <p className="text-sm">{selectedTicket.description}</p>
+                      <div className="bg-blue-50 text-blue-900 rounded-2xl rounded-br-sm px-4 py-3 border border-blue-200">
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{selectedTicket.description}</p>
                       </div>
-                      <p className="text-xs text-foreground-400 mt-1 text-right">
+                      <p className="text-xs text-foreground-400 mt-1 text-right px-1">
                         {formatDate(selectedTicket.createdAt)}
                       </p>
                     </div>
@@ -367,45 +425,108 @@ export const SupportChat: React.FC = () => {
 
                   {/* Messages */}
                   <AnimatePresence>
-                    {selectedTicket.messages?.map((msg, index) => (
-                      <motion.div
-                        key={msg.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className={`flex ${msg.senderType === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div className={`max-w-[70%] ${msg.senderType !== "user" ? "flex gap-2" : ""}`}>
-                          {msg.senderType !== "user" && (
-                            <Avatar
-                              size="sm"
-                              icon={<Icon icon="lucide:headphones" />}
-                              classNames={{
-                                base: "bg-success-100",
-                                icon: "text-success-600"
-                              }}
-                            />
-                          )}
-                          <div>
-                            {msg.senderType !== "user" && (
-                              <p className="text-xs text-foreground-500 mb-1">Support Team</p>
+                    {selectedTicket.messages?.map((msg, index) => {
+                      // Determine if message is from user (patient) or support
+                      // Use hybrid logic: check both senderType and compare with ticket author/current user
+                      let isUser = false
+                      
+                      // First priority: If senderType is explicitly "support", it's NOT from user
+                      if (msg.senderType === "support") {
+                        isUser = false
+                      }
+                      // Check if message is from the ticket author (patient)
+                      else if (selectedTicket.author) {
+                        isUser = msg.sender.firstName === selectedTicket.author.firstName && 
+                                 msg.sender.lastName === selectedTicket.author.lastName
+                      }
+                      // Fallback: check against current logged-in user
+                      else if (user) {
+                        isUser = msg.sender.firstName === user.firstName && 
+                                 msg.sender.lastName === user.lastName
+                      }
+                      // Default: if senderType is "user", treat as user message
+                      else {
+                        isUser = msg.senderType === "user"
+                      }
+                      
+                      const isSupport = !isUser && msg.senderType !== "system"
+                      
+                      // Check if this message is from the same sender as the previous message
+                      const prevMsg = index > 0 ? selectedTicket.messages?.[index - 1] : null
+                      const isSameSenderAsPrevious = prevMsg && 
+                        prevMsg.sender.firstName === msg.sender.firstName &&
+                        prevMsg.sender.lastName === msg.sender.lastName
+                      
+                      // Check if next message is from the same sender
+                      const nextMsg = index < (selectedTicket.messages?.length || 0) - 1 ? selectedTicket.messages?.[index + 1] : null
+                      const isSameSenderAsNext = nextMsg &&
+                        nextMsg.sender.firstName === msg.sender.firstName &&
+                        nextMsg.sender.lastName === msg.sender.lastName
+                      
+                      // Determine if we should show the avatar and name (first in group)
+                      const showHeader = !isSameSenderAsPrevious
+                      
+                      // Determine if we should show the timestamp (last in group)
+                      const showTimestamp = !isSameSenderAsNext
+                      
+                      return (
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className={`flex ${isUser ? "justify-end" : "justify-start"} ${isSameSenderAsPrevious ? "mt-0.5" : "mt-4"}`}
+                        >
+                          <div className={`max-w-[70%] ${!isUser ? "flex gap-2" : ""}`}>
+                            {/* Avatar/Spacer for support/brand messages */}
+                            {isSupport && (
+                              showHeader ? (
+                                <Avatar
+                                  size="sm"
+                                  icon={<Icon icon="lucide:building-2" />}
+                                  classNames={{
+                                    base: "bg-teal-100 flex-shrink-0",
+                                    icon: "text-teal-600"
+                                  }}
+                                />
+                              ) : (
+                                // Spacer to maintain alignment for grouped messages
+                                <div className="w-8 flex-shrink-0"></div>
+                              )
                             )}
-                            <div className={`rounded-2xl px-4 py-3 ${
-                              msg.senderType === "user"
-                                ? "bg-primary text-primary-foreground rounded-br-sm"
-                                : "bg-content2 rounded-bl-sm"
-                            }`}>
-                              <p className="text-sm">{msg.message}</p>
+                            
+                            <div className="flex-1">
+                              {/* Sender name for non-user messages - only show for first message in group */}
+                              {!isUser && showHeader && (
+                                <p className="text-xs font-semibold mb-1 px-1" style={{ color: isSupport ? "#14b8a6" : "#6B7280" }}>
+                                  {isSupport ? "Support Team" : "System"}
+                                </p>
+                              )}
+                              
+                              {/* Message bubble */}
+                              <div className={`rounded-2xl px-4 py-3 ${
+                                isUser
+                                  ? "bg-blue-50 text-blue-900 rounded-br-sm border border-blue-200"
+                                  : isSupport
+                                  ? "bg-teal-50 text-teal-900 rounded-bl-sm border border-teal-200"
+                                  : "bg-content2 rounded-bl-sm"
+                              }`}>
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                              </div>
+                              
+                              {/* Timestamp - only show for last message in group */}
+                              {showTimestamp && (
+                                <p className={`text-xs text-foreground-400 mt-1 px-1 ${
+                                  isUser ? "text-right" : ""
+                                }`}>
+                                  {formatDate(msg.createdAt)}
+                                </p>
+                              )}
                             </div>
-                            <p className={`text-xs text-foreground-400 mt-1 ${
-                              msg.senderType === "user" ? "text-right" : ""
-                            }`}>
-                              {formatDate(msg.createdAt)}
-                            </p>
                           </div>
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      )
+                    })}
                   </AnimatePresence>
 
                   {/* Auto-response if no messages yet */}
@@ -419,16 +540,16 @@ export const SupportChat: React.FC = () => {
                       <div className="flex gap-2 max-w-[70%]">
                         <Avatar
                           size="sm"
-                          icon={<Icon icon="lucide:headphones" />}
+                          icon={<Icon icon="lucide:building-2" />}
                           classNames={{
-                            base: "bg-success-100",
-                            icon: "text-success-600"
+                            base: "bg-teal-100 flex-shrink-0",
+                            icon: "text-teal-600"
                           }}
                         />
-                        <div>
-                          <p className="text-xs text-foreground-500 mb-1">Support Team</p>
-                          <div className="bg-content2 rounded-2xl rounded-bl-sm px-4 py-3">
-                            <p className="text-sm">
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold mb-1 px-1" style={{ color: "#14b8a6" }}>Support Team</p>
+                          <div className="bg-teal-50 text-teal-900 rounded-2xl rounded-bl-sm px-4 py-3 border border-teal-200">
+                            <p className="text-sm leading-relaxed">
                               Thanks for reaching out! We've received your message and our team will get back to you shortly. 
                               You'll also receive updates via email.
                             </p>

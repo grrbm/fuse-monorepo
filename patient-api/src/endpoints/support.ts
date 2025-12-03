@@ -40,8 +40,6 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
         metadata: metadata || {},
       });
 
-      console.log('✅ Ticket created:', ticket.id);
-
       // Emit WebSocket event for real-time updates
       wsService.emitTicketCreated({
         ticketId: ticket.id,
@@ -118,8 +116,6 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
         parseInt(limit as string)
       );
 
-      console.log(`✅ Listed tickets: ${result.tickets.length} of ${result.total}`);
-
       res.json({
         success: true,
         data: {
@@ -156,8 +152,6 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
       const { ticketId } = req.params;
 
       const ticket = await ticketService.getTicketById(ticketId, currentUser.id);
-
-      console.log('✅ Retrieved ticket:', ticketId);
 
       res.json({
         success: true,
@@ -197,7 +191,14 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
 
       const ticket = await ticketService.updateTicket(ticketId, updateData, currentUser.id);
 
-      console.log('✅ Ticket updated:', ticketId);
+      // Emit WebSocket event for real-time updates
+      wsService.emitTicketUpdated({
+        ticketId: ticket.id,
+        title: ticket.title,
+        clinicId: ticket.clinicId,
+        authorId: ticket.authorId,
+        status: ticket.status,
+      });
 
       res.json({
         success: true,
@@ -234,7 +235,7 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
       }
 
       const { ticketId } = req.params;
-      const { message, isInternal, attachments } = req.body;
+      const { message, isInternal, attachments, senderType } = req.body;
 
       if (!message) {
         return res.status(400).json({
@@ -243,16 +244,33 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
         });
       }
 
+      // Determine sender type based on user role and request
+      let messageSenderType = MessageSender.USER;
+      if (senderType === 'support' && ['admin', 'support', 'provider', 'brand'].includes(currentUser.userRole)) {
+        messageSenderType = MessageSender.SUPPORT;
+      } else if (senderType === 'system') {
+        messageSenderType = MessageSender.SYSTEM;
+      }
+
       const ticketMessage = await ticketService.addMessage({
         ticketId,
         senderId: currentUser.id,
-        senderType: MessageSender.USER,
+        senderType: messageSenderType,
         message,
         isInternal: isInternal || false,
         attachments: attachments || [],
       });
 
-      console.log('✅ Message added to ticket:', ticketId);
+      // Get ticket info for WebSocket event
+      const ticket = await ticketService.getTicketById(ticketId, currentUser.id);
+
+      // Emit WebSocket event for real-time updates
+      wsService.emitTicketMessage({
+        ticketId,
+        clinicId: ticket.clinicId,
+        authorId: ticket.authorId,
+        senderType: messageSenderType,
+      });
 
       res.status(201).json({
         success: true,
@@ -295,8 +313,6 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
 
       const stats = await ticketService.getStatistics(filterClinicId);
 
-      console.log('✅ Retrieved ticket statistics');
-
       res.json({
         success: true,
         data: stats,
@@ -325,8 +341,6 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
       const { ticketId } = req.params;
 
       await ticketService.deleteTicket(ticketId);
-
-      console.log('✅ Ticket deleted:', ticketId);
 
       res.json({
         success: true,
