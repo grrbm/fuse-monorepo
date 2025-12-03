@@ -634,6 +634,18 @@ app.post("/auth/signup", async (req, res) => {
       console.log('❌ Failed to send verification email, but user was created');
     }
 
+    // HIPAA Audit: Log account creation
+    await AuditService.log({
+      userId: user.id,
+      userEmail: user.email,
+      action: AuditAction.CREATE,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      ipAddress: AuditService.getClientIp(req),
+      details: { role: mappedRole, clinicId: finalClinicId },
+      success: true,
+    });
+
     res.status(201).json({
       success: true,
       message: "User registered successfully. Please check your email to activate your account.",
@@ -1202,8 +1214,11 @@ app.get("/auth/verify-email", async (req, res) => {
   }
 });
 
-app.post("/auth/signout", async (_req, res) => {
+app.post("/auth/signout", authenticateJWT, async (req, res) => {
   try {
+    // HIPAA Audit: Log logout
+    await AuditService.logLogout(req);
+
     // With JWT, signout is handled client-side by removing the token
     // No server-side session to destroy
     res.status(200).json({
@@ -1325,6 +1340,9 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
 
     // Update user with the prepared data
     await user.update(updateData);
+
+    // HIPAA Audit: Log profile update (PHI modification)
+    await AuditService.logPatientUpdate(req, currentUser.id, Object.keys(updateData));
 
     console.log('Profile updated for user:', user.email); // Safe - no PHI
 
@@ -5164,6 +5182,13 @@ app.get("/orders", authenticateJWT, async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
+    // HIPAA Audit: Log PHI access (patient viewing their orders)
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.ORDER,
+      details: { orderCount: orders.length, selfAccess: true },
+    });
+
     res.status(200).json({
       success: true,
       data: orders
@@ -8209,6 +8234,12 @@ app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
     const result = await orderService.listOrdersByClinic(clinicId, currentUser.id, paginationParams);
 
     if (result.success) {
+      // HIPAA Audit: Log bulk PHI access (viewing all orders for a clinic)
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.VIEW,
+        resourceType: AuditResourceType.ORDER,
+        details: { bulkAccess: true, clinicId },
+      });
       res.status(200).json(result);
     } else {
       if (result.message === "Forbidden") {
@@ -8345,6 +8376,13 @@ app.get("/messages", authenticateJWT, async (req, res) => {
     };
 
     const messages = await MessageService.getMessagesByUserId(currentUser.id, params);
+
+    // HIPAA Audit: Log message access
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.MESSAGE,
+      details: { messageCount: messages.data?.length || 0 },
+    });
 
     res.json({
       success: true,
@@ -8551,6 +8589,10 @@ app.get("/md/patient", authenticateJWT, async (req, res) => {
 
     const tokenResponse = await MDAuthService.generateToken();
     const patient = await MDPatientService.getPatient(user.mdPatientId, tokenResponse.access_token);
+
+    // HIPAA Audit: Log PHI access (viewing telehealth patient record)
+    await AuditService.logPatientView(req, currentUser.id, { mdPatientId: user.mdPatientId });
+
     return res.json({ success: true, data: patient });
   } catch (error) {
     console.error('❌ Error fetching MD patient:', error);
@@ -8576,6 +8618,15 @@ app.get("/md/cases/:caseId", authenticateJWT, async (req, res) => {
 
     const tokenResponse = await MDAuthService.generateToken();
     const mdCase = await MDCaseService.getCase(caseId, tokenResponse.access_token);
+
+    // HIPAA Audit: Log PHI access (viewing telehealth case details)
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.PRESCRIPTION,
+      resourceId: caseId,
+      details: { mdCase: true },
+    });
+
     return res.json({ success: true, data: mdCase });
   } catch (error) {
     console.error('❌ Error fetching MD case:', error);
@@ -8605,6 +8656,15 @@ app.get("/md/cases/latest", authenticateJWT, async (req, res) => {
     const MDCaseService = (await import('./services/mdIntegration/MDCase.service')).default;
     const tokenResponse = await MDAuthService.generateToken();
     const mdCase = await MDCaseService.getCase(caseId, tokenResponse.access_token);
+
+    // HIPAA Audit: Log PHI access (viewing latest telehealth case)
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.PRESCRIPTION,
+      resourceId: caseId,
+      details: { mdCase: true, latestCase: true },
+    });
+
     return res.json({ success: true, data: mdCase });
   } catch (error) {
     console.error('❌ Error fetching latest MD case:', error);
@@ -9803,6 +9863,13 @@ async function startServer() {
         })
       );
 
+      // HIPAA Audit: Log PHI access (doctor viewing all patient chats)
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.VIEW,
+        resourceType: AuditResourceType.MESSAGE,
+        details: { bulkAccess: true, chatCount: chatsWithPatients.length },
+      });
+
       res.json({
         success: true,
         data: chatsWithPatients
@@ -10072,6 +10139,9 @@ async function startServer() {
       } else if (patient && (!patient.phoneNumber || patient.smsOptedOut)) {
         console.log(`ℹ️ Skipping SMS notification for patient ${patient.id}: ${!patient.phoneNumber ? 'no phone number' : 'SMS opted out'}`);
       }
+
+      // HIPAA Audit: Log message creation (doctor sending health communication)
+      await AuditService.logMessageSent(req, chatId, chat.patientId);
 
       res.json({
         success: true,
@@ -10449,6 +10519,9 @@ async function startServer() {
 
       // Emit patient's unread count (reset to 0 since they sent the message)
       WebSocketService.emitUnreadCountUpdate(chat.patientId, 0);
+
+      // HIPAA Audit: Log message creation (patient sending health communication)
+      await AuditService.logMessageSent(req, chat.id, chat.doctorId);
 
       res.json({
         success: true,

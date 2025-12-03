@@ -12,6 +12,7 @@ import PharmacyProduct from '../models/PharmacyProduct';
 import PharmacyCoverage from '../models/PharmacyCoverage';
 import Pharmacy from '../models/Pharmacy';
 import IronSailOrderService from '../services/pharmacy/ironsail-order';
+import { AuditService, AuditAction, AuditResourceType } from '../services/audit.service';
 
 export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
 
@@ -216,6 +217,17 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             // Age and gender can be added when User model is updated
             const filteredOrders = orders;
 
+            // HIPAA Audit: Log bulk PHI access (doctor viewing pending orders with patient info)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.VIEW,
+                resourceType: AuditResourceType.ORDER,
+                details: { 
+                    bulkAccess: true, 
+                    orderCount: filteredOrders.length,
+                    filters: { status, clinicId, patientSearch }
+                },
+            });
+
             res.json({
                 success: true,
                 data: filteredOrders.map(order => ({
@@ -338,6 +350,18 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
 
             const successCount = results.filter((r: any) => r.success).length;
             const failCount = results.length - successCount;
+
+            // HIPAA Audit: Log bulk order approval (doctor approving patient treatments)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.UPDATE,
+                resourceType: AuditResourceType.ORDER,
+                details: { 
+                    bulkApproval: true,
+                    orderIds,
+                    successCount,
+                    failCount,
+                },
+            });
 
             res.json({
                 success: true,
@@ -490,6 +514,14 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
 
             console.log(`📋 Found ${coverageData.length} pharmacy coverage(s) for order ${order.orderNumber}`);
 
+            // HIPAA Audit: Log PHI access (viewing patient pharmacy coverage)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.VIEW,
+                resourceType: AuditResourceType.ORDER,
+                resourceId: orderId,
+                details: { pharmacyCoverage: true, patientState },
+            });
+
             res.json({
                 success: true,
                 hasCoverage: true,
@@ -539,6 +571,14 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             // Add notes using order service
             const orderService = new OrderService();
             const result = await orderService.addDoctorNotes(orderId, user.id, note);
+
+            // HIPAA Audit: Log PHI modification (adding notes to patient order)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.UPDATE,
+                resourceType: AuditResourceType.ORDER,
+                resourceId: orderId,
+                details: { addedDoctorNotes: true },
+            });
 
             res.json(result);
 
