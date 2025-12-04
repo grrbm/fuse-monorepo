@@ -84,24 +84,22 @@ try {
   console.warn('⚠️  Failed to load RDS CA certificate:', certError instanceof Error ? certError.message : certError);
 }
 
-// HIPAA-compliant database connection with proper TLS verification
+// HIPAA-compliant database connection with enforced TLS
 const sequelizeConfig = {
   dialect: 'postgres' as const,
   dialectOptions: {
     // SSL configuration for HIPAA compliance:
-    // - Production: require SSL with CA certificate verification (TLS 1.2+)
-    // - Development with localhost: no SSL (local tunnel)
-    // - Other: require SSL with relaxed validation as fallback
-    ssl: process.env.NODE_ENV === 'production' ? {
-      require: true,
-      rejectUnauthorized: !!rdsCaCert, // Verify certificate if CA bundle is available
-      ca: rdsCaCert, // AWS RDS CA certificate bundle
-    } : (process.env.NODE_ENV === 'development' && isLocalhost) ? false : isLocalhost ? {
-      require: false, // Don't require SSL for localhost tunnel
-      rejectUnauthorized: false,
-    } : false,
+    // - Production: ALWAYS require SSL with strict certificate verification
+    // - Development: Allow localhost without SSL, but require SSL for remote connections
+    ssl: isLocalhost && process.env.NODE_ENV === 'development'
+      ? false  // Local development only
+      : {
+        require: true,
+        rejectUnauthorized: true, // ALWAYS verify certificates in non-local environments
+        ca: rdsCaCert, // AWS RDS CA certificate bundle
+      },
   },
-  logging: false, // Don't log SQL queries in production (could contain PHI)
+  logging: false, // Don't log SQL queries (could contain PHI)
   pool: {
     max: 10,
     min: 0,
@@ -109,6 +107,14 @@ const sequelizeConfig = {
     idle: 10000,
   },
 };
+
+// SECURITY: Fail if we're in production without CA certificate
+if (process.env.NODE_ENV === 'production' && !rdsCaCert) {
+  console.error('❌ CRITICAL: RDS CA certificate not found in production');
+  console.error('   Download from: https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem');
+  console.error('   Save to: patient-api/src/certs/rds-ca-bundle.pem');
+  throw new Error('RDS CA certificate is required in production');
+}
 
 export const sequelize = new Sequelize(databaseUrl, {
   ...sequelizeConfig,
@@ -284,7 +290,7 @@ export async function initializeDatabase() {
 
     console.log("Syncing...")
     // Sync all models to database (safer sync mode)
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log('✅ Database tables synchronized successfully');
 
     // Add new enum value for amount_capturable_updated status
@@ -474,18 +480,9 @@ export async function initializeDatabase() {
 
     // Force recreate GlobalFormStructure table (drop and recreate)
     try {
-      console.log('🔄 Dropping and recreating GlobalFormStructure table...');
-      // First, try to drop the table if it exists with wrong permissions
-      try {
-        await sequelize.query('DROP TABLE IF EXISTS "GlobalFormStructures" CASCADE;');
-        console.log('✅ Dropped existing GlobalFormStructures table');
-      } catch (dropError) {
-        console.log('⚠️  Could not drop table (may not exist):', dropError instanceof Error ? dropError.message : dropError);
-      }
-
-      // Now force create the table fresh
-      await GlobalFormStructure.sync({ force: true });
-      console.log('✅ GlobalFormStructure table created fresh');
+      console.log('🔄 Ensuring GlobalFormStructure table exists...');
+      await GlobalFormStructure.sync(); // Creates if not exists, never drops
+      console.log('✅ GlobalFormStructure table ready');
     } catch (syncError) {
       console.error('❌ Error syncing GlobalFormStructure:', syncError);
       throw syncError;
