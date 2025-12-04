@@ -1,4 +1,4 @@
-import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
+import { Table, Column, DataType, ForeignKey, BelongsTo, Index } from 'sequelize-typescript';
 import Entity from './Entity';
 import User from './User';
 
@@ -9,6 +9,13 @@ import User from './User';
 @Table({
     freezeTableName: true,
     tableName: 'MfaTokens',
+    indexes: [
+        {
+            unique: true,
+            fields: ['mfaToken'],
+            name: 'mfa_token_unique_idx'
+        }
+    ]
 })
 export default class MfaToken extends Entity {
     @ForeignKey(() => User)
@@ -31,7 +38,6 @@ export default class MfaToken extends Entity {
     @Column({
         type: DataType.STRING,
         allowNull: false,
-        unique: true,
         comment: 'Temporary token used to identify the MFA session',
     })
     declare mfaToken: string;
