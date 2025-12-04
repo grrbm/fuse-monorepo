@@ -10106,6 +10106,10 @@ async function startServer() {
   const { registerClientManagementEndpoints } = await import('./endpoints/client-management');
   registerClientManagementEndpoints(app, authenticateJWT, getCurrentUser);
 
+  // ============= AUDIT LOGS ENDPOINTS =============
+  const { registerAuditLogsEndpoints } = await import('./endpoints/audit-logs');
+  registerAuditLogsEndpoints(app, authenticateJWT, getCurrentUser);
+
   // ============= SUBSCRIPTION ENDPOINTS =============
   const { registerSubscriptionEndpoints } = await import('./endpoints/subscription');
   registerSubscriptionEndpoints(app, authenticateJWT, getCurrentUser);
