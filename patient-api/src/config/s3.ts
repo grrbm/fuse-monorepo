@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -61,16 +61,40 @@ export async function uploadToS3(
     const safePrefix = prefix ? `${sanitizeFileName(prefix)}-` : '';
     const key = `${folder}/${timestamp}-${safePrefix}${safeName}`;
 
+    // SECURITY: Enforce encryption and verify bucket configuration
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
       Body: fileBuffer,
       ContentType: contentType,
       ServerSideEncryption: 'AES256', // HIPAA: Ensure AES-256 encryption at rest
-      // ACL: "public-read", // Make file publicly readable - Commented out due to bucket ACL restrictions
+      // SECURITY: Never use public-read ACL for PHI
+      // Access should be granted via pre-signed URLs or bucket policies
     });
 
+    // SECURITY: Upload with encryption and verify
     await s3Client.send(command);
+
+    // Verify object encryption was applied
+    const headCommand = new HeadObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+    const headResponse = await s3Client.send(headCommand);
+
+    if (headResponse.ServerSideEncryption !== 'AES256') {
+      console.error('❌ S3 encryption verification failed for key:', key);
+      // Cleanup - delete unencrypted object
+      try {
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+        }));
+      } catch (cleanupError) {
+        console.error('⚠️ Failed to cleanup unencrypted object:', key);
+      }
+      throw new Error('Object encryption verification failed');
+    }
 
     // Return public URL
     const url = `https://${BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
