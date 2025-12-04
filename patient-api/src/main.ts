@@ -917,12 +917,12 @@ app.post("/auth/google", async (req, res) => {
     if (user.userRoles?.superAdmin === true) {
       // Update last login time
       await user.updateLastLogin();
-      
+
       // Create JWT token directly
       const token = createJWTToken(user);
-      
+
       console.log('🔓 SuperAdmin bypass (Google): MFA skipped for', user.email);
-      
+
       return res.status(200).json({
         success: true,
         requiresMfa: false,
@@ -1049,12 +1049,12 @@ app.post("/auth/signin", async (req, res) => {
     if (user.userRoles?.superAdmin === true) {
       // Update last login time
       await user.updateLastLogin();
-      
+
       // Create JWT token directly
       const token = createJWTToken(user);
-      
+
       console.log('🔓 SuperAdmin bypass: MFA skipped for', user.email);
-      
+
       return res.status(200).json({
         success: true,
         requiresMfa: false,
