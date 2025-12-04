@@ -19,6 +19,12 @@ export enum AuditAction {
   PASSWORD_CHANGE = 'PASSWORD_CHANGE',
   PASSWORD_RESET = 'PASSWORD_RESET',
   
+  // MFA events (HIPAA compliance)
+  MFA_CODE_SENT = 'MFA_CODE_SENT',
+  MFA_VERIFIED = 'MFA_VERIFIED',
+  MFA_FAILED = 'MFA_FAILED',
+  MFA_RESEND = 'MFA_RESEND',
+  
   // PHI Access events
   VIEW = 'VIEW',
   CREATE = 'CREATE',

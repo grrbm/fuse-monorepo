@@ -1,19 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Eye, EyeOff, Stethoscope } from 'lucide-react'
+import { Eye, EyeOff, Stethoscope, Mail, ArrowLeft, RefreshCw } from 'lucide-react'
 
 export default function SignIn() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
-    const { login, isLoading, error, user } = useAuth()
+    const [mfaCode, setMfaCode] = useState(['', '', '', '', '', ''])
+    const [resendCooldown, setResendCooldown] = useState(0)
+    const { login, verifyMfa, resendMfaCode, cancelMfa, mfa, isLoading, error, user } = useAuth()
     const router = useRouter()
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
+    const mfaInputRefs = useRef<(HTMLInputElement | null)[]>([])
 
     // Redirect if already authenticated
     useEffect(() => {
@@ -29,6 +32,14 @@ export default function SignIn() {
         }
     }, [router.query.message])
 
+    // Resend cooldown timer
+    useEffect(() => {
+        if (resendCooldown > 0) {
+            const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000)
+            return () => clearTimeout(timer)
+        }
+    }, [resendCooldown])
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
@@ -36,10 +47,178 @@ export default function SignIn() {
             return
         }
 
-        const success = await login(email, password)
-        if (success) {
+        const result = await login(email, password)
+        if (result === true) {
             router.push('/')
         }
+    }
+
+    const handleMfaCodeChange = (index: number, value: string) => {
+        const digit = value.replace(/\D/g, '').slice(-1)
+        
+        const newCode = [...mfaCode]
+        newCode[index] = digit
+        setMfaCode(newCode)
+
+        if (digit && index < 5) {
+            mfaInputRefs.current[index + 1]?.focus()
+        }
+    }
+
+    const handleMfaKeyDown = (index: number, e: React.KeyboardEvent) => {
+        if (e.key === 'Backspace' && !mfaCode[index] && index > 0) {
+            mfaInputRefs.current[index - 1]?.focus()
+        }
+    }
+
+    const handleMfaPaste = (e: React.ClipboardEvent) => {
+        e.preventDefault()
+        const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+        if (pastedData.length === 6) {
+            setMfaCode(pastedData.split(''))
+            mfaInputRefs.current[5]?.focus()
+        }
+    }
+
+    const handleMfaSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        const code = mfaCode.join('')
+        if (code.length !== 6) return
+
+        const success = await verifyMfa(code)
+        if (success) {
+            router.push('/')
+        } else {
+            setMfaCode(['', '', '', '', '', ''])
+            mfaInputRefs.current[0]?.focus()
+        }
+    }
+
+    const handleResendCode = async () => {
+        if (resendCooldown > 0) return
+        
+        const success = await resendMfaCode()
+        if (success) {
+            setSuccessMessage('New verification code sent!')
+            setResendCooldown(30)
+            setTimeout(() => setSuccessMessage(null), 3000)
+        }
+    }
+
+    const handleBackToLogin = () => {
+        cancelMfa()
+        setMfaCode(['', '', '', '', '', ''])
+        setPassword('')
+    }
+
+    // MFA Verification Form
+    if (mfa.required) {
+        return (
+            <>
+                <Head>
+                    <title>Verify Your Identity - Doctor Portal</title>
+                    <meta name="description" content="Enter verification code" />
+                </Head>
+
+                <div className="min-h-screen bg-background flex items-center justify-center p-4">
+                    <div className="w-full max-w-md space-y-6">
+                        <div className="text-center">
+                            <div className="flex justify-center mb-4">
+                                <div className="w-12 h-12 bg-emerald-600 rounded-lg flex items-center justify-center">
+                                    <Mail className="h-6 w-6 text-white" />
+                                </div>
+                            </div>
+                            <h1 className="text-2xl font-bold text-foreground">Check Your Email</h1>
+                            <p className="text-muted-foreground mt-2">
+                                We sent a 6-digit verification code to<br />
+                                <span className="font-medium text-foreground">{email}</span>
+                            </p>
+                        </div>
+
+                        <Card className="bg-card border-border">
+                            <CardHeader className="space-y-1">
+                                <CardTitle className="text-center text-lg">Enter Verification Code</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={handleMfaSubmit} className="space-y-6">
+                                    {error && (
+                                        <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                                            {error}
+                                        </div>
+                                    )}
+
+                                    {successMessage && (
+                                        <div className="p-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md">
+                                            {successMessage}
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-center gap-2">
+                                        {mfaCode.map((digit, index) => (
+                                            <input
+                                                key={index}
+                                                ref={(el) => { mfaInputRefs.current[index] = el }}
+                                                type="text"
+                                                inputMode="numeric"
+                                                maxLength={1}
+                                                value={digit}
+                                                onChange={(e) => handleMfaCodeChange(index, e.target.value)}
+                                                onKeyDown={(e) => handleMfaKeyDown(index, e)}
+                                                onPaste={handleMfaPaste}
+                                                className="w-12 h-14 text-center text-2xl font-bold border-2 border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                                autoFocus={index === 0}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    <p className="text-xs text-center text-muted-foreground">
+                                        Code expires in 5 minutes
+                                    </p>
+
+                                    <Button
+                                        type="submit"
+                                        className="w-full bg-emerald-600 hover:bg-emerald-700"
+                                        disabled={isLoading || mfaCode.join('').length !== 6}
+                                    >
+                                        {isLoading ? 'Verifying...' : 'Verify & Sign In'}
+                                    </Button>
+                                </form>
+
+                                <div className="mt-6 space-y-3">
+                                    <button
+                                        type="button"
+                                        onClick={handleResendCode}
+                                        disabled={resendCooldown > 0 || isLoading || mfa.resendsRemaining <= 0}
+                                        className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <RefreshCw className="h-4 w-4" />
+                                        {resendCooldown > 0 
+                                            ? `Resend code in ${resendCooldown}s`
+                                            : mfa.resendsRemaining <= 0
+                                                ? 'No resends remaining'
+                                                : `Resend code (${mfa.resendsRemaining} remaining)`
+                                        }
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleBackToLogin}
+                                        className="w-full flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                                    >
+                                        <ArrowLeft className="h-4 w-4" />
+                                        Back to sign in
+                                    </button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <p className="text-xs text-center text-muted-foreground">
+                            🔒 Two-factor authentication required for HIPAA compliance
+                        </p>
+                    </div>
+                </div>
+            </>
+        )
     }
 
     return (
