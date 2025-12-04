@@ -786,20 +786,70 @@ app.get("/auth/google/callback", async (req, res) => {
       console.log('👤 Existing user found:', user.email);
     }
 
-    // Update last login time
-    await user.updateLastLogin();
+    // Load UserRoles for the user
+    await user.getUserRoles();
 
-    // Create JWT token
-    const token = createJWTToken(user);
+    // SuperAdmin bypass: Skip MFA entirely for superAdmin users
+    if (user.userRoles?.superAdmin === true) {
+      // Update last login time
+      await user.updateLastLogin();
 
-    // HIPAA Audit: Log Google OAuth login
-    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
+      // Create JWT token
+      const token = createJWTToken(user);
 
-    console.log('✅ User signed in via Google:', user.email);
+      console.log('🔓 SuperAdmin bypass (Google callback): MFA skipped for', user.email);
 
-    // Redirect back to frontend with token and flag to skip account creation step
-    const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
-    console.log('🔗 Redirecting to:', redirectUrl);
+      // Redirect back to frontend with token
+      const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
+      console.log('🔗 Redirecting to:', redirectUrl);
+      return res.redirect(redirectUrl);
+    }
+
+    // Non-superAdmin: Require MFA even for Google OAuth
+    const otpCode = MfaToken.generateCode();
+    const mfaSessionToken = MfaToken.generateMfaToken();
+    const expiresAt = MfaToken.getExpirationTime();
+
+    // Delete any existing MFA tokens for this user (cleanup)
+    await MfaToken.destroy({ where: { userId: user.id } });
+
+    // Create new MFA token record
+    await MfaToken.create({
+      userId: user.id,
+      code: otpCode,
+      mfaToken: mfaSessionToken,
+      expiresAt,
+      email: user.email,
+      verified: false,
+      resendCount: 0,
+      failedAttempts: 0
+    });
+
+    // Send OTP email
+    const emailSent = await MailsSender.sendMfaCode(user.email, otpCode, user.firstName);
+
+    if (!emailSent) {
+      console.error('❌ Failed to send MFA code email to:', user.email);
+      return res.redirect(`${returnUrl}?googleAuth=error&reason=mfa_email_failed`);
+    }
+
+    // HIPAA Audit: Log MFA code sent (Google OAuth callback)
+    await AuditService.log({
+      action: AuditAction.MFA_CODE_SENT,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      userId: user.id,
+      clinicId: user.clinicId,
+      details: { email: user.email, method: 'google_oauth_callback' },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    console.log('🔐 MFA code sent to Google user (callback):', user.email);
+
+    // Redirect to frontend with MFA required flag
+    const redirectUrl = `${returnUrl}?googleAuth=mfa_required&mfaToken=${mfaSessionToken}&email=${encodeURIComponent(user.email)}`;
+    console.log('🔗 Redirecting to MFA:', redirectUrl);
     res.redirect(redirectUrl);
 
   } catch (error) {
@@ -863,22 +913,76 @@ app.post("/auth/google", async (req, res) => {
     // Load UserRoles for the user
     await user.getUserRoles();
 
-    // Update last login time
-    await user.updateLastLogin();
+    // SuperAdmin bypass: Skip MFA entirely for superAdmin users
+    if (user.userRoles?.superAdmin === true) {
+      // Update last login time
+      await user.updateLastLogin();
+      
+      // Create JWT token directly
+      const token = createJWTToken(user);
+      
+      console.log('🔓 SuperAdmin bypass (Google): MFA skipped for', user.email);
+      
+      return res.status(200).json({
+        success: true,
+        requiresMfa: false,
+        token: token,
+        user: user.toSafeJSON(),
+        message: "Authentication successful"
+      });
+    }
 
-    // Create JWT token
-    const token = createJWTToken(user);
+    // Non-superAdmin: Require MFA even for Google OAuth
+    const otpCode = MfaToken.generateCode();
+    const mfaSessionToken = MfaToken.generateMfaToken();
+    const expiresAt = MfaToken.getExpirationTime();
 
-    // HIPAA Audit: Log Google login
-    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
+    // Delete any existing MFA tokens for this user (cleanup)
+    await MfaToken.destroy({ where: { userId: user.id } });
 
-    console.log('✅ User signed in via Google:', user.email);
+    // Create new MFA token record
+    await MfaToken.create({
+      userId: user.id,
+      code: otpCode,
+      mfaToken: mfaSessionToken,
+      expiresAt,
+      email: user.email,
+      verified: false,
+      resendCount: 0,
+      failedAttempts: 0
+    });
 
+    // Send OTP email
+    const emailSent = await MailsSender.sendMfaCode(user.email, otpCode, user.firstName);
+
+    if (!emailSent) {
+      console.error('❌ Failed to send MFA code email to:', user.email);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send verification code. Please try again."
+      });
+    }
+
+    // HIPAA Audit: Log MFA code sent (Google OAuth)
+    await AuditService.log({
+      action: AuditAction.MFA_CODE_SENT,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      userId: user.id,
+      clinicId: user.clinicId,
+      details: { email: user.email, method: 'google_oauth' },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    console.log('🔐 MFA code sent to Google user:', user.email);
+
+    // Return MFA required response
     res.status(200).json({
       success: true,
-      message: "Authentication successful",
-      token: token,
-      user: user.toSafeJSON()
+      requiresMfa: true,
+      mfaToken: mfaSessionToken,
+      message: "Verification code sent to your email"
     });
 
   } catch (error) {
@@ -938,6 +1042,25 @@ app.post("/auth/signin", async (req, res) => {
         success: false,
         message: "Please check your email and activate your account before signing in.",
         needsActivation: true
+      });
+    }
+
+    // SuperAdmin bypass: Skip MFA entirely for superAdmin users
+    if (user.userRoles?.superAdmin === true) {
+      // Update last login time
+      await user.updateLastLogin();
+      
+      // Create JWT token directly
+      const token = createJWTToken(user);
+      
+      console.log('🔓 SuperAdmin bypass: MFA skipped for', user.email);
+      
+      return res.status(200).json({
+        success: true,
+        requiresMfa: false,
+        token: token,
+        user: user.toSafeJSON(),
+        message: "Signed in successfully"
       });
     }
 
