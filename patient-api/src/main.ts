@@ -108,6 +108,7 @@ import { contactRoutes } from "./features/contacts";
 import { tagRoutes } from "./features/tags";
 import { GlobalFees } from "./models/GlobalFees";
 
+
 // Helper function to fetch global fees from database
 async function getGlobalFees() {
   const globalFees = await GlobalFees.findOne();
@@ -218,15 +219,31 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, curl, Postman, etc.)
     if (!origin) return callback(null, true);
 
+    // SECURITY: Strict CORS configuration - no hardcoded IPs in production
     const allowedOrigins = process.env.NODE_ENV === 'production'
       ? [
         process.env.FRONTEND_URL,
-        'http://3.140.178.30', // Add your frontend IP
-        'https://unboundedhealth.xyz', // Add unboundedhealth.xyz
-        'https://www.unboundedhealth.xyz'
-      ].filter(Boolean) // Remove undefined values
-      : ['http://localhost:3000', 'http://localhost:3002', 'http://localhost:3003', 'http://localhost:3030', 'http://3.140.178.30', 'https://unboundedhealth.xyz']; // Allow local frontends, your IP, and unboundedhealth.xyz during development
+        // Add additional production domains via environment variables only
+        process.env.ADDITIONAL_ALLOWED_ORIGINS?.split(',').map(o => o.trim())
+      ].flat().filter(Boolean)
+      : [
+        'http://localhost:3000',
+        'http://localhost:3002',
+        'http://localhost:3003',
+        'http://localhost:3030'
+        // Development only - no production domains
+      ];
 
+    // SECURITY: Validate all origins are HTTPS in production
+    if (process.env.NODE_ENV === 'production') {
+      const insecureOrigins = allowedOrigins.filter(origin =>
+        typeof origin === 'string' && !origin.startsWith('https://')
+      );
+      if (insecureOrigins.length > 0) {
+        console.error('❌ CRITICAL: HTTP origins not allowed in production:', insecureOrigins);
+        throw new Error('All production origins must use HTTPS');
+      }
+    }
     // Check if origin is in allowed list or matches patterns
     const isAllowed = allowedOrigins.includes(origin) ||
       // Allow clinic subdomains in development (e.g., g-health.localhost:3000, saboia.xyz.localhost:3000)
@@ -256,11 +273,25 @@ app.use(cors({
   exposedHeaders: ['Set-Cookie'],
 }));
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // disable if frontend loads remote assets
+}));
+
+app.use(helmet.hsts({
+  maxAge: 31536000,
+  includeSubDomains: true,
+  preload: true
+}));
+
+app.use(helmet.noSniff());
+app.use(helmet.frameguard({ action: "deny" }));
+app.use(helmet.referrerPolicy({ policy: "no-referrer" }));
+
+app.disable("x-powered-by");
 
 // Conditional JSON parsing - exclude webhook paths that need raw body
 app.use((req, res, next) => {
-  if (req.path === '/webhook/stripe' || req.path === '/md/webhooks') {
+  if (req.path.startsWith('/webhook/stripe') || req.path.startsWith('/md/webhooks')) {
     next(); // Skip JSON parsing for webhook endpoints that need raw body
   } else {
     express.json()(req, res, next); // Apply JSON parsing for all other routes
@@ -797,7 +828,7 @@ app.get("/auth/google/callback", async (req, res) => {
       // Create JWT token
       const token = createJWTToken(user);
 
-      console.log('🔓 SuperAdmin bypass (Google callback): MFA skipped for', user.email);
+      console.log(`🔓 SuperAdmin bypass (Google callback): MFA skipped for user ${user.id}`);
 
       // Redirect back to frontend with token
       const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
@@ -921,7 +952,7 @@ app.post("/auth/google", async (req, res) => {
       // Create JWT token directly
       const token = createJWTToken(user);
 
-      console.log('🔓 SuperAdmin bypass (Google): MFA skipped for', user.email);
+      console.log(`🔓 SuperAdmin bypass (Google callback): MFA skipped for user ${user.id}`);
 
       return res.status(200).json({
         success: true,
@@ -1053,7 +1084,7 @@ app.post("/auth/signin", async (req, res) => {
       // Create JWT token directly
       const token = createJWTToken(user);
 
-      console.log('🔓 SuperAdmin bypass: MFA skipped for', user.email);
+      console.log(`🔓 SuperAdmin bypass (Google callback): MFA skipped for user ${user.id}`);
 
       return res.status(200).json({
         success: true,
@@ -5350,19 +5381,19 @@ app.post("/webhook/stripe", express.raw({ type: 'application/json' }), async (re
   let event;
 
   try {
-    // Verify webhook signature
     const signature = Array.isArray(sig) ? sig[0] : sig;
     if (!signature) {
       throw new Error('No signature provided');
     }
     event = stripe.webhooks.constructEvent(req.body, signature, endpointSecret);
   } catch (err: any) {
-    console.error('❌ Webhook signature verification failed:', err.message);
-    console.error('🔍 Debug - Signature header:', sig);
-    console.error('🔍 Debug - Endpoint secret configured:', !!endpointSecret);
-    console.error('🔍 Debug - Body type:', typeof req.body);
-    console.error('🔍 Debug - Body is buffer:', Buffer.isBuffer(req.body));
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    // SECURITY: Generic error message - don't reveal internal details
+    console.error('❌ Webhook signature verification failed');
+    // SECURITY: Log details internally but don't expose to caller
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Debug - Error:', err.message);
+    }
+    return res.status(400).send('Invalid request');
   }
 
   // Check for duplicate webhook events
@@ -5625,11 +5656,12 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
       });
     }
 
+    // SECURITY: Never log PHI (email is PHI under HIPAA)
     console.log('🔍 [ORDERS/:ID] User found:', {
       id: user.id,
       role: user.role,
-      clinicId: user.clinicId,
-      email: user.email
+      clinicId: user.clinicId
+      // email removed - PHI must not be logged
     });
 
     let whereClause: any = { id };
@@ -5688,7 +5720,7 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
       console.log('🔍 [ORDERS/:ID] Treatment clinicId:', treatment.clinicId);
 
       if (treatment.clinicId !== user.clinicId) {
-        console.log('❌ [ORDERS/:ID] Access denied - treatment clinic does not match user clinic');
+        console.log('❌ [ORDERS/:ID] Access denied - clinic mismatch');
         return res.status(403).json({
           success: false,
           message: "Access denied"
@@ -11058,26 +11090,26 @@ async function startServer() {
         payload = {};
       }
 
-      const secret = process.env.MD_INTEGRATIONS_WEBHOOK_SECRET || '';
-      let signatureValid = true;
-      if (secret) {
-        // Verify against exact raw body string
-        signatureValid = MDWebhookService.verifyWebhookSignature(providedSignature, rawBody, secret);
+      // SECURITY: MD Integrations webhook secret is REQUIRED
+      const secret = process.env.MD_INTEGRATIONS_WEBHOOK_SECRET;
+      if (!secret) {
+        console.error('❌ CRITICAL: MD_INTEGRATIONS_WEBHOOK_SECRET not configured');
+        return res.status(500).json({ success: false, message: 'Webhook configuration error' });
       }
 
+      // ALWAYS verify signature - no bypass
+      const signatureValid = MDWebhookService.verifyWebhookSignature(providedSignature, rawBody, secret);
+
+      // SECURITY: Minimal logging - no PHI in logs
       console.log(`[MD-WH] reqId=${requestId} received`, {
         event_type: payload?.event_type,
-        case_id: payload?.case_id,
-        patient_id: payload?.patient_id,
-        signature_present: Boolean(providedSignature),
         signature_valid: signatureValid,
-        header_sig_name: signatureHeaderName,
-        auth_present: Boolean(authorization),
         content_type: contentType,
-        body_preview: rawBody?.slice(0, 300)
+        // REMOVED: case_id, patient_id, body_preview (may contain PHI)
       });
 
-      if (secret && !signatureValid) {
+      if (!signatureValid) {
+        console.warn(`[MD-WH] reqId=${requestId} signature validation failed`);
         return res.status(401).json({ success: false, message: 'Invalid signature' });
       }
 
