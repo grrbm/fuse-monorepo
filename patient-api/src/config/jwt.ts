@@ -4,12 +4,16 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config({ path: '.env.local' });
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'your-jwt-secret-key';
-const JWT_EXPIRES_IN = '30m'; // 30 minutes for HIPAA compliance
-
-if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
-  console.warn('WARNING: JWT_SECRET not set in production. Using SESSION_SECRET as fallback.');
+// SECURITY: No fallback secrets - fail hard if not configured
+if (!process.env.JWT_SECRET) {
+  console.error('❌ CRITICAL: JWT_SECRET environment variable is not set');
+  console.error('   This is required for secure authentication');
+  console.error('   Set JWT_SECRET in your .env.local file');
+  throw new Error('JWT_SECRET environment variable is required');
 }
+
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = '30m'; // 30 minutes for HIPAA compliance
 
 export interface JWTPayload {
   userId: string;
