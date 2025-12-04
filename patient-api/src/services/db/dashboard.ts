@@ -1,9 +1,6 @@
 import { Op, QueryTypes } from 'sequelize';
 import Order from '../../models/Order';
-import Payment from '../../models/Payment';
-import User from '../../models/User';
 import Subscription from '../../models/Subscription';
-import TenantProduct from '../../models/TenantProduct';
 import Product from '../../models/Product';
 import OrderItem from '../../models/OrderItem';
 import { sequelize } from '../../config/database';
@@ -39,6 +36,8 @@ export const getClinicRevenue = async (
     startDate: Date,
     endDate: Date
 ): Promise<RevenueData> => {
+    // Filter by Order.status = 'paid' (this is the Order status, not Payment status)
+    // Payment.status uses different values ('succeeded', 'pending', etc.)
     const orders = await Order.findAll({
         where: {
             clinicId,
@@ -46,13 +45,7 @@ export const getClinicRevenue = async (
             createdAt: {
                 [Op.between]: [startDate, endDate]
             }
-        },
-        include: [{
-            model: Payment,
-            as: 'payment',
-            where: { status: 'paid' },
-            required: false
-        }]
+        }
     });
 
     const totalRevenue = orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
@@ -66,6 +59,7 @@ export const getClinicOrders = async (
     startDate: Date,
     endDate: Date
 ): Promise<{ orders: Order[], total: number }> => {
+    // HIPAA Compliance: Do not include user/patient PHI in dashboard queries
     const orders = await Order.findAll({
         where: {
             clinicId,
@@ -73,17 +67,6 @@ export const getClinicOrders = async (
                 [Op.between]: [startDate, endDate]
             }
         },
-        include: [
-            {
-                model: User,
-                as: 'user',
-                attributes: ['id', 'firstName', 'lastName', 'email']
-            },
-            {
-                model: Payment,
-                as: 'payment'
-            }
-        ],
         order: [['createdAt', 'DESC']]
     });
 
@@ -91,10 +74,12 @@ export const getClinicOrders = async (
 };
 
 export const getClinicSubscriptions = async (clinicId: string): Promise<number> => {
+    // Subscription.status enum: 'pending', 'processing', 'paid', 'payment_due', 'cancelled', 'deleted'
+    // 'paid' represents an active subscription
     const activeSubscriptions = await Subscription.count({
         where: {
             clinicId,
-            status: 'active'
+            status: 'paid'
         }
     });
 
@@ -106,22 +91,19 @@ export const getNewPatients = async (
     startDate: Date,
     endDate: Date
 ): Promise<number> => {
-    const newPatients = await User.count({
+    // Count distinct users who placed their first order with this clinic in the date range
+    const orders = await Order.findAll({
         where: {
+            clinicId,
             createdAt: {
                 [Op.between]: [startDate, endDate]
             }
         },
-        include: [{
-            model: Order,
-            as: 'orders',
-            where: { clinicId },
-            required: true
-        }],
-        distinct: true
+        attributes: ['userId'],
+        group: ['userId']
     });
 
-    return newPatients;
+    return orders.length;
 };
 
 export const getRevenueTimeSeries = async (
@@ -130,19 +112,20 @@ export const getRevenueTimeSeries = async (
     endDate: Date,
     interval: 'daily' | 'weekly' = 'daily'
 ): Promise<RevenueTimeSeriesPoint[]> => {
-    const dateFormat = interval === 'daily' ? '%Y-%m-%d' : '%Y-%W';
+    // PostgreSQL uses TO_CHAR for date formatting, and table name is "Order" (case-sensitive)
+    const dateFormat = interval === 'daily' ? 'YYYY-MM-DD' : 'IYYY-IW';
     
     const results = await sequelize.query(
         `
         SELECT 
-            DATE_FORMAT(o.createdAt, :dateFormat) as date,
-            SUM(COALESCE(o.totalAmount, 0)) as revenue,
+            TO_CHAR(o."createdAt", :dateFormat) as date,
+            SUM(COALESCE(o."totalAmount", 0)) as revenue,
             COUNT(o.id) as orders
-        FROM Orders o
-        WHERE o.clinicId = :clinicId
+        FROM "Order" o
+        WHERE o."clinicId" = :clinicId
             AND o.status = 'paid'
-            AND o.createdAt BETWEEN :startDate AND :endDate
-        GROUP BY DATE_FORMAT(o.createdAt, :dateFormat)
+            AND o."createdAt" BETWEEN :startDate AND :endDate
+        GROUP BY TO_CHAR(o."createdAt", :dateFormat)
         ORDER BY date ASC
         `,
         {
@@ -247,14 +230,12 @@ export const getRecentOrders = async (
     clinicId: string,
     limit: number = 10
 ): Promise<Order[]> => {
+    // HIPAA Compliance: Do not include user/patient PHI in dashboard recent activity
+    // Only return order-level data without patient identifying information
     const orders = await Order.findAll({
         where: { clinicId },
+        attributes: ['id', 'orderNumber', 'totalAmount', 'status', 'createdAt'],
         include: [
-            {
-                model: User,
-                as: 'user',
-                attributes: ['id', 'firstName', 'lastName', 'email']
-            },
             {
                 model: OrderItem,
                 as: 'orderItems',

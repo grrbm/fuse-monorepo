@@ -1,6 +1,5 @@
 import Order from "../../models/Order";
 import User from "../../models/User";
-import Treatment from "../../models/Treatment";
 import OrderItem from "../../models/OrderItem";
 import Product from "../../models/Product";
 import TenantProduct from "../../models/TenantProduct";
@@ -11,12 +10,7 @@ export const getOrder = async (orderId: string) => {
     return Order.findOne({
         where: {
             id: orderId,
-        },
-        include: [{
-            model: Treatment,
-            as: 'treatment',
-            attributes: ['id', 'name', 'clinicId', 'orderItems']
-        }]
+        }
     });
 }
 
@@ -33,6 +27,7 @@ export const listOrdersByClinic = async (
     const offset = (page - 1) * limit;
 
     const { rows: orders, count: total } = await Order.findAndCountAll({
+        where: { clinicId },
         attributes: [
             'id', 
             'orderNumber', 
@@ -53,19 +48,13 @@ export const listOrdersByClinic = async (
                 attributes: ['id', 'firstName', 'lastName', 'email']
             },
             {
-                model: Treatment,
-                as: 'treatment',
-                where: { clinicId },
-                attributes: ['id', 'name', 'clinicId']
-            },
-            {
                 model: OrderItem,
                 as: 'orderItems',
                 include: [
                     {
                         model: Product,
                         as: 'product',
-                        attributes: ['id', 'name', 'price', 'category']
+                        attributes: ['id', 'name', 'price', 'categories']
                     }
                 ]
             },
@@ -158,11 +147,6 @@ export const listOrdersByUser = async (
                 model: User,
                 as: 'user',
                 attributes: ['id', 'firstName', 'lastName', 'email']
-            },
-            {
-                model: Treatment,
-                as: 'treatment',
-                attributes: ['id', 'name', 'clinicId']
             }
         ],
         order: [['createdAt', 'DESC']],
