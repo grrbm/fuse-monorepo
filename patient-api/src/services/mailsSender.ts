@@ -418,4 +418,87 @@ export class MailsSender {
       return false
     }
   }
+
+  /**
+   * Send a 6-digit MFA verification code for HIPAA-compliant sign-in
+   */
+  static async sendMfaCode(email: string, code: string, firstName?: string): Promise<boolean> {
+    const greeting = firstName ? `Hello ${firstName}` : 'Hello';
+
+    const msg: any = {
+      to: email,
+      from: this.FROM_EMAIL,
+      subject: 'Your Fuse Sign-In Verification Code',
+      text: `${greeting},\n\nYour sign-in verification code is: ${code}\n\nThis code will expire in 5 minutes.\n\nIf you didn't attempt to sign in, please secure your account immediately.\n\nBest regards,\nThe Fuse Team`,
+      // Disable click tracking for security
+      trackingSettings: {
+        clickTracking: {
+          enable: false
+        },
+        openTracking: {
+          enable: false
+        }
+      },
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #059669 0%, #047857 100%); padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">🔐 Sign-In Verification</h1>
+          </div>
+          
+          <div style="padding: 40px 30px; background-color: #f8f9fa;">
+            <h2 style="color: #333; margin-top: 0;">${greeting},</h2>
+            
+            <p style="color: #666; font-size: 16px; line-height: 1.6;">
+              Enter this verification code to complete your sign-in:
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <div style="background-color: #ecfdf5; 
+                          padding: 24px 32px; 
+                          border-radius: 12px; 
+                          display: inline-block;
+                          border: 2px solid #10b981;">
+                <span style="font-size: 42px; 
+                            font-weight: bold; 
+                            letter-spacing: 12px; 
+                            color: #059669;
+                            font-family: 'Courier New', monospace;">
+                  ${code}
+                </span>
+              </div>
+            </div>
+            
+            <p style="color: #666; font-size: 14px; text-align: center;">
+              <strong>⏱️ This code will expire in 5 minutes.</strong>
+            </p>
+            
+            <div style="background-color: #fef3c7; padding: 15px; border-radius: 8px; margin-top: 30px; border-left: 4px solid #f59e0b;">
+              <p style="color: #92400e; font-size: 14px; margin: 0;">
+                <strong>🔒 Security Notice:</strong> If you didn't attempt to sign in, please secure your account immediately by changing your password.
+              </p>
+            </div>
+          </div>
+          
+          <div style="background-color: #333; padding: 20px; text-align: center;">
+            <p style="color: #ccc; margin: 0; font-size: 14px;">
+              Best regards,<br>
+              The Fuse Team
+            </p>
+            <p style="color: #999; margin: 10px 0 0 0; font-size: 12px;">
+              This is an automated security message for HIPAA compliance.
+            </p>
+          </div>
+        </div>
+      `
+    }
+
+    try {
+      await sgMail.send(msg)
+      console.log(`✅ MFA verification code sent to: ${email}`)
+      return true
+    } catch (error) {
+      console.error('❌ Failed to send MFA verification code:', error)
+      return false
+    }
+  }
 }

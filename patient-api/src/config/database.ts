@@ -49,6 +49,7 @@ import UserTag from '../models/UserTag';
 import { GlobalFees } from '../models/GlobalFees';
 import UserRoles from '../models/UserRoles';
 import AuditLog from '../models/AuditLog';
+import MfaToken from '../models/MfaToken';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -121,7 +122,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     UserPatient, TenantProduct, FormSectionTemplate,
     TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyCoverage, PharmacyProduct,
     TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily,
-    MessageTemplate, Sequence, SequenceRun, Tag, UserTag, GlobalFees, UserRoles, AuditLog
+    MessageTemplate, Sequence, SequenceRun, Tag, UserTag, GlobalFees, UserRoles, AuditLog, MfaToken
   ],
 });
 

@@ -40,6 +40,7 @@ import QuestionnaireService from "./services/questionnaire.service";
 import formTemplateService from "./services/formTemplate.service";
 import User from "./models/User";
 import UserRoles from "./models/UserRoles";
+import MfaToken from "./models/MfaToken";
 import Clinic from "./models/Clinic";
 import { Op } from "sequelize";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
@@ -940,16 +941,187 @@ app.post("/auth/signin", async (req, res) => {
       });
     }
 
+    // HIPAA MFA: Generate OTP code and require verification
+    const otpCode = MfaToken.generateCode();
+    const mfaSessionToken = MfaToken.generateMfaToken();
+    const expiresAt = MfaToken.getExpirationTime();
+
+    // Delete any existing MFA tokens for this user (cleanup)
+    await MfaToken.destroy({ where: { userId: user.id } });
+
+    // Create new MFA token record
+    await MfaToken.create({
+      userId: user.id,
+      code: otpCode,
+      mfaToken: mfaSessionToken,
+      expiresAt,
+      email: user.email,
+      verified: false,
+      resendCount: 0,
+      failedAttempts: 0
+    });
+
+    // Send OTP email
+    const emailSent = await MailsSender.sendMfaCode(user.email, otpCode, user.firstName);
+
+    if (!emailSent) {
+      console.error('❌ Failed to send MFA code email to:', user.email);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send verification code. Please try again."
+      });
+    }
+
+    // HIPAA Audit: Log MFA code sent
+    await AuditService.log({
+      action: AuditAction.MFA_CODE_SENT,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      userId: user.id,
+      clinicId: user.clinicId,
+      details: { email: user.email },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    console.log('🔐 MFA code sent to:', user.email);
+
+    // Return MFA required response (don't give JWT yet)
+    res.status(200).json({
+      success: true,
+      requiresMfa: true,
+      mfaToken: mfaSessionToken,
+      message: "Verification code sent to your email"
+    });
+
+  } catch (error) {
+    console.error('Authentication error occurred:', error);
+    res.status(500).json({
+      success: false,
+      message: "Authentication failed. Please try again."
+    });
+  }
+});
+
+// MFA Verify endpoint - verify OTP code and issue JWT token
+app.post("/auth/mfa/verify", async (req, res) => {
+  try {
+    const { mfaToken, code } = req.body;
+
+    if (!mfaToken || !code) {
+      return res.status(400).json({
+        success: false,
+        message: "MFA token and verification code are required"
+      });
+    }
+
+    // Find the MFA token record
+    const mfaRecord = await MfaToken.findOne({
+      where: { mfaToken },
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!mfaRecord) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired verification session. Please sign in again."
+      });
+    }
+
+    // Check if expired
+    if (mfaRecord.isExpired()) {
+      await mfaRecord.destroy();
+      return res.status(401).json({
+        success: false,
+        message: "Verification code has expired. Please sign in again.",
+        expired: true
+      });
+    }
+
+    // Check if rate limited
+    if (mfaRecord.isRateLimited()) {
+      // HIPAA Audit: Log rate limit
+      await AuditService.log({
+        action: AuditAction.MFA_FAILED,
+        resourceType: AuditResourceType.USER,
+        resourceId: mfaRecord.userId,
+        userId: mfaRecord.userId,
+        details: { reason: 'rate_limited', email: mfaRecord.email },
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        success: false
+      });
+
+      return res.status(429).json({
+        success: false,
+        message: "Too many failed attempts. Please sign in again.",
+        rateLimited: true
+      });
+    }
+
+    // Verify the code
+    if (mfaRecord.code !== code.trim()) {
+      // Increment failed attempts
+      mfaRecord.failedAttempts += 1;
+      await mfaRecord.save();
+
+      // HIPAA Audit: Log failed MFA attempt
+      await AuditService.log({
+        action: AuditAction.MFA_FAILED,
+        resourceType: AuditResourceType.USER,
+        resourceId: mfaRecord.userId,
+        userId: mfaRecord.userId,
+        details: { reason: 'invalid_code', email: mfaRecord.email, attempts: mfaRecord.failedAttempts },
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        success: false
+      });
+
+      return res.status(401).json({
+        success: false,
+        message: "Invalid verification code. Please try again.",
+        attemptsRemaining: 5 - mfaRecord.failedAttempts
+      });
+    }
+
+    // Code is valid - get the user
+    const user = mfaRecord.user || await User.findByPk(mfaRecord.userId);
+    if (!user) {
+      await mfaRecord.destroy();
+      return res.status(401).json({
+        success: false,
+        message: "User not found. Please sign in again."
+      });
+    }
+
+    // Load UserRoles
+    await user.getUserRoles();
+
+    // Mark MFA as verified and delete the record
+    await mfaRecord.destroy();
+
     // Update last login time
     await user.updateLastLogin();
 
     // Create JWT token
     const token = createJWTToken(user);
 
-    // HIPAA Audit: Log successful login
+    // HIPAA Audit: Log successful MFA verification
+    await AuditService.log({
+      action: AuditAction.MFA_VERIFIED,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      userId: user.id,
+      clinicId: user.clinicId,
+      details: { email: user.email },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    // HIPAA Audit: Log successful login (after MFA)
     await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
 
-    console.log('JWT token created for user:', user.email); // Safe to log email for development
+    console.log('✅ MFA verified for user:', user.email);
 
     res.status(200).json({
       success: true,
@@ -959,10 +1131,96 @@ app.post("/auth/signin", async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Authentication error occurred');
+    console.error('MFA verification error:', error);
     res.status(500).json({
       success: false,
-      message: "Authentication failed. Please try again."
+      message: "Verification failed. Please try again."
+    });
+  }
+});
+
+// MFA Resend endpoint - resend OTP code
+app.post("/auth/mfa/resend", async (req, res) => {
+  try {
+    const { mfaToken } = req.body;
+
+    if (!mfaToken) {
+      return res.status(400).json({
+        success: false,
+        message: "MFA token is required"
+      });
+    }
+
+    // Find the MFA token record
+    const mfaRecord = await MfaToken.findOne({
+      where: { mfaToken },
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!mfaRecord) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired verification session. Please sign in again."
+      });
+    }
+
+    // Check if can resend (max 3 resends)
+    if (!mfaRecord.canResend()) {
+      return res.status(429).json({
+        success: false,
+        message: "Maximum resend attempts reached. Please sign in again.",
+        maxResends: true
+      });
+    }
+
+    // Generate new code and extend expiration
+    const newCode = MfaToken.generateCode();
+    mfaRecord.code = newCode;
+    mfaRecord.expiresAt = MfaToken.getExpirationTime();
+    mfaRecord.resendCount += 1;
+    mfaRecord.failedAttempts = 0; // Reset failed attempts on resend
+    await mfaRecord.save();
+
+    // Send new OTP email
+    const user = mfaRecord.user || await User.findByPk(mfaRecord.userId);
+    const emailSent = await MailsSender.sendMfaCode(
+      mfaRecord.email,
+      newCode,
+      user?.firstName
+    );
+
+    if (!emailSent) {
+      console.error('❌ Failed to resend MFA code to:', mfaRecord.email);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send verification code. Please try again."
+      });
+    }
+
+    // HIPAA Audit: Log MFA code resend
+    await AuditService.log({
+      action: AuditAction.MFA_RESEND,
+      resourceType: AuditResourceType.USER,
+      resourceId: mfaRecord.userId,
+      userId: mfaRecord.userId,
+      details: { email: mfaRecord.email, resendCount: mfaRecord.resendCount },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    console.log('🔐 MFA code resent to:', mfaRecord.email, '(attempt', mfaRecord.resendCount, 'of 3)');
+
+    res.status(200).json({
+      success: true,
+      message: "New verification code sent to your email",
+      resendsRemaining: 3 - mfaRecord.resendCount
+    });
+
+  } catch (error) {
+    console.error('MFA resend error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to resend code. Please try again."
     });
   }
 });

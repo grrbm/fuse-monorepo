@@ -112,6 +112,7 @@ export class AuditService {
         resourceType: AuditResourceType;
         resourceId?: string | null;
         ipAddress?: string | null;
+        userAgent?: string | null;
         details?: Record<string, any> | null;
         clinicId?: string | null;
         success?: boolean;
