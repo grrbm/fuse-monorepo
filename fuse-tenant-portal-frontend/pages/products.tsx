@@ -29,6 +29,18 @@ interface Product {
   isActive: boolean
   createdAt: string
   imageUrl?: string
+  brandId?: string | null
+  brandName?: string
+  pharmacyCoverages?: PharmacyCoverage[]
+}
+
+interface PharmacyCoverage {
+  id: string
+  customName: string
+  customSig: string
+  pharmacyProduct?: {
+    pharmacyProductName: string
+  }
 }
 
 interface PharmacyVendor {
@@ -106,8 +118,10 @@ export default function Products() {
       const firstPageProducts: Product[] = firstJson?.data?.products || []
       const totalPages: number = firstJson?.data?.pagination?.totalPages || 1
 
+      let allProducts: Product[] = []
+
       if (totalPages <= 1) {
-        setProducts(firstPageProducts)
+        allProducts = firstPageProducts
       } else {
         // Fetch remaining pages in parallel
         const pageNumbers = Array.from({ length: totalPages - 1 }, (_, i) => i + 2)
@@ -120,8 +134,46 @@ export default function Products() {
         })
         const pages = await Promise.all(requests)
         const restProducts: Product[] = pages.flatMap(p => (p?.data?.products || []))
-        setProducts([...firstPageProducts, ...restProducts])
+        allProducts = [...firstPageProducts, ...restProducts]
       }
+
+      // Sort products: standard products first, then custom products (with brandId)
+      const sortedProducts = allProducts.sort((a, b) => {
+        const aIsCustom = !!a.brandId
+        const bIsCustom = !!b.brandId
+
+        // If one is custom and the other isn't, standard comes first
+        if (aIsCustom && !bIsCustom) return 1
+        if (!aIsCustom && bIsCustom) return -1
+
+        // Otherwise maintain original order
+        return 0
+      })
+
+      // Fetch pharmacy coverages for each product
+      const productsWithCoverages = await Promise.all(
+        sortedProducts.map(async (product) => {
+          try {
+            const coverageRes = await fetch(`${baseUrl}/public/products/${product.id}/pharmacy-coverages`)
+            if (coverageRes.ok) {
+              const coverageData = await coverageRes.json()
+              const coverages = coverageData.data || []
+              console.log(`✅ Fetched ${coverages.length} coverages for product ${product.id}:`, product.name)
+              return {
+                ...product,
+                pharmacyCoverages: coverages
+              }
+            } else {
+              console.warn(`⚠️ Failed to fetch coverages for product ${product.id}: ${coverageRes.status}`)
+            }
+          } catch (error) {
+            console.error(`❌ Error fetching coverages for product ${product.id}:`, error)
+          }
+          return product
+        })
+      )
+
+      setProducts(productsWithCoverages)
     } catch (error: any) {
       console.error("❌ Error fetching products:", error)
       setSaveMessage(error.message)
@@ -343,6 +395,53 @@ export default function Products() {
       fetchProducts()
     } catch (error: any) {
       console.error("❌ Error deactivating product:", error)
+      setSaveMessage(error.message)
+    }
+  }
+
+  const handlePermanentDelete = async (product: Product) => {
+    if (!token) return
+
+    const confirmMessage = `Are you sure you want to PERMANENTLY DELETE "${product.name}"? This action cannot be undone and will remove all associated data.`
+    if (!confirm(confirmMessage)) return
+
+    try {
+      const response = await fetch(`${baseUrl}/products-management/${product.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!response.ok) throw new Error("Failed to delete product")
+
+      const data = await response.json()
+      setSaveMessage(data.message || "Product permanently deleted")
+      fetchProducts()
+    } catch (error: any) {
+      console.error("❌ Error deleting product:", error)
+      setSaveMessage(error.message)
+    }
+  }
+
+  const handleQuickActivate = async (product: Product) => {
+    if (!token) return
+
+    try {
+      const response = await fetch(`${baseUrl}/products-management/${product.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isActive: true }),
+      })
+
+      if (!response.ok) throw new Error("Failed to activate product")
+
+      const data = await response.json()
+      setSaveMessage(data.message || "Product activated successfully")
+      fetchProducts()
+    } catch (error: any) {
+      console.error("❌ Error activating product:", error)
       setSaveMessage(error.message)
     }
   }
@@ -659,7 +758,7 @@ export default function Products() {
                 onClick={handleCreateProduct}
                 className="rounded-full px-6 bg-[#4FA59C] hover:bg-[#478F87] text-white shadow-sm transition-all"
               >
-                <Plus className="mr-2 h-5 w-5" /> Add Product
+                <Plus className="mr-2 h-5 w-5" /> Product Builder
               </Button>
             </div>
           </div>
@@ -677,8 +776,8 @@ export default function Products() {
             <button
               onClick={() => setActiveTab('selected')}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === 'selected'
-                  ? 'bg-[#4FA59C] text-white shadow-sm'
-                  : 'text-[#6B7280] hover:bg-[#F3F4F6]'
+                ? 'bg-[#4FA59C] text-white shadow-sm'
+                : 'text-[#6B7280] hover:bg-[#F3F4F6]'
                 }`}
             >
               Selected Products
@@ -686,8 +785,8 @@ export default function Products() {
             <button
               onClick={() => setActiveTab('all')}
               className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${activeTab === 'all'
-                  ? 'bg-[#4FA59C] text-white shadow-sm'
-                  : 'text-[#6B7280] hover:bg-[#F3F4F6]'
+                ? 'bg-[#4FA59C] text-white shadow-sm'
+                : 'text-[#6B7280] hover:bg-[#F3F4F6]'
                 }`}
             >
               All Products
@@ -751,9 +850,9 @@ export default function Products() {
                   {/* Product Image Header */}
                   {product.imageUrl && (
                     <div className="w-full h-48 overflow-hidden bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                      <img 
-                        src={product.imageUrl} 
-                        alt={product.name} 
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
@@ -763,12 +862,19 @@ export default function Products() {
                       <ImageIcon className="h-16 w-16 text-[#D1D5DB]" />
                     </div>
                   )}
-                  
+
                   <div className="p-6 space-y-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <h3 className="text-lg font-semibold text-[#1F2937] mb-1 truncate">{product.name}</h3>
                         <p className="text-sm text-[#6B7280] line-clamp-2">{product.description}</p>
+                        {product.brandId && (
+                          <div className="mt-2">
+                            <span className="inline-flex items-center px-2.5 py-1 bg-purple-50 text-purple-700 text-xs font-medium rounded-full border border-purple-200">
+                              Custom product from {product.brandName || 'Brand'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       {!product.isActive && (
                         <span className="px-3 py-1 bg-[#FEF3C7] text-[#92400E] text-xs font-medium rounded-full border border-[#FDE68A] whitespace-nowrap">
@@ -778,8 +884,48 @@ export default function Products() {
                     </div>
 
                     <div className="space-y-3">
+                      {/* Pharmacy Coverages - Show if bundle has multiple medications */}
+                      <div className="bg-[#F0F9FF] rounded-xl p-2.5 border border-[#BAE6FD]">
+                        <p className="text-[10px] font-semibold text-[#0369A1] mb-1.5 uppercase tracking-wide">
+                          {product.pharmacyCoverages && product.pharmacyCoverages.length > 1
+                            ? `Bundle (${product.pharmacyCoverages.length} medications)`
+                            : 'Single Medication'}
+                        </p>
+
+                        <div className="space-y-1">
+                          {product.pharmacyCoverages && product.pharmacyCoverages.length > 0 ? (
+                            product.pharmacyCoverages.map((coverage, idx) => (
+                              <div key={coverage.id} className="text-xs">
+                                <p className="font-semibold text-[#0C4A6E] leading-tight">
+                                  • {coverage.customName || coverage.pharmacyProduct?.pharmacyProductName || 'Product'}
+                                </p>
+                                {coverage.customSig && (
+                                  <p className="text-[10px] text-[#64748B] leading-tight ml-2 truncate" title={coverage.customSig}>
+                                    {coverage.customSig}
+                                  </p>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <>
+                              <div className="text-xs">
+                                <p className="font-semibold text-[#0C4A6E] leading-tight">
+                                  • {product.name}
+                                </p>
+                                {product.placeholderSig && (
+                                  <p className="text-[10px] text-[#64748B] leading-tight ml-2 truncate" title={product.placeholderSig}>
+                                    {product.placeholderSig}
+                                  </p>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {product.pharmacyCoverages && product.pharmacyCoverages.length <= 1 && <div className="h-[32px]"></div>}
+
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Product Questions</label>
+                        <label className="text-xs font-medium text-[#9CA3AF] uppercase tracking-wide">Medical Questions</label>
                         <select
                           value=""
                           onChange={(e) => handleAttachFormToProduct(product.id, e.target.value)}
@@ -815,20 +961,47 @@ export default function Products() {
                             <FileText className="h-4 w-4" />
                             Manage
                           </button>
-                          <button
-                            onClick={() => handleToggleActive(product)}
-                            className="rounded-full px-4 py-2.5 border border-[#E5E7EB] text-[#EF4444] text-sm font-medium hover:bg-[#FEF2F2] transition-all"
-                          >
-                            Deactivate
-                          </button>
+                          {activeTab === 'all' ? (
+                            <button
+                              onClick={() => handlePermanentDelete(product)}
+                              className="rounded-full px-4 py-2.5 bg-[#EF4444] text-white text-sm font-medium hover:bg-[#DC2626] transition-all"
+                            >
+                              Delete
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleToggleActive(product)}
+                              className="rounded-full px-4 py-2.5 border border-[#E5E7EB] text-[#EF4444] text-sm font-medium hover:bg-[#FEF2F2] transition-all"
+                            >
+                              Deactivate
+                            </button>
+                          )}
                         </>
                       ) : (
-                        <button
-                          onClick={() => handleToggleActive(product)}
-                          className="flex-1 rounded-full px-4 py-2.5 bg-[#4FA59C] text-white text-sm font-medium shadow-sm hover:bg-[#478F87] transition-all"
-                        >
-                          Configure
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleToggleActive(product)}
+                            className="flex-1 rounded-full px-4 py-2.5 bg-[#4FA59C] text-white text-sm font-medium shadow-sm hover:bg-[#478F87] transition-all"
+                          >
+                            Configure
+                          </button>
+                          {activeTab === 'all' && (
+                            <>
+                              <button
+                                onClick={() => handleQuickActivate(product)}
+                                className="rounded-full px-4 py-2.5 bg-[#10B981] text-white text-sm font-medium hover:bg-[#059669] transition-all"
+                              >
+                                Activate
+                              </button>
+                              <button
+                                onClick={() => handlePermanentDelete(product)}
+                                className="rounded-full px-4 py-2.5 bg-[#EF4444] text-white text-sm font-medium hover:bg-[#DC2626] transition-all"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

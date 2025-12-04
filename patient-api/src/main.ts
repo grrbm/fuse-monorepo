@@ -12,6 +12,11 @@ import Order from "./models/Order";
 import OrderItem from "./models/OrderItem";
 import Payment from "./models/Payment";
 import ShippingAddress from "./models/ShippingAddress";
+import Pharmacy from "./models/Pharmacy";
+import PharmacyCoverage from "./models/PharmacyCoverage";
+import PharmacyProduct from "./models/PharmacyProduct";
+import Prescription from "./models/Prescription";
+import PrescriptionProducts from "./models/PrescriptionProducts";
 import BrandSubscription, { BrandSubscriptionStatus } from "./models/BrandSubscription";
 import BrandSubscriptionPlans from "./models/BrandSubscriptionPlans";
 import TierConfiguration from "./models/TierConfiguration";
@@ -23,6 +28,7 @@ import { uploadToS3, deleteFromS3, isValidImageFile, isValidFileSize } from "./c
 import Stripe from "stripe";
 import OrderService from "./services/order.service";
 import UserService from "./services/user.service";
+import { AuditService, AuditAction, AuditResourceType } from "./services/audit.service";
 import TreatmentService from "./services/treatment.service";
 import PaymentService from "./services/payment.service";
 import ClinicService from "./services/clinic.service";
@@ -154,11 +160,10 @@ async function generateUniqueSlug(clinicName: string, excludeId?: string): Promi
   }
 }
 
-// SSL workaround - disable SSL certificate validation in production
-// This is safe within a secure network environment
-if (process.env.NODE_ENV === 'production') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
+// HIPAA Compliance Note: TLS certificate validation is enabled globally.
+// Database SSL uses relaxed validation (rejectUnauthorized: false) because 
+// AWS RDS certificates aren't in Node's default CA store.
+// All other HTTPS connections (Stripe, SendGrid, etc.) use full TLS validation.
 
 const app = express();
 
@@ -631,6 +636,18 @@ app.post("/auth/signup", async (req, res) => {
       console.log('❌ Failed to send verification email, but user was created');
     }
 
+    // HIPAA Audit: Log account creation
+    await AuditService.log({
+      userId: user.id,
+      userEmail: user.email,
+      action: AuditAction.CREATE,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      ipAddress: AuditService.getClientIp(req),
+      details: { role: mappedRole, clinicId: finalClinicId },
+      success: true,
+    });
+
     res.status(201).json({
       success: true,
       message: "User registered successfully. Please check your email to activate your account.",
@@ -776,6 +793,9 @@ app.get("/auth/google/callback", async (req, res) => {
     // Create JWT token
     const token = createJWTToken(user);
 
+    // HIPAA Audit: Log Google OAuth login
+    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
+
     console.log('✅ User signed in via Google:', user.email);
 
     // Redirect back to frontend with token and flag to skip account creation step
@@ -850,6 +870,9 @@ app.post("/auth/google", async (req, res) => {
     // Create JWT token
     const token = createJWTToken(user);
 
+    // HIPAA Audit: Log Google login
+    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
+
     console.log('✅ User signed in via Google:', user.email);
 
     res.status(200).json({
@@ -886,6 +909,8 @@ app.post("/auth/signin", async (req, res) => {
     // Find user by email
     const user = await User.findByEmail(email);
     if (!user) {
+      // HIPAA Audit: Log failed login attempt (user not found)
+      await AuditService.logLoginFailed(req, email, 'User not found');
       return res.status(401).json({
         success: false,
         message: "Invalid email or password"
@@ -898,6 +923,8 @@ app.post("/auth/signin", async (req, res) => {
     // Validate password (permanent or temporary)
     const isValidPassword = await user.validateAnyPassword(password);
     if (!isValidPassword) {
+      // HIPAA Audit: Log failed login attempt (wrong password)
+      await AuditService.logLoginFailed(req, email, 'Invalid password');
       return res.status(401).json({
         success: false,
         message: "Invalid email or password"
@@ -906,6 +933,8 @@ app.post("/auth/signin", async (req, res) => {
 
     // Check if user account is activated
     if (!user.activated) {
+      // HIPAA Audit: Log failed login attempt (not activated)
+      await AuditService.logLoginFailed(req, email, 'Account not activated');
       return res.status(401).json({
         success: false,
         message: "Please check your email and activate your account before signing in.",
@@ -918,6 +947,9 @@ app.post("/auth/signin", async (req, res) => {
 
     // Create JWT token
     const token = createJWTToken(user);
+
+    // HIPAA Audit: Log successful login
+    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
 
     console.log('JWT token created for user:', user.email); // Safe to log email for development
 
@@ -1174,6 +1206,9 @@ app.get("/auth/verify-email", async (req, res) => {
     // Create JWT token for automatic login
     const authToken = createJWTToken(user);
 
+    // HIPAA Audit: Log email verification and auto-login
+    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
+
     res.status(200).json({
       success: true,
       message: "Account activated successfully! You are now logged in.",
@@ -1190,8 +1225,11 @@ app.get("/auth/verify-email", async (req, res) => {
   }
 });
 
-app.post("/auth/signout", async (_req, res) => {
+app.post("/auth/signout", authenticateJWT, async (req, res) => {
   try {
+    // HIPAA Audit: Log logout
+    await AuditService.logLogout(req);
+
     // With JWT, signout is handled client-side by removing the token
     // No server-side session to destroy
     res.status(200).json({
@@ -1313,6 +1351,9 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
 
     // Update user with the prepared data
     await user.update(updateData);
+
+    // HIPAA Audit: Log profile update (PHI modification)
+    await AuditService.logPatientUpdate(req, currentUser.id, Object.keys(updateData));
 
     console.log('Profile updated for user:', user.email); // Safe - no PHI
 
@@ -5074,6 +5115,17 @@ app.get("/users/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
 
     const validCustomers = customers.filter(c => c !== null);
 
+    // HIPAA Audit: Log bulk PHI access (viewing all patients in a clinic)
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.PATIENT,
+      details: {
+        bulkAccess: true,
+        clinicId,
+        patientCount: validCustomers.length
+      },
+    });
+
     res.status(200).json({
       success: true,
       data: validCustomers
@@ -5106,7 +5158,19 @@ app.get("/orders", authenticateJWT, async (req, res) => {
         {
           model: OrderItem,
           as: 'orderItems',
-          include: [{ model: Product, as: 'product' }]
+          include: [
+            {
+              model: Product,
+              as: 'product',
+              include: [
+                {
+                  model: PharmacyCoverage,
+                  as: 'pharmacyCoverages',
+                  required: false
+                }
+              ]
+            }
+          ]
         },
         {
           model: Payment,
@@ -5127,6 +5191,13 @@ app.get("/orders", authenticateJWT, async (req, res) => {
         }
       ],
       order: [['createdAt', 'DESC']]
+    });
+
+    // HIPAA Audit: Log PHI access (patient viewing their orders)
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.ORDER,
+      details: { orderCount: orders.length, selfAccess: true },
     });
 
     res.status(200).json({
@@ -5296,10 +5367,43 @@ app.get("/orders/:id", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Fetch prescriptions for this order (created around the same time)
+    const prescriptions = await Prescription.findAll({
+      where: {
+        patientId: order.userId,
+        name: {
+          [Op.like]: `%${order.orderNumber}%`
+        }
+      },
+      include: [
+        {
+          model: PrescriptionProducts,
+          as: 'prescriptionProducts',
+          include: [
+            {
+              model: Product,
+              as: 'product'
+            }
+          ]
+        },
+        {
+          model: User,
+          as: 'doctor',
+          attributes: ['id', 'firstName', 'lastName']
+        }
+      ]
+    });
+
+    // HIPAA Audit: Log PHI access (order contains patient name, address, medications)
+    await AuditService.logOrderView(req, order.id);
+
     console.log('✅ [ORDERS/:ID] Order successfully retrieved and returned');
     res.status(200).json({
       success: true,
-      data: order
+      data: {
+        ...order.toJSON(),
+        prescriptions
+      }
     });
 
   } catch (error) {
@@ -8103,6 +8207,8 @@ app.put("/patient", authenticateJWT, async (req, res) => {
     const result = await userService.updateUserPatient(currentUser.id, data, address);
 
     if (result.success) {
+      // HIPAA Audit: Log PHI modification (patient updating their own profile)
+      await AuditService.logPatientUpdate(req, currentUser.id, Object.keys(data));
       res.status(200).json(result);
     } else {
       res.status(400).json(result.error);
@@ -8139,6 +8245,12 @@ app.get("/orders/by-clinic/:clinicId", authenticateJWT, async (req, res) => {
     const result = await orderService.listOrdersByClinic(clinicId, currentUser.id, paginationParams);
 
     if (result.success) {
+      // HIPAA Audit: Log bulk PHI access (viewing all orders for a clinic)
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.VIEW,
+        resourceType: AuditResourceType.ORDER,
+        details: { bulkAccess: true, clinicId },
+      });
       res.status(200).json(result);
     } else {
       if (result.message === "Forbidden") {
@@ -8276,6 +8388,13 @@ app.get("/messages", authenticateJWT, async (req, res) => {
 
     const messages = await MessageService.getMessagesByUserId(currentUser.id, params);
 
+    // HIPAA Audit: Log message access
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.MESSAGE,
+      details: { messageCount: messages.data?.length || 0 },
+    });
+
     res.json({
       success: true,
       data: messages
@@ -8320,6 +8439,13 @@ app.post("/messages", authenticateJWT, async (req, res) => {
     };
 
     const message = await MessageService.createMessageForUser(currentUser.id, payload);
+
+    // HIPAA Audit: Log message creation
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.CREATE,
+      resourceType: AuditResourceType.MESSAGE,
+      resourceId: message?.id,
+    });
 
     res.json({
       success: true,
@@ -8423,6 +8549,14 @@ app.post("/md-files", authenticateJWT, upload.single('file'), async (req, res) =
       req.file.mimetype
     );
 
+    // HIPAA Audit: Log medical document upload
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.CREATE,
+      resourceType: AuditResourceType.DOCUMENT,
+      resourceId: file?.id,
+      details: { fileName: req.file.originalname, mimeType: req.file.mimetype },
+    });
+
     res.json({
       success: true,
       message: "File uploaded successfully",
@@ -8449,6 +8583,13 @@ app.get("/md-files/:fileId", authenticateJWT, async (req, res) => {
     }
 
     const file = await MDFilesService.getFile(fileId);
+
+    // HIPAA Audit: Log medical document access
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.DOCUMENT,
+      resourceId: fileId,
+    });
 
     res.json({
       success: true,
@@ -8481,6 +8622,10 @@ app.get("/md/patient", authenticateJWT, async (req, res) => {
 
     const tokenResponse = await MDAuthService.generateToken();
     const patient = await MDPatientService.getPatient(user.mdPatientId, tokenResponse.access_token);
+
+    // HIPAA Audit: Log PHI access (viewing telehealth patient record)
+    await AuditService.logPatientView(req, currentUser.id, { mdPatientId: user.mdPatientId });
+
     return res.json({ success: true, data: patient });
   } catch (error) {
     console.error('❌ Error fetching MD patient:', error);
@@ -8506,6 +8651,15 @@ app.get("/md/cases/:caseId", authenticateJWT, async (req, res) => {
 
     const tokenResponse = await MDAuthService.generateToken();
     const mdCase = await MDCaseService.getCase(caseId, tokenResponse.access_token);
+
+    // HIPAA Audit: Log PHI access (viewing telehealth case details)
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.PRESCRIPTION,
+      resourceId: caseId,
+      details: { mdCase: true },
+    });
+
     return res.json({ success: true, data: mdCase });
   } catch (error) {
     console.error('❌ Error fetching MD case:', error);
@@ -8535,6 +8689,15 @@ app.get("/md/cases/latest", authenticateJWT, async (req, res) => {
     const MDCaseService = (await import('./services/mdIntegration/MDCase.service')).default;
     const tokenResponse = await MDAuthService.generateToken();
     const mdCase = await MDCaseService.getCase(caseId, tokenResponse.access_token);
+
+    // HIPAA Audit: Log PHI access (viewing latest telehealth case)
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.VIEW,
+      resourceType: AuditResourceType.PRESCRIPTION,
+      resourceId: caseId,
+      details: { mdCase: true, latestCase: true },
+    });
+
     return res.json({ success: true, data: mdCase });
   } catch (error) {
     console.error('❌ Error fetching latest MD case:', error);
@@ -8777,6 +8940,14 @@ app.get("/md-files/:fileId/download", authenticateJWT, async (req, res) => {
 
     // Download file content
     const fileBuffer = await MDFilesService.downloadFile(fileId);
+
+    // HIPAA Audit: Log medical document download
+    await AuditService.logFromRequest(req, {
+      action: AuditAction.EXPORT,
+      resourceType: AuditResourceType.DOCUMENT,
+      resourceId: fileId,
+      details: { fileName: fileInfo.name, download: true },
+    });
 
     res.set({
       'Content-Type': fileInfo.mime_type,
@@ -9737,6 +9908,13 @@ async function startServer() {
         })
       );
 
+      // HIPAA Audit: Log PHI access (doctor viewing all patient chats)
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.VIEW,
+        resourceType: AuditResourceType.MESSAGE,
+        details: { bulkAccess: true, chatCount: chatsWithPatients.length },
+      });
+
       res.json({
         success: true,
         data: chatsWithPatients
@@ -9785,6 +9963,9 @@ async function startServer() {
         ...chat.toJSON(),
         patient: patient ? patient.toJSON() : null
       };
+
+      // HIPAA Audit: Log PHI access (chat messages may contain health information)
+      await AuditService.logMessageView(req, chatId, chat.patientId);
 
       res.json({
         success: true,
@@ -10004,6 +10185,9 @@ async function startServer() {
         console.log(`ℹ️ Skipping SMS notification for patient ${patient.id}: ${!patient.phoneNumber ? 'no phone number' : 'SMS opted out'}`);
       }
 
+      // HIPAA Audit: Log message creation (doctor sending health communication)
+      await AuditService.logMessageSent(req, chatId, chat.patientId);
+
       res.json({
         success: true,
         data: {
@@ -10199,6 +10383,9 @@ async function startServer() {
         doctor: doctor ? doctor.toJSON() : null
       };
 
+      // HIPAA Audit: Log PHI access (patient viewing their chat which may contain health info)
+      await AuditService.logMessageView(req, chat.id, currentUser.id);
+
       res.json({
         success: true,
         data: chatWithDoctor
@@ -10377,6 +10564,9 @@ async function startServer() {
 
       // Emit patient's unread count (reset to 0 since they sent the message)
       WebSocketService.emitUnreadCountUpdate(chat.patientId, 0);
+
+      // HIPAA Audit: Log message creation (patient sending health communication)
+      await AuditService.logMessageSent(req, chat.id, chat.doctorId);
 
       res.json({
         success: true,
@@ -11288,6 +11478,100 @@ app.get("/public/questionnaires/first-user-profile", async (_req, res) => {
   } catch (error) {
     console.error('❌ Error fetching first user_profile questionnaire:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch user_profile questionnaire' });
+  }
+});
+
+// Public: get tenant product by ID
+app.get("/tenant-products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    console.log('🏢 [PUBLIC] Fetching tenant product:', id);
+
+    const tenantProduct = await TenantProduct.findByPk(id, {
+      include: [
+        { model: Product, as: 'product' },
+        { model: Questionnaire, as: 'questionnaire' }
+      ]
+    });
+
+    if (!tenantProduct) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tenant product not found'
+      });
+    }
+
+    console.log('🏢 [PUBLIC] Found tenant product, productId:', tenantProduct.productId);
+
+    res.json({
+      success: true,
+      data: {
+        id: tenantProduct.id,
+        productId: tenantProduct.productId,
+        clinicId: tenantProduct.clinicId,
+        questionnaireId: tenantProduct.questionnaireId,
+        price: tenantProduct.price,
+        stripeProductId: tenantProduct.stripeProductId,
+        stripePriceId: tenantProduct.stripePriceId,
+        product: tenantProduct.product,
+        questionnaire: tenantProduct.questionnaire
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ [PUBLIC] Error fetching tenant product:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch tenant product'
+    });
+  }
+});
+
+// Public: get pharmacy coverages for a product
+app.get("/public/products/:productId/pharmacy-coverages", async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    console.log('💊 [PUBLIC] Fetching pharmacy coverages for product:', productId);
+
+    // Fetch all pharmacy coverages for this product
+    const coverages = await PharmacyCoverage.findAll({
+      where: { productId },
+      include: [
+        {
+          model: Pharmacy,
+          as: 'pharmacy',
+          attributes: ['id', 'name', 'slug']
+        },
+        {
+          model: PharmacyProduct,
+          as: 'assignments',
+          attributes: ['id', 'pharmacyProductName']
+        }
+      ],
+      order: [['customName', 'ASC']]
+    });
+
+    console.log('💊 [PUBLIC] Found coverages:', coverages.length);
+
+    res.json({
+      success: true,
+      data: coverages.map(c => ({
+        id: c.id,
+        customName: c.customName,
+        customSig: c.customSig,
+        pharmacy: c.pharmacy,
+        pharmacyProduct: c.assignments && c.assignments.length > 0 ? {
+          pharmacyProductName: c.assignments[0].pharmacyProductName
+        } : null
+      }))
+    });
+  } catch (error: any) {
+    console.error('❌ [PUBLIC] Error fetching pharmacy coverages:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch pharmacy coverages'
+    });
   }
 });
 

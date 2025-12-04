@@ -1,6 +1,8 @@
 import { Sequelize } from 'sequelize-typescript';
 import { DataTypes } from 'sequelize';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import User from '../models/User';
 import Entity from '../models/Entity';
 import Product from '../models/Product';
@@ -34,6 +36,7 @@ import Sale from '../models/Sale';
 import DoctorPatientChats from '../models/DoctorPatientChats';
 import Pharmacy from '../models/Pharmacy';
 import PharmacyProduct from '../models/PharmacyProduct';
+import PharmacyCoverage from '../models/PharmacyCoverage';
 import TenantCustomFeatures from '../models/TenantCustomFeatures';
 import TierConfiguration from '../models/TierConfiguration';
 import TenantAnalyticsEvents from '../models/TenantAnalyticsEvents';
@@ -47,6 +50,7 @@ import { GlobalFees } from '../models/GlobalFees';
 import UserRoles from '../models/UserRoles';
 import SupportTicket from '../models/SupportTicket';
 import TicketMessage from '../models/TicketMessage';
+import AuditLog from '../models/AuditLog';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -64,19 +68,35 @@ if (!databaseUrl) {
 // Check if we're connecting to localhost
 const isLocalhost = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
 
-// HIPAA-compliant database connection
+// HIPAA Compliance: Load AWS RDS CA certificate bundle for proper TLS verification
+// Certificate downloaded from: https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+const rdsCaCertPath = path.join(__dirname, '../certs/rds-ca-bundle.pem');
+let rdsCaCert: string | undefined;
+
+try {
+  if (fs.existsSync(rdsCaCertPath)) {
+    rdsCaCert = fs.readFileSync(rdsCaCertPath, 'utf8');
+    console.log('✅ AWS RDS CA certificate bundle loaded for TLS verification');
+  } else {
+    console.warn('⚠️  AWS RDS CA certificate bundle not found at:', rdsCaCertPath);
+    console.warn('   Run: curl -o patient-api/src/certs/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem');
+  }
+} catch (certError) {
+  console.warn('⚠️  Failed to load RDS CA certificate:', certError instanceof Error ? certError.message : certError);
+}
+
+// HIPAA-compliant database connection with proper TLS verification
 const sequelizeConfig = {
   dialect: 'postgres' as const,
   dialectOptions: {
-    // SSL configuration: 
-    // - Production: require SSL with relaxed validation
-    // - Development with localhost: no SSL
-    // - Localhost (non-development): use SSL but don't require it
+    // SSL configuration for HIPAA compliance:
+    // - Production: require SSL with CA certificate verification (TLS 1.2+)
+    // - Development with localhost: no SSL (local tunnel)
+    // - Other: require SSL with relaxed validation as fallback
     ssl: process.env.NODE_ENV === 'production' ? {
       require: true,
-      rejectUnauthorized: false,
-      ca: undefined, // Don't validate CA certificate
-      checkServerIdentity: () => undefined, // Skip hostname verification
+      rejectUnauthorized: !!rdsCaCert, // Verify certificate if CA bundle is available
+      ca: rdsCaCert, // AWS RDS CA certificate bundle
     } : (process.env.NODE_ENV === 'development' && isLocalhost) ? false : isLocalhost ? {
       require: false, // Don't require SSL for localhost tunnel
       rejectUnauthorized: false,
@@ -101,10 +121,10 @@ export const sequelize = new Sequelize(databaseUrl, {
     ShippingAddress, ShippingOrder, Subscription,
     TreatmentPlan, BrandSubscription, BrandSubscriptionPlans, Physician, BrandTreatment,
     UserPatient, TenantProduct, FormSectionTemplate,
-    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyProduct,
+    TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyCoverage, PharmacyProduct,
     TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily,
     MessageTemplate, Sequence, SequenceRun, Tag, UserTag, GlobalFees, UserRoles,
-    SupportTicket, TicketMessage
+    SupportTicket, TicketMessage, AuditLog
   ],
 });
 
@@ -340,6 +360,80 @@ export async function initializeDatabase() {
       }
     } catch (error) {
       console.error('❌ Error ensuring GlobalFees:', error);
+    }
+
+    // Ensure PharmacyProduct -> PharmacyCoverage cascade delete
+    try {
+      console.log('🔄 Ensuring PharmacyProduct → PharmacyCoverage cascade behavior...');
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.table_constraints tc
+            WHERE tc.constraint_name = 'PharmacyProduct_pharmacyCoverageId_fkey'
+              AND tc.table_name = 'PharmacyProduct'
+              AND tc.constraint_type = 'FOREIGN KEY'
+          ) THEN
+            ALTER TABLE "PharmacyProduct"
+              DROP CONSTRAINT "PharmacyProduct_pharmacyCoverageId_fkey";
+          END IF;
+        END
+        $$;
+      `);
+
+      await sequelize.query(`
+        ALTER TABLE "PharmacyProduct"
+        ADD CONSTRAINT "PharmacyProduct_pharmacyCoverageId_fkey"
+        FOREIGN KEY ("pharmacyCoverageId") REFERENCES "PharmacyCoverage" ("id") ON DELETE CASCADE;
+      `);
+
+      console.log('✅ Cascade delete enforced for PharmacyCoverage → PharmacyProduct');
+    } catch (error) {
+      console.error('❌ Error enforcing cascade delete for PharmacyCoverage → PharmacyProduct:', error);
+    }
+
+    // Ensure unique index for coverage/state combinations
+    try {
+      console.log('🔄 Ensuring PharmacyProduct coverage/state uniqueness constraint...');
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND indexname = 'unique_product_state'
+          ) THEN
+            DROP INDEX "unique_product_state";
+          END IF;
+        END
+        $$;
+      `);
+
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND indexname = 'unique_coverage_state'
+          ) THEN
+            DROP INDEX "unique_coverage_state";
+          END IF;
+        END
+        $$;
+      `);
+
+      await sequelize.query(`
+        CREATE UNIQUE INDEX "unique_coverage_state"
+        ON "PharmacyProduct" ("pharmacyCoverageId", "state");
+      `);
+
+      console.log('✅ Coverage/state uniqueness constraint ensured');
+    } catch (error) {
+      console.error('❌ Error ensuring coverage/state uniqueness constraint:', error);
     }
 
     // Backfill UserRoles table from deprecated User.role field

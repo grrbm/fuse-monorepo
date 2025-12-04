@@ -142,6 +142,74 @@ export default function OfferingDetailsPage() {
                         </Card>
                     )}
 
+                    {/* Prescriptions Card */}
+                    {order.prescriptions && order.prescriptions.length > 0 && (
+                        <Card className="transition-shadow hover:shadow-md border-2 border-success-200">
+                            <CardBody>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Icon icon="lucide:pill" className="text-success" width={20} />
+                                    <div className="font-medium text-foreground text-lg">Prescriptions</div>
+                                </div>
+                                <Divider className="my-3" />
+                                <div className="space-y-4">
+                                    {order.prescriptions.map((prescription: any, idx: number) => (
+                                        <div key={prescription.id} className="bg-success-50/50 p-4 rounded-md space-y-3">
+                                            <div className="flex items-start justify-between">
+                                                <div>
+                                                    <div className="font-medium text-foreground">{prescription.name}</div>
+                                                    {prescription.doctor && (
+                                                        <div className="text-xs text-foreground-500 mt-1">
+                                                            Prescribed by: Dr. {prescription.doctor.firstName} {prescription.doctor.lastName}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <Chip size="sm" variant="flat" color="success">
+                                                    Active
+                                                </Chip>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                                <div>
+                                                    <span className="text-foreground-500">Written:</span>{' '}
+                                                    <span className="text-foreground-700">
+                                                        {new Date(prescription.writtenAt).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-foreground-500">Expires:</span>{' '}
+                                                    <span className="text-foreground-700">
+                                                        {new Date(prescription.expiresAt).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {prescription.prescriptionProducts && prescription.prescriptionProducts.length > 0 && (
+                                                <div className="mt-3">
+                                                    <div className="text-xs font-medium text-foreground-500 mb-2">Medications:</div>
+                                                    <div className="space-y-2">
+                                                        {prescription.prescriptionProducts.map((pp: any, ppIdx: number) => (
+                                                            <div key={ppIdx} className="bg-white/60 p-3 rounded border border-success-200">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Icon icon="lucide:pill" className="text-success-600" width={16} />
+                                                                    <span className="text-sm font-medium text-foreground">
+                                                                        {pp.product?.name || 'Medication'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="text-xs text-foreground-500 mt-1">
+                                                                    Quantity: {pp.quantity}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardBody>
+                        </Card>
+                    )}
+
                 </div>
             )}
         </div>

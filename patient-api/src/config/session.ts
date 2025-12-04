@@ -2,6 +2,8 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -16,13 +18,24 @@ if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
   console.warn('IMPORTANT: Set SESSION_SECRET environment variable immediately after deployment for security.');
 }
 
-// Create a separate connection pool for sessions
+// HIPAA Compliance: Load AWS RDS CA certificate bundle for proper TLS verification
+const rdsCaCertPath = path.join(__dirname, '../certs/rds-ca-bundle.pem');
+let rdsCaCert: string | undefined;
+
+try {
+  if (fs.existsSync(rdsCaCertPath)) {
+    rdsCaCert = fs.readFileSync(rdsCaCertPath, 'utf8');
+  }
+} catch (certError) {
+  console.warn('⚠️  Session pool: Failed to load RDS CA certificate');
+}
+
+// Create a separate connection pool for sessions with proper TLS verification
 const sessionPool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? {
-    rejectUnauthorized: false,
-    ca: undefined,
-    checkServerIdentity: () => undefined,
+    rejectUnauthorized: !!rdsCaCert, // Verify certificate if CA bundle is available
+    ca: rdsCaCert, // AWS RDS CA certificate bundle
   } : false,
 });
 

@@ -9,8 +9,10 @@ import Treatment from '../models/Treatment';
 import ShippingAddress from '../models/ShippingAddress';
 import OrderService from '../services/order.service';
 import PharmacyProduct from '../models/PharmacyProduct';
+import PharmacyCoverage from '../models/PharmacyCoverage';
 import Pharmacy from '../models/Pharmacy';
 import IronSailOrderService from '../services/pharmacy/ironsail-order';
+import { AuditService, AuditAction, AuditResourceType } from '../services/audit.service';
 
 export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
 
@@ -215,6 +217,17 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             // Age and gender can be added when User model is updated
             const filteredOrders = orders;
 
+            // HIPAA Audit: Log bulk PHI access (doctor viewing pending orders with patient info)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.VIEW,
+                resourceType: AuditResourceType.ORDER,
+                details: { 
+                    bulkAccess: true, 
+                    orderCount: filteredOrders.length,
+                    filters: { status, clinicId, patientSearch }
+                },
+            });
+
             res.json({
                 success: true,
                 data: filteredOrders.map(order => ({
@@ -338,6 +351,18 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             const successCount = results.filter((r: any) => r.success).length;
             const failCount = results.length - successCount;
 
+            // HIPAA Audit: Log bulk order approval (doctor approving patient treatments)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.UPDATE,
+                resourceType: AuditResourceType.ORDER,
+                details: { 
+                    bulkApproval: true,
+                    orderIds,
+                    successCount,
+                    failCount,
+                },
+            });
+
             res.json({
                 success: true,
                 message: `Bulk approval completed: ${successCount} succeeded, ${failCount} failed`,
@@ -357,7 +382,7 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
         }
     });
 
-    // Get pharmacy coverage for an order
+    // Get pharmacy coverage for an order (returns ALL coverages for the product)
     app.get("/doctor/orders/:orderId/pharmacy-coverage", authenticateJWT, async (req: any, res: any) => {
         try {
             const currentUser = getCurrentUser(req);
@@ -420,8 +445,8 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 });
             }
 
-            // Find pharmacy coverage for this product and state
-            const coverage = await PharmacyProduct.findOne({
+            // Find ALL pharmacy coverages for this product in the patient's state
+            const coverages = await PharmacyProduct.findAll({
                 where: {
                     productId,
                     state: patientState
@@ -431,11 +456,18 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         model: Pharmacy,
                         as: 'pharmacy',
                         attributes: ['id', 'name', 'slug', 'isActive']
+                    },
+                    {
+                        model: PharmacyCoverage,
+                        as: 'pharmacyCoverage'
                     }
                 ]
             });
 
-            if (!coverage || !coverage.pharmacy?.isActive) {
+            // Filter out inactive pharmacies
+            const activeCoverages = coverages.filter(c => c.pharmacy?.isActive);
+
+            if (activeCoverages.length === 0) {
                 return res.json({
                     success: false,
                     hasCoverage: false,
@@ -448,29 +480,19 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 });
             }
 
+            // Map all coverages to response format
+            const coverageData = activeCoverages.map(coverage => {
             // Use SIG from product placeholder first, then pharmacy coverage, then fallback to order notes or default
             const sig = order.tenantProduct?.product?.placeholderSig ||
+                    coverage.pharmacyCoverage?.customSig ||
                 coverage.sig ||
                 order.doctorNotes ||
                 order.notes ||
                 'Take as directed by your healthcare provider';
 
-            console.log('📋 Pharmacy coverage data:', {
-                pharmacy: coverage.pharmacy.name,
-                state: patientState,
-                pharmacyProductId: coverage.pharmacyProductId,
-                pharmacyProductName: coverage.pharmacyProductName,
-                sig: sig,
-                sigSource: coverage.sig ? 'coverage' : order.tenantProduct?.product?.placeholderSig ? 'product' : order.doctorNotes ? 'doctorNotes' : order.notes ? 'orderNotes' : 'default',
-                form: coverage.form,
-                rxId: coverage.rxId,
-                wholesaleCost: coverage.pharmacyWholesaleCost
-            });
-
-            res.json({
-                success: true,
-                hasCoverage: true,
-                data: {
+                return {
+                    id: coverage.id,
+                    pharmacyCoverageId: coverage.pharmacyCoverageId,
                     pharmacy: {
                         id: coverage.pharmacy.id,
                         name: coverage.pharmacy.name,
@@ -482,13 +504,34 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         pharmacyProductName: coverage.pharmacyProductName,
                         pharmacyWholesaleCost: coverage.pharmacyWholesaleCost,
                         sig: sig,
+                        customName: coverage.pharmacyCoverage?.customName,
+                        customSig: coverage.pharmacyCoverage?.customSig,
                         form: coverage.form,
                         rxId: coverage.rxId
-                    },
+                    }
+                };
+            });
+
+            console.log(`📋 Found ${coverageData.length} pharmacy coverage(s) for order ${order.orderNumber}`);
+
+            // HIPAA Audit: Log PHI access (viewing patient pharmacy coverage)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.VIEW,
+                resourceType: AuditResourceType.ORDER,
+                resourceId: orderId,
+                details: { pharmacyCoverage: true, patientState },
+            });
+
+            res.json({
+                success: true,
+                hasCoverage: true,
+                data: {
+                    coverages: coverageData,
                     product: {
                         id: productId,
                         name: order.tenantProduct?.product?.name
-                    }
+                    },
+                    patientState
                 }
             });
 
@@ -528,6 +571,14 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
             // Add notes using order service
             const orderService = new OrderService();
             const result = await orderService.addDoctorNotes(orderId, user.id, note);
+
+            // HIPAA Audit: Log PHI modification (adding notes to patient order)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.UPDATE,
+                resourceType: AuditResourceType.ORDER,
+                resourceId: orderId,
+                details: { addedDoctorNotes: true },
+            });
 
             res.json(result);
 
@@ -654,7 +705,8 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 });
             }
 
-            const coverage = await PharmacyProduct.findOne({
+            // Find ALL IronSail coverages for this order
+            const coverages = await PharmacyProduct.findAll({
                 where: {
                     productId,
                     state: patientState
@@ -664,31 +716,54 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         model: Pharmacy,
                         as: 'pharmacy',
                         attributes: ['id', 'name', 'slug', 'isActive']
+                    },
+                    {
+                        model: PharmacyCoverage,
+                        as: 'pharmacyCoverage'
                     }
                 ]
             });
 
-            if (!coverage || !coverage.pharmacy) {
+            const ironSailCoverages = coverages.filter(c => c.pharmacy?.slug === 'ironsail' && c.pharmacy?.isActive);
+
+            if (ironSailCoverages.length === 0) {
                 return res.status(400).json({
                     success: false,
-                    message: "No pharmacy coverage found for this order"
+                    message: "No IronSail pharmacy coverage found for this order"
                 });
             }
 
-            if (coverage.pharmacy.slug !== 'ironsail') {
-                return res.status(400).json({
-                    success: false,
-                    message: `This action is only available for IronSail orders. Current pharmacy: ${coverage.pharmacy.name}`
-                });
-            }
+            console.log(`✅ [Retry Email] Found ${ironSailCoverages.length} IronSail coverage(s), proceeding with email retry`);
 
-            console.log(`✅ [Retry Email] Order ${order.orderNumber} is IronSail, proceeding with email retry`);
-
-            // Retry email send
+            // Retry email send for ALL IronSail coverages
             const ironSailService = new IronSailOrderService();
+            const results: any[] = [];
+            
+            for (const coverage of ironSailCoverages) {
             const result = await ironSailService.retrySendEmail(order, coverage);
+                results.push({
+                    coverageName: coverage.pharmacyCoverage?.customName || 'Product',
+                    ...result
+                });
+            }
 
-            res.json(result);
+            const allSucceeded = results.every((r: any) => r.success);
+
+            // HIPAA Audit: Log email retry (sending patient documents)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.EMAIL_SENT,
+                resourceType: AuditResourceType.ORDER,
+                resourceId: orderId,
+                details: { retryEmail: true, coverageCount: results.length, success: allSucceeded },
+            });
+
+            res.json({
+                success: allSucceeded,
+                message: allSucceeded 
+                    ? `Email sent successfully for ${results.length} coverage(s)` 
+                    : `Some emails failed to send`,
+                results
+            });
 
         } catch (error) {
             console.error('❌ [Retry Email] Error:', error);
@@ -756,7 +831,8 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                 });
             }
 
-            const coverage = await PharmacyProduct.findOne({
+            // Find ALL IronSail coverages for this order
+            const coverages = await PharmacyProduct.findAll({
                 where: {
                     productId,
                     state: patientState
@@ -766,31 +842,54 @@ export function registerDoctorEndpoints(app: Express, authenticateJWT: any, getC
                         model: Pharmacy,
                         as: 'pharmacy',
                         attributes: ['id', 'name', 'slug', 'isActive']
+                    },
+                    {
+                        model: PharmacyCoverage,
+                        as: 'pharmacyCoverage'
                     }
                 ]
             });
 
-            if (!coverage || !coverage.pharmacy) {
+            const ironSailCoverages = coverages.filter(c => c.pharmacy?.slug === 'ironsail' && c.pharmacy?.isActive);
+
+            if (ironSailCoverages.length === 0) {
                 return res.status(400).json({
                     success: false,
-                    message: "No pharmacy coverage found for this order"
+                    message: "No IronSail pharmacy coverage found for this order"
                 });
             }
 
-            if (coverage.pharmacy.slug !== 'ironsail') {
-                return res.status(400).json({
-                    success: false,
-                    message: `This action is only available for IronSail orders. Current pharmacy: ${coverage.pharmacy.name}`
-                });
-            }
+            console.log(`✅ [Retry Spreadsheet] Found ${ironSailCoverages.length} IronSail coverage(s), proceeding with spreadsheet retry`);
 
-            console.log(`✅ [Retry Spreadsheet] Order ${order.orderNumber} is IronSail, proceeding with spreadsheet retry`);
-
-            // Retry spreadsheet write
+            // Retry spreadsheet write for ALL IronSail coverages
             const ironSailService = new IronSailOrderService();
+            const results: any[] = [];
+            
+            for (const coverage of ironSailCoverages) {
             const result = await ironSailService.retryWriteToSpreadsheet(order, coverage);
+                results.push({
+                    coverageName: coverage.pharmacyCoverage?.customName || 'Product',
+                    ...result
+                });
+            }
 
-            res.json(result);
+            const allSucceeded = results.every((r: any) => r.success);
+
+            // HIPAA Audit: Log spreadsheet update (patient records)
+            await AuditService.logFromRequest(req, {
+                action: AuditAction.EXPORT,
+                resourceType: AuditResourceType.ORDER,
+                resourceId: orderId,
+                details: { retrySpreadsheet: true, coverageCount: results.length, success: allSucceeded },
+            });
+
+            res.json({
+                success: allSucceeded,
+                message: allSucceeded 
+                    ? `Spreadsheet updated successfully for ${results.length} coverage(s)` 
+                    : `Some spreadsheet updates failed`,
+                results
+            });
 
         } catch (error) {
             console.error('❌ [Retry Spreadsheet] Error:', error);

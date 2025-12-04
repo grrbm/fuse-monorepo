@@ -587,14 +587,33 @@ export const TreatmentsPage: React.FC = () => {
                           <div className="space-y-2">
                             {order.orderItems && order.orderItems.length > 0 ? (
                               order.orderItems.map((item: any, index: number) => (
-                                <div key={index} className="flex justify-between items-start text-xs">
-                                  <div className="flex-1">
-                                    <p className="font-medium text-foreground">{item.product?.name || 'Product'}</p>
-                                    {item.product?.placeholderSig && (
-                                      <p className="text-xs text-foreground-400 mt-0.5">{item.product.placeholderSig}</p>
-                                    )}
+                                <div key={index} className="space-y-1.5">
+                                  <div className="flex justify-between items-start text-xs">
+                                    <div className="flex-1">
+                                      <p className="font-medium text-foreground">{item.product?.name || 'Product'}</p>
+                                      {item.product?.placeholderSig && !item.product?.pharmacyCoverages?.length && (
+                                        <p className="text-xs text-foreground-400 mt-0.5">{item.product.placeholderSig}</p>
+                                      )}
+                                    </div>
+                                    <p className="text-foreground-500 ml-2">Qty: {item.quantity}</p>
                                   </div>
-                                  <p className="text-foreground-500 ml-2">Qty: {item.quantity}</p>
+                                  {/* Show pharmacy coverages if available */}
+                                  {item.product?.pharmacyCoverages && item.product.pharmacyCoverages.length > 0 && (
+                                    <div className="ml-3 space-y-1">
+                                      {item.product.pharmacyCoverages.map((coverage: any) => (
+                                        <div key={coverage.id} className="text-xs bg-blue-50 rounded p-2 border border-blue-100">
+                                          <p className="font-semibold text-blue-900">
+                                            • {coverage.customName || coverage.pharmacyProduct?.pharmacyProductName || 'Medication'}
+                                          </p>
+                                          {coverage.customSig && (
+                                            <p className="text-[10px] text-blue-700 mt-0.5">
+                                              <span className="font-medium">SIG:</span> {coverage.customSig}
+                                            </p>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               ))
                             ) : (
