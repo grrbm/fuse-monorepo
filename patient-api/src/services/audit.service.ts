@@ -1,11 +1,14 @@
 import { Request } from 'express';
 import AuditLog, { AuditAction, AuditResourceType } from '../models/AuditLog';
+import UserRoles from '../models/UserRoles';
 
 /**
  * HIPAA Audit Service
  * 
  * Provides easy-to-use methods for logging PHI access and system events.
  * All logs are stored in the audit_logs table with 6-year retention requirement.
+ * 
+ * NOTE: SuperAdmin users are NEVER logged for audit purposes.
  * 
  * Usage:
  *   import { AuditService } from '../services/audit.service';
@@ -72,6 +75,22 @@ export class AuditService {
     }
 
     /**
+     * Check if a user is a superAdmin (excluded from audit logging)
+     * SuperAdmin can only be set directly in the database - never via API
+     */
+    static async isSuperAdmin(userId?: string | null): Promise<boolean> {
+        if (!userId) return false;
+        
+        try {
+            const userRoles = await UserRoles.findOne({ where: { userId } });
+            return userRoles?.superAdmin === true;
+        } catch (error) {
+            // If we can't check, assume not superAdmin and continue logging
+            return false;
+        }
+    }
+
+    /**
      * Log an audit event from an Express request
      * Automatically extracts user, IP, and user agent from the request
      */
@@ -81,6 +100,11 @@ export class AuditService {
     ): Promise<AuditLog | null> {
         try {
             const user = this.getUserFromRequest(req);
+
+            // SuperAdmins are never logged
+            if (await this.isSuperAdmin(user?.id)) {
+                return null;
+            }
 
             return await AuditLog.log({
                 userId: user?.id || null,
@@ -119,6 +143,11 @@ export class AuditService {
         errorMessage?: string | null;
     }): Promise<AuditLog | null> {
         try {
+            // SuperAdmins are never logged
+            if (await this.isSuperAdmin(params.userId)) {
+                return null;
+            }
+
             return await AuditLog.log(params);
         } catch (error) {
             console.error('⚠️  Failed to write audit log:', error);
@@ -134,13 +163,11 @@ export class AuditService {
      * Log a successful login
      */
     static async logLogin(req: Request, user: { id: string; email: string; clinicId?: string }): Promise<void> {
-        await this.logFromRequest(req, {
-            action: AuditAction.LOGIN,
-            resourceType: AuditResourceType.SESSION,
-            details: { event: 'User logged in successfully' },
-        });
+        // SuperAdmins are never logged
+        if (await this.isSuperAdmin(user.id)) {
+            return;
+        }
 
-        // Also log with user info since req.user might not be set yet
         await AuditLog.log({
             userId: user.id,
             userEmail: user.email,
