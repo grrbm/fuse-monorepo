@@ -15,6 +15,14 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated })
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const handleShowConfirmation = () => {
+    if (!title.trim() || !description.trim()) {
+      return;
+    }
+    setShowConfirmModal(true);
+  };
 
   const handleCreateTicket = async () => {
     const token = localStorage.getItem('auth-token');
@@ -24,6 +32,7 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated })
     }
     
     setCreating(true);
+    setShowConfirmModal(false);
 
     try {
       const response = await apiCall("/support/tickets", {
@@ -43,15 +52,9 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated })
         if (onTicketCreated) {
           await onTicketCreated();
         }
-        
-        // Show success message
-        alert("Support ticket created! We'll get back to you soon via email.");
-      } else {
-        alert(response.error || "Failed to create ticket. Please try again.");
       }
     } catch (error) {
       console.error("Error creating ticket:", error);
-      alert("Failed to create ticket. Please try again.");
     } finally {
       setCreating(false);
     }
@@ -166,34 +169,112 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated })
                 />
               </div>
 
-              {/* Warning Banner */}
-              <div className="bg-warning-50 rounded-lg p-3 flex gap-2 border border-warning-200">
-                <Icon icon="lucide:alert-triangle" className="text-warning-600 mt-0.5 flex-shrink-0" />
-                <div className="text-xs text-warning-700">
-                  <p className="font-medium mb-1">Platform Support Only</p>
-                  <p>This chat is for technical issues, billing, or platform questions. For medical concerns, please use the Messenger to chat with your doctor.</p>
-                </div>
-              </div>
-
-              <div className="bg-primary-50 rounded-lg p-3 flex gap-2">
-                <Icon icon="lucide:info" className="text-primary mt-0.5 flex-shrink-0 text-sm" />
-                <p className="text-xs text-primary-700">
-                  You'll receive updates via email and can track your conversation in the Support tab.
-                </p>
-              </div>
-
               <Button
                 color="primary"
                 size="lg"
                 className="w-full"
-                isLoading={creating}
                 isDisabled={!title.trim() || !description.trim()}
-                onPress={handleCreateTicket}
+                onPress={handleShowConfirmation}
               >
                 Send Message
               </Button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirmModal && (
+          <>
+            {/* Modal Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+              onClick={() => !creating && setShowConfirmModal(false)}
+            />
+            
+            {/* Modal Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-content1 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-warning-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Icon icon="lucide:alert-triangle" className="text-warning-600 text-xl" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">Confirm Support Request</h3>
+                      <p className="text-sm text-foreground-500">Please read before continuing</p>
+                    </div>
+                  </div>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="light"
+                    onPress={() => !creating && setShowConfirmModal(false)}
+                    isDisabled={creating}
+                  >
+                    <Icon icon="lucide:x" />
+                  </Button>
+                </div>
+
+                {/* Warning Content */}
+                <div className="bg-warning-50 border-l-4 border-warning-400 rounded-lg p-4">
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-warning-800">
+                      Platform Support Only
+                    </p>
+                    <p className="text-sm text-warning-700 leading-relaxed">
+                      This support system is for technical issues, billing questions, or platform-related concerns only.
+                    </p>
+                    <p className="text-sm text-warning-700 leading-relaxed">
+                      <strong>For medical concerns or prescription-related questions</strong>, please use the Messenger to communicate directly with your healthcare provider.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Question */}
+                <div className="pt-2">
+                  <p className="text-sm font-medium text-foreground text-center">
+                    Are you sure you want to create this support ticket?
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    color="default"
+                    variant="flat"
+                    size="lg"
+                    className="flex-1"
+                    onPress={() => setShowConfirmModal(false)}
+                    isDisabled={creating}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    color="primary"
+                    size="lg"
+                    className="flex-1"
+                    isLoading={creating}
+                    onPress={handleCreateTicket}
+                  >
+                    Yes, Create Ticket
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </>

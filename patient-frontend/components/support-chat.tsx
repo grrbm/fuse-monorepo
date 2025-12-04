@@ -33,7 +33,11 @@ interface TicketMessage {
   createdAt: string;
 }
 
-export const SupportChat: React.FC = () => {
+interface SupportChatProps {
+  onTicketCreated?: () => void;
+}
+
+export const SupportChat: React.FC<SupportChatProps> = ({ onTicketCreated }) => {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
@@ -45,6 +49,7 @@ export const SupportChat: React.FC = () => {
   const [newTicketTitle, setNewTicketTitle] = useState("");
   const [newTicketDescription, setNewTicketDescription] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
 
@@ -107,11 +112,18 @@ export const SupportChat: React.FC = () => {
     }
   };
 
+  // Show confirmation modal
+  const handleShowConfirmation = () => {
+    if (!newTicketTitle.trim() || !newTicketDescription.trim()) return;
+    setShowConfirmModal(true);
+  };
+
   // Create new ticket
   const handleCreateTicket = async () => {
     const token = localStorage.getItem('auth-token');
     if (!token || !newTicketTitle.trim() || !newTicketDescription.trim()) return;
     setCreating(true);
+    setShowConfirmModal(false);
 
     try {
       const response = await apiCall("/support/tickets", {
@@ -128,6 +140,11 @@ export const SupportChat: React.FC = () => {
         setShowNewTicketForm(false);
         await fetchTickets();
         setSelectedTicket(response.data.data);
+        
+        // Call callback if provided
+        if (onTicketCreated) {
+          onTicketCreated();
+        }
       }
     } catch (error) {
       console.error("Error creating ticket:", error);
@@ -305,9 +322,6 @@ export const SupportChat: React.FC = () => {
                 >
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <h3 className="font-medium text-sm truncate flex-1">{ticket.title}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(ticket.status)}`}>
-                      {getStatusLabel(ticket.status)}
-                    </span>
                   </div>
                   <p className="text-xs text-foreground-500 truncate mb-2">{ticket.description}</p>
                   <div className="flex items-center justify-between text-xs text-foreground-400">
@@ -336,7 +350,10 @@ export const SupportChat: React.FC = () => {
               <Button
                 isIconOnly
                 variant="light"
-                onPress={() => setShowNewTicketForm(false)}
+                onPress={() => {
+                  setShowNewTicketForm(false);
+                  setShowConfirmModal(false);
+                }}
               >
                 <Icon icon="lucide:x" />
               </Button>
@@ -368,9 +385,8 @@ export const SupportChat: React.FC = () => {
                 color="primary"
                 size="lg"
                 className="w-full"
-                isLoading={creating}
                 isDisabled={!newTicketTitle.trim() || !newTicketDescription.trim()}
-                onPress={handleCreateTicket}
+                onPress={handleShowConfirmation}
               >
                 Send Message
               </Button>
@@ -384,9 +400,6 @@ export const SupportChat: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold">{selectedTicket.title}</h3>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(selectedTicket.status)}`}>
-                    {getStatusLabel(selectedTicket.status)}
-                  </span>
                 </div>
                 <Button
                   isIconOnly
@@ -613,6 +626,101 @@ export const SupportChat: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirmModal && (
+          <>
+            {/* Modal Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+              onClick={() => !creating && setShowConfirmModal(false)}
+            />
+            
+            {/* Modal Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="bg-content1 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Icon icon="lucide:alert-triangle" className="text-yellow-600 text-xl" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold">Confirm Support Request</h3>
+                      <p className="text-sm text-foreground-500">Please read before continuing</p>
+                    </div>
+                  </div>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="light"
+                    onPress={() => !creating && setShowConfirmModal(false)}
+                    isDisabled={creating}
+                  >
+                    <Icon icon="lucide:x" />
+                  </Button>
+                </div>
+
+                {/* Warning Content */}
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4">
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-yellow-800">
+                      Platform Support Only
+                    </p>
+                    <p className="text-sm text-yellow-700 leading-relaxed">
+                      This support system is for technical issues, billing questions, or platform-related concerns only.
+                    </p>
+                    <p className="text-sm text-yellow-700 leading-relaxed">
+                      <strong>For medical concerns or prescription-related questions</strong>, please use the Messenger to communicate directly with your healthcare provider.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Question */}
+                <div className="pt-2">
+                  <p className="text-sm font-medium text-center">
+                    Are you sure you want to create this support ticket?
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    color="default"
+                    variant="flat"
+                    size="lg"
+                    className="flex-1"
+                    onPress={() => setShowConfirmModal(false)}
+                    isDisabled={creating}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    color="primary"
+                    size="lg"
+                    className="flex-1"
+                    isLoading={creating}
+                    onPress={handleCreateTicket}
+                  >
+                    Yes, Create Ticket
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
