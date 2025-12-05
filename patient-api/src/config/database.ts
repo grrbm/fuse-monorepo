@@ -75,13 +75,22 @@ let rdsCaCert: string | undefined;
 try {
   if (fs.existsSync(rdsCaCertPath)) {
     rdsCaCert = fs.readFileSync(rdsCaCertPath, 'utf8');
-    console.log('✅ AWS RDS CA certificate bundle loaded for TLS verification');
+    // HIPAA: Do not log certificate loading details in production
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ AWS RDS CA certificate bundle loaded for TLS verification');
+    }
   } else {
-    console.warn('⚠️  AWS RDS CA certificate bundle not found at:', rdsCaCertPath);
-    console.warn('   Run: curl -o patient-api/src/certs/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem');
+    // HIPAA: Only warn in development
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('⚠️  AWS RDS CA certificate bundle not found at:', rdsCaCertPath);
+      console.warn('   Run: curl -o patient-api/src/certs/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem');
+    }
   }
 } catch (certError) {
-  console.warn('⚠️  Failed to load RDS CA certificate:', certError instanceof Error ? certError.message : certError);
+  // HIPAA: Only warn in development, do not expose error details in production
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('⚠️  Failed to load RDS CA certificate:', certError instanceof Error ? certError.message : certError);
+  }
 }
 
 // HIPAA-compliant database connection with enforced TLS
@@ -99,7 +108,7 @@ const sequelizeConfig = {
         ca: rdsCaCert, // AWS RDS CA certificate bundle
       },
   },
-  logging: false, // Don't log SQL queries (could contain PHI)
+  logging: false, // HIPAA: Don't log SQL queries (could contain PHI)
   pool: {
     max: 10,
     min: 0,
@@ -110,9 +119,7 @@ const sequelizeConfig = {
 
 // SECURITY: Fail if we're in production without CA certificate
 if (process.env.NODE_ENV === 'production' && !rdsCaCert) {
-  console.error('❌ CRITICAL: RDS CA certificate not found in production');
-  console.error('   Download from: https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem');
-  console.error('   Save to: patient-api/src/certs/rds-ca-bundle.pem');
+  // HIPAA: Do not log paths or detailed instructions in production
   throw new Error('RDS CA certificate is required in production');
 }
 
@@ -142,7 +149,9 @@ async function ensureProductCategoriesColumn() {
     const hasLegacyCategoryColumn = Object.prototype.hasOwnProperty.call(tableDefinition, 'category');
 
     if (!hasCategoriesColumn) {
-      console.log('⚙️  Updating Product table to support multiple categories (auto-migration)...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚙️  Updating Product table to support multiple categories (auto-migration)...');
+      }
 
       if (!hasTempColumn) {
         await queryInterface.addColumn('Product', 'categories_temp', {
@@ -164,7 +173,9 @@ async function ensureProductCategoriesColumn() {
           await queryInterface.removeColumn('Product', 'category');
           await sequelize.query('DROP TYPE IF EXISTS "enum_Product_category";');
         } catch (removeError) {
-          console.warn('⚠️  Skipped removing legacy category column (already removed?):', removeError instanceof Error ? removeError.message : removeError);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('⚠️  Skipped removing legacy category column (already removed?):', removeError instanceof Error ? removeError.message : removeError);
+          }
         }
       }
 
@@ -172,7 +183,9 @@ async function ensureProductCategoriesColumn() {
         await queryInterface.renameColumn('Product', 'categories_temp', 'categories');
       } catch (renameError) {
         if (renameError instanceof Error && renameError.message.includes('already exists')) {
-          console.warn('⚠️  Categories column already present, skipping rename.');
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('⚠️  Categories column already present, skipping rename.');
+          }
         } else {
           throw renameError;
         }
@@ -189,7 +202,9 @@ async function ensureProductCategoriesColumn() {
         WHERE "categories" IS NULL;
       `);
 
-      console.log('✅ Product categories auto-migration completed');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Product categories auto-migration completed');
+      }
     } else {
       // Ensure column defaults and null handling are correct even if migration already ran
       await sequelize.query(`
@@ -204,7 +219,10 @@ async function ensureProductCategoriesColumn() {
       `);
     }
   } catch (error) {
-    console.error('❌ Failed to ensure Product categories column:', error);
+    // HIPAA: Do not log detailed error in production
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Failed to ensure Product categories column:', error);
+    }
   }
 }
 
@@ -275,27 +293,38 @@ async function ensureDefaultFormStructures() {
           isDefault: structure.id === "default",
           isActive: true
         });
-        console.log(`✅ Created default form structure: ${structure.name}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✅ Created default form structure: ${structure.name}`);
+        }
       }
     }
   } catch (error) {
-    console.error('❌ Error ensuring default form structures:', error);
+    // HIPAA: Do not log detailed error in production
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error ensuring default form structures:', error);
+    }
   }
 }
 
 export async function initializeDatabase() {
   try {
     await sequelize.authenticate();
-    console.log('✅ Database connection established successfully');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ Database connection established successfully');
+      console.log("Syncing...");
+    }
 
-    console.log("Syncing...")
     // Sync all models to database (safer sync mode)
     await sequelize.sync();
-    console.log('✅ Database tables synchronized successfully');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ Database tables synchronized successfully');
+    }
 
     // Add new enum value for amount_capturable_updated status
     try {
-      console.log('🔄 Adding amount_capturable_updated to Order status enum...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Adding amount_capturable_updated to Order status enum...');
+      }
       await sequelize.query(`
         DO $$ 
         BEGIN
@@ -308,14 +337,20 @@ export async function initializeDatabase() {
           END IF;
         END $$;
       `);
-      console.log('✅ Order status enum updated successfully');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Order status enum updated successfully');
+      }
     } catch (enumError) {
-      console.log('⚠️  Could not add enum value (may already exist):', enumError instanceof Error ? enumError.message : enumError);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚠️  Could not add enum value (may already exist):', enumError instanceof Error ? enumError.message : enumError);
+      }
     }
 
     // Ensure TierConfiguration exists for all active BrandSubscriptionPlans
     try {
-      console.log('🔍 Checking TierConfiguration for active plans...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Checking TierConfiguration for active plans...');
+      }
       const activePlans = await BrandSubscriptionPlans.findAll({
         where: { isActive: true }
       });
@@ -334,19 +369,29 @@ export async function initializeDatabase() {
             brandSubscriptionPlanId: plan.id,
             canAddCustomProducts: isPremiumTier,
           });
-          console.log(`✅ Created TierConfiguration for plan: ${plan.name} (${plan.planType}) - canAddCustomProducts: ${isPremiumTier}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`✅ Created TierConfiguration for plan: ${plan.name} (${plan.planType}) - canAddCustomProducts: ${isPremiumTier}`);
+          }
         } else {
-          console.log(`✓ TierConfiguration already exists for plan: ${plan.name}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`✓ TierConfiguration already exists for plan: ${plan.name}`);
+          }
         }
       }
-      console.log('✅ TierConfiguration check complete');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ TierConfiguration check complete');
+      }
     } catch (error) {
-      console.error('❌ Error ensuring TierConfiguration:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error ensuring TierConfiguration:', error);
+      }
     }
 
     // Ensure GlobalFees row exists (there should only ever be one row)
     try {
-      console.log('🔍 Checking GlobalFees configuration...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Checking GlobalFees configuration...');
+      }
       const feesCount = await GlobalFees.count();
 
       if (feesCount === 0) {
@@ -355,20 +400,28 @@ export async function initializeDatabase() {
           fuseTransactionDoctorFeeUsd: 0,
           stripeTransactionFeePercent: 0,
         });
-        console.log('✅ Created default GlobalFees row (all fees set to zero)');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Created default GlobalFees row (all fees set to zero)');
+        }
       } else {
-        console.log(`✓ GlobalFees configuration exists (${feesCount} row${feesCount > 1 ? 's' : ''})`);
-        if (feesCount > 1) {
-          console.warn('⚠️  Warning: Multiple GlobalFees rows detected. There should only be one row.');
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✓ GlobalFees configuration exists (${feesCount} row${feesCount > 1 ? 's' : ''})`);
+          if (feesCount > 1) {
+            console.warn('⚠️  Warning: Multiple GlobalFees rows detected. There should only be one row.');
+          }
         }
       }
     } catch (error) {
-      console.error('❌ Error ensuring GlobalFees:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error ensuring GlobalFees:', error);
+      }
     }
 
     // Ensure PharmacyProduct -> PharmacyCoverage cascade delete
     try {
-      console.log('🔄 Ensuring PharmacyProduct → PharmacyCoverage cascade behavior...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Ensuring PharmacyProduct → PharmacyCoverage cascade behavior...');
+      }
       await sequelize.query(`
         DO $$
         BEGIN
@@ -392,14 +445,20 @@ export async function initializeDatabase() {
         FOREIGN KEY ("pharmacyCoverageId") REFERENCES "PharmacyCoverage" ("id") ON DELETE CASCADE;
       `);
 
-      console.log('✅ Cascade delete enforced for PharmacyCoverage → PharmacyProduct');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Cascade delete enforced for PharmacyCoverage → PharmacyProduct');
+      }
     } catch (error) {
-      console.error('❌ Error enforcing cascade delete for PharmacyCoverage → PharmacyProduct:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error enforcing cascade delete for PharmacyCoverage → PharmacyProduct:', error);
+      }
     }
 
     // Ensure unique index for coverage/state combinations
     try {
-      console.log('🔄 Ensuring PharmacyProduct coverage/state uniqueness constraint...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Ensuring PharmacyProduct coverage/state uniqueness constraint...');
+      }
       await sequelize.query(`
         DO $$
         BEGIN
@@ -435,14 +494,20 @@ export async function initializeDatabase() {
         ON "PharmacyProduct" ("pharmacyCoverageId", "state");
       `);
 
-      console.log('✅ Coverage/state uniqueness constraint ensured');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Coverage/state uniqueness constraint ensured');
+      }
     } catch (error) {
-      console.error('❌ Error ensuring coverage/state uniqueness constraint:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error ensuring coverage/state uniqueness constraint:', error);
+      }
     }
 
     // Backfill UserRoles table from deprecated User.role field
     try {
-      console.log('🔄 Backfilling UserRoles table from User.role field...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Backfilling UserRoles table from User.role field...');
+      }
 
       // Get all users
       const users = await User.findAll({
@@ -473,18 +538,28 @@ export async function initializeDatabase() {
         }
       }
 
-      console.log(`✅ UserRoles backfill complete: ${backfilledCount} created, ${skippedCount} already existed (${users.length} total users)`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`✅ UserRoles backfill complete: ${backfilledCount} created, ${skippedCount} already existed (${users.length} total users)`);
+      }
     } catch (error) {
-      console.error('❌ Error backfilling UserRoles:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error backfilling UserRoles:', error);
+      }
     }
 
     // Force recreate GlobalFormStructure table (drop and recreate)
     try {
-      console.log('🔄 Ensuring GlobalFormStructure table exists...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Ensuring GlobalFormStructure table exists...');
+      }
       await GlobalFormStructure.sync(); // Creates if not exists, never drops
-      console.log('✅ GlobalFormStructure table ready');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ GlobalFormStructure table ready');
+      }
     } catch (syncError) {
-      console.error('❌ Error syncing GlobalFormStructure:', syncError);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error syncing GlobalFormStructure:', syncError);
+      }
       throw syncError;
     }
 
@@ -496,7 +571,9 @@ export async function initializeDatabase() {
       const migrationService = new MigrationService(sequelize);
       await migrationService.runActiveToIsActiveMigration();
     } catch (error) {
-      console.error('❌ Error during active to isActive migration:', error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error during active to isActive migration:', error);
+      }
       // Don't throw - let the app continue
     }
 
@@ -530,9 +607,13 @@ export async function initializeDatabase() {
         ALTER TABLE "BrandSubscription"
         ADD COLUMN IF NOT EXISTS "customMaxProducts" INTEGER;
       `);
-      console.log('✅ Ensured customMaxProducts column exists on BrandSubscription');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Ensured customMaxProducts column exists on BrandSubscription');
+      }
     } catch (e) {
-      console.log('⚠️  customMaxProducts column may already exist or error:', e instanceof Error ? e.message : e);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚠️  customMaxProducts column may already exist or error:', e instanceof Error ? e.message : e);
+      }
     }
 
     // Reset retry flag at the start of a new billing cycle
@@ -566,12 +647,18 @@ export async function initializeDatabase() {
           supportedStates: ['CA'], // Can be expanded to include more states
           isActive: true
         });
-        console.log('✅ Created Absolute RX pharmacy');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Created Absolute RX pharmacy');
+        }
       } else {
-        console.log('✅ Absolute RX pharmacy already exists');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Absolute RX pharmacy already exists');
+        }
       }
     } catch (e) {
-      console.error('❌ Error creating Absolute RX pharmacy:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error creating Absolute RX pharmacy:', e);
+      }
       // ignore - don't fail startup
     }
 
@@ -595,18 +682,27 @@ export async function initializeDatabase() {
           ], // All US states except Alaska (AK) and Hawaii (HI)
           isActive: true
         });
-        console.log('✅ Created IronSail pharmacy');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Created IronSail pharmacy');
+        }
       } else {
-        console.log('✅ IronSail pharmacy already exists');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ IronSail pharmacy already exists');
+        }
       }
     } catch (e) {
-      console.error('❌ Error creating IronSail pharmacy:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error creating IronSail pharmacy:', e);
+      }
       // ignore - don't fail startup
     }
 
     return true;
   } catch (error) {
-    console.error('❌ Unable to connect to the database:', error);
+    // HIPAA: Do not log detailed database errors in production
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Unable to connect to the database:', error);
+    }
     return false;
   }
 }

@@ -11,10 +11,12 @@ dotenv.config({ path: '.env.local' });
 const PgSession = connectPgSimple(session);
 
 if (!process.env.SESSION_SECRET) {
-  console.error('❌ CRITICAL: SESSION_SECRET environment variable is not set');
-  console.error('   This is required for secure session management');
-  console.error('   Set SESSION_SECRET in your .env.local file');
   throw new Error('SESSION_SECRET environment variable is required');
+}
+
+// SECURITY: Validate SESSION_SECRET minimum length
+if (process.env.SESSION_SECRET.length < 32) {
+  throw new Error('SESSION_SECRET must be at least 32 characters for security compliance');
 }
 
 const SESSION_SECRET = process.env.SESSION_SECRET;
@@ -28,7 +30,10 @@ try {
     rdsCaCert = fs.readFileSync(rdsCaCertPath, 'utf8');
   }
 } catch (certError) {
-  console.warn('⚠️  Session pool: Failed to load RDS CA certificate');
+  // HIPAA: Only warn in development
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('⚠️  Session pool: Failed to load RDS CA certificate');
+  }
 }
 
 // SECURITY: Determine if connecting to localhost
@@ -51,9 +56,6 @@ const sessionPool = new Pool({
 
 // SECURITY: Fail if we're in production without CA certificate
 if (process.env.NODE_ENV === 'production' && !rdsCaCert) {
-  console.error('❌ CRITICAL: RDS CA certificate not found for session pool in production');
-  console.error('   Download from: https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem');
-  console.error('   Save to: patient-api/src/certs/rds-ca-bundle.pem');
   throw new Error('RDS CA certificate is required in production');
 }
 
@@ -88,7 +90,6 @@ export const sessionConfig = session({
 declare module 'express-session' {
   interface SessionData {
     userId?: string;
-    userEmail?: string;
     userRole?: 'patient' | 'doctor' | 'admin';
     loginTime?: Date;
     lastActivity?: Date;
@@ -104,10 +105,10 @@ export const updateLastActivity = (req: any, res: any, next: any) => {
 };
 
 // Helper function to create user session
+// HIPAA: Do not store PII (email) in session
 export const createUserSession = (req: any, user: any): Promise<void> => {
   return new Promise((resolve, reject) => {
     req.session.userId = user.id;
-    req.session.userEmail = user.email;
     req.session.userRole = user.role;
     req.session.loginTime = new Date();
     req.session.lastActivity = new Date();
@@ -115,28 +116,19 @@ export const createUserSession = (req: any, user: any): Promise<void> => {
     // Explicitly save the session to ensure cookie is set
     req.session.save((err: any) => {
       if (err) {
-        console.error('Failed to save session:', err);
-        reject(err);
+        // HIPAA: Do not log detailed error information
+        reject(new Error('Failed to save session'));
       } else {
-        console.log(`Session saved successfully for user ID: ${user.id}`);
         resolve();
       }
     });
-
-    // Don't log PHI - only log non-sensitive session info
-    console.log(`Session created for user ID: ${user.id}`);
   });
 };
 
 // Helper function to destroy user session
 export const destroyUserSession = (req: any) => {
-  const userId = req.session?.userId;
   req.session.destroy((err: any) => {
-    if (err) {
-      console.error('Error destroying session');
-    } else {
-      console.log(`Session destroyed for user ID: ${userId || 'unknown'}`);
-    }
+    // HIPAA: Do not log session details
   });
 };
 // Check if user is authenticated
@@ -145,6 +137,7 @@ export const isAuthenticated = (req: any): boolean => {
 };
 
 // Get current user from session
+// HIPAA: Do not return PII from session
 export const getCurrentUser = (req: any) => {
   if (!isAuthenticated(req)) {
     return null;
@@ -152,7 +145,6 @@ export const getCurrentUser = (req: any) => {
 
   return {
     id: req.session.userId,
-    email: req.session.userEmail,
     role: req.session.userRole,
     loginTime: req.session.loginTime,
     lastActivity: req.session.lastActivity,

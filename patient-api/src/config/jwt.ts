@@ -6,10 +6,13 @@ dotenv.config({ path: '.env.local' });
 
 // SECURITY: No fallback secrets - fail hard if not configured
 if (!process.env.JWT_SECRET) {
-  console.error('❌ CRITICAL: JWT_SECRET environment variable is not set');
-  console.error('   This is required for secure authentication');
-  console.error('   Set JWT_SECRET in your .env.local file');
+  // HIPAA: Do not log detailed instructions in production
   throw new Error('JWT_SECRET environment variable is required');
+}
+
+// SECURITY: Validate JWT_SECRET minimum length for HIPAA compliance
+if (process.env.JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET must be at least 32 characters for security compliance');
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -17,7 +20,6 @@ const JWT_EXPIRES_IN = '30m'; // 30 minutes for HIPAA compliance
 
 export interface JWTPayload {
   userId: string;
-  userEmail: string;
   userRole: 'patient' | 'provider' | 'admin' | 'brand';
   clinicId?: string;
   loginTime: number;
@@ -27,9 +29,9 @@ export interface JWTPayload {
 
 // Create JWT token
 export const createJWTToken = (user: any): string => {
+  // HIPAA: Do not include PII (email) in JWT payload
   const payload: JWTPayload = {
     userId: user.id,
-    userEmail: user.email,
     userRole: user.role,
     clinicId: user.clinicId,
     loginTime: Date.now(),
@@ -58,16 +60,16 @@ export const verifyJWTToken = (token: string): JWTPayload | null => {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
 
       // Map old token format to new format if needed
+      // HIPAA: Do not include PII in returned payload
       return {
         userId: decoded.userId,
-        userEmail: decoded.email || decoded.userEmail,
         userRole: decoded.role || decoded.userRole,
         loginTime: decoded.loginTime || decoded.iat * 1000,
         iat: decoded.iat,
         exp: decoded.exp,
       };
     } catch (fallbackError) {
-      console.error('JWT verification failed:', error.message);
+      // HIPAA: Do not log token details or error specifics
       return null;
     }
   }
@@ -94,7 +96,7 @@ export const authenticateJWT = (req: any, res: any, next: any) => {
   if (!token) {
     return res.status(401).json({
       success: false,
-      message: 'No token provided'
+      message: 'Authentication required'
     });
   }
 
@@ -102,7 +104,7 @@ export const authenticateJWT = (req: any, res: any, next: any) => {
   if (!decoded) {
     return res.status(401).json({
       success: false,
-      message: 'Invalid or expired token'
+      message: 'Authentication required'
     });
   }
 
@@ -124,7 +126,6 @@ export const getCurrentUser = (req: any) => {
 
   return {
     id: req.user.userId,
-    email: req.user.userEmail,
     role: req.user.userRole,
     clinicId: req.user.clinicId,
     loginTime: new Date(req.user.loginTime),
