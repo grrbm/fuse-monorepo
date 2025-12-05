@@ -6534,7 +6534,7 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
         resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
         resourceId: template.id,
         details: {
-          title,
+          templateName: title,
           formTemplateType: formTemplateType || 'normal',
           productId: productId || null,
           category: category || null,
@@ -7273,6 +7273,7 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
         resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
         resourceId: id,
         details: {
+          templateName: template?.title || name || 'Unknown',
           updatedFields: Object.keys(req.body).filter(k => req.body[k] !== undefined),
           newStatus: status || null,
         },
@@ -8491,6 +8492,10 @@ app.delete("/questionnaires/:id", authenticateJWT, async (req, res) => {
     // Create questionnaire service instance
     const questionnaireService = new QuestionnaireService();
 
+    // Get template info before deletion for audit log
+    const templateToDelete = await Questionnaire.findByPk(questionnaireId);
+    const templateName = templateToDelete?.title || 'Unknown template';
+
     // Delete questionnaire
     const result = await questionnaireService.deleteQuestionnaire(questionnaireId, currentUser.id);
 
@@ -8502,6 +8507,7 @@ app.delete("/questionnaires/:id", authenticateJWT, async (req, res) => {
         resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
         resourceId: questionnaireId,
         details: {
+          templateName,
           deleted: result.deleted,
         },
       });

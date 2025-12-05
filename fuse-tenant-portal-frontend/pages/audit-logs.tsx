@@ -495,7 +495,7 @@ export default function AuditLogs() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full min-w-[900px]">
                     <thead className="bg-[#F9FAFB] border-y border-[#E5E7EB]">
                       <tr>
                         <th className="text-left py-3 px-5 text-xs font-semibold text-[#6B7280] uppercase tracking-wider">
@@ -525,14 +525,13 @@ export default function AuditLogs() {
                       {logs.map((log) => (
                         <tr
                           key={log.id}
-                          className={`transition-colors cursor-pointer ${
-                            log.isSuperAdmin 
-                              ? 'bg-red-100 hover:bg-red-200 border-l-4 border-red-600' 
-                              : 'hover:bg-[#F9FAFB]'
-                          }`}
+                          className={`transition-colors cursor-pointer ${log.isSuperAdmin
+                            ? 'bg-red-100 hover:bg-red-200 border-l-4 border-red-600'
+                            : 'hover:bg-[#F9FAFB]'
+                            }`}
                           onClick={() => setSelectedLog(log)}
                         >
-                          <td className="py-3 px-5">
+                          <td className="py-3 px-5 whitespace-nowrap">
                             <span className="text-sm text-[#4B5563]">
                               {formatDate(log.createdAt)}
                             </span>
@@ -551,9 +550,8 @@ export default function AuditLogs() {
                           </td>
                           <td className="py-3 px-5">
                             <span
-                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
-                                ACTION_COLORS[log.action] || 'bg-gray-100 text-gray-800 border-gray-200'
-                              }`}
+                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${ACTION_COLORS[log.action] || 'bg-gray-100 text-gray-800 border-gray-200'
+                                }`}
                             >
                               {log.action.replace(/_/g, ' ')}
                             </span>
@@ -593,17 +591,24 @@ export default function AuditLogs() {
                           </td>
                           <td className="py-3 px-5">
                             {log.details && Object.keys(log.details).length > 0 ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-[#4FA59C] hover:bg-[#F0FDF4] rounded-lg"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setSelectedLog(log)
-                                }}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                {log.details.templateName && (
+                                  <span className="text-sm text-[#374151] max-w-[200px] truncate" title={log.details.templateName}>
+                                    {log.details.templateName}
+                                  </span>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-[#4FA59C] hover:bg-[#F0FDF4] rounded-lg"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedLog(log)
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </div>
                             ) : (
                               <span className="text-[#9CA3AF]">—</span>
                             )}
@@ -660,20 +665,17 @@ export default function AuditLogs() {
           onClick={() => setSelectedLog(null)}
         >
           <div
-            className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl ${
-              selectedLog.isSuperAdmin 
-                ? 'bg-red-50 border-2 border-red-500' 
-                : 'bg-white border border-[#E5E7EB]'
-            }`}
+            className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl ${selectedLog.isSuperAdmin
+              ? 'bg-red-50 border-2 border-red-500'
+              : 'bg-white border border-[#E5E7EB]'
+              }`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 space-y-6">
-              <div className={`flex items-center justify-between pb-4 border-b ${
-                selectedLog.isSuperAdmin ? 'border-red-300' : 'border-[#E5E7EB]'
-              }`}>
-                <h2 className={`text-xl font-semibold ${
-                  selectedLog.isSuperAdmin ? 'text-red-800' : 'text-[#1F2937]'
-                }`}>Audit Log Details</h2>
+              <div className={`flex items-center justify-between pb-4 border-b ${selectedLog.isSuperAdmin ? 'border-red-300' : 'border-[#E5E7EB]'
+                }`}>
+                <h2 className={`text-xl font-semibold ${selectedLog.isSuperAdmin ? 'text-red-800' : 'text-[#1F2937]'
+                  }`}>Audit Log Details</h2>
                 <button
                   onClick={() => setSelectedLog(null)}
                   className="rounded-full px-4 py-2 border border-[#E5E7EB] text-[#6B7280] hover:bg-[#F3F4F6] transition-all text-sm font-medium"
@@ -715,9 +717,8 @@ export default function AuditLogs() {
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-[#6B7280] uppercase">Action</p>
                   <span
-                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
-                      ACTION_COLORS[selectedLog.action] || 'bg-gray-100 text-gray-800 border-gray-200'
-                    }`}
+                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${ACTION_COLORS[selectedLog.action] || 'bg-gray-100 text-gray-800 border-gray-200'
+                      }`}
                   >
                     {selectedLog.action.replace(/_/g, ' ')}
                   </span>
