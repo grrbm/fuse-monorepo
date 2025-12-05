@@ -307,6 +307,26 @@ export async function initializeDatabase() {
       console.log('⚠️  Could not add enum value (may already exist):', enumError instanceof Error ? enumError.message : enumError);
     }
 
+    // Add QuestionnaireTemplate to audit_logs resourceType enum
+    try {
+      console.log('🔄 Adding QuestionnaireTemplate to audit_logs resourceType enum...');
+      await sequelize.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum 
+            WHERE enumlabel = 'QuestionnaireTemplate' 
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'enum_audit_logs_resourceType')
+          ) THEN
+            ALTER TYPE "enum_audit_logs_resourceType" ADD VALUE 'QuestionnaireTemplate';
+          END IF;
+        END $$;
+      `);
+      console.log('✅ Audit log resourceType enum updated successfully');
+    } catch (enumError) {
+      console.log('⚠️  Could not add QuestionnaireTemplate enum value (may already exist):', enumError instanceof Error ? enumError.message : enumError);
+    }
+
     // Ensure TierConfiguration exists for all active BrandSubscriptionPlans
     try {
       console.log('🔍 Checking TierConfiguration for active plans...');

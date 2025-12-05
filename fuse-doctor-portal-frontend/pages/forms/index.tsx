@@ -22,7 +22,13 @@ export default function Forms() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSort, setSelectedSort] = useState("name_asc")
   const [creating, setCreating] = useState(false)
-  const [productFormTemplates, setProductFormTemplates] = useState<Array<{ id: string; title: string; description: string }>>([])
+  const [productFormTemplates, setProductFormTemplates] = useState<Array<{
+    id: string;
+    title: string;
+    description: string;
+    createdAt: string;
+    user?: { id: string; email: string; firstName?: string; lastName?: string } | null;
+  }>>([])
 
   // Fetch product form templates
   useEffect(() => {
@@ -42,7 +48,9 @@ export default function Forms() {
           setProductFormTemplates(forms.map((f: any) => ({
             id: f.id,
             title: f.title || 'Untitled Form',
-            description: f.description || ''
+            description: f.description || '',
+            createdAt: f.createdAt || '',
+            user: f.user || null,
           })))
         } else {
           const data = await res.json().catch(() => ({}))
@@ -75,7 +83,9 @@ export default function Forms() {
         setProductFormTemplates(forms.map((f: any) => ({
           id: f.id,
           title: f.title || 'Untitled Form',
-          description: f.description || ''
+          description: f.description || '',
+          createdAt: f.createdAt || '',
+          user: f.user || null,
         })))
       }
     } catch (error) {
@@ -298,6 +308,35 @@ export default function Forms() {
                     </div>
                   </div>
                   <div className="p-6 space-y-4">
+                    {/* Creator info */}
+                    <div className="flex items-center gap-2 text-xs text-[#6B7280]">
+                      {template.user ? (
+                        <>
+                          <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px] font-medium text-white">
+                              {template.user.firstName?.charAt(0).toUpperCase() || template.user.email?.charAt(0).toUpperCase() || 'D'}
+                            </span>
+                          </div>
+                          <span className="truncate">
+                            Created by {template.user.firstName && template.user.lastName
+                              ? `${template.user.firstName} ${template.user.lastName}`
+                              : template.user.email}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-5 h-5 bg-gray-400 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span className="text-[10px] font-medium text-white">S</span>
+                          </div>
+                          <span>System template</span>
+                        </>
+                      )}
+                      {template.createdAt && (
+                        <span className="text-[#9CA3AF]">
+                          • {new Date(template.createdAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
                     {/* Actions */}
                     <div className="flex gap-2 pt-2">
                       <button

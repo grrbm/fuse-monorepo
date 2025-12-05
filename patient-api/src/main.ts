@@ -6523,7 +6523,28 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
         formTemplateType === 'master_template' ||
         formTemplateType === 'standardized_template'
       ) ? formTemplateType : null,
+      createdById: currentUser.id,
     });
+
+    // Audit: Log template creation
+    console.log('📝 [AUDIT] Attempting to log template CREATE for id:', template.id);
+    try {
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.CREATE,
+        resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
+        resourceId: template.id,
+        details: {
+          title,
+          formTemplateType: formTemplateType || 'normal',
+          productId: productId || null,
+          category: category || null,
+          createdBy: currentUser.email,
+        },
+      });
+      console.log('✅ [AUDIT] Template CREATE audit log created successfully');
+    } catch (auditError) {
+      console.error('❌ [AUDIT] Failed to create template CREATE audit log:', auditError);
+    }
 
     res.status(201).json({ success: true, data: template });
   } catch (error) {
@@ -7243,6 +7264,23 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
       status,
       productId,
     });
+
+    // Audit: Log template update
+    console.log('📝 [AUDIT] Attempting to log template UPDATE for id:', id);
+    try {
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.UPDATE,
+        resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
+        resourceId: id,
+        details: {
+          updatedFields: Object.keys(req.body).filter(k => req.body[k] !== undefined),
+          newStatus: status || null,
+        },
+      });
+      console.log('✅ [AUDIT] Template UPDATE audit log created successfully');
+    } catch (auditError) {
+      console.error('❌ [AUDIT] Failed to create template UPDATE audit log:', auditError);
+    }
 
     res.status(200).json({ success: true, data: template });
   } catch (error: any) {
@@ -8455,6 +8493,22 @@ app.delete("/questionnaires/:id", authenticateJWT, async (req, res) => {
 
     // Delete questionnaire
     const result = await questionnaireService.deleteQuestionnaire(questionnaireId, currentUser.id);
+
+    // Audit: Log template deletion
+    console.log('📝 [AUDIT] Attempting to log template DELETE for id:', questionnaireId);
+    try {
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.DELETE,
+        resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
+        resourceId: questionnaireId,
+        details: {
+          deleted: result.deleted,
+        },
+      });
+      console.log('✅ [AUDIT] Template DELETE audit log created successfully');
+    } catch (auditError) {
+      console.error('❌ [AUDIT] Failed to create template DELETE audit log:', auditError);
+    }
 
     console.log('✅ Questionnaire deleted:', {
       questionnaireId: result.questionnaireId,

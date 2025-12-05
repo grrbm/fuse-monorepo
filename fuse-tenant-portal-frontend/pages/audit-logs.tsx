@@ -88,6 +88,7 @@ const RESOURCE_ICONS: Record<string, string> = {
   Treatment: '🩺',
   Message: '💬',
   QuestionnaireResponse: '📋',
+  QuestionnaireTemplate: '📝',
   Payment: '💳',
   Subscription: '📅',
   Session: '🔐',
