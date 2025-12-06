@@ -388,14 +388,15 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
       }
 
       const { userId } = req.params;
-      const { patient, doctor, admin, brand } = req.body;
+      const { patient, doctor, admin, brand, superAdmin } = req.body;
 
       // Validate at least one boolean was provided
       if (typeof patient !== 'boolean' && typeof doctor !== 'boolean' && 
-          typeof admin !== 'boolean' && typeof brand !== 'boolean') {
+          typeof admin !== 'boolean' && typeof brand !== 'boolean' &&
+          typeof superAdmin !== 'boolean') {
         return res.status(400).json({
           success: false,
-          message: 'At least one role must be specified (patient, doctor, admin, brand)'
+          message: 'At least one role must be specified (patient, doctor, admin, brand, superAdmin)'
         });
       }
 
@@ -416,6 +417,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
           doctor: doctor ?? false,
           admin: admin ?? false,
           brand: brand ?? false,
+          superAdmin: superAdmin ?? false,
         });
         console.log(`✅ [Client Mgmt] Created UserRoles for user ${userId}`);
       } else {
@@ -425,6 +427,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
         if (typeof doctor === 'boolean') updates.doctor = doctor;
         if (typeof admin === 'boolean') updates.admin = admin;
         if (typeof brand === 'boolean') updates.brand = brand;
+        if (typeof superAdmin === 'boolean') updates.superAdmin = superAdmin;
 
         await userRoles.update(updates);
         console.log(`✅ [Client Mgmt] Updated UserRoles for user ${userId}:`, updates);
@@ -450,6 +453,7 @@ export function registerClientManagementEndpoints(app: Express, authenticateJWT:
           doctor: userRoles.doctor,
           admin: userRoles.admin,
           brand: userRoles.brand,
+          superAdmin: userRoles.superAdmin,
         }
       });
     } catch (error) {
