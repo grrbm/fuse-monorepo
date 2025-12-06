@@ -158,7 +158,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user,
     // { id: "offerings", label: "Offerings", icon: "lucide:list-checks" }, // Hidden
     { id: "treatments", label: "Treatments", icon: "lucide:pill" },
     { id: "messenger", label: "Messenger", icon: "lucide:message-square" },
-    ...(hasTickets ? [{ id: "support", label: "Support", icon: "lucide:headphones" }] : []),
     { id: "account", label: "Account", icon: "lucide:user" },
   ];
 

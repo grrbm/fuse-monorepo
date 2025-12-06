@@ -40,6 +40,18 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
         metadata: metadata || {},
       });
 
+      // Create automatic welcome message from support team
+      const welcomeMessage = "Thanks for reaching out! We've received your message and our team will get back to you shortly. You'll also receive updates via email.";
+      
+      // Use the ticket author as senderId (required field), but mark as SUPPORT type
+      await ticketService.addMessage({
+        ticketId: ticket.id,
+        senderId: currentUser.id, // Required field, but senderType will be SUPPORT
+        senderType: MessageSender.SUPPORT,
+        message: welcomeMessage,
+        isInternal: false,
+      });
+
       // Emit WebSocket event for real-time updates
       wsService.emitTicketCreated({
         ticketId: ticket.id,
@@ -49,10 +61,13 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
         status: ticket.status,
       });
 
+      // Reload ticket with the new message
+      const ticketWithMessage = await ticketService.getTicketById(ticket.id, currentUser.id);
+
       res.status(201).json({
         success: true,
         message: 'Ticket created successfully',
-        data: ticket,
+        data: ticketWithMessage,
       });
     } catch (error) {
       console.error('❌ Error creating ticket:', error);

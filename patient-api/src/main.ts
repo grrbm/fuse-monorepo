@@ -9664,6 +9664,12 @@ async function startServer() {
   prescriptionWorker.start();
   console.log('💊 Prescription expiration worker initialized');
 
+  // Initialize Support Ticket Auto-Close Service
+  const SupportTicketAutoCloseService = (await import('./services/supportTicketAutoClose.service')).default;
+  const ticketAutoCloseService = new SupportTicketAutoCloseService();
+  ticketAutoCloseService.start();
+  console.log('🎫 Support ticket auto-close service initialized');
+
   // Start auto-approval service
   const AutoApprovalService = (await import('./services/autoApproval.service')).default;
   AutoApprovalService.start();
