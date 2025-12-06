@@ -18,6 +18,7 @@ class QuestionnaireService {
         productId?: string | null;
         category?: string | null;
         formTemplateType?: 'normal' | 'user_profile' | 'doctor' | 'master_template' | 'standardized_template' | null;
+        createdById?: string | null;
     }) {
         return Questionnaire.create({
             title: input.title,
@@ -28,7 +29,7 @@ class QuestionnaireService {
             category: input.category ?? null,
             formTemplateType: input.formTemplateType ?? null,
             isTemplate: true,
-            userId: null,
+            userId: input.createdById ?? null,
             personalizationQuestionsSetup: false,
             createAccountQuestionsSetup: false,
             doctorQuestionsSetup: false,
@@ -73,7 +74,15 @@ class QuestionnaireService {
     async listAllProductForms() {
         return Questionnaire.findAll({
             where: { isTemplate: true, formTemplateType: 'normal' },
-            attributes: ['id', 'title', 'description', 'productId', 'category', 'createdAt', 'updatedAt'],
+            attributes: ['id', 'title', 'description', 'productId', 'category', 'userId', 'createdAt', 'updatedAt'],
+            include: [
+                {
+                    model: User,
+                    as: 'user',
+                    attributes: ['id', 'email', 'firstName', 'lastName'],
+                    required: false,
+                },
+            ],
             order: [['updatedAt', 'DESC']],
         });
     }
@@ -679,11 +688,17 @@ class QuestionnaireService {
 
         // Ownership and template rules
         if (questionnaire.isTemplate) {
-            // Allow deleting standardized templates with no owner
-            if (questionnaire.formTemplateType !== 'standardized_template' || questionnaire.userId !== null) {
-                throw new Error('Cannot delete template questionnaires');
+            // Allow deleting:
+            // 1. standardized_template with no owner (tenant portal)
+            // 2. normal type templates (product form templates - doctors can delete these)
+            const isStandardizedWithNoOwner = questionnaire.formTemplateType === 'standardized_template' && questionnaire.userId === null;
+            const isNormalTemplate = questionnaire.formTemplateType === 'normal' || questionnaire.formTemplateType === null;
+
+            if (!isStandardizedWithNoOwner && !isNormalTemplate) {
+                throw new Error('Cannot delete this type of template questionnaire');
             }
             // standardized_template with userId === null → permitted via tenant portal
+            // normal templates → permitted (doctors can delete product form templates)
         } else {
             // Non-templates must belong to the requesting user
             if (questionnaire.userId !== userId) {

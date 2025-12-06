@@ -80,7 +80,7 @@ export class AuditService {
      */
     static async isSuperAdmin(userId?: string | null): Promise<boolean> {
         if (!userId) return false;
-        
+
         try {
             const userRoles = await UserRoles.findOne({ where: { userId } });
             return userRoles?.superAdmin === true;
@@ -312,6 +312,41 @@ export class AuditService {
                 success: true,
             });
         }
+    }
+
+    /**
+     * Log questionnaire template creation
+     */
+    static async logTemplateCreate(req: Request, templateId: string, details?: Record<string, any>): Promise<void> {
+        await this.logFromRequest(req, {
+            action: AuditAction.CREATE,
+            resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
+            resourceId: templateId,
+            details,
+        });
+    }
+
+    /**
+     * Log questionnaire template update
+     */
+    static async logTemplateUpdate(req: Request, templateId: string, updatedFields?: string[]): Promise<void> {
+        await this.logFromRequest(req, {
+            action: AuditAction.UPDATE,
+            resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
+            resourceId: templateId,
+            details: updatedFields ? { updatedFields } : undefined,
+        });
+    }
+
+    /**
+     * Log questionnaire template deletion
+     */
+    static async logTemplateDelete(req: Request, templateId: string): Promise<void> {
+        await this.logFromRequest(req, {
+            action: AuditAction.DELETE,
+            resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
+            resourceId: templateId,
+        });
     }
 }
 
