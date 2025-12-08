@@ -177,21 +177,6 @@ if (!process.env.STRIPE_SECRET_KEY) {
   }
 }
 
-// SECURITY: Only log Stripe configuration status in development
-if (process.env.NODE_ENV === 'development') {
-  const lastChars = (val?: string, n = 6) => (val ? val.slice(-n) : 'MISSING');
-  const publishableSuffix = lastChars(process.env.STRIPE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
-  const secretSuffix = lastChars(process.env.STRIPE_SECRET_KEY);
-  const brandSuffix = lastChars(process.env.STRIPE_BRAND_SUBSCRIPTION_PRODUCT_ID);
-  const stripeWebhookSuffix = lastChars(process.env.STRIPE_WEBHOOK_SECRET);
-  console.log('🔎 Stripe env suffixes', {
-    STRIPE_PUBLISHABLE_KEY: publishableSuffix,
-    STRIPE_SECRET_KEY: secretSuffix,
-    STRIPE_BRAND_SUBSCRIPTION_PRODUCT_ID: brandSuffix,
-    STRIPE_WEBHOOK_SECRET: stripeWebhookSuffix
-  });
-}
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2025-08-27.basil',
 });
@@ -730,6 +715,8 @@ app.post("/auth/signup", async (req, res) => {
     // HIPAA Compliance: Don't log the actual error details that might contain PHI
     if (process.env.NODE_ENV === 'development') {
       console.error('Registration error occurred:', error.name);
+    } else {
+      console.error('Registration error occurred');
     }
 
     // Handle specific database errors
@@ -857,7 +844,12 @@ app.get("/auth/google/callback", async (req, res) => {
           console.log('✅ New user created via Google');
         }
       } catch (createError) {
-        console.error('❌ Failed to create user:', createError);
+
+        if (process.env.NODE_ENV === 'development') {
+          console.error('❌ Failed to create user:', createError);
+        } else {
+          console.error('❌ Failed to create user');
+        }
         throw createError;
       }
     } else {
@@ -1515,7 +1507,11 @@ app.post("/auth/send-verification-code", async (req, res) => {
       }
     } catch (error) {
       // Continue even if user lookup fails
-      console.log('User lookup failed, sending generic email');
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ User lookup failed, sending generic email:', error);
+      } else {
+        console.error('❌ User lookup failed, sending generic email');
+      }
     }
 
     verificationCodes.set(email.toLowerCase(), { code, expiresAt, firstName });
@@ -1757,7 +1753,11 @@ app.post("/auth/signout", authenticateJWT, async (req, res) => {
       message: "Signed out successfully"
     });
   } catch (error) {
-    console.error('Sign out error occurred');
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Sign out error occurred:', error);
+    } else {
+      console.error('❌ Sign out error occurred');
+    }
     res.status(500).json({
       success: false,
       message: "Sign out failed"
@@ -1786,7 +1786,11 @@ app.get("/auth/me", authenticateJWT, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Auth check error occurred');
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Auth check error occurred:', error);
+    } else {
+      console.error('❌ Auth check error occurred');
+    }
     res.status(500).json({
       success: false,
       message: "Auth check failed"
@@ -1886,7 +1890,11 @@ app.put("/auth/profile", authenticateJWT, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Profile update error occurred');
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Profile update error occurred:', error);
+    } else {
+      console.error('❌ Profile update error occurred');
+    }
     res.status(500).json({
       success: false,
       message: "Failed to update profile"
@@ -2007,7 +2015,11 @@ app.get("/clinic/:id", authenticateJWT, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching clinic data');
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error fetching clinic data:', error);
+    } else {
+      console.error('❌ Error fetching clinic data');
+    }
     res.status(500).json({
       success: false,
       message: "Failed to fetch clinic data"
@@ -2104,7 +2116,11 @@ app.put("/clinic/:id", authenticateJWT, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error updating clinic data');
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error updating clinic data:', error);
+    } else {
+      console.error('❌ Error updating clinic data');
+    }
     res.status(500).json({
       success: false,
       message: "Failed to update clinic data"
@@ -2632,7 +2648,11 @@ app.get("/products/:id", async (req, res) => {
             e?.parent?.code === '23505'
           );
           if (!isUniqueViolation) {
-            console.warn('⚠️ Failed to persist computed slug for product (non-unique error)', id, e);
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('⚠️ Failed to persist computed slug for product (non-unique error)', id, e);
+            } else {
+              console.warn('⚠️ Failed to persist computed slug for product (non-unique error)');
+            }
             break;
           }
           attempt += 1;
@@ -2832,7 +2852,11 @@ app.delete("/products/:id", authenticateJWT, async (req, res) => {
       await product.destroy();
       console.log('✅ Product deleted successfully:', { id: product.id, name: product.name });
     } catch (deleteError) {
-      console.error('Error deleting product from database:', deleteError);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error deleting product from database:', deleteError);
+      } else {
+        console.error('❌ Error deleting product from database');
+      }
       return res.status(400).json({
         success: false,
         message: "Cannot delete product because it is being used by treatments. Please remove it from all treatments first."
@@ -3194,7 +3218,11 @@ app.get("/products-management", authenticateJWT, async (req, res) => {
     });
     res.status(200).json(result);
   } catch (error: any) {
-    console.error('❌ Error listing products:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error listing products:', error);
+    } else {
+      console.error('❌ Error listing products');
+    }
     res.status(500).json({ success: false, message: error.message || "Failed to list products" });
   }
 });
@@ -3216,7 +3244,11 @@ app.get("/products-management/:id", authenticateJWT, async (req, res) => {
 
     res.status(200).json(result);
   } catch (error: any) {
-    console.error('❌ Error fetching product:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error fetching product:', error);
+    } else {
+      console.error('❌ Error fetching product');
+    }
     res.status(500).json({ success: false, message: error.message || "Failed to fetch product" });
   }
 });
@@ -3248,7 +3280,11 @@ app.post("/products-management", authenticateJWT, async (req, res) => {
 
     res.status(201).json(result);
   } catch (error: any) {
-    console.error('❌ Error creating product:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error creating product:', error);
+    } else {
+      console.error('❌ Error creating product');
+    }
     res.status(500).json({ success: false, message: error.message || "Failed to create product" });
   }
 });
@@ -3280,7 +3316,11 @@ app.put("/products-management/:id", authenticateJWT, async (req, res) => {
 
     res.status(200).json(result);
   } catch (error: any) {
-    console.error('❌ Error updating product:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error updating product:', error);
+    } else {
+      console.error('❌ Error updating product');
+    }
     res.status(500).json({ success: false, message: error.message || "Failed to update product" });
   }
 });
@@ -3302,7 +3342,11 @@ app.delete("/products-management/:id", authenticateJWT, async (req, res) => {
 
     res.status(200).json(result);
   } catch (error: any) {
-    console.error('❌ Error deleting product:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error deleting product:', error);
+    } else {
+      console.error('❌ Error deleting product');
+    }
     res.status(500).json({ success: false, message: error.message || "Failed to delete product" });
   }
 });
@@ -3319,7 +3363,11 @@ app.get("/products-management/categories/list", authenticateJWT, async (req, res
     const result = await productService.listCategories(currentUser.id);
     res.status(200).json(result);
   } catch (error: any) {
-    console.error('❌ Error listing categories:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error listing categories:', error);
+    } else {
+      console.error('❌ Error listing categories');
+    }
     res.status(500).json({ success: false, message: error.message || "Failed to list categories" });
   }
 });
@@ -3336,7 +3384,11 @@ app.get("/products-management/vendors/list", authenticateJWT, async (req, res) =
     const result = await productService.listPharmacyVendors(currentUser.id);
     res.status(200).json(result);
   } catch (error: any) {
-    console.error('❌ Error listing pharmacy vendors:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error listing pharmacy vendors:', error);
+    } else {
+      console.error('❌ Error listing pharmacy vendors');
+    }
     res.status(500).json({ success: false, message: error.message || "Failed to list pharmacy vendors" });
   }
 });
@@ -3874,7 +3926,12 @@ app.get("/treatments/:id", async (req, res) => {
             });
           }
         } catch (authError) {
-          console.warn('⚠️ Optional auth failed for /treatments/:id', authError);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('⚠️ Optional auth failed for /treatments/:id', authError);
+          } else {
+            console.warn('⚠️ Optional auth failed for /treatments/:id');
+          }
+
         }
       }
     }
@@ -4602,7 +4659,12 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       const doctorUsd = Math.max(0, doctorFlatUsd);
       brandAmountUsd = Math.max(0, totalPaid - platformFeeUsd - stripeFeeUsd - doctorUsd - pharmacyWholesaleTotal);
     } catch (e) {
-      console.warn('⚠️ Failed to compute brandAmountUsd, defaulting to 0:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ Failed to compute brandAmountUsd, defaulting to 0:', e);
+      } else {
+        console.warn('⚠️ Failed to compute brandAmountUsd, defaulting to 0:');
+      }
+
       brandAmountUsd = 0;
     }
 
@@ -4618,7 +4680,11 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
         };
       }
     } catch (e) {
-      console.warn('⚠️ Could not resolve clinic Stripe account for transfer_data:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ Could not resolve clinic Stripe account for transfer_data:', e);
+      } else {
+        console.warn('⚠️ Could not resolve clinic Stripe account for transfer_data:');
+      }
     }
 
     // Persist payout breakdown on Order
@@ -4631,7 +4697,11 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
         brandAmount: Number(brandAmountUsd.toFixed(2)),
       });
     } catch (e) {
-      console.warn('⚠️ Failed to persist payout breakdown on Order:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('⚠️ Failed to persist payout breakdown on Order:', e);
+      } else {
+        console.warn('⚠️ Failed to persist payout breakdown on Order:');
+      }
     }
 
     // Create payment intent with optional transfer_data to send clinic margin
@@ -4658,7 +4728,11 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
         ...(transferData ? { transfer_data: transferData } : {}),
       });
     } catch (stripeError: any) {
-      console.error('❌ Stripe payment intent creation failed:', stripeError);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Stripe payment intent creation failed:', stripeError);
+      } else {
+        console.error('❌ Stripe payment intent creation failed:');
+      }
 
       // Mark order as failed
       await order.update({ status: 'failed' });
@@ -5554,7 +5628,11 @@ app.post("/stripe/connect/session", authenticateJWT, async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('❌ Error creating Stripe Connect session:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error creating Stripe Connect session:', error);
+    } else {
+      console.error('❌ Error creating Stripe Connect session');
+    }
     res.status(500).json({
       success: false,
       message: error.message || "Failed to create Connect session"
@@ -5595,7 +5673,11 @@ app.get("/stripe/connect/status", authenticateJWT, async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('❌ Error fetching Stripe Connect status:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error fetching Stripe Connect status:', error);
+    } else {
+      console.error('❌ Error fetching Stripe Connect status');
+    }
     res.status(500).json({
       success: false,
       message: error.message || "Failed to fetch Connect status"
@@ -5650,7 +5732,11 @@ app.post("/stripe/connect/account-link", authenticateJWT, async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('❌ Error creating account link:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error creating account link:', error);
+    } else {
+      console.error('❌ Error creating account link');
+    }
     res.status(500).json({
       success: false,
       message: error.message || "Failed to create account link"
@@ -6329,7 +6415,11 @@ app.put("/brand-subscriptions/features", authenticateJWT, async (req, res) => {
 
     res.status(200).json(result);
   } catch (error: any) {
-    console.error('❌ Error updating subscription features:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error updating subscription features:', error);
+    } else {
+      console.error('❌ Error updating subscription features');
+    }
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to update subscription features'
@@ -6542,7 +6632,11 @@ app.post("/brand-subscriptions/cancel", authenticateJWT, async (req, res) => {
       try {
         await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
       } catch (stripeError) {
-        console.error('Error canceling Stripe subscription:', stripeError);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('❌ Error canceling Stripe subscription:', stripeError);
+        } else {
+          console.error('❌ Error canceling Stripe subscription');
+        }
         // Continue with local cancellation even if Stripe fails
       }
     }
@@ -6899,7 +6993,11 @@ app.get("/questionnaires/templates/assigned", authenticateJWT, async (req, res) 
 
     res.status(200).json({ success: true, data: assignment })
   } catch (error: any) {
-    console.error('❌ Error fetching tenant product form assignment:', error)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error fetching tenant product form assignment:', error)
+    } else {
+      console.error('❌ Error fetching tenant product form assignment')
+    }
     res.status(500).json({ success: false, message: error.message || 'Failed to fetch assignment' })
   }
 })
@@ -6916,7 +7014,11 @@ app.get("/questionnaires/templates/assignments", authenticateJWT, async (req, re
 
     res.status(200).json({ success: true, data: assignments })
   } catch (error: any) {
-    console.error('❌ Error listing tenant product form assignments:', error)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error listing tenant product form assignments:', error)
+    } else {
+      console.error('❌ Error listing tenant product form assignments')
+    }
     res.status(500).json({ success: false, message: error.message || 'Failed to list assignments' })
   }
 })
@@ -7339,8 +7441,12 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
       doctorQuestionsSetup: template.doctorQuestionsSetup ?? false,
       color: template.color || null,
     }).catch((err) => {
-      console.error('❌ Error creating cloned questionnaire:', err);
-      console.error('Template data:', JSON.stringify(template, null, 2));
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ Error creating cloned questionnaire:', err);
+        console.error('Template data:', JSON.stringify(template, null, 2));
+      } else {
+        console.error('❌ Error creating cloned questionnaire');
+      }
       throw new Error(`Failed to create questionnaire: ${err.message}`);
     });
 
@@ -7356,7 +7462,11 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
         conditionalLogic: step.conditionalLogic || null,
         questionnaireId: clonedQuestionnaire.id,
       }).catch((err) => {
-        console.error('❌ Error creating cloned step:', err);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('❌ Error creating cloned step:', err);
+        } else {
+          console.error('❌ Error creating cloned step');
+        }
         throw new Error(`Failed to create step: ${err.message}`);
       });
 
@@ -7376,7 +7486,11 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
           conditionalLogic: question.conditionalLogic || null,
           stepId: clonedStep.id,
         }).catch((err) => {
-          console.error('❌ Error creating cloned question:', err);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('❌ Error creating cloned question:', err);
+          } else {
+            console.error('❌ Error creating cloned question');
+          }
           throw new Error(`Failed to create question: ${err.message}`);
         });
 
@@ -7391,7 +7505,11 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
               questionId: clonedQuestion.id,
             }))
           ).catch((err) => {
-            console.error('❌ Error creating cloned options:', err);
+            if (process.env.NODE_ENV === 'development') {
+              console.error('❌ Error creating cloned options:', err);
+            } else {
+              console.error('❌ Error creating cloned options');
+            }
             throw new Error(`Failed to create options: ${err.message}`);
           });
         }
@@ -7426,7 +7544,11 @@ app.post("/questionnaires/templates/:id/clone-for-product", authenticateJWT, asy
 
     return res.status(201).json({ success: true, data: fullClone });
   } catch (error: any) {
-    console.error('❌ Error cloning template for product:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error cloning template for product:', error);
+    } else {
+      console.error('❌ Error cloning template for product');
+    }
     const errorMessage = error?.message || 'Failed to clone template for product';
     return res.status(500).json({
       success: false,
@@ -7625,8 +7747,12 @@ app.post("/questionnaires/:id/import-template-steps", authenticateJWT, async (re
 
     return res.status(200).json({ success: true, data: result });
   } catch (error: any) {
-    console.error('❌ Error importing template steps:', error);
-    console.error('Stack:', error.stack);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error importing template steps:', error);
+      console.error('Stack:', error.stack);
+    } else {
+      console.error('❌ Error importing template steps');
+    }
     return res.status(500).json({
       success: false,
       message: error?.message || 'Failed to import template steps',
@@ -7691,7 +7817,11 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
 
     res.status(200).json({ success: true, data: template });
   } catch (error: any) {
-    console.error('❌ Error updating questionnaire template:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error updating questionnaire template:', error);
+    } else {
+      console.error('❌ Error updating questionnaire template');
+    }
     res.status(500).json({ success: false, message: error.message || 'Failed to update questionnaire template' });
   }
 });
@@ -7911,7 +8041,11 @@ app.post("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
         console.log(`✅ Created QuestionnaireCustomization for user ${currentUser.id}, questionnaire ${questionnaireId}`);
       }
     } catch (customizationError) {
-      console.error('⚠️ Error managing QuestionnaireCustomization:', customizationError);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('⚠️ Error managing QuestionnaireCustomization:', customizationError);
+      } else {
+        console.error('⚠️ Error managing QuestionnaireCustomization');
+      }
     }
 
     res.status(201).json({ success: true, data: record });
@@ -8035,7 +8169,11 @@ app.delete("/admin/tenant-product-forms", authenticateJWT, async (req, res) => {
         }
       }
     } catch (customizationError) {
-      console.error('⚠️ Error deactivating QuestionnaireCustomization:', customizationError);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('⚠️ Error deactivating QuestionnaireCustomization:', customizationError);
+      } else {
+        console.error('⚠️ Error deactivating QuestionnaireCustomization');
+      }
     }
 
     res.status(200).json({ success: true });
@@ -8225,7 +8363,11 @@ app.put("/questionnaires/:id/color", authenticateJWT, async (req, res) => {
 
     res.status(200).json({ success: true, data: updated });
   } catch (error: any) {
-    console.error('❌ Error updating questionnaire color:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error updating questionnaire color:', error);
+    } else {
+      console.error('❌ Error updating questionnaire color');
+    }
 
     if (error instanceof Error) {
       if (error.message.includes('not found')) {
@@ -8262,7 +8404,11 @@ app.post("/questionnaires/import", authenticateJWT, async (req, res) => {
 
     res.status(201).json({ success: true, data: assignment });
   } catch (error: any) {
-    console.error('❌ Error assigning questionnaire templates:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ Error assigning questionnaire templates:', error);
+    } else {
+      console.error('❌ Error assigning questionnaire templates');
+    }
     res.status(500).json({ success: false, message: error.message || 'Failed to assign templates' });
   }
 });
@@ -10186,7 +10332,11 @@ app.post("/organization/verify-domain", authenticateJWT, async (req, res) => {
       }
     } catch (dnsError: any) {
       // DNS lookup failed - domain doesn't exist or no CNAME configured
-      console.log('DNS lookup error:', dnsError.code);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('DNS lookup error:', dnsError.code);
+      } else {
+        console.log('DNS lookup error');
+      }
 
       if (dnsError.code === 'ENODATA' || dnsError.code === 'ENOTFOUND') {
         return res.json({
@@ -11243,7 +11393,11 @@ async function startServer() {
           }
         } catch (smsError) {
           // Don't fail the message send if SMS fails - log and continue
-          console.error('❌ Failed to send SMS notification to patient:', smsError);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('❌ Failed to send SMS notification to patient:', smsError);
+          } else {
+            console.error('❌ Failed to send SMS notification to patient');
+          }
         }
       } else if (patient && (!patient.phoneNumber || patient.smsOptedOut)) {
         console.log(`ℹ️ Skipping SMS notification for patient ${patient.id}: ${!patient.phoneNumber ? 'no phone number' : 'SMS opted out'}`);
@@ -11439,7 +11593,11 @@ async function startServer() {
           });
 
         } catch (autoAssignError: any) {
-          console.error('❌ Error auto-assigning doctor:', autoAssignError);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('❌ Error auto-assigning doctor:', autoAssignError);
+          } else {
+            console.error('❌ Error auto-assigning doctor');
+          }
           return res.json({
             success: true,
             data: null,
@@ -11801,7 +11959,11 @@ async function startServer() {
       console.log(`[MD-WH] reqId=${requestId} processed`, { event_type: payload?.event_type });
       return res.status(200).json({ received: true });
     } catch (error: any) {
-      console.error(`[MD-WH] reqId=${requestId} error`, error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`[MD-WH] reqId=${requestId} error`, error);
+      } else {
+        console.error(`[MD-WH] reqId=${requestId} error`);
+      }
       return res.status(500).json({ success: false, message: 'Webhook processing failed' });
     }
   });
@@ -12320,7 +12482,11 @@ app.get("/public/brand-products/:clinicSlug/:slug", async (req, res) => {
         console.log('✅ Using questionnaire from Questionnaire.productId:', questionnaireId);
       }
     } catch (e) {
-      console.error('Error finding product questionnaire:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error finding product questionnaire:', e);
+      } else {
+        console.error('Error finding product questionnaire');
+      }
     }
 
     const categories = Array.isArray((product as any).categories)
@@ -12659,7 +12825,11 @@ app.get("/tenant-products/:id", async (req, res) => {
       }
     });
   } catch (error: any) {
-    console.error('❌ [PUBLIC] Error fetching tenant product:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ [PUBLIC] Error fetching tenant product:', error);
+    } else {
+      console.error('❌ [PUBLIC] Error fetching tenant product');
+    }
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch tenant product'
@@ -12707,7 +12877,11 @@ app.get("/public/products/:productId/pharmacy-coverages", async (req, res) => {
       }))
     });
   } catch (error: any) {
-    console.error('❌ [PUBLIC] Error fetching pharmacy coverages:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('❌ [PUBLIC] Error fetching pharmacy coverages:', error);
+    } else {
+      console.error('❌ [PUBLIC] Error fetching pharmacy coverages');
+    }
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch pharmacy coverages'
