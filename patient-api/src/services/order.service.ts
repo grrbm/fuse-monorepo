@@ -198,6 +198,9 @@ class OrderService {
             // HIPAA: Only fetch required fields for processing
             attributes: [
               "id",
+              "firstName",
+              "lastName",
+              "email",
               "pharmacyPatientId",
               "clinicId",
               "address",

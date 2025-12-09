@@ -1,6 +1,7 @@
 import { Express, Request, Response } from "express";
 import { Op } from "sequelize";
 import User from "../models/User";
+import UserRoles from "../models/UserRoles";
 import Order from "../models/Order";
 import Clinic from "../models/Clinic";
 import TenantProduct from "../models/TenantProduct";
@@ -144,15 +145,17 @@ export function registerDoctorEndpoints(
             .json({ success: false, message: "Unauthorized" });
         }
 
-        // Fetch full user data to get clinicId
-        const user = await User.findByPk(currentUser.id);
+        // Fetch full user data to get clinicId and roles
+        const user = await User.findByPk(currentUser.id, {
+          include: [{ model: UserRoles, as: 'userRoles' }]
+        });
         if (!user) {
           return res
             .status(403)
             .json({ success: false, message: "User not found" });
         }
 
-        if (user.role !== "doctor" && user.role !== "admin") {
+        if (!user.hasAnyRoleSync(['doctor', 'admin'])) {
           return res.status(403).json({
             success: false,
             message: "Access denied. Doctor or admin role required.",
@@ -388,14 +391,16 @@ export function registerDoctorEndpoints(
             .json({ success: false, message: "Unauthorized" });
         }
 
-        const user = await User.findByPk(currentUser.id);
+        const user = await User.findByPk(currentUser.id, {
+          include: [{ model: UserRoles, as: 'userRoles' }]
+        });
         if (!user) {
           return res
             .status(401)
             .json({ success: false, message: "User not found" });
         }
 
-        if (user.role !== "doctor" && user.role !== "admin") {
+        if (!user.hasAnyRoleSync(['doctor', 'admin'])) {
           return res.status(403).json({
             success: false,
             message: "Access denied. Doctor or admin role required.",
@@ -506,8 +511,10 @@ export function registerDoctorEndpoints(
             .json({ success: false, message: "Unauthorized" });
         }
 
-        const user = await User.findByPk(currentUser.id);
-        if (!user || (user.role !== "doctor" && user.role !== "admin")) {
+        const user = await User.findByPk(currentUser.id, {
+          include: [{ model: UserRoles, as: 'userRoles' }]
+        });
+        if (!user || !user.hasAnyRoleSync(['doctor', 'admin'])) {
           return res.status(403).json({
             success: false,
             message: "Access denied. Doctor or admin role required.",
