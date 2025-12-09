@@ -1,63 +1,72 @@
-import sgMail from '@sendgrid/mail'
+import sgMail from "@sendgrid/mail";
 
 // Initialize SendGrid with API key from environment
-const sendgridApiKey = process.env.SENDGRID_API_KEY
+const sendgridApiKey = process.env.SENDGRID_API_KEY;
 if (!sendgridApiKey) {
-  console.error('❌ SENDGRID_API_KEY environment variable is not set')
+  console.error("❌ SENDGRID_API_KEY environment variable is not set");
 } else {
-  sgMail.setApiKey(sendgridApiKey)
-  console.log('✅ SendGrid initialized')
+  sgMail.setApiKey(sendgridApiKey);
+  if (process.env.NODE_ENV === "development") {
+    console.log("✅ SendGrid initialized");
+  }
 }
 
 interface EmailOptions {
-  to: string
-  subject: string
-  text?: string
-  html?: string
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
 }
 
 export class MailsSender {
-  private static readonly FROM_EMAIL = 'noreply@fusehealth.com'
+  private static readonly FROM_EMAIL = "noreply@fusehealth.com";
 
   /**
    * Send a verification email to activate user account
    */
-  static async sendVerificationEmail(email: string, activationToken: string, firstName: string, frontendOrigin?: string): Promise<boolean> {
+  static async sendVerificationEmail(
+    email: string,
+    activationToken: string,
+    firstName: string,
+    frontendOrigin?: string
+  ): Promise<boolean> {
     // Determine the frontend URL based on environment
     const getFrontendUrl = () => {
       // Use provided origin from the request
       if (frontendOrigin) {
-        return frontendOrigin
+        return frontendOrigin;
       }
 
       if (process.env.FRONTEND_URL) {
-        return process.env.FRONTEND_URL
+        return process.env.FRONTEND_URL;
       }
 
       // Fallback based on NODE_ENV
-      if (process.env.NODE_ENV === 'production') {
-        return 'https://app.fuse.health'
+      if (process.env.NODE_ENV === "production") {
+        return "https://app.fuse.health";
       }
 
-      return 'http://localhost:3002'
-    }
+      return "http://localhost:3002";
+    };
 
-    const activationUrl = `${getFrontendUrl()}/verify-email?token=${activationToken}`
-    console.log('🔗 Activation URL generated:', activationUrl)
+    const activationUrl = `${getFrontendUrl()}/verify-email?token=${activationToken}`;
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔗 Activation URL generated for verification email");
+    }
 
     const msg: any = {
       to: email,
       from: this.FROM_EMAIL,
-      subject: 'Activate Your Fuse Brand Partner Account',
+      subject: "Activate Your Fuse Brand Partner Account",
       text: `Hello ${firstName},\n\nWelcome to Fuse! Please activate your brand partner account by clicking the link below:\n\n${activationUrl}\n\nThis link will expire in 24 hours.\n\nBest regards,\nThe Fuse Team`,
       // Disable click tracking to prevent URL rewriting
       trackingSettings: {
         clickTracking: {
-          enable: false
+          enable: false,
         },
         openTracking: {
-          enable: false
-        }
+          enable: false,
+        },
       },
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -104,16 +113,21 @@ export class MailsSender {
             </p>
           </div>
         </div>
-      `
-    }
+      `,
+    };
 
     try {
-      await sgMail.send(msg)
-      console.log(`✅ Verification email sent to: ${email}`)
-      return true
+      await sgMail.send(msg);
+      console.log("✅ Verification email sent");
+      return true;
     } catch (error) {
-      console.error('❌ Failed to send verification email:', error)
-      return false
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Failed to send verification email:", error);
+      } else {
+        console.error("❌ Failed to send verification email");
+      }
+
+      return false;
     }
   }
 
@@ -125,63 +139,79 @@ export class MailsSender {
       to: options.to,
       from: this.FROM_EMAIL,
       subject: options.subject,
-    }
+      trackingSettings: {
+        clickTracking: {
+          enable: false,
+        },
+        openTracking: {
+          enable: false,
+        },
+      },
+    };
 
     if (options.text) {
-      msg.text = options.text
+      msg.text = options.text;
     }
 
     if (options.html) {
-      msg.html = options.html
+      msg.html = options.html;
     }
 
     try {
-      await sgMail.send(msg)
-      console.log(`✅ Email sent to: ${options.to}`)
-      return true
+      await sgMail.send(msg);
+      console.log("✅ Email sent");
+      return true;
     } catch (error) {
-      console.error('❌ Failed to send email:', error)
-      return false
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Failed to send email:", error);
+      } else {
+        console.error("❌ Failed to send email");
+      }
+      return false;
     }
   }
 
   /**
    * Send welcome email after successful activation
    */
-  static async sendWelcomeEmail(email: string, firstName: string, frontendOrigin?: string): Promise<boolean> {
+  static async sendWelcomeEmail(
+    email: string,
+    firstName: string,
+    frontendOrigin?: string
+  ): Promise<boolean> {
     // Use same URL logic as verification email
     const getFrontendUrl = () => {
       // Use provided origin from the request (same as verification email)
       if (frontendOrigin) {
-        return frontendOrigin
+        return frontendOrigin;
       }
 
       if (process.env.FRONTEND_URL) {
-        return process.env.FRONTEND_URL
+        return process.env.FRONTEND_URL;
       }
 
-      if (process.env.NODE_ENV === 'production') {
-        return 'https://app.fuse.health'
+      if (process.env.NODE_ENV === "production") {
+        return "https://app.fuse.health";
       }
 
-      return 'http://localhost:3002'
-    }
+      return "http://localhost:3002";
+    };
 
-    const frontendUrl = getFrontendUrl()
+    const frontendUrl = getFrontendUrl();
 
     const msg: any = {
       to: email,
       from: this.FROM_EMAIL,
-      subject: 'Welcome to Fuse - Your Account is Active!',
+      subject: "Welcome to Fuse - Your Account is Active!",
       text: `Hello ${firstName},\n\nYour brand partner account has been successfully activated! You can now access your dashboard and start managing your brand presence.\n\nLogin at: ${frontendUrl}/signin\n\nBest regards,\nThe Fuse Team`,
       // Disable click tracking to prevent URL rewriting
       trackingSettings: {
         clickTracking: {
-          enable: false
+          enable: false,
         },
         openTracking: {
-          enable: false
-        }
+          enable: false,
+        },
       },
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -221,16 +251,21 @@ export class MailsSender {
             </p>
           </div>
         </div>
-      `
-    }
+      `,
+    };
 
     try {
-      await sgMail.send(msg)
-      console.log(`✅ Welcome email sent to: ${email}`)
-      return true
+      await sgMail.send(msg);
+      console.log("✅ Welcome email sent");
+
+      return true;
     } catch (error) {
-      console.error('❌ Failed to send welcome email:', error)
-      return false
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Failed to send welcome email:", error);
+      } else {
+        console.error("❌ Failed to send welcome email");
+      }
+      return false;
     }
   }
 
@@ -245,18 +280,18 @@ export class MailsSender {
   ): Promise<boolean> {
     const getFrontendUrl = () => {
       if (process.env.PATIENT_PORTAL_URL) {
-        return process.env.PATIENT_PORTAL_URL
+        return process.env.PATIENT_PORTAL_URL;
       }
 
-      if (process.env.NODE_ENV === 'production') {
-        return 'https://patient.fuse.health'
+      if (process.env.NODE_ENV === "production") {
+        return "https://patient.fuse.health";
       }
 
-      return 'http://localhost:3002'
-    }
+      return "http://localhost:3002";
+    };
 
-    const loginUrl = `${getFrontendUrl()}/login`
-    const clinic = clinicName || 'Your Healthcare Provider'
+    const loginUrl = `${getFrontendUrl()}/login`;
+    const clinic = clinicName || "Your Healthcare Provider";
 
     const msg: any = {
       to: email,
@@ -266,11 +301,11 @@ export class MailsSender {
       // Disable click tracking
       trackingSettings: {
         clickTracking: {
-          enable: false
+          enable: false,
         },
         openTracking: {
-          enable: true // Track opens for patient engagement
-        }
+          enable: false, // Track opens for patient engagement, Track closed for HIPAA/SOC2
+        },
       },
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -328,38 +363,46 @@ export class MailsSender {
             </p>
           </div>
         </div>
-      `
-    }
+      `,
+    };
 
     try {
-      await sgMail.send(msg)
-      console.log(`✅ Patient welcome email sent to: ${email}`)
-      return true
+      await sgMail.send(msg);
+      console.log("✅ Patient welcome email sent");
+      return true;
     } catch (error) {
-      console.error('❌ Failed to send patient welcome email:', error)
-      return false
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Failed to send patient welcome email:", error);
+      } else {
+        console.error("❌ Failed to send patient welcome email");
+      }
+      return false;
     }
   }
 
   /**
    * Send a 6-digit verification code for email sign-in
    */
-  static async sendVerificationCode(email: string, code: string, firstName?: string): Promise<boolean> {
-    const greeting = firstName ? `Hello ${firstName}` : 'Hello';
+  static async sendVerificationCode(
+    email: string,
+    code: string,
+    firstName?: string
+  ): Promise<boolean> {
+    const greeting = firstName ? `Hello ${firstName}` : "Hello";
 
     const msg: any = {
       to: email,
       from: this.FROM_EMAIL,
-      subject: 'Your Fuse Verification Code',
+      subject: "Your Fuse Verification Code",
       text: `${greeting},\n\nYour verification code is: ${code}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this code, please ignore this email.\n\nBest regards,\nThe Fuse Team`,
       // Disable click tracking
       trackingSettings: {
         clickTracking: {
-          enable: false
+          enable: false,
         },
         openTracking: {
-          enable: false
-        }
+          enable: false,
+        },
       },
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -406,38 +449,46 @@ export class MailsSender {
             </p>
           </div>
         </div>
-      `
-    }
+      `,
+    };
 
     try {
-      await sgMail.send(msg)
-      console.log(`✅ Verification code sent to: ${email}`)
-      return true
+      await sgMail.send(msg);
+      console.log("✅ Verification code sent");
+      return true;
     } catch (error) {
-      console.error('❌ Failed to send verification code:', error)
-      return false
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Failed to send verification code:", error);
+      } else {
+        console.error("❌ Failed to send verification code");
+      }
+      return false;
     }
   }
 
   /**
    * Send a 6-digit MFA verification code for HIPAA-compliant sign-in
    */
-  static async sendMfaCode(email: string, code: string, firstName?: string): Promise<boolean> {
-    const greeting = firstName ? `Hello ${firstName}` : 'Hello';
+  static async sendMfaCode(
+    email: string,
+    code: string,
+    firstName?: string
+  ): Promise<boolean> {
+    const greeting = firstName ? `Hello ${firstName}` : "Hello";
 
     const msg: any = {
       to: email,
       from: this.FROM_EMAIL,
-      subject: 'Your Fuse Sign-In Verification Code',
+      subject: "Your Fuse Sign-In Verification Code",
       text: `${greeting},\n\nYour sign-in verification code is: ${code}\n\nThis code will expire in 5 minutes.\n\nIf you didn't attempt to sign in, please secure your account immediately.\n\nBest regards,\nThe Fuse Team`,
       // Disable click tracking for security
       trackingSettings: {
         clickTracking: {
-          enable: false
+          enable: false,
         },
         openTracking: {
-          enable: false
-        }
+          enable: false,
+        },
       },
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -489,16 +540,20 @@ export class MailsSender {
             </p>
           </div>
         </div>
-      `
-    }
+      `,
+    };
 
     try {
-      await sgMail.send(msg)
-      console.log(`✅ MFA verification code sent to: ${email}`)
-      return true
+      await sgMail.send(msg);
+      console.log("✅ MFA verification code sent");
+      return true;
     } catch (error) {
-      console.error('❌ Failed to send MFA verification code:', error)
-      return false
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ Failed to send MFA verification code:", error);
+      } else {
+        console.error("❌ Failed to send MFA verification code");
+      }
+      return false;
     }
   }
 }

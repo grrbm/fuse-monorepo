@@ -1,41 +1,54 @@
-import { Router } from 'express';
-import { authenticateJWT } from '../config/jwt';
-import { GlobalFees } from '../models/GlobalFees';
+import { Router } from "express";
+import { authenticateJWT } from "../config/jwt";
+import { GlobalFees } from "../models/GlobalFees";
+import User from "../models/User";
+import UserRoles from "../models/UserRoles";
 
 const router = Router();
 
 /**
  * GET /config/fees
  * Returns the platform fee configuration from the database
- * @auth Required
+ * @auth Required (admin only)
  */
-router.get('/fees', authenticateJWT, async (req, res) => {
+router.get("/fees", authenticateJWT, async (req, res) => {
   try {
-    // Fetch the first (and should be only) GlobalFees row
+    const currentUser = (req as any).user;
+    if (!currentUser) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: "userRoles", required: false }],
+    });
+
+    if (!user || !user.hasRoleSync("admin")) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
     const globalFees = await GlobalFees.findOne();
 
     if (!globalFees) {
       return res.status(404).json({
         success: false,
-        message: 'Global fees configuration not found. Please contact support.'
+        message: "Global fees configuration not found. Please contact support.",
       });
     }
 
-    const fees = {
-      platformFeePercent: Number(globalFees.fuseTransactionFeePercent),
-      stripeFeePercent: Number(globalFees.stripeTransactionFeePercent),
-      doctorFlatFeeUsd: Number(globalFees.fuseTransactionDoctorFeeUsd),
-    };
-
     return res.status(200).json({
       success: true,
-      data: fees
+      data: {
+        platformFeePercent: Number(globalFees.fuseTransactionFeePercent),
+        stripeFeePercent: Number(globalFees.stripeTransactionFeePercent),
+        doctorFlatFeeUsd: Number(globalFees.fuseTransactionDoctorFeeUsd),
+      },
     });
-  } catch (error: any) {
-    console.error('Error fetching fee configuration:', error);
+  } catch {
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch fee configuration'
+      message: "Failed to fetch fee configuration",
     });
   }
 });
@@ -43,24 +56,49 @@ router.get('/fees', authenticateJWT, async (req, res) => {
 /**
  * PUT /config/fees
  * Updates the platform fee configuration
- * @auth Required (admin only recommended)
+ * @auth Required (admin only)
  */
-router.put('/fees', authenticateJWT, async (req, res) => {
+router.put("/fees", authenticateJWT, async (req, res) => {
   try {
+    const currentUser = (req as any).user;
+    if (!currentUser) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Not authenticated" });
+    }
+
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: "userRoles", required: false }],
+    });
+
+    if (!user || !user.hasRoleSync("admin")) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
     const { platformFeePercent, stripeFeePercent, doctorFlatFeeUsd } = req.body;
 
-    // Fetch the first (and should be only) GlobalFees row
+    if (
+      (platformFeePercent !== undefined &&
+        typeof platformFeePercent !== "number") ||
+      (stripeFeePercent !== undefined &&
+        typeof stripeFeePercent !== "number") ||
+      (doctorFlatFeeUsd !== undefined && typeof doctorFlatFeeUsd !== "number")
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Fee values must be numeric",
+      });
+    }
+
     let globalFees = await GlobalFees.findOne();
 
     if (!globalFees) {
-      // Create if doesn't exist
       globalFees = await GlobalFees.create({
         fuseTransactionFeePercent: platformFeePercent ?? 0,
         stripeTransactionFeePercent: stripeFeePercent ?? 0,
         fuseTransactionDoctorFeeUsd: doctorFlatFeeUsd ?? 0,
       });
     } else {
-      // Update existing
       if (platformFeePercent !== undefined) {
         globalFees.fuseTransactionFeePercent = platformFeePercent;
       }
@@ -75,21 +113,19 @@ router.put('/fees', authenticateJWT, async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Fee configuration updated successfully',
+      message: "Fee configuration updated successfully",
       data: {
         platformFeePercent: Number(globalFees.fuseTransactionFeePercent),
         stripeFeePercent: Number(globalFees.stripeTransactionFeePercent),
         doctorFlatFeeUsd: Number(globalFees.fuseTransactionDoctorFeeUsd),
-      }
+      },
     });
-  } catch (error: any) {
-    console.error('Error updating fee configuration:', error);
+  } catch {
     return res.status(500).json({
       success: false,
-      message: 'Failed to update fee configuration'
+      message: "Failed to update fee configuration",
     });
   }
 });
 
 export default router;
-

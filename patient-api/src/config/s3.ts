@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -18,28 +18,22 @@ const AWS_REGION = process.env.AWS_REGION!;
 
 // Validate required environment variables
 if (!BUCKET_NAME) {
-  console.error('❌ AWS_PUBLIC_BUCKET environment variable is required');
   throw new Error('AWS_PUBLIC_BUCKET environment variable is required');
 }
 if (!AWS_REGION) {
-  console.error('❌ AWS_REGION environment variable is required');
   throw new Error('AWS_REGION environment variable is required');
 }
 if (!process.env.AWS_ACCESS_KEY_ID) {
-  console.error('❌ AWS_ACCESS_KEY_ID environment variable is required');
   throw new Error('AWS_ACCESS_KEY_ID environment variable is required');
 }
 if (!process.env.AWS_SECRET_ACCESS_KEY) {
-  console.error('❌ AWS_SECRET_ACCESS_KEY environment variable is required');
   throw new Error('AWS_SECRET_ACCESS_KEY environment variable is required');
 }
 
-console.log('✅ S3 configuration loaded:', {
-  bucket: BUCKET_NAME,
-  region: AWS_REGION,
-  hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
-  hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY
-});
+// HIPAA: Do not log configuration details in production
+if (process.env.NODE_ENV === 'development') {
+  console.log('✅ S3 configuration loaded');
+}
 
 const sanitizeFileName = (fileName: string) =>
   fileName
@@ -61,24 +55,48 @@ export async function uploadToS3(
     const safePrefix = prefix ? `${sanitizeFileName(prefix)}-` : '';
     const key = `${folder}/${timestamp}-${safePrefix}${safeName}`;
 
+    // SECURITY: Enforce encryption and verify bucket configuration
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
       Body: fileBuffer,
       ContentType: contentType,
       ServerSideEncryption: 'AES256', // HIPAA: Ensure AES-256 encryption at rest
-      // ACL: "public-read", // Make file publicly readable - Commented out due to bucket ACL restrictions
+      // SECURITY: Never use public-read ACL for PHI
+      // Access should be granted via pre-signed URLs or bucket policies
     });
 
+    // SECURITY: Upload with encryption and verify
     await s3Client.send(command);
+
+    // Verify object encryption was applied
+    const headCommand = new HeadObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+    const headResponse = await s3Client.send(headCommand);
+
+    if (headResponse.ServerSideEncryption !== 'AES256') {
+      // HIPAA: Do not log key details
+      // Cleanup - delete unencrypted object
+      try {
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+        }));
+      } catch (cleanupError) {
+        // HIPAA: Do not log key details
+      }
+      throw new Error('Object encryption verification failed');
+    }
 
     // Return public URL
     const url = `https://${BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
-    console.log('✅ File uploaded to S3:', url);
+    // HIPAA: Do not log URLs that may contain identifiable paths
     return url;
 
   } catch (error) {
-    console.error('❌ S3 upload failed:', error);
+    // HIPAA: Do not log detailed error information
     throw new Error('Failed to upload file to S3');
   }
 }
@@ -98,10 +116,10 @@ export async function deleteFromS3(fileUrl: string): Promise<void> {
     });
 
     await s3Client.send(command);
-    console.log('✅ File deleted from S3:', key);
+    // HIPAA: Do not log key details
 
   } catch (error) {
-    console.error('❌ S3 delete failed:', error);
+    // HIPAA: Do not log detailed error information
     throw new Error('Failed to delete file from S3');
   }
 }
@@ -113,7 +131,7 @@ function extractKeyFromS3Url(url: string): string | null {
     const match = url.match(bucketPattern);
     return match?.[1] ?? null;
   } catch (error) {
-    console.error('Error extracting S3 key from URL:', error);
+    // HIPAA: Do not log URL details
     return null;
   }
 }

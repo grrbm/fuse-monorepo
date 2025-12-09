@@ -1,4 +1,4 @@
-import ShippingAddress from '../models/ShippingAddress';
+import ShippingAddress from "../models/ShippingAddress";
 
 export interface AddressData {
   addressId?: string;
@@ -16,28 +16,29 @@ export interface AddressData {
 export class ShippingAddressService {
   public static async updateOrCreateAddress(
     userId: string,
-    addressData: AddressData,
+    addressData: AddressData
   ): Promise<ShippingAddress> {
-    const { addressId } = addressData
+    const { addressId, ...safeData } = addressData;
+
     if (addressId) {
       // Update existing address
       const existingAddress = await ShippingAddress.findOne({
-        where: { id: addressId, userId }
+        where: { id: addressId, userId },
       });
 
       if (!existingAddress) {
-        throw new Error('Address not found or does not belong to user');
+        throw new Error("Address not found or does not belong to user");
       }
 
-      await existingAddress.update(addressData);
+      await existingAddress.update(safeData);
       return existingAddress;
     } else {
       // Create new address
       const newAddress = await ShippingAddress.create({
         userId,
-        ...addressData,
-        country: addressData.country || 'US',
-        isDefault: true
+        ...safeData,
+        country: safeData.country || "US",
+        isDefault: true,
       });
 
       return newAddress;
