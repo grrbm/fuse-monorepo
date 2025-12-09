@@ -2668,6 +2668,193 @@ app.post("/custom-website", authenticateJWT, async (req, res) => {
   }
 });
 
+// Upload portal logo to S3
+app.post("/custom-website/upload-logo", authenticateJWT, upload.single('logo'), async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(404).json({
+        success: false,
+        message: "User or clinic not found"
+      });
+    }
+
+    // Only allow brand users to upload portal images
+    if (!user.hasAnyRoleSync(['brand', 'doctor'])) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded"
+      });
+    }
+
+    if (!isValidFileSize(req.file.size)) {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Maximum size is 5MB."
+      });
+    }
+
+    // Get existing custom website to delete old logo if exists
+    const customWebsite = await CustomWebsite.findOne({
+      where: { clinicId: user.clinicId }
+    });
+
+    if (customWebsite?.logo) {
+      try {
+        await deleteFromS3(customWebsite.logo);
+        console.log('🗑️ Old portal logo deleted from S3');
+      } catch (error) {
+        console.error('Warning: Failed to delete old portal logo from S3:', error);
+      }
+    }
+
+    // Upload new logo to S3
+    const logoUrl = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      'portal-logos'
+    );
+
+    console.log('🌐 Portal logo uploaded for clinic:', { clinicId: user.clinicId, logoUrl });
+
+    res.status(200).json({
+      success: true,
+      message: "Portal logo uploaded successfully",
+      data: { logoUrl }
+    });
+  } catch (error) {
+    console.error('Error uploading portal logo:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload portal logo"
+    });
+  }
+});
+
+// Upload portal hero image to S3
+app.post("/custom-website/upload-hero", authenticateJWT, upload.single('heroImage'), async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(404).json({
+        success: false,
+        message: "User or clinic not found"
+      });
+    }
+
+    // Only allow brand users to upload portal images
+    if (!user.hasAnyRoleSync(['brand', 'doctor'])) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded"
+      });
+    }
+
+    if (!isValidFileSize(req.file.size)) {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Maximum size is 5MB."
+      });
+    }
+
+    // Get existing custom website to delete old hero image if exists
+    const customWebsite = await CustomWebsite.findOne({
+      where: { clinicId: user.clinicId }
+    });
+
+    if (customWebsite?.heroImageUrl) {
+      try {
+        await deleteFromS3(customWebsite.heroImageUrl);
+        console.log('🗑️ Old portal hero image deleted from S3');
+      } catch (error) {
+        console.error('Warning: Failed to delete old portal hero image from S3:', error);
+      }
+    }
+
+    // Upload new hero image to S3
+    const heroImageUrl = await uploadToS3(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      'portal-hero-images'
+    );
+
+    console.log('🌐 Portal hero image uploaded for clinic:', { clinicId: user.clinicId, heroImageUrl });
+
+    res.status(200).json({
+      success: true,
+      message: "Portal hero image uploaded successfully",
+      data: { heroImageUrl }
+    });
+  } catch (error) {
+    console.error('Error uploading portal hero image:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload portal hero image"
+    });
+  }
+});
+
+// Public endpoint to get first custom website (for localhost testing without subdomain)
+app.get("/custom-website/default", async (req, res) => {
+  try {
+    // For localhost testing: return the first available active custom website
+    const customWebsite = await CustomWebsite.findOne({
+      where: { isActive: true },
+      order: [['createdAt', 'DESC']]
+    });
+
+    if (!customWebsite) {
+      return res.status(404).json({
+        success: false,
+        message: "No custom website found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: customWebsite
+    });
+  } catch (error) {
+    console.error('Error fetching default custom website:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch custom website"
+    });
+  }
+});
+
 // Public endpoint to get custom website by clinic slug (for landing page)
 app.get("/custom-website/by-slug/:slug", async (req, res) => {
   try {

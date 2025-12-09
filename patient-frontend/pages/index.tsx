@@ -1,7 +1,148 @@
 import { useRouter } from 'next/router';
+import { useState, useEffect } from 'react';
+import { extractClinicSlugFromDomain } from '../lib/clinic-utils';
+import { apiCall } from '../lib/api';
+
+interface CustomWebsite {
+  portalTitle?: string;
+  portalDescription?: string;
+  primaryColor?: string;
+  fontFamily?: string;
+  logo?: string;
+  heroImageUrl?: string;
+  heroTitle?: string;
+  heroSubtitle?: string;
+}
 
 export default function LandingPage() {
   const router = useRouter();
+  const [customWebsite, setCustomWebsite] = useState<CustomWebsite | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadCustomWebsite = async () => {
+      try {
+        const domainInfo = await extractClinicSlugFromDomain();
+        console.log('🔍 Domain info:', domainInfo);
+
+        // Try to load custom website if we have a clinic slug
+        if (domainInfo.hasClinicSubdomain && domainInfo.clinicSlug) {
+          console.log('🌐 Fetching custom website for slug:', domainInfo.clinicSlug);
+          const result = await apiCall(`/custom-website/by-slug/${domainInfo.clinicSlug}`);
+          console.log('✅ Custom website data:', result);
+          if (result.success && result.data?.data) {
+            // API returns { success, data: { data: {...} } }
+            setCustomWebsite(result.data.data);
+          } else if (result.success && result.data) {
+            setCustomWebsite(result.data);
+          }
+        } else {
+          // For localhost testing: fetch the default/first available custom website
+          console.log('🏠 No clinic subdomain detected, loading default custom website for testing...');
+          try {
+            const result = await apiCall('/custom-website/default');
+            console.log('✅ Loaded default custom website:', result);
+            if (result.success && result.data?.data) {
+              // API returns { success, data: { data: {...} } }
+              setCustomWebsite(result.data.data);
+            } else if (result.success && result.data) {
+              setCustomWebsite(result.data);
+            }
+          } catch (error) {
+            console.log('ℹ️ No custom website found');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error loading custom website:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadCustomWebsite();
+  }, []);
+
+  // Handle nested data structure from API response
+  const websiteData = (customWebsite as any)?.data || customWebsite;
+
+  const heroImageUrl = websiteData?.heroImageUrl || "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1920&q=80";
+  const heroTitle = websiteData?.heroTitle || "Your Daily Health, Simplified";
+  const heroSubtitle = websiteData?.heroSubtitle || "All-in-one nutritional support in one simple drink";
+  const primaryColor = websiteData?.primaryColor || "#004d4d";
+  const fontFamily = websiteData?.fontFamily || "Georgia, serif";
+  const logo = websiteData?.logo;
+
+  console.log('🎨 Rendering with values:', {
+    heroImageUrl,
+    heroTitle,
+    heroSubtitle,
+    primaryColor,
+    fontFamily,
+    logo,
+    customWebsite
+  });
+
+  // Show loading skeleton while fetching custom website
+  if (isLoading) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: "#f5f3ef", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+        {/* Header Skeleton */}
+        <header style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: "white" }}>
+          <div
+            style={{
+              maxWidth: "1280px",
+              margin: "0 auto",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "1rem 1.5rem",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "3rem" }}>
+              <div style={{ width: "120px", height: "32px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+              <div style={{ display: "flex", gap: "2rem" }}>
+                <div style={{ width: "100px", height: "14px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+                <div style={{ width: "80px", height: "14px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+                <div style={{ width: "90px", height: "14px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+              <div style={{ width: "100px", height: "36px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+              <div style={{ width: "32px", height: "32px", backgroundColor: "#e0e0e0", borderRadius: "50%" }}></div>
+            </div>
+          </div>
+        </header>
+
+        {/* Hero Skeleton */}
+        <div
+          style={{
+            height: "100vh",
+            width: "100%",
+            position: "relative",
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#e8e6e1"
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              zIndex: 10,
+              textAlign: "center",
+              maxWidth: "800px",
+              padding: "0 2rem"
+            }}
+          >
+            <div style={{ width: "600px", height: "64px", backgroundColor: "#d0d0d0", borderRadius: "8px", margin: "0 auto 1.5rem" }}></div>
+            <div style={{ width: "400px", height: "24px", backgroundColor: "#d0d0d0", borderRadius: "8px", margin: "0 auto 2rem" }}></div>
+            <div style={{ width: "180px", height: "56px", backgroundColor: "#d0d0d0", borderRadius: "4px", margin: "0 auto" }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#f5f3ef", fontFamily: "system-ui, -apple-system, sans-serif" }}>
@@ -18,7 +159,11 @@ export default function LandingPage() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "3rem" }}>
-            <h1 style={{ fontFamily: "Georgia, serif", fontSize: "1.875rem", fontWeight: 400 }}>AG1</h1>
+            {logo ? (
+              <img src={logo} alt="Logo" style={{ height: "2rem", objectFit: "contain" }} />
+            ) : (
+              <h1 style={{ fontFamily: fontFamily, fontSize: "1.875rem", fontWeight: 400 }}>AG1</h1>
+            )}
             <nav style={{ display: "flex", alignItems: "center", gap: "2rem", fontSize: "0.875rem" }}>
               <a href="#" style={{ color: "inherit", textDecoration: "none" }}>
                 AG1 for Daily Health
@@ -54,7 +199,7 @@ export default function LandingPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
             <button
               style={{
-                backgroundColor: "#004d4d",
+                backgroundColor: primaryColor,
                 color: "white",
                 padding: "0.5rem 1.5rem",
                 border: "none",
@@ -92,7 +237,7 @@ export default function LandingPage() {
         }}
       >
         <img
-          src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1920&q=80"
+          src={heroImageUrl}
           alt="Hero"
           style={{
             width: "100%",
@@ -118,20 +263,20 @@ export default function LandingPage() {
             fontWeight: 700,
             marginBottom: "1.5rem",
             textShadow: "0 2px 10px rgba(0,0,0,0.3)",
-            fontFamily: "Georgia, serif"
+            fontFamily: fontFamily
           }}>
-            Your Daily Health, Simplified
+            {heroTitle}
           </h1>
           <p style={{
             fontSize: "1.5rem",
             marginBottom: "2rem",
             textShadow: "0 2px 10px rgba(0,0,0,0.3)"
           }}>
-            All-in-one nutritional support in one simple drink
+            {heroSubtitle}
           </p>
           <button
             style={{
-              backgroundColor: "#004d4d",
+              backgroundColor: primaryColor,
               color: "white",
               padding: "1rem 3rem",
               border: "none",

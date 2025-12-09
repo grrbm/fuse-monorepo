@@ -4,7 +4,6 @@ import Layout from "@/components/Layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Monitor, Smartphone, Upload, Link as LinkIcon } from "lucide-react"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
@@ -36,7 +35,10 @@ export default function PortalPage() {
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+  const [isUploadingHero, setIsUploadingHero] = useState(false)
   const [logoInputMode, setLogoInputMode] = useState<"file" | "url">("url")
+  const [heroInputMode, setHeroInputMode] = useState<"file" | "url">("url")
   const [settings, setSettings] = useState<PortalSettings>({
     portalTitle: "Welcome to Our Portal",
     portalDescription: "Your trusted healthcare partner. Browse our products and services below.",
@@ -99,16 +101,64 @@ export default function PortalPage() {
     }
   }
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // For now, convert to base64. In production, you'd upload to S3/CloudFront
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setSettings({ ...settings, logo: reader.result as string })
+    setIsUploadingLogo(true)
+    try {
+      const formData = new FormData()
+      formData.append('logo', file)
+
+      const response = await authenticatedFetch(`${API_URL}/custom-website/upload-logo`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data.logoUrl) {
+          setSettings({ ...settings, logo: data.data.logoUrl })
+        }
+      } else {
+        alert('Failed to upload logo')
+      }
+    } catch (error) {
+      console.error('Error uploading logo:', error)
+      alert('Error uploading logo')
+    } finally {
+      setIsUploadingLogo(false)
     }
-    reader.readAsDataURL(file)
+  }
+
+  const handleHeroImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploadingHero(true)
+    try {
+      const formData = new FormData()
+      formData.append('heroImage', file)
+
+      const response = await authenticatedFetch(`${API_URL}/custom-website/upload-hero`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data.heroImageUrl) {
+          setSettings({ ...settings, heroImageUrl: data.data.heroImageUrl })
+        }
+      } else {
+        alert('Failed to upload hero image')
+      }
+    } catch (error) {
+      console.error('Error uploading hero image:', error)
+      alert('Error uploading hero image')
+    } finally {
+      setIsUploadingHero(false)
+    }
   }
 
   if (isLoading) {
@@ -131,16 +181,7 @@ export default function PortalPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Settings Panel */}
-          <div className="space-y-6">
-            <Tabs defaultValue="branding" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="branding">Branding</TabsTrigger>
-                <TabsTrigger value="hero">Hero</TabsTrigger>
-                <TabsTrigger value="domain">Domain</TabsTrigger>
-                <TabsTrigger value="settings">Settings</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="branding" className="space-y-4 mt-4">
+          <div className="space-y-4">
                 {/* Portal Title */}
                 <Card>
                   <CardHeader className="pb-3">
@@ -243,14 +284,15 @@ export default function PortalPage() {
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-medium">Logo</CardTitle>
+                    <CardDescription>Upload your brand logo (recommended: 200x60px)</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {settings.logo && (
-                      <div className="mb-3">
+                      <div className="mb-3 p-4 bg-muted/30 rounded-lg flex items-center justify-center">
                         <img
                           src={settings.logo}
                           alt="Logo preview"
-                          className="h-12 object-contain"
+                          className="h-12 object-contain max-w-[200px]"
                         />
                       </div>
                     )}
@@ -275,11 +317,18 @@ export default function PortalPage() {
                     </div>
 
                     {logoInputMode === "file" ? (
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileUpload}
-                      />
+                      <div>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          disabled={isUploadingLogo}
+                        />
+                        {isUploadingLogo && (
+                          <p className="text-xs text-blue-600 mt-2">Uploading to S3...</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-2">Accepted formats: PNG, JPG, SVG. Max size: 2MB</p>
+                      </div>
                     ) : (
                       <div className="flex gap-2">
                         <Input
@@ -298,27 +347,70 @@ export default function PortalPage() {
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
 
-              <TabsContent value="hero" className="space-y-4 mt-4">
                 {/* Hero Image */}
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium">Hero Image URL</CardTitle>
+                    <CardTitle className="text-sm font-medium">Hero Banner Image</CardTitle>
+                    <CardDescription>Large viewport image displayed at the top of your landing page (recommended: 1920x1080px)</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <Input
-                      value={settings.heroImageUrl}
-                      onChange={(e) => setSettings({ ...settings, heroImageUrl: e.target.value })}
-                      placeholder="https://example.com/hero-image.jpg"
-                    />
+                  <CardContent className="space-y-3">
                     {settings.heroImageUrl && (
-                      <div className="mt-3 rounded-md overflow-hidden">
+                      <div className="mb-3 rounded-lg overflow-hidden border">
                         <img
                           src={settings.heroImageUrl}
                           alt="Hero preview"
-                          className="w-full h-32 object-cover"
+                          className="w-full h-48 object-cover"
                         />
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 mb-3">
+                      <Button
+                        variant={heroInputMode === "file" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setHeroInputMode("file")}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload a file
+                      </Button>
+                      <Button
+                        variant={heroInputMode === "url" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setHeroInputMode("url")}
+                      >
+                        <LinkIcon className="w-4 h-4 mr-2" />
+                        Enter URL
+                      </Button>
+                    </div>
+
+                    {heroInputMode === "file" ? (
+                      <div>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleHeroImageUpload}
+                          disabled={isUploadingHero}
+                        />
+                        {isUploadingHero && (
+                          <p className="text-xs text-blue-600 mt-2">Uploading to S3...</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-2">Accepted formats: PNG, JPG, WebP. Max size: 5MB. Recommended: 1920x1080px or larger</p>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          value={settings.heroImageUrl}
+                          onChange={(e) => setSettings({ ...settings, heroImageUrl: e.target.value })}
+                          placeholder="https://example.com/hero-image.jpg"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSettings({ ...settings, heroImageUrl: "" })}
+                        >
+                          Clear
+                        </Button>
                       </div>
                     )}
                   </CardContent>
@@ -351,36 +443,6 @@ export default function PortalPage() {
                     />
                   </CardContent>
                 </Card>
-              </TabsContent>
-
-              <TabsContent value="domain" className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">Custom Domain</CardTitle>
-                    <CardDescription>Configure your custom domain settings</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      Custom domain configuration coming soon. Contact support for early access.
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="settings" className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">Portal Settings</CardTitle>
-                    <CardDescription>Advanced portal configuration</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      Advanced settings coming soon.
-                    </p>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
 
             {/* Save Button */}
             <Button onClick={handleSave} className="w-full" disabled={isSaving}>
