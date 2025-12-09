@@ -14,7 +14,7 @@ import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useAuth } from "../contexts/AuthContext";
 import { getAvatarEmoji } from "../lib/avatarUtils";
 
-function HomePage() {
+function DashboardPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = React.useState("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -132,7 +132,7 @@ function HomePage() {
   );
 }
 
-export default function Home() {
-  return <HomePage />;
+export default function DashboardRoute() {
+  return <DashboardPage />;
 }
 
