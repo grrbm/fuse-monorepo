@@ -18,24 +18,24 @@ export enum AuditAction {
   LOGIN_FAILED = 'LOGIN_FAILED',
   PASSWORD_CHANGE = 'PASSWORD_CHANGE',
   PASSWORD_RESET = 'PASSWORD_RESET',
-  
+
   // MFA events (HIPAA compliance)
   MFA_CODE_SENT = 'MFA_CODE_SENT',
   MFA_VERIFIED = 'MFA_VERIFIED',
   MFA_FAILED = 'MFA_FAILED',
   MFA_RESEND = 'MFA_RESEND',
-  
+
   // PHI Access events
   VIEW = 'VIEW',
   CREATE = 'CREATE',
   UPDATE = 'UPDATE',
   DELETE = 'DELETE',
   EXPORT = 'EXPORT',
-  
+
   // Communication events
   EMAIL_SENT = 'EMAIL_SENT',
   SMS_SENT = 'SMS_SENT',
-  
+
   // Administrative events
   ROLE_CHANGE = 'ROLE_CHANGE',
   PERMISSION_CHANGE = 'PERMISSION_CHANGE',
@@ -49,6 +49,7 @@ export enum AuditResourceType {
   TREATMENT = 'Treatment',
   MESSAGE = 'Message',
   QUESTIONNAIRE_RESPONSE = 'QuestionnaireResponse',
+  QUESTIONNAIRE_TEMPLATE = 'QuestionnaireTemplate',
   PAYMENT = 'Payment',
   SUBSCRIPTION = 'Subscription',
   SESSION = 'Session',

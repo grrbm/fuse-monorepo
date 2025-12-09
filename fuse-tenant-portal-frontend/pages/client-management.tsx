@@ -49,6 +49,7 @@ interface UserRoles {
   doctor: boolean
   admin: boolean
   brand: boolean
+  superAdmin: boolean
   createdAt: string
   updatedAt: string
 }
@@ -102,6 +103,7 @@ export default function ClientManagement() {
     doctor: false,
     admin: false,
     brand: false,
+    superAdmin: false,
   })
 
   useEffect(() => {
@@ -199,6 +201,7 @@ export default function ClientManagement() {
         doctor: user.userRoles.doctor,
         admin: user.userRoles.admin,
         brand: user.userRoles.brand,
+        superAdmin: user.userRoles.superAdmin,
       })
     } else {
       // Fallback to deprecated role field
@@ -207,6 +210,7 @@ export default function ClientManagement() {
         doctor: user.role === 'doctor',
         admin: user.role === 'admin',
         brand: user.role === 'brand',
+        superAdmin: false,
       })
     }
   }
@@ -530,6 +534,22 @@ export default function ClientManagement() {
                                 />
                                 <span className="text-sm text-[#374151]">Brand</span>
                               </label>
+                              {/* Super Admin - Special styling to indicate elevated privileges */}
+                              <div className="mt-3 pt-3 border-t border-red-200">
+                                <label className="flex items-center space-x-3 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={userRolesData.superAdmin}
+                                    onChange={(e) => setUserRolesData({ ...userRolesData, superAdmin: e.target.checked })}
+                                    disabled={updatingRole}
+                                    className="w-4 h-4 text-red-600 border-red-300 rounded focus:ring-red-500"
+                                  />
+                                  <span className="text-sm font-semibold text-red-700">Super Admin</span>
+                                </label>
+                                <p className="text-xs text-red-600 mt-1 ml-7">
+                                  Bypasses audit logging and 2FA requirements
+                                </p>
+                              </div>
                             </div>
                             <Button
                               onClick={handleRolesChange}

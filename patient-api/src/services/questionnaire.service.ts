@@ -780,14 +780,21 @@ class QuestionnaireService {
 
     // Ownership and template rules
     if (questionnaire.isTemplate) {
-      // Allow deleting standardized templates with no owner
-      if (
-        questionnaire.formTemplateType !== "standardized_template" ||
-        questionnaire.userId !== null
-      ) {
-        throw new Error("Cannot delete template questionnaires");
+      // Allow deleting:
+      // 1. standardized_template with no owner (tenant portal)
+      // 2. normal type templates (product form templates - doctors can delete these)
+      const isStandardizedWithNoOwner =
+        questionnaire.formTemplateType === "standardized_template" &&
+        questionnaire.userId === null;
+      const isNormalTemplate =
+        questionnaire.formTemplateType === "normal" ||
+        questionnaire.formTemplateType === null;
+
+      if (!isStandardizedWithNoOwner && !isNormalTemplate) {
+        throw new Error("Cannot delete this type of template questionnaire");
       }
       // standardized_template with userId === null → permitted via tenant portal
+      // normal templates → permitted (doctors can delete product form templates)
     } else {
       // Non-templates must belong to the requesting user
       if (questionnaire.userId !== userId) {
