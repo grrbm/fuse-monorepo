@@ -6,15 +6,10 @@ import { useRouter } from 'next/router';
 
 interface Order {
   id: string;
+  orderNumber?: string;
   totalAmount: number;
   status: string;
   createdAt: string;
-  user?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  };
   orderItems?: Array<{
     id: string;
     product?: {
@@ -96,10 +91,14 @@ export function RecentActivity() {
     return `${diffDays}d ago`;
   };
 
-  const getInitials = (firstName?: string, lastName?: string) => {
-    const first = firstName?.charAt(0) || '';
-    const last = lastName?.charAt(0) || '';
-    return (first + last).toUpperCase() || '??';
+  // Format order number to show last 6 characters for compact display
+  const formatOrderNumber = (orderNumber?: string) => {
+    if (!orderNumber) return 'Order';
+    // Show format like "ORD-...3526" for compact display
+    if (orderNumber.length > 12) {
+      return `${orderNumber.slice(0, 4)}...${orderNumber.slice(-4)}`;
+    }
+    return orderNumber;
   };
 
   return (
@@ -139,9 +138,6 @@ export function RecentActivity() {
         ) : (
           <div className="space-y-4">
             {orders.map((order) => {
-              const customerName = order.user
-                ? `${order.user.firstName} ${order.user.lastName}`
-                : 'Unknown Customer';
               const productName = order.orderItems?.[0]?.product?.name || 'Product';
               const itemCount = order.orderItems?.length || 0;
 
@@ -152,13 +148,11 @@ export function RecentActivity() {
                   onClick={() => router.push(`/orders/${order.id}`)}
                 >
                   <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-medium text-primary">
-                      {getInitials(order.user?.firstName, order.user?.lastName)}
-                    </span>
+                    <ShoppingCart className="h-5 w-5 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">
-                      {customerName}
+                    <p className="text-sm font-medium text-foreground font-mono">
+                      {formatOrderNumber(order.orderNumber)}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
                       {productName}

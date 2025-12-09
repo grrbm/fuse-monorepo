@@ -12,6 +12,7 @@ import {
     Settings,
     LogOut,
     ClipboardList,
+    FileQuestion,
 } from "lucide-react"
 
 const navigation = [
@@ -20,6 +21,7 @@ const navigation = [
     { name: "Patients", icon: Users, current: false, href: "/patients" },
     { name: "Appointments", icon: Calendar, current: false, href: "/appointments" },
     { name: "Records", icon: FileText, current: false, href: "/records" },
+    { name: "Medical Question Templates", icon: FileQuestion, current: false, href: "/forms" },
 ]
 
 const configuration = [

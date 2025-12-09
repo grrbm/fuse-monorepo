@@ -51,6 +51,7 @@ import UserRoles from '../models/UserRoles';
 import SupportTicket from '../models/SupportTicket';
 import TicketMessage from '../models/TicketMessage';
 import AuditLog from '../models/AuditLog';
+import MfaToken from '../models/MfaToken';
 import { MigrationService } from '../services/migration.service';
 
 // Load environment variables from .env.local
@@ -124,7 +125,7 @@ export const sequelize = new Sequelize(databaseUrl, {
     TenantProductForm, GlobalFormStructure, Sale, DoctorPatientChats, Pharmacy, PharmacyCoverage, PharmacyProduct,
     TenantCustomFeatures, TierConfiguration, TenantAnalyticsEvents, FormAnalyticsDaily,
     MessageTemplate, Sequence, SequenceRun, Tag, UserTag, GlobalFees, UserRoles,
-    SupportTicket, TicketMessage, AuditLog
+    SupportTicket, TicketMessage, AuditLog, MfaToken
   ],
 });
 
@@ -307,6 +308,26 @@ export async function initializeDatabase() {
       console.log('✅ Order status enum updated successfully');
     } catch (enumError) {
       console.log('⚠️  Could not add enum value (may already exist):', enumError instanceof Error ? enumError.message : enumError);
+    }
+
+    // Add QuestionnaireTemplate to audit_logs resourceType enum
+    try {
+      console.log('🔄 Adding QuestionnaireTemplate to audit_logs resourceType enum...');
+      await sequelize.query(`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_enum 
+            WHERE enumlabel = 'QuestionnaireTemplate' 
+            AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'enum_audit_logs_resourceType')
+          ) THEN
+            ALTER TYPE "enum_audit_logs_resourceType" ADD VALUE 'QuestionnaireTemplate';
+          END IF;
+        END $$;
+      `);
+      console.log('✅ Audit log resourceType enum updated successfully');
+    } catch (enumError) {
+      console.log('⚠️  Could not add QuestionnaireTemplate enum value (may already exist):', enumError instanceof Error ? enumError.message : enumError);
     }
 
     // Ensure TierConfiguration exists for all active BrandSubscriptionPlans

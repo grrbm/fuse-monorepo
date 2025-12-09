@@ -9,10 +9,20 @@ interface User {
   organization?: string
 }
 
+interface MfaState {
+  required: boolean
+  token: string | null
+  resendsRemaining: number
+}
+
 interface AuthContextType {
   user: User | null
   token: string | null
-  login: (email: string, password: string) => Promise<boolean>
+  login: (email: string, password: string) => Promise<boolean | 'mfa_required'>
+  verifyMfa: (code: string) => Promise<boolean>
+  resendMfaCode: () => Promise<boolean>
+  cancelMfa: () => void
+  mfa: MfaState
   signup: (email: string, password: string, name: string, organization: string) => Promise<boolean>
   logout: () => void
   isLoading: boolean
@@ -28,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [mfa, setMfa] = useState<MfaState>({ required: false, token: null, resendsRemaining: 3 })
   const router = useRouter()
 
   // Check for existing token on mount
@@ -49,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<boolean | 'mfa_required'> => {
     setIsLoading(true)
     setError(null)
 
@@ -64,7 +75,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json()
 
-      if (response.ok && data.success && data.token && data.user) {
+      if (response.ok && data.success) {
+        // Check if MFA is required
+        if (data.requiresMfa && data.mfaToken) {
+          setMfa({ required: true, token: data.mfaToken, resendsRemaining: 3 })
+          setIsLoading(false)
+          return 'mfa_required'
+        }
+
         const authToken = data.token as string
         const userData = data.user as User
 
@@ -88,6 +106,105 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false)
       return false
     }
+  }
+
+  const verifyMfa = async (code: string): Promise<boolean> => {
+    if (!mfa.token) {
+      setError('MFA session expired. Please sign in again.')
+      return false
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/mfa/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mfaToken: mfa.token, code }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        const authToken = data.token as string
+        const userData = data.user as User
+
+        localStorage.setItem('tenant_token', authToken)
+        localStorage.setItem('tenant_user', JSON.stringify(userData))
+
+        setToken(authToken)
+        setUser(userData)
+        setMfa({ required: false, token: null, resendsRemaining: 3 })
+
+        setIsLoading(false)
+        return true
+      } else {
+        if (data.expired) {
+          setMfa({ required: false, token: null, resendsRemaining: 3 })
+          setError('Verification code expired. Please sign in again.')
+        } else if (data.rateLimited) {
+          setMfa({ required: false, token: null, resendsRemaining: 3 })
+          setError('Too many failed attempts. Please sign in again.')
+        } else {
+          setError(data.message || 'Invalid verification code')
+        }
+        setIsLoading(false)
+        return false
+      }
+    } catch (error) {
+      setError('Network error. Please try again.')
+      setIsLoading(false)
+      return false
+    }
+  }
+
+  const resendMfaCode = async (): Promise<boolean> => {
+    if (!mfa.token) {
+      setError('MFA session expired. Please sign in again.')
+      return false
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/mfa/resend`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mfaToken: mfa.token }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setMfa(prev => ({ ...prev, resendsRemaining: data.resendsRemaining ?? prev.resendsRemaining - 1 }))
+        setIsLoading(false)
+        return true
+      } else {
+        if (data.maxResends) {
+          setMfa({ required: false, token: null, resendsRemaining: 0 })
+          setError('Maximum resend attempts reached. Please sign in again.')
+        } else {
+          setError(data.message || 'Failed to resend code')
+        }
+        setIsLoading(false)
+        return false
+      }
+    } catch (error) {
+      setError('Network error. Please try again.')
+      setIsLoading(false)
+      return false
+    }
+  }
+
+  const cancelMfa = () => {
+    setMfa({ required: false, token: null, resendsRemaining: 3 })
+    setError(null)
   }
 
   const signup = async (email: string, password: string, name: string, organization: string): Promise<boolean> => {
@@ -150,6 +267,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       token,
       login,
+      verifyMfa,
+      resendMfaCode,
+      cancelMfa,
+      mfa,
       signup,
       logout,
       isLoading,

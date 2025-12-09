@@ -40,6 +40,7 @@ import QuestionnaireService from "./services/questionnaire.service";
 import formTemplateService from "./services/formTemplate.service";
 import User from "./models/User";
 import UserRoles from "./models/UserRoles";
+import MfaToken from "./models/MfaToken";
 import Clinic from "./models/Clinic";
 import { Op } from "sequelize";
 import QuestionnaireStepService from "./services/questionnaireStep.service";
@@ -787,20 +788,70 @@ app.get("/auth/google/callback", async (req, res) => {
       console.log('👤 Existing user found:', user.email);
     }
 
-    // Update last login time
-    await user.updateLastLogin();
+    // Load UserRoles for the user
+    await user.getUserRoles();
 
-    // Create JWT token
-    const token = createJWTToken(user);
+    // SuperAdmin bypass: Skip MFA entirely for superAdmin users
+    if (user.userRoles?.superAdmin === true) {
+      // Update last login time
+      await user.updateLastLogin();
 
-    // HIPAA Audit: Log Google OAuth login
-    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
+      // Create JWT token
+      const token = createJWTToken(user);
 
-    console.log('✅ User signed in via Google:', user.email);
+      console.log('🔓 SuperAdmin bypass (Google callback): MFA skipped for', user.email);
 
-    // Redirect back to frontend with token and flag to skip account creation step
-    const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
-    console.log('🔗 Redirecting to:', redirectUrl);
+      // Redirect back to frontend with token
+      const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
+      console.log('🔗 Redirecting to:', redirectUrl);
+      return res.redirect(redirectUrl);
+    }
+
+    // Non-superAdmin: Require MFA even for Google OAuth
+    const otpCode = MfaToken.generateCode();
+    const mfaSessionToken = MfaToken.generateMfaToken();
+    const expiresAt = MfaToken.getExpirationTime();
+
+    // Delete any existing MFA tokens for this user (cleanup)
+    await MfaToken.destroy({ where: { userId: user.id } });
+
+    // Create new MFA token record
+    await MfaToken.create({
+      userId: user.id,
+      code: otpCode,
+      mfaToken: mfaSessionToken,
+      expiresAt,
+      email: user.email,
+      verified: false,
+      resendCount: 0,
+      failedAttempts: 0
+    });
+
+    // Send OTP email
+    const emailSent = await MailsSender.sendMfaCode(user.email, otpCode, user.firstName);
+
+    if (!emailSent) {
+      console.error('❌ Failed to send MFA code email to:', user.email);
+      return res.redirect(`${returnUrl}?googleAuth=error&reason=mfa_email_failed`);
+    }
+
+    // HIPAA Audit: Log MFA code sent (Google OAuth callback)
+    await AuditService.log({
+      action: AuditAction.MFA_CODE_SENT,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      userId: user.id,
+      clinicId: user.clinicId,
+      details: { email: user.email, method: 'google_oauth_callback' },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    console.log('🔐 MFA code sent to Google user (callback):', user.email);
+
+    // Redirect to frontend with MFA required flag
+    const redirectUrl = `${returnUrl}?googleAuth=mfa_required&mfaToken=${mfaSessionToken}&email=${encodeURIComponent(user.email)}`;
+    console.log('🔗 Redirecting to MFA:', redirectUrl);
     res.redirect(redirectUrl);
 
   } catch (error) {
@@ -864,22 +915,76 @@ app.post("/auth/google", async (req, res) => {
     // Load UserRoles for the user
     await user.getUserRoles();
 
-    // Update last login time
-    await user.updateLastLogin();
+    // SuperAdmin bypass: Skip MFA entirely for superAdmin users
+    if (user.userRoles?.superAdmin === true) {
+      // Update last login time
+      await user.updateLastLogin();
 
-    // Create JWT token
-    const token = createJWTToken(user);
+      // Create JWT token directly
+      const token = createJWTToken(user);
 
-    // HIPAA Audit: Log Google login
-    await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
+      console.log('🔓 SuperAdmin bypass (Google): MFA skipped for', user.email);
 
-    console.log('✅ User signed in via Google:', user.email);
+      return res.status(200).json({
+        success: true,
+        requiresMfa: false,
+        token: token,
+        user: user.toSafeJSON(),
+        message: "Authentication successful"
+      });
+    }
 
+    // Non-superAdmin: Require MFA even for Google OAuth
+    const otpCode = MfaToken.generateCode();
+    const mfaSessionToken = MfaToken.generateMfaToken();
+    const expiresAt = MfaToken.getExpirationTime();
+
+    // Delete any existing MFA tokens for this user (cleanup)
+    await MfaToken.destroy({ where: { userId: user.id } });
+
+    // Create new MFA token record
+    await MfaToken.create({
+      userId: user.id,
+      code: otpCode,
+      mfaToken: mfaSessionToken,
+      expiresAt,
+      email: user.email,
+      verified: false,
+      resendCount: 0,
+      failedAttempts: 0
+    });
+
+    // Send OTP email
+    const emailSent = await MailsSender.sendMfaCode(user.email, otpCode, user.firstName);
+
+    if (!emailSent) {
+      console.error('❌ Failed to send MFA code email to:', user.email);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send verification code. Please try again."
+      });
+    }
+
+    // HIPAA Audit: Log MFA code sent (Google OAuth)
+    await AuditService.log({
+      action: AuditAction.MFA_CODE_SENT,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      userId: user.id,
+      clinicId: user.clinicId,
+      details: { email: user.email, method: 'google_oauth' },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    console.log('🔐 MFA code sent to Google user:', user.email);
+
+    // Return MFA required response
     res.status(200).json({
       success: true,
-      message: "Authentication successful",
-      token: token,
-      user: user.toSafeJSON()
+      requiresMfa: true,
+      mfaToken: mfaSessionToken,
+      message: "Verification code sent to your email"
     });
 
   } catch (error) {
@@ -942,16 +1047,206 @@ app.post("/auth/signin", async (req, res) => {
       });
     }
 
+    // SuperAdmin bypass: Skip MFA entirely for superAdmin users
+    if (user.userRoles?.superAdmin === true) {
+      // Update last login time
+      await user.updateLastLogin();
+
+      // Create JWT token directly
+      const token = createJWTToken(user);
+
+      console.log('🔓 SuperAdmin bypass: MFA skipped for', user.email);
+
+      return res.status(200).json({
+        success: true,
+        requiresMfa: false,
+        token: token,
+        user: user.toSafeJSON(),
+        message: "Signed in successfully"
+      });
+    }
+
+    // HIPAA MFA: Generate OTP code and require verification
+    const otpCode = MfaToken.generateCode();
+    const mfaSessionToken = MfaToken.generateMfaToken();
+    const expiresAt = MfaToken.getExpirationTime();
+
+    // Delete any existing MFA tokens for this user (cleanup)
+    await MfaToken.destroy({ where: { userId: user.id } });
+
+    // Create new MFA token record
+    await MfaToken.create({
+      userId: user.id,
+      code: otpCode,
+      mfaToken: mfaSessionToken,
+      expiresAt,
+      email: user.email,
+      verified: false,
+      resendCount: 0,
+      failedAttempts: 0
+    });
+
+    // Send OTP email
+    const emailSent = await MailsSender.sendMfaCode(user.email, otpCode, user.firstName);
+
+    if (!emailSent) {
+      console.error('❌ Failed to send MFA code email to:', user.email);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send verification code. Please try again."
+      });
+    }
+
+    // HIPAA Audit: Log MFA code sent
+    await AuditService.log({
+      action: AuditAction.MFA_CODE_SENT,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      userId: user.id,
+      clinicId: user.clinicId,
+      details: { email: user.email },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    console.log('🔐 MFA code sent to:', user.email);
+
+    // Return MFA required response (don't give JWT yet)
+    res.status(200).json({
+      success: true,
+      requiresMfa: true,
+      mfaToken: mfaSessionToken,
+      message: "Verification code sent to your email"
+    });
+
+  } catch (error) {
+    console.error('Authentication error occurred:', error);
+    res.status(500).json({
+      success: false,
+      message: "Authentication failed. Please try again."
+    });
+  }
+});
+
+// MFA Verify endpoint - verify OTP code and issue JWT token
+app.post("/auth/mfa/verify", async (req, res) => {
+  try {
+    const { mfaToken, code } = req.body;
+
+    if (!mfaToken || !code) {
+      return res.status(400).json({
+        success: false,
+        message: "MFA token and verification code are required"
+      });
+    }
+
+    // Find the MFA token record
+    const mfaRecord = await MfaToken.findOne({
+      where: { mfaToken },
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!mfaRecord) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired verification session. Please sign in again."
+      });
+    }
+
+    // Check if expired
+    if (mfaRecord.isExpired()) {
+      await mfaRecord.destroy();
+      return res.status(401).json({
+        success: false,
+        message: "Verification code has expired. Please sign in again.",
+        expired: true
+      });
+    }
+
+    // Check if rate limited
+    if (mfaRecord.isRateLimited()) {
+      // HIPAA Audit: Log rate limit
+      await AuditService.log({
+        action: AuditAction.MFA_FAILED,
+        resourceType: AuditResourceType.USER,
+        resourceId: mfaRecord.userId,
+        userId: mfaRecord.userId,
+        details: { reason: 'rate_limited', email: mfaRecord.email },
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        success: false
+      });
+
+      return res.status(429).json({
+        success: false,
+        message: "Too many failed attempts. Please sign in again.",
+        rateLimited: true
+      });
+    }
+
+    // Verify the code
+    if (mfaRecord.code !== code.trim()) {
+      // Increment failed attempts
+      mfaRecord.failedAttempts += 1;
+      await mfaRecord.save();
+
+      // HIPAA Audit: Log failed MFA attempt
+      await AuditService.log({
+        action: AuditAction.MFA_FAILED,
+        resourceType: AuditResourceType.USER,
+        resourceId: mfaRecord.userId,
+        userId: mfaRecord.userId,
+        details: { reason: 'invalid_code', email: mfaRecord.email, attempts: mfaRecord.failedAttempts },
+        ipAddress: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        success: false
+      });
+
+      return res.status(401).json({
+        success: false,
+        message: "Invalid verification code. Please try again.",
+        attemptsRemaining: 5 - mfaRecord.failedAttempts
+      });
+    }
+
+    // Code is valid - get the user
+    const user = mfaRecord.user || await User.findByPk(mfaRecord.userId);
+    if (!user) {
+      await mfaRecord.destroy();
+      return res.status(401).json({
+        success: false,
+        message: "User not found. Please sign in again."
+      });
+    }
+
+    // Load UserRoles
+    await user.getUserRoles();
+
+    // Mark MFA as verified and delete the record
+    await mfaRecord.destroy();
+
     // Update last login time
     await user.updateLastLogin();
 
     // Create JWT token
     const token = createJWTToken(user);
 
-    // HIPAA Audit: Log successful login
+    // HIPAA Audit: Log successful MFA verification
+    await AuditService.log({
+      action: AuditAction.MFA_VERIFIED,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      userId: user.id,
+      clinicId: user.clinicId,
+      details: { email: user.email },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    // HIPAA Audit: Log successful login (after MFA)
     await AuditService.logLogin(req, { id: user.id, email: user.email, clinicId: user.clinicId });
 
-    console.log('JWT token created for user:', user.email); // Safe to log email for development
+    console.log('✅ MFA verified for user:', user.email);
 
     res.status(200).json({
       success: true,
@@ -961,10 +1256,96 @@ app.post("/auth/signin", async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Authentication error occurred');
+    console.error('MFA verification error:', error);
     res.status(500).json({
       success: false,
-      message: "Authentication failed. Please try again."
+      message: "Verification failed. Please try again."
+    });
+  }
+});
+
+// MFA Resend endpoint - resend OTP code
+app.post("/auth/mfa/resend", async (req, res) => {
+  try {
+    const { mfaToken } = req.body;
+
+    if (!mfaToken) {
+      return res.status(400).json({
+        success: false,
+        message: "MFA token is required"
+      });
+    }
+
+    // Find the MFA token record
+    const mfaRecord = await MfaToken.findOne({
+      where: { mfaToken },
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!mfaRecord) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired verification session. Please sign in again."
+      });
+    }
+
+    // Check if can resend (max 3 resends)
+    if (!mfaRecord.canResend()) {
+      return res.status(429).json({
+        success: false,
+        message: "Maximum resend attempts reached. Please sign in again.",
+        maxResends: true
+      });
+    }
+
+    // Generate new code and extend expiration
+    const newCode = MfaToken.generateCode();
+    mfaRecord.code = newCode;
+    mfaRecord.expiresAt = MfaToken.getExpirationTime();
+    mfaRecord.resendCount += 1;
+    mfaRecord.failedAttempts = 0; // Reset failed attempts on resend
+    await mfaRecord.save();
+
+    // Send new OTP email
+    const user = mfaRecord.user || await User.findByPk(mfaRecord.userId);
+    const emailSent = await MailsSender.sendMfaCode(
+      mfaRecord.email,
+      newCode,
+      user?.firstName
+    );
+
+    if (!emailSent) {
+      console.error('❌ Failed to resend MFA code to:', mfaRecord.email);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send verification code. Please try again."
+      });
+    }
+
+    // HIPAA Audit: Log MFA code resend
+    await AuditService.log({
+      action: AuditAction.MFA_RESEND,
+      resourceType: AuditResourceType.USER,
+      resourceId: mfaRecord.userId,
+      userId: mfaRecord.userId,
+      details: { email: mfaRecord.email, resendCount: mfaRecord.resendCount },
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent']
+    });
+
+    console.log('🔐 MFA code resent to:', mfaRecord.email, '(attempt', mfaRecord.resendCount, 'of 3)');
+
+    res.status(200).json({
+      success: true,
+      message: "New verification code sent to your email",
+      resendsRemaining: 3 - mfaRecord.resendCount
+    });
+
+  } catch (error) {
+    console.error('MFA resend error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to resend code. Please try again."
     });
   }
 });
@@ -6144,7 +6525,28 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
         formTemplateType === 'master_template' ||
         formTemplateType === 'standardized_template'
       ) ? formTemplateType : null,
+      createdById: currentUser.id,
     });
+
+    // Audit: Log template creation
+    console.log('📝 [AUDIT] Attempting to log template CREATE for id:', template.id);
+    try {
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.CREATE,
+        resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
+        resourceId: template.id,
+        details: {
+          templateName: title,
+          formTemplateType: formTemplateType || 'normal',
+          productId: productId || null,
+          category: category || null,
+          createdBy: currentUser.email,
+        },
+      });
+      console.log('✅ [AUDIT] Template CREATE audit log created successfully');
+    } catch (auditError) {
+      console.error('❌ [AUDIT] Failed to create template CREATE audit log:', auditError);
+    }
 
     res.status(201).json({ success: true, data: template });
   } catch (error) {
@@ -6864,6 +7266,24 @@ app.put("/questionnaires/templates/:id", authenticateJWT, async (req, res) => {
       status,
       productId,
     });
+
+    // Audit: Log template update
+    console.log('📝 [AUDIT] Attempting to log template UPDATE for id:', id);
+    try {
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.UPDATE,
+        resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
+        resourceId: id,
+        details: {
+          templateName: template?.title || name || 'Unknown',
+          updatedFields: Object.keys(req.body).filter(k => req.body[k] !== undefined),
+          newStatus: status || null,
+        },
+      });
+      console.log('✅ [AUDIT] Template UPDATE audit log created successfully');
+    } catch (auditError) {
+      console.error('❌ [AUDIT] Failed to create template UPDATE audit log:', auditError);
+    }
 
     res.status(200).json({ success: true, data: template });
   } catch (error: any) {
@@ -8074,8 +8494,29 @@ app.delete("/questionnaires/:id", authenticateJWT, async (req, res) => {
     // Create questionnaire service instance
     const questionnaireService = new QuestionnaireService();
 
+    // Get template info before deletion for audit log
+    const templateToDelete = await Questionnaire.findByPk(questionnaireId);
+    const templateName = templateToDelete?.title || 'Unknown template';
+
     // Delete questionnaire
     const result = await questionnaireService.deleteQuestionnaire(questionnaireId, currentUser.id);
+
+    // Audit: Log template deletion
+    console.log('📝 [AUDIT] Attempting to log template DELETE for id:', questionnaireId);
+    try {
+      await AuditService.logFromRequest(req, {
+        action: AuditAction.DELETE,
+        resourceType: AuditResourceType.QUESTIONNAIRE_TEMPLATE,
+        resourceId: questionnaireId,
+        details: {
+          templateName,
+          deleted: result.deleted,
+        },
+      });
+      console.log('✅ [AUDIT] Template DELETE audit log created successfully');
+    } catch (auditError) {
+      console.error('❌ [AUDIT] Failed to create template DELETE audit log:', auditError);
+    }
 
     console.log('✅ Questionnaire deleted:', {
       questionnaireId: result.questionnaireId,
@@ -9855,6 +10296,10 @@ async function startServer() {
   // ============= CLIENT MANAGEMENT ENDPOINTS =============
   const { registerClientManagementEndpoints } = await import('./endpoints/client-management');
   registerClientManagementEndpoints(app, authenticateJWT, getCurrentUser);
+
+  // ============= AUDIT LOGS ENDPOINTS =============
+  const { registerAuditLogsEndpoints } = await import('./endpoints/audit-logs');
+  registerAuditLogsEndpoints(app, authenticateJWT, getCurrentUser);
 
   // ============= SUBSCRIPTION ENDPOINTS =============
   const { registerSubscriptionEndpoints } = await import('./endpoints/subscription');

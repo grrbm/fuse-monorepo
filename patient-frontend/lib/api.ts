@@ -82,6 +82,28 @@ export const authApi = {
     return result;
   },
 
+  // MFA verification endpoint
+  verifyMfa: async (mfaToken: string, code: string) => {
+    console.log('🔐 MFA verify attempt');
+    const result = await apiCall('/auth/mfa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ mfaToken, code }),
+    });
+    console.log('🔐 MFA verify result:', result);
+    return result;
+  },
+
+  // MFA resend code endpoint
+  resendMfaCode: async (mfaToken: string) => {
+    console.log('🔐 MFA resend attempt');
+    const result = await apiCall('/auth/mfa/resend', {
+      method: 'POST',
+      body: JSON.stringify({ mfaToken }),
+    });
+    console.log('🔐 MFA resend result:', result);
+    return result;
+  },
+
   signUp: async (userData: {
     firstName: string;
     lastName: string;

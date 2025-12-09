@@ -11,6 +11,7 @@ import {
   Settings,
   DollarSign,
   MessageSquare,
+  Shield,
 } from "lucide-react"
 
 const navigation = [
@@ -20,6 +21,7 @@ const navigation = [
   { name: "Client Management", icon: Users, href: "/client-management" },
   { name: "Tier Management", icon: Settings, href: "/tier-management" },
   { name: "Global Fees", icon: DollarSign, href: "/global-fees" },
+  { name: "Audit Logs", icon: Shield, href: "/audit-logs" },
   { name: "Support", icon: MessageSquare, href: "/support" },
 ]
 
