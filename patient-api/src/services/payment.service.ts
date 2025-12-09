@@ -1,387 +1,424 @@
-import User from '../models/User';
-import Treatment from '../models/Treatment';
-import Clinic from '../models/Clinic';
-import Order, { OrderStatus } from '../models/Order';
-import OrderItem from '../models/OrderItem';
-import Product from '../models/Product';
-import TreatmentProducts from '../models/TreatmentProducts';
-import ShippingAddress from '../models/ShippingAddress';
-import { StripeService } from '@fuse/stripe';
-import TreatmentPlan, { BillingInterval } from '../models/TreatmentPlan';
-import Payment from '../models/Payment';
+import User from "../models/User";
+import Treatment from "../models/Treatment";
+import Clinic from "../models/Clinic";
+import Order, { OrderStatus } from "../models/Order";
+import OrderItem from "../models/OrderItem";
+import Product from "../models/Product";
+import TreatmentProducts from "../models/TreatmentProducts";
+import ShippingAddress from "../models/ShippingAddress";
+import { StripeService } from "@fuse/stripe";
+import TreatmentPlan, { BillingInterval } from "../models/TreatmentPlan";
+import Payment from "../models/Payment";
 
 interface SubscribeTreatmentResult {
-    success: boolean;
-    message: string;
-    data?: {
-        clientSecret: string;
-        subscriptionId?: string;
-        orderId: string;
-        paymentIntentId: string;
-    };
-    error?: string;
+  success: boolean;
+  message: string;
+  data?: {
+    clientSecret: string;
+    subscriptionId?: string;
+    orderId: string;
+    paymentIntentId: string;
+  };
+  error?: string;
 }
 
 interface SubscribeClinicResult {
-    success: boolean;
-    message: string;
-    data?: {
-        paymentUrl: string;
-    };
-    error?: string;
+  success: boolean;
+  message: string;
+  data?: {
+    paymentUrl: string;
+  };
+  error?: string;
 }
 
 class PaymentService {
-    private stripeService: StripeService;
+  private stripeService: StripeService;
 
-    constructor() {
-        this.stripeService = new StripeService();
-    }
+  constructor() {
+    this.stripeService = new StripeService();
+  }
 
-    async subscribeTreatment(
+  async subscribeTreatment({
+    treatmentId,
+    treatmentPlanId,
+    userId,
+    shippingInfo,
+    billingInterval = BillingInterval.MONTHLY,
+    stripePriceId,
+    questionnaireAnswers,
+  }: {
+    treatmentId: string;
+    treatmentPlanId: string;
+    userId: string;
+    shippingInfo: {
+      address: string;
+      apartment?: string;
+      city: string;
+      state: string;
+      zipCode: string;
+      country: string;
+    };
+    billingInterval: BillingInterval;
+    stripePriceId: string;
+    questionnaireAnswers?: Record<string, string>;
+  }): Promise<SubscribeTreatmentResult> {
+    try {
+      // Get user and validate
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return {
+          success: false,
+          message: "User not found",
+          error: "User with the provided ID does not exist",
+        };
+      }
+
+      // Get treatment with products and validate
+      const treatment = await Treatment.findByPk(treatmentId, {
+        include: [
+          {
+            model: TreatmentProducts,
+            as: "treatmentProducts",
+            include: [
+              {
+                model: Product,
+                as: "product",
+              },
+            ],
+          },
+        ],
+      });
+      if (!treatment) {
+        return {
+          success: false,
+          message: "Treatment not found",
+          error: "Treatment with the provided ID does not exist",
+        };
+      }
+
+      // Get treatment plan and validate
+      const treatmentPlan = await TreatmentPlan.findByPk(treatmentPlanId);
+      if (!treatmentPlan) {
+        return {
+          success: false,
+          message: "Treatment plan not found",
+          error: "Treatment plan with the provided ID does not exist",
+        };
+      }
+
+      // Validate treatment has Stripe data
+      if (!treatment.stripeProductId) {
+        return {
+          success: false,
+          message: "Treatment not configured for subscriptions",
+          error: "Treatment does not have Stripe product or price configured",
+        };
+      }
+
+      // Ensure user has a Stripe customer ID
+      let stripeCustomerId = user.stripeCustomerId;
+      if (!stripeCustomerId) {
+        const stripeCustomer = await this.stripeService.createCustomer(
+          user.email,
+          `${user.firstName} ${user.lastName}`
+        );
+        stripeCustomerId = stripeCustomer.id;
+
+        // Save Stripe customer ID to user
+        await user.update({ stripeCustomerId });
+      }
+
+      // Calculate order amount from treatment plan
+      const totalAmount = treatmentPlan.price;
+
+      const shippingAddress = await ShippingAddress.create({
+        address: shippingInfo.address,
+        apartment: shippingInfo.apartment,
+        city: shippingInfo.city,
+        state: shippingInfo.state,
+        zipCode: shippingInfo.zipCode,
+        country: shippingInfo.country,
+        userId,
+      });
+
+      // Update user with DOB and gender from questionnaire if present
+      try {
+        if (questionnaireAnswers) {
+          const updateData: any = {};
+
+          // Check if questionnaireAnswers has structured format
+          const answers = (questionnaireAnswers as any).answers || [];
+
+          // Extract DOB from questionnaire answers
+          const dobAnswer = answers.find(
+            (a: any) =>
+              a.questionText?.toLowerCase().includes("date of birth") ||
+              a.questionText?.toLowerCase().includes("birthday") ||
+              a.questionText?.toLowerCase().includes("dob")
+          );
+
+          // Extract gender from questionnaire answers
+          const genderAnswer = answers.find(
+            (a: any) =>
+              a.questionText?.toLowerCase().includes("gender") ||
+              a.questionText?.toLowerCase().includes("sex")
+          );
+
+          // Only update if user doesn't have these values already
+          if (dobAnswer?.answer && !user.dob) {
+            // Normalize DOB to YYYY-MM-DD format
+            let normalized = String(dobAnswer.answer);
+            const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+            const usMatch = mmddyyyy.exec(normalized);
+            if (usMatch) {
+              const mm = usMatch[1].padStart(2, "0");
+              const dd = usMatch[2].padStart(2, "0");
+              const yyyy = usMatch[3];
+              normalized = `${yyyy}-${mm}-${dd}`;
+            }
+            updateData.dob = normalized;
+            if (process.env.NODE_ENV === "development") {
+              console.log("📋 Extracted DOB from questionnaire");
+            }
+          }
+
+          if (genderAnswer?.answer && !user.gender) {
+            // Extract gender value (could be from selectedOptions or direct answer)
+            let genderValue = genderAnswer.answer;
+            if (
+              genderAnswer.selectedOptions &&
+              genderAnswer.selectedOptions.length > 0
+            ) {
+              genderValue = genderAnswer.selectedOptions[0].optionText;
+            }
+            updateData.gender = String(genderValue).toLowerCase();
+            if (process.env.NODE_ENV === "development") {
+              console.log("📋 Extracted gender from questionnaire");
+            }
+          }
+
+          // Update user if we have new data
+          if (Object.keys(updateData).length > 0) {
+            await user.update(updateData);
+            if (process.env.NODE_ENV === "development") {
+              console.log(`✅ Updated user ${user.id} with questionnaire data`);
+            }
+          }
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error(
+            "⚠️ Error updating user from questionnaire answers:",
+            error
+          );
+        } else {
+          console.error("⚠️ Error updating user from questionnaire answers");
+        }
+        // Don't fail the order creation if user update fails
+      }
+
+      // Create order
+      const orderNumber = await Order.generateOrderNumber();
+      const order = await Order.create({
+        orderNumber,
+        userId: userId,
+        treatmentId: treatmentId,
+        treatmentPlanId: treatmentPlanId,
+        status: OrderStatus.PENDING,
+        billingInterval: billingInterval,
+        subtotalAmount: totalAmount,
+        totalAmount: totalAmount,
+        questionnaireAnswers: questionnaireAnswers,
+        shippingAddressId: shippingAddress.id,
+      });
+
+      // Create order items from treatment products
+      if (
+        treatment.treatmentProducts &&
+        treatment.treatmentProducts.length > 0
+      ) {
+        const orderItems: any[] = [];
+        for (const treatmentProduct of treatment.treatmentProducts) {
+          const product = treatmentProduct.product;
+          const orderItem = await OrderItem.create({
+            orderId: order.id,
+            productId: product.id,
+            quantity: 1, // Default quantity for subscription
+            unitPrice: product.price || 0,
+            totalPrice: product.price || 0,
+            pharmacyProductId: product.pharmacyProductId,
+            placeholderSig:
+              treatmentProduct.placeholderSig ||
+              product.placeholderSig ||
+              "Use as directed",
+          });
+          orderItems.push(orderItem);
+        }
+        console.log(
+          `✅ Created ${orderItems.length} order items for treatment subscription`
+        );
+      }
+
+      // Create Stripe payment intent for manual capture (subscription created after approval)
+      // Default expiration: 48 hours (2880 minutes) for manual capture orders
+      const paymentIntent = await this.stripeService.createPaymentIntent(
+        totalAmount,
+        "usd",
+        stripeCustomerId,
         {
-            treatmentId,
-            treatmentPlanId,
-            userId,
-            shippingInfo,
-            billingInterval = BillingInterval.MONTHLY,
-            stripePriceId,
-            questionnaireAnswers,
-        }: {
-            treatmentId: string,
-            treatmentPlanId: string,
-            userId: string,
-            shippingInfo: {
-                address: string;
-                apartment?: string;
-                city: string;
-                state: string;
-                zipCode: string;
-                country: string;
-            },
-            billingInterval: BillingInterval,
-            stripePriceId: string,
-            questionnaireAnswers?: Record<string, string>,
+          userId: userId,
+          orderId: order.id,
+          treatmentId: treatmentId,
+          stripePriceId: stripePriceId,
+          order_type: "subscription_initial_payment",
         }
-    ): Promise<SubscribeTreatmentResult> {
-        try {
-            // Get user and validate
-            const user = await User.findByPk(userId);
-            if (!user) {
-                return {
-                    success: false,
-                    message: "User not found",
-                    error: "User with the provided ID does not exist"
-                };
-            }
+      );
 
-            // Get treatment with products and validate
-            const treatment = await Treatment.findByPk(treatmentId, {
-                include: [
-                    {
-                        model: TreatmentProducts,
-                        as: 'treatmentProducts',
-                        include: [
-                            {
-                                model: Product,
-                                as: 'product'
-                            }
-                        ]
-                    }
-                ]
-            });
-            if (!treatment) {
-                return {
-                    success: false,
-                    message: "Treatment not found",
-                    error: "Treatment with the provided ID does not exist"
-                };
-            }
+      if (process.env.NODE_ENV === "development") {
+        console.log("📋 Payment intent created:", {
+          id: paymentIntent?.id,
+          status: paymentIntent?.status,
+        });
+      }
 
-            // Get treatment plan and validate
-            const treatmentPlan = await TreatmentPlan.findByPk(treatmentPlanId);
-            if (!treatmentPlan) {
-                return {
-                    success: false,
-                    message: "Treatment plan not found",
-                    error: "Treatment plan with the provided ID does not exist"
-                };
-            }
+      if (!paymentIntent || !paymentIntent.client_secret) {
+        console.error("❌ No payment intent or client secret found");
+        throw new Error("Failed to create payment intent");
+      }
 
-            // Validate treatment has Stripe data
-            if (!treatment.stripeProductId) {
-                return {
-                    success: false,
-                    message: "Treatment not configured for subscriptions",
-                    error: "Treatment does not have Stripe product or price configured"
-                };
-            }
+      // Store stripePriceId on order for subscription creation after capture
+      await order.update({
+        stripePriceId: stripePriceId,
+      });
 
-            // Ensure user has a Stripe customer ID
-            let stripeCustomerId = user.stripeCustomerId;
-            if (!stripeCustomerId) {
-                const stripeCustomer = await this.stripeService.createCustomer(
-                    user.email,
-                    `${user.firstName} ${user.lastName}`
-                );
-                stripeCustomerId = stripeCustomer.id;
+      // Create payment record - this is the single source of truth for payment intent ID
+      await Payment.create({
+        orderId: order.id,
+        stripePaymentIntentId: paymentIntent.id,
+        status: "pending",
+        paymentMethod: "card",
+        amount: totalAmount,
+        currency: "usd",
+      });
 
-                // Save Stripe customer ID to user
-                await user.update({ stripeCustomerId });
-            }
-
-
-            // Calculate order amount from treatment plan
-            const totalAmount = treatmentPlan.price;
-
-
-            const shippingAddress = await ShippingAddress.create({
-                address: shippingInfo.address,
-                apartment: shippingInfo.apartment,
-                city: shippingInfo.city,
-                state: shippingInfo.state,
-                zipCode: shippingInfo.zipCode,
-                country: shippingInfo.country,
-                userId
-            });
-
-            // Update user with DOB and gender from questionnaire if present
-            try {
-                if (questionnaireAnswers) {
-                    const updateData: any = {};
-
-                    // Check if questionnaireAnswers has structured format
-                    const answers = (questionnaireAnswers as any).answers || [];
-
-                    // Extract DOB from questionnaire answers
-                    const dobAnswer = answers.find((a: any) =>
-                        a.questionText?.toLowerCase().includes('date of birth') ||
-                        a.questionText?.toLowerCase().includes('birthday') ||
-                        a.questionText?.toLowerCase().includes('dob')
-                    );
-
-                    // Extract gender from questionnaire answers
-                    const genderAnswer = answers.find((a: any) =>
-                        a.questionText?.toLowerCase().includes('gender') ||
-                        a.questionText?.toLowerCase().includes('sex')
-                    );
-
-                    // Only update if user doesn't have these values already
-                    if (dobAnswer?.answer && !user.dob) {
-                        // Normalize DOB to YYYY-MM-DD format
-                        let normalized = String(dobAnswer.answer);
-                        const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
-                        const usMatch = mmddyyyy.exec(normalized);
-                        if (usMatch) {
-                            const mm = usMatch[1].padStart(2, '0');
-                            const dd = usMatch[2].padStart(2, '0');
-                            const yyyy = usMatch[3];
-                            normalized = `${yyyy}-${mm}-${dd}`;
-                        }
-                        updateData.dob = normalized;
-                        console.log(`📋 Extracted DOB from questionnaire: ${normalized}`);
-                    }
-
-                    if (genderAnswer?.answer && !user.gender) {
-                        // Extract gender value (could be from selectedOptions or direct answer)
-                        let genderValue = genderAnswer.answer;
-                        if (genderAnswer.selectedOptions && genderAnswer.selectedOptions.length > 0) {
-                            genderValue = genderAnswer.selectedOptions[0].optionText;
-                        }
-                        updateData.gender = String(genderValue).toLowerCase();
-                        console.log(`📋 Extracted gender from questionnaire: ${genderValue}`);
-                    }
-
-                    // Update user if we have new data
-                    if (Object.keys(updateData).length > 0) {
-                        await user.update(updateData);
-                        console.log(`✅ Updated user ${user.id} with questionnaire data:`, updateData);
-                    }
-                }
-            } catch (error) {
-                console.error('⚠️ Error updating user from questionnaire answers:', error);
-                // Don't fail the order creation if user update fails
-            }
-
-            // Create order
-            const orderNumber = await Order.generateOrderNumber();
-            const order = await Order.create({
-                orderNumber,
-                userId: userId,
-                treatmentId: treatmentId,
-                treatmentPlanId: treatmentPlanId,
-                status: OrderStatus.PENDING,
-                billingInterval: billingInterval,
-                subtotalAmount: totalAmount,
-                totalAmount: totalAmount,
-                questionnaireAnswers: questionnaireAnswers,
-                shippingAddressId: shippingAddress.id
-            });
-
-            // Create order items from treatment products
-            if (treatment.treatmentProducts && treatment.treatmentProducts.length > 0) {
-                const orderItems: any[] = [];
-                for (const treatmentProduct of treatment.treatmentProducts) {
-                    const product = treatmentProduct.product;
-                    const orderItem = await OrderItem.create({
-                        orderId: order.id,
-                        productId: product.id,
-                        quantity: 1, // Default quantity for subscription
-                        unitPrice: product.price || 0,
-                        totalPrice: product.price || 0,
-                        pharmacyProductId: product.pharmacyProductId,
-                        placeholderSig: treatmentProduct.placeholderSig || product.placeholderSig || "Use as directed"
-                    });
-                    orderItems.push(orderItem);
-                }
-                console.log(`✅ Created ${orderItems.length} order items for treatment subscription`);
-            }
-
-            // Create Stripe payment intent for manual capture (subscription created after approval)
-            // Default expiration: 48 hours (2880 minutes) for manual capture orders
-            const paymentIntent = await this.stripeService.createPaymentIntent(
-                totalAmount,
-                'usd',
-                stripeCustomerId,
-                {
-                    userId: userId,
-                    orderId: order.id,
-                    treatmentId: treatmentId,
-                    stripePriceId: stripePriceId,
-                    order_type: 'subscription_initial_payment'
-                }
-            );
-
-            console.log('📋 Payment intent created:', JSON.stringify(paymentIntent, null, 2));
-
-            if (!paymentIntent || !paymentIntent.client_secret) {
-                console.error('❌ No payment intent or client secret found');
-                throw new Error('Failed to create payment intent');
-            }
-
-            // Store stripePriceId on order for subscription creation after capture
-            await order.update({
-                stripePriceId: stripePriceId
-            });
-
-            // Create payment record - this is the single source of truth for payment intent ID
-            await Payment.create({
-                orderId: order.id,
-                stripePaymentIntentId: paymentIntent.id,
-                status: 'pending',
-                paymentMethod: 'card',
-                amount: totalAmount,
-                currency: 'usd'
-            });
-
-            return {
-                success: true,
-                message: "Payment intent created successfully (manual capture enabled - subscription will be created after approval)",
-                data: {
-                    clientSecret: paymentIntent.client_secret,
-                    orderId: order.id,
-                    paymentIntentId: paymentIntent.id
-                }
-            };
-
-        } catch (error) {
-            console.error('Error creating subscription:', error);
-            return {
-                success: false,
-                message: "Failed to create subscription",
-                error: error instanceof Error ? error.message : 'Unknown error occurred'
-            };
-        }
+      return {
+        success: true,
+        message:
+          "Payment intent created successfully (manual capture enabled - subscription will be created after approval)",
+        data: {
+          clientSecret: paymentIntent.client_secret,
+          orderId: order.id,
+          paymentIntentId: paymentIntent.id,
+        },
+      };
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("Error creating subscription:", error);
+      } else {
+        console.error("Error creating subscription");
+      }
+      return {
+        success: false,
+        message: "Failed to create subscription",
+        error: "An error occurred while creating subscription",
+      };
     }
+  }
 
-    async subscribeClinic(
-        clinicId: string,
-        userId: string
-    ): Promise<SubscribeClinicResult> {
-        try {
-            // Get user and validate
-            const user = await User.findByPk(userId);
-            if (!user) {
-                return {
-                    success: false,
-                    message: "User not found",
-                    error: "User with the provided ID does not exist"
-                };
-            }
+  async subscribeClinic(
+    clinicId: string,
+    userId: string
+  ): Promise<SubscribeClinicResult> {
+    try {
+      // Get user and validate
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return {
+          success: false,
+          message: "User not found",
+          error: "User with the provided ID does not exist",
+        };
+      }
 
-            // Get clinic and validate
-            const clinic = await Clinic.findByPk(clinicId);
-            if (!clinic) {
-                return {
-                    success: false,
-                    message: "Clinic not found",
-                    error: "Clinic with the provided ID does not exist"
-                };
-            }
+      // Get clinic and validate
+      const clinic = await Clinic.findByPk(clinicId);
+      if (!clinic) {
+        return {
+          success: false,
+          message: "Clinic not found",
+          error: "Clinic with the provided ID does not exist",
+        };
+      }
 
-            if (user.clinicId != clinicId) {
-                return {
-                    success: false,
-                    message: "Forbidden",
-                    error: "Forbidden"
-                };
-            }
+      if (user.clinicId != clinicId) {
+        return {
+          success: false,
+          message: "Forbidden",
+          error: "Forbidden",
+        };
+      }
 
-            // Ensure user has a Stripe customer ID
-            let stripeCustomerId = user.stripeCustomerId;
-            if (!stripeCustomerId) {
-                const stripeCustomer = await this.stripeService.createCustomer(
-                    user.email,
-                    `${user.firstName} ${user.lastName}`
-                );
-                stripeCustomerId = stripeCustomer.id;
+      // Ensure user has a Stripe customer ID
+      let stripeCustomerId = user.stripeCustomerId;
+      if (!stripeCustomerId) {
+        const stripeCustomer = await this.stripeService.createCustomer(
+          user.email,
+          `${user.firstName} ${user.lastName}`
+        );
+        stripeCustomerId = stripeCustomer.id;
 
-                // Save Stripe customer ID to user
-                await user.update({ stripeCustomerId });
-            }
+        // Save Stripe customer ID to user
+        await user.update({ stripeCustomerId });
+      }
 
-            // Get Stripe subscription product and price from environment
-            const stripeProductId = process.env.STRIPE_SUBSCRIPTION_PRODUCT;
-            const stripePriceId = process.env.STRIPE_SUBSCRIPTION_PRICE;
+      // Get Stripe subscription product and price from environment
+      const stripeProductId = process.env.STRIPE_SUBSCRIPTION_PRODUCT;
+      const stripePriceId = process.env.STRIPE_SUBSCRIPTION_PRICE;
 
-            if (!stripeProductId || !stripePriceId) {
-                return {
-                    success: false,
-                    message: "Subscription not configured",
-                    error: "STRIPE_SUBSCRIPTION_PRODUCT or STRIPE_SUBSCRIPTION_PRICE environment variables not set"
-                };
-            }
+      if (!stripeProductId || !stripePriceId) {
+        return {
+          success: false,
+          message: "Subscription not configured",
+          error:
+            "STRIPE_SUBSCRIPTION_PRODUCT or STRIPE_SUBSCRIPTION_PRICE environment variables not set",
+        };
+      }
 
-            // Create Stripe checkout session
-            const checkoutSession = await this.stripeService.checkoutSub({
-                line_items: [{
-                    price: stripePriceId,
-                    quantity: 1
-                }],
-                stripeCustomerId: stripeCustomerId,
-                metadata: {
-                    userId: userId,
-                    clinicId: clinicId,
-                }
-            });
+      // Create Stripe checkout session
+      const checkoutSession = await this.stripeService.checkoutSub({
+        line_items: [
+          {
+            price: stripePriceId,
+            quantity: 1,
+          },
+        ],
+        stripeCustomerId: stripeCustomerId,
+        metadata: {
+          userId: userId,
+          clinicId: clinicId,
+        },
+      });
 
-            return {
-                success: true,
-                message: "Clinic subscription checkout session created successfully",
-                data: {
-                    paymentUrl: checkoutSession.url!
-                }
-            };
-
-        } catch (error) {
-            console.error('Error creating clinic subscription:', error);
-            return {
-                success: false,
-                message: "Failed to create clinic subscription",
-                error: error instanceof Error ? error.message : 'Unknown error occurred'
-            };
-        }
+      return {
+        success: true,
+        message: "Clinic subscription checkout session created successfully",
+        data: {
+          paymentUrl: checkoutSession.url!,
+        },
+      };
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("Error creating clinic subscription:", error);
+      } else {
+        console.error("Error creating clinic subscription");
+      }
+      return {
+        success: false,
+        message: "Failed to create clinic subscription",
+        error: "An error occurred while creating clinic subscription",
+      };
     }
+  }
 }
 
 export default PaymentService;

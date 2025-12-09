@@ -1,151 +1,213 @@
-import Questionnaire from '../models/Questionnaire';
-import QuestionnaireStep from '../models/QuestionnaireStep';
-import Question from '../models/Question';
-import QuestionOption from '../models/QuestionOption';
-import Treatment from '../models/Treatment';
-import User from '../models/User';
+import Questionnaire from "../models/Questionnaire";
+import QuestionnaireStep from "../models/QuestionnaireStep";
+import Question from "../models/Question";
+import QuestionOption from "../models/QuestionOption";
+import Treatment from "../models/Treatment";
+import User from "../models/User";
+import { Transaction } from "sequelize";
 
 class QuestionnaireStepService {
-    async validateQuestionnaireOperation(questionnaireId: string, userId: string) {
-        const user = await User.findByPk(userId);
-        if (!user) {
-            throw new Error('User not found');
-        }
-
-        const questionnaire = await Questionnaire.findByPk(questionnaireId, {
-            include: [
-                {
-                    model: Treatment,
-                    as: 'treatment'
-                }
-            ]
-        });
-
-        if (!questionnaire) {
-            throw new Error('Questionnaire not found');
-        }
-
-        if (questionnaire.treatment && questionnaire.treatment.clinicId !== user.clinicId) {
-            throw new Error('Questionnaire does not belong to your clinic');
-        }
-
-        return { user, questionnaire };
+  async validateQuestionnaireOperation(
+    questionnaireId: string,
+    userId: string
+  ) {
+    const user = await User.findByPk(userId);
+    if (!user) {
+      throw new Error("User not found");
     }
 
-    async addQuestionnaireStep(questionnaireId: string, userId: string) {
-        // Validate questionnaire operation permission
-        await this.validateQuestionnaireOperation(questionnaireId, userId);
+    const questionnaire = await Questionnaire.findByPk(questionnaireId, {
+      include: [
+        {
+          model: Treatment,
+          as: "treatment",
+        },
+      ],
+    });
 
-        const existingSteps = await QuestionnaireStep.findAll({
-            where: { questionnaireId },
-            order: [['stepOrder', 'DESC']],
-            limit: 1
-        });
-
-        const nextStepOrder = existingSteps.length > 0 && existingSteps[0]?.stepOrder ? existingSteps[0].stepOrder + 1 : 1;
-
-        const newStep = await QuestionnaireStep.create({
-            title: 'New Step',
-            description: '',
-            stepOrder: nextStepOrder,
-            questionnaireId: questionnaireId
-        });
-
-        return newStep;
+    if (!questionnaire) {
+      throw new Error("Questionnaire not found");
     }
 
-    async updateQuestionnaireStep(stepId: string, updateData: { title?: string; description?: string; isDeadEnd?: boolean; conditionalLogic?: string; required?: boolean }, userId: string) {
-        const step = await QuestionnaireStep.findByPk(stepId);
-        if (!step) {
-            throw new Error('Questionnaire step not found');
-        }
-
-        // Validate questionnaire operation permission
-        await this.validateQuestionnaireOperation(step.questionnaireId, userId);
-
-        // Update step with provided data
-        // Treat empty string as null for conditionalLogic (clears the field)
-        const updatedStep = await step.update({
-            ...(updateData.title !== undefined && { title: updateData.title }),
-            ...(updateData.description !== undefined && { description: updateData.description }),
-            ...(updateData.isDeadEnd !== undefined && { isDeadEnd: updateData.isDeadEnd }),
-            ...(updateData.conditionalLogic !== undefined && { 
-                conditionalLogic: updateData.conditionalLogic === '' ? null : updateData.conditionalLogic 
-            }),
-            ...(updateData.required !== undefined && { required: updateData.required })
-        });
-
-        return updatedStep;
+    if (
+      questionnaire.treatment &&
+      questionnaire.treatment.clinicId !== user.clinicId
+    ) {
+      throw new Error("Questionnaire does not belong to your clinic");
     }
 
-    async deleteQuestionnaireStep(stepId: string, userId: string) {
-        const step = await QuestionnaireStep.findByPk(stepId, {
-            include: [
-                {
-                    model: Question,
-                    as: 'questions'
-                }
-            ]
-        });
+    return { user, questionnaire };
+  }
 
-        if (!step) {
-            throw new Error('Questionnaire step not found');
-        }
+  async addQuestionnaireStep(questionnaireId: string, userId: string) {
+    // Validate questionnaire operation permission
+    await this.validateQuestionnaireOperation(questionnaireId, userId);
 
-        // Validate questionnaire operation permission
-        await this.validateQuestionnaireOperation(step.questionnaireId, userId);
+    const existingSteps = await QuestionnaireStep.findAll({
+      where: { questionnaireId },
+      order: [["stepOrder", "DESC"]],
+      limit: 1,
+    });
 
-        // Delete all questions associated with this step first
-        if (step.questions && step.questions.length > 0) {
-            for (const question of step.questions) {
-                // Delete question options first
-                await QuestionOption.destroy({
-                    where: { questionId: question.id }
-                });
+    const nextStepOrder =
+      existingSteps.length > 0 && existingSteps[0]?.stepOrder
+        ? existingSteps[0].stepOrder + 1
+        : 1;
 
-                // Then delete the question
-                await Question.destroy({
-                    where: { id: question.id }
-                });
-            }
-        }
+    const newStep = await QuestionnaireStep.create({
+      title: "New Step",
+      description: "",
+      stepOrder: nextStepOrder,
+      questionnaireId: questionnaireId,
+    });
 
-        // Delete the step
-        await QuestionnaireStep.destroy({
-            where: { id: stepId }
-        });
+    return newStep;
+  }
 
-        return { deleted: true, stepId };
+  async updateQuestionnaireStep(
+    stepId: string,
+    updateData: {
+      title?: string;
+      description?: string;
+      isDeadEnd?: boolean;
+      conditionalLogic?: string;
+      required?: boolean;
+    },
+    userId: string
+  ) {
+    const step = await QuestionnaireStep.findByPk(stepId);
+    if (!step) {
+      throw new Error("Questionnaire step not found");
     }
 
-    async saveStepsOrder(steps: Array<{ id: string; stepOrder: number }>, questionnaireId: string, userId: string) {
-        if (!steps || !Array.isArray(steps) || steps.length === 0) {
-            throw new Error('Steps array is required and cannot be empty');
-        }
+    // Validate questionnaire operation permission
+    await this.validateQuestionnaireOperation(step.questionnaireId, userId);
 
-        // Validate questionnaire operation permission
-        await this.validateQuestionnaireOperation(questionnaireId, userId);
+    // Update step with provided data
+    // Treat empty string as null for conditionalLogic (clears the field)
+    const updatedStep = await step.update({
+      ...(updateData.title !== undefined && { title: updateData.title }),
+      ...(updateData.description !== undefined && {
+        description: updateData.description,
+      }),
+      ...(updateData.isDeadEnd !== undefined && {
+        isDeadEnd: updateData.isDeadEnd,
+      }),
+      ...(updateData.conditionalLogic !== undefined && {
+        conditionalLogic:
+          updateData.conditionalLogic === ""
+            ? null
+            : updateData.conditionalLogic,
+      }),
+      ...(updateData.required !== undefined && {
+        required: updateData.required,
+      }),
+    });
 
-        // Get all step IDs to validate they exist and belong to the questionnaire
-        const stepIds = steps.map(step => step.id);
-        // Update step orders
-        const updatePromises = steps.map(step =>
-            QuestionnaireStep.update(
-                { stepOrder: step.stepOrder },
-                { where: { id: step.id } }
-            )
-        );
+    return updatedStep;
+  }
 
-        await Promise.all(updatePromises);
+  async deleteQuestionnaireStep(stepId: string, userId: string) {
+    const step = await QuestionnaireStep.findByPk(stepId, {
+      include: [
+        {
+          model: Question,
+          as: "questions",
+        },
+      ],
+    });
 
-        // Return updated steps
-        const updatedSteps = await QuestionnaireStep.findAll({
-            where: { id: stepIds },
-            order: [['stepOrder', 'ASC']]
-        });
-
-        return updatedSteps;
+    if (!step) {
+      throw new Error("Questionnaire step not found");
     }
+
+    // Validate questionnaire operation permission
+    await this.validateQuestionnaireOperation(step.questionnaireId, userId);
+
+    const sequelize = QuestionnaireStep.sequelize;
+    if (!sequelize) {
+      throw new Error("Database connection not available");
+    }
+
+    const transaction: Transaction = await sequelize.transaction();
+
+    try {
+      // Delete all questions associated with this step first
+      if (step.questions && step.questions.length > 0) {
+        for (const question of step.questions) {
+          // Delete question options first
+          await QuestionOption.destroy({
+            where: { questionId: question.id },
+            transaction,
+          });
+
+          // Then delete the question
+          await Question.destroy({
+            where: { id: question.id },
+            transaction,
+          });
+        }
+      }
+
+      // Delete the step
+      await QuestionnaireStep.destroy({
+        where: { id: stepId },
+        transaction,
+      });
+
+      await transaction.commit();
+
+      return { deleted: true, stepId };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  async saveStepsOrder(
+    steps: Array<{ id: string; stepOrder: number }>,
+    questionnaireId: string,
+    userId: string
+  ) {
+    if (!steps || !Array.isArray(steps) || steps.length === 0) {
+      throw new Error("Steps array is required and cannot be empty");
+    }
+
+    // Validate questionnaire operation permission
+    await this.validateQuestionnaireOperation(questionnaireId, userId);
+
+    // Get all step IDs to validate they exist and belong to the questionnaire
+    const stepIds = steps.map((step) => step.id);
+
+    const existingSteps = await QuestionnaireStep.findAll({
+      where: { id: stepIds, questionnaireId },
+      attributes: ["id"],
+    });
+
+    if (existingSteps.length !== stepIds.length) {
+      throw new Error(
+        "One or more steps do not belong to the specified questionnaire"
+      );
+    }
+
+    // Update step orders
+    const updatePromises = steps.map((step) =>
+      QuestionnaireStep.update(
+        { stepOrder: step.stepOrder },
+        { where: { id: step.id, questionnaireId } }
+      )
+    );
+
+    await Promise.all(updatePromises);
+
+    // Return updated steps
+    const updatedSteps = await QuestionnaireStep.findAll({
+      where: { id: stepIds, questionnaireId },
+      order: [["stepOrder", "ASC"]],
+    });
+
+    return updatedSteps;
+  }
 }
 
 export default QuestionnaireStepService;
