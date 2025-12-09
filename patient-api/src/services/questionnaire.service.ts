@@ -26,6 +26,7 @@ class QuestionnaireService {
       | "master_template"
       | "standardized_template"
       | null;
+    createdById?: string | null;
   }) {
     return Questionnaire.create({
       title: input.title,
@@ -36,7 +37,7 @@ class QuestionnaireService {
       category: input.category ?? null,
       formTemplateType: input.formTemplateType ?? null,
       isTemplate: true,
-      userId: null,
+      userId: input.createdById ?? null,
       personalizationQuestionsSetup: false,
       createAccountQuestionsSetup: false,
       doctorQuestionsSetup: false,
@@ -92,8 +93,17 @@ class QuestionnaireService {
         "description",
         "productId",
         "category",
+        "userId",
         "createdAt",
         "updatedAt",
+      ],
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "email", "firstName", "lastName"],
+          required: false,
+        },
       ],
       order: [["updatedAt", "DESC"]],
     });
@@ -862,17 +872,15 @@ class QuestionnaireService {
 
       await transaction.commit();
 
-      if (process.env.NODE_ENV === "development") {
-        console.log("✅ Questionnaire deleted:", deletedIds.questionnaireId);
-        console.log("📈 Total Quantities:");
-        console.log("  - Total Questionnaires: 1");
-        console.log("  - Total Steps:", deletedIds.steps.length);
-        console.log("  - Total Questions:", deletedIds.questions.length);
-        console.log(
-          "  - Total Question Options:",
-          deletedIds.questionOptions.length
-        );
-      }
+      console.log("✅ Questionnaire deleted:", deletedIds.questionnaireId);
+      console.log("📈 Total Quantities:");
+      console.log("  - Total Questionnaires: 1");
+      console.log("  - Total Steps:", deletedIds.steps.length);
+      console.log("  - Total Questions:", deletedIds.questions.length);
+      console.log(
+        "  - Total Question Options:",
+        deletedIds.questionOptions.length
+      );
 
       return {
         deleted: true,
