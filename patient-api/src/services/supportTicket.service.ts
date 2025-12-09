@@ -1,5 +1,4 @@
 import SupportTicket, { TicketStatus, TicketPriority, TicketCategory } from '../models/SupportTicket';
-import TicketMessage, { MessageSender } from '../models/TicketMessage';
 import User from '../models/User';
 import Clinic from '../models/Clinic';
 import { Op } from 'sequelize';
@@ -29,16 +28,8 @@ interface UpdateTicketData {
 
 interface AddMessageData {
   ticketId: string;
-  senderId: string;
-  senderType: MessageSender;
+  role: 'user' | 'support' | 'system';
   message: string;
-  isInternal?: boolean;
-  attachments?: Array<{
-    name: string;
-    url: string;
-    size: number;
-    type: string;
-  }>;
 }
 
 interface TicketFilters {
@@ -66,6 +57,7 @@ export default class SupportTicketService {
       status: TicketStatus.NEW,
       tags: data.tags || [],
       metadata: data.metadata || {},
+      messages: [],
       messageCount: 0,
     });
 
@@ -75,6 +67,11 @@ export default class SupportTicketService {
         {
           model: User,
           as: 'author',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+        },
+        {
+          model: User,
+          as: 'lastUpdatedBy',
           attributes: ['id', 'firstName', 'lastName', 'email'],
         },
         {
@@ -97,7 +94,14 @@ export default class SupportTicketService {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: ['id', 'firstName', 'lastName', 'email', 'city', 'state', 'address', 'role'],
+          include: [
+            {
+              model: Clinic,
+              as: 'clinic',
+              attributes: ['id', 'name'],
+            },
+          ],
         },
         {
           model: User,
@@ -105,21 +109,14 @@ export default class SupportTicketService {
           attributes: ['id', 'firstName', 'lastName', 'email'],
         },
         {
+          model: User,
+          as: 'lastUpdatedBy',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+        },
+        {
           model: Clinic,
           as: 'clinic',
           attributes: ['id', 'name'],
-        },
-        {
-          model: TicketMessage,
-          as: 'messages',
-          include: [
-            {
-              model: User,
-              as: 'sender',
-              attributes: ['id', 'firstName', 'lastName', 'email'],
-            },
-          ],
-          order: [['createdAt', 'ASC']],
         },
       ],
     });
@@ -168,7 +165,11 @@ export default class SupportTicketService {
 
     // Assigned to filter
     if (filters.assignedToId) {
-      whereClause.assignedToId = filters.assignedToId;
+      if (filters.assignedToId === 'null') {
+        whereClause.assignedToId = { [Op.is]: null };
+      } else {
+        whereClause.assignedToId = filters.assignedToId;
+      }
     }
 
     // Search filter
@@ -188,11 +189,23 @@ export default class SupportTicketService {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: ['id', 'firstName', 'lastName', 'email', 'city', 'state', 'address', 'role'],
+          include: [
+            {
+              model: Clinic,
+              as: 'clinic',
+              attributes: ['id', 'name'],
+            },
+          ],
         },
         {
           model: User,
           as: 'assignedTo',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+        },
+        {
+          model: User,
+          as: 'lastUpdatedBy',
           attributes: ['id', 'firstName', 'lastName', 'email'],
         },
         {
@@ -236,6 +249,9 @@ export default class SupportTicketService {
     if (data.tags !== undefined) ticket.tags = data.tags;
     if (data.metadata !== undefined) ticket.metadata = data.metadata;
 
+    // Track who made the last update
+    ticket.lastUpdatedById = userId;
+
     // Handle status changes
     if (data.status !== undefined) {
       ticket.status = data.status;
@@ -257,11 +273,23 @@ export default class SupportTicketService {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: ['id', 'firstName', 'lastName', 'email', 'city', 'state', 'address', 'role'],
+          include: [
+            {
+              model: Clinic,
+              as: 'clinic',
+              attributes: ['id', 'name'],
+            },
+          ],
         },
         {
           model: User,
           as: 'assignedTo',
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+        },
+        {
+          model: User,
+          as: 'lastUpdatedBy',
           attributes: ['id', 'firstName', 'lastName', 'email'],
         },
         {
@@ -278,40 +306,32 @@ export default class SupportTicketService {
   /**
    * Add message to ticket
    */
-  async addMessage(data: AddMessageData): Promise<TicketMessage> {
+  async addMessage(data: AddMessageData): Promise<{ role: string; message: string; createdAt: string }> {
     const ticket = await SupportTicket.findByPk(data.ticketId);
 
     if (!ticket) {
       throw new Error('Ticket not found');
     }
 
-    // Create message
-    const message = await TicketMessage.create({
-      ticketId: data.ticketId,
-      senderId: data.senderId,
-      senderType: data.senderType,
+    // Get current messages array or initialize empty array
+    const currentMessages = ticket.messages || [];
+    
+    // Create new message object
+    const newMessage = {
+      role: data.role,
       message: data.message,
-      isInternal: data.isInternal || false,
-      attachments: data.attachments || [],
-      read: false,
-    });
+      createdAt: new Date().toISOString(),
+    };
 
-    // Update ticket message count
-    ticket.messageCount = ticket.messageCount + 1;
+    // Add new message to array
+    const updatedMessages = [...currentMessages, newMessage];
+
+    // Update ticket with new messages array and increment count
+    ticket.messages = updatedMessages;
+    ticket.messageCount = updatedMessages.length;
     await ticket.save();
 
-    // Reload with associations
-    const messageWithAssociations = await TicketMessage.findByPk(message.id, {
-      include: [
-        {
-          model: User,
-          as: 'sender',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
-        },
-      ],
-    });
-
-    return messageWithAssociations!;
+    return newMessage;
   }
 
   /**

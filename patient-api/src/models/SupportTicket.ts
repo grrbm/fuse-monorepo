@@ -1,8 +1,7 @@
-import { Table, Column, DataType, ForeignKey, BelongsTo, HasMany } from 'sequelize-typescript';
+import { Table, Column, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import Entity from './Entity';
 import User from './User';
 import Clinic from './Clinic';
-import TicketMessage from './TicketMessage';
 
 export enum TicketStatus {
   NEW = 'new',
@@ -106,6 +105,16 @@ export default class SupportTicket extends Entity {
   })
   declare assignedTeam?: string;
 
+  @ForeignKey(() => User)
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  declare lastUpdatedById?: string;
+
+  @BelongsTo(() => User, 'lastUpdatedById')
+  declare lastUpdatedBy?: User;
+
   @Column({
     type: DataType.DATE,
     allowNull: true,
@@ -118,8 +127,16 @@ export default class SupportTicket extends Entity {
   })
   declare closedAt?: Date;
 
-  @HasMany(() => TicketMessage, 'ticketId')
-  declare messages: TicketMessage[];
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    defaultValue: [],
+  })
+  declare messages?: Array<{
+    role: 'user' | 'support' | 'system';
+    message: string;
+    createdAt: string;
+  }>;
 
   @Column({
     type: DataType.INTEGER,

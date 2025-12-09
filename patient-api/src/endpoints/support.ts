@@ -1,8 +1,8 @@
 import { Express, Request, Response } from 'express';
 import SupportTicketService from '../services/supportTicket.service';
 import { TicketStatus, TicketPriority, TicketCategory } from '../models/SupportTicket';
-import { MessageSender } from '../models/TicketMessage';
 import wsService from '../services/websocket.service';
+import User from '../models/User';
 
 export function registerSupportEndpoints(app: Express, authenticateJWT: any, getCurrentUser: any) {
   const ticketService = new SupportTicketService();
@@ -43,13 +43,11 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
       // Create automatic welcome message from support team
       const welcomeMessage = "Thanks for reaching out! We've received your message and our team will get back to you shortly. You'll also receive updates via email.";
       
-      // Use the ticket author as senderId (required field), but mark as SUPPORT type
+      // Add welcome message as support type
       await ticketService.addMessage({
         ticketId: ticket.id,
-        senderId: currentUser.id, // Required field, but senderType will be SUPPORT
-        senderType: MessageSender.SUPPORT,
+        role: 'support',
         message: welcomeMessage,
-        isInternal: false,
       });
 
       // Emit WebSocket event for real-time updates
@@ -96,6 +94,7 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
         category,
         clinicId,
         search,
+        assignedToId,
         page = 1,
         limit = 20,
       } = req.query;
@@ -108,6 +107,7 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
 
       if (category) filters.category = category;
       if (search) filters.search = search;
+      if (assignedToId) filters.assignedToId = assignedToId;
 
       // If user is not admin/support staff, they can only see their own tickets
       // Check if user has a role that allows seeing all tickets (e.g., 'support', 'admin', 'doctor', 'brand')
@@ -250,7 +250,7 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
       }
 
       const { ticketId } = req.params;
-      const { message, isInternal, attachments, senderType } = req.body;
+      const { message, role } = req.body;
 
       if (!message) {
         return res.status(400).json({
@@ -259,21 +259,26 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
         });
       }
 
-      // Determine sender type based on user role and request
-      let messageSenderType = MessageSender.USER;
-      if (senderType === 'support' && ['admin', 'support', 'provider', 'brand'].includes(currentUser.userRole)) {
-        messageSenderType = MessageSender.SUPPORT;
-      } else if (senderType === 'system') {
-        messageSenderType = MessageSender.SYSTEM;
+      // Determine role based on user role and request
+      // If role is provided and user has permission, use it
+      // Otherwise, determine based on user role
+      let messageRole: 'user' | 'support' | 'system' = 'user';
+      
+      if (role === 'system') {
+        messageRole = 'system';
+      } else if (role === 'support' && ['admin', 'support', 'provider', 'brand', 'doctor'].includes(currentUser.role)) {
+        messageRole = 'support';
+      } else if (['admin', 'support', 'provider', 'brand', 'doctor'].includes(currentUser.role)) {
+        // If user is support staff and no role specified, default to support
+        messageRole = 'support';
+      } else {
+        messageRole = 'user';
       }
 
       const ticketMessage = await ticketService.addMessage({
         ticketId,
-        senderId: currentUser.id,
-        senderType: messageSenderType,
+        role: messageRole,
         message,
-        isInternal: isInternal || false,
-        attachments: attachments || [],
       });
 
       // Get ticket info for WebSocket event
@@ -284,7 +289,7 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
         ticketId,
         clinicId: ticket.clinicId,
         authorId: ticket.authorId,
-        senderType: messageSenderType,
+        senderType: messageRole,
       });
 
       res.status(201).json({
@@ -374,6 +379,62 @@ export function registerSupportEndpoints(app: Express, authenticateJWT: any, get
       res.status(500).json({
         success: false,
         message: 'Failed to delete ticket',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
+  /**
+   * Get users available for ticket assignment (tenant users with brand role)
+   * GET /support/users
+   */
+  app.get('/support/users', authenticateJWT, async (req: any, res: Response) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
+      // Only admin/support/provider/doctor/brand users can see assignable users
+      const isAdminOrSupport = ['admin', 'support', 'provider', 'doctor', 'brand'].includes(currentUser.role);
+      if (!isAdminOrSupport) {
+        return res.status(403).json({ success: false, message: 'Forbidden' });
+      }
+
+      // Get clinicId from current user or query param
+      const clinicId = req.query.clinicId || currentUser.clinicId;
+      if (!clinicId) {
+        return res.status(400).json({ success: false, message: 'Clinic ID is required' });
+      }
+
+      // Get users with brand role only
+      const users = await User.findAll({
+        where: {
+          clinicId: clinicId,
+          role: 'brand',
+          activated: true,
+        },
+        attributes: ['id', 'firstName', 'lastName', 'email', 'role'],
+        order: [['firstName', 'ASC'], ['lastName', 'ASC']],
+      });
+
+      res.json({
+        success: true,
+        data: {
+          users: users.map(user => ({
+            id: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            role: user.role,
+          })),
+        },
+      });
+    } catch (error) {
+      console.error('❌ Error getting assignable users:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get assignable users',
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }

@@ -7,21 +7,24 @@ import { io, Socket } from "socket.io-client"
 import {
   MessageSquare,
   Search,
-  Filter,
   Clock,
   AlertCircle,
   CheckCircle2,
   XCircle,
-  MoreHorizontal,
-  Eye,
   MessageCircle,
-  Calendar,
-  User,
   Tag,
   Loader2,
-  X,
   Send,
   ArrowRight,
+  Check,
+  ChevronDown,
+  User,
+  Mail,
+  Hash,
+  MapPin,
+  Building2,
+  Globe,
+  Copy,
 } from "lucide-react"
 
 interface Ticket {
@@ -37,6 +40,14 @@ interface Ticket {
     firstName: string
     lastName: string
     email: string
+    city?: string
+    state?: string
+    address?: string
+    role?: string
+    clinic?: {
+      id: string
+      name: string
+    }
   }
   assignedTo?: {
     id: string
@@ -45,23 +56,21 @@ interface Ticket {
     email: string
   }
   assignedTeam?: string
+  lastUpdatedBy?: {
+    id: string
+    firstName: string
+    lastName: string
+    email: string
+  }
   messageCount: number
   tags?: string[]
   messages?: TicketMessage[]
 }
 
 interface TicketMessage {
-  id: string
+  role: "user" | "support" | "system"
   message: string
-  senderType: "user" | "support" | "system"
-  sender: {
-    id: string
-    firstName: string
-    lastName: string
-    email: string
-  }
   createdAt: string
-  read: boolean
 }
 
 
@@ -96,26 +105,60 @@ const categoryConfig = {
 }
 
 export default function Support() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
   const socketRef = useRef<Socket | null>(null)
+
+  // Load filter assignment from localStorage
+  const getStoredFilterAssignment = () => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('support_filter_assignment') || 'all'
+    }
+    return 'all'
+  }
 
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [filterAssignment, setFilterAssignment] = useState<string>(getStoredFilterAssignment())
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [newMessage, setNewMessage] = useState("")
   const [sending, setSending] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [assignDropdownOpen, setAssignDropdownOpen] = useState(false)
+  const [assignableUsers, setAssignableUsers] = useState<Array<{id: string, firstName: string, lastName: string, email: string, role: string}>>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const selectedTicketRef = useRef<Ticket | null>(null)
+  const assignDropdownRef = useRef<HTMLDivElement>(null)
   
   // Keep ref updated with current selected ticket
   useEffect(() => {
     selectedTicketRef.current = selectedTicket
   }, [selectedTicket])
+
+  // Close assign dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (assignDropdownRef.current && !assignDropdownRef.current.contains(event.target as Node)) {
+        setAssignDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  // Save filter assignment to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('support_filter_assignment', filterAssignment)
+    }
+  }, [filterAssignment])
 
   // Fetch tickets
   const fetchTickets = async () => {
@@ -126,6 +169,13 @@ export default function Support() {
       const params = new URLSearchParams()
       if (filterStatus !== "all") params.append("status", filterStatus)
       if (searchQuery) params.append("search", searchQuery)
+      
+      // Add assignment filter
+      if (filterAssignment === "mine" && user?.id) {
+        params.append("assignedToId", user.id)
+      } else if (filterAssignment === "unassigned") {
+        params.append("assignedToId", "null")
+      }
 
       const response = await fetch(`${baseUrl}/support/tickets?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -137,7 +187,8 @@ export default function Support() {
       setTickets(data.data.tickets || [])
     } catch (error: any) {
       console.error("Error fetching tickets:", error)
-      toast.error("Failed to load tickets")
+      // Silently handle errors - don't show toast when there are no tickets
+      setTickets([])
     } finally {
       setLoading(false)
     }
@@ -186,21 +237,12 @@ export default function Support() {
     setSending(true)
 
     const messageContent = newMessage.trim()
-    const tempId = `temp-${Date.now()}`
     
     // Optimistic update - add message immediately
     const optimisticMessage: TicketMessage = {
-      id: tempId,
+      role: "support",
       message: messageContent,
-      senderType: "support",
-      sender: {
-        id: "current-user",
-        firstName: "You",
-        lastName: "",
-        email: "",
-      },
       createdAt: new Date().toISOString(),
-      read: false,
     }
 
     // Update local state immediately
@@ -225,7 +267,7 @@ export default function Support() {
         },
         body: JSON.stringify({
           message: messageContent,
-          senderType: "support",
+          role: "support",
         }),
       })
 
@@ -234,12 +276,20 @@ export default function Support() {
       const data = await response.json()
       
       // Replace optimistic message with real one from server
-      setSelectedTicket(prev => ({
-        ...prev!,
-        messages: prev!.messages?.map(msg => 
-          msg.id === tempId ? data.data : msg
-        ) || [],
-      }))
+      // The server returns the new message, so we replace the last one
+      setSelectedTicket(prev => {
+        if (!prev) return prev;
+        const messages = prev.messages || [];
+        const updatedMessages = [...messages];
+        // Replace the last message (optimistic) with the real one
+        if (updatedMessages.length > 0) {
+          updatedMessages[updatedMessages.length - 1] = data.data;
+        }
+        return {
+          ...prev,
+          messages: updatedMessages,
+        };
+      })
 
       toast.success("Message sent successfully")
       
@@ -249,12 +299,16 @@ export default function Support() {
       console.error("Error sending message:", error)
       toast.error("Failed to send message")
       
-      // Remove optimistic message on error
-      setSelectedTicket(prev => ({
-        ...prev!,
-        messages: prev!.messages?.filter(msg => msg.id !== tempId) || [],
-        messageCount: prev!.messageCount - 1,
-      }))
+      // Remove optimistic message on error (remove the last message)
+      setSelectedTicket(prev => {
+        if (!prev) return prev;
+        const messages = prev.messages || [];
+        return {
+          ...prev,
+          messages: messages.slice(0, -1), // Remove last message
+          messageCount: Math.max(0, prev.messageCount - 1),
+        };
+      })
     } finally {
       setSending(false)
     }
@@ -262,13 +316,21 @@ export default function Support() {
 
   // Get next status in workflow
   const getNextStatus = (currentStatus: string) => {
-    const statusFlow: Record<string, { next: string; label: string } | null> = {
-      new: { next: "in_progress", label: "In Progress" },
-      in_progress: { next: "resolved", label: "Resolved" },
-      resolved: { next: "closed", label: "Closed" },
+    const statusFlow: Record<string, { next: string; label: string; icon: any } | null> = {
+      new: { next: "in_progress", label: "In Progress", icon: Clock },
+      in_progress: { next: "resolved", label: "Resolved", icon: CheckCircle2 },
+      resolved: { next: "closed", label: "Closed", icon: XCircle },
       closed: null,
     }
     return statusFlow[currentStatus]
+  }
+
+  // Get icon for next status
+  const getNextStatusIcon = (currentStatus: string) => {
+    const nextStatus = getNextStatus(currentStatus)
+    if (!nextStatus) return null
+    const IconComponent = nextStatus.icon
+    return <IconComponent className="h-5 w-5" />
   }
 
   // Update ticket status
@@ -321,7 +383,67 @@ export default function Support() {
 
   useEffect(() => {
     fetchTickets()
-  }, [token, filterStatus])
+  }, [token, filterStatus, filterAssignment, user?.id])
+
+  // Fetch assignable users
+  const fetchAssignableUsers = async () => {
+    if (!token) return
+    setLoadingUsers(true)
+
+    try {
+      const response = await fetch(`${baseUrl}/support/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!response.ok) throw new Error("Failed to fetch users")
+
+      const data = await response.json()
+      setAssignableUsers(data.data.users || [])
+    } catch (error: any) {
+      console.error("Error fetching users:", error)
+      toast.error("Failed to load users")
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  // Assign ticket to user
+  const assignTicket = async (userId: string | null) => {
+    if (!token || !selectedTicket) return
+    setAssignDropdownOpen(false)
+
+    try {
+      const response = await fetch(`${baseUrl}/support/tickets/${selectedTicket.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assignedToId: userId || null,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to assign ticket")
+
+      const data = await response.json()
+      setSelectedTicket(data.data)
+      toast.success(userId ? "Ticket assigned successfully" : "Ticket unassigned")
+      
+      // Refresh tickets list
+      fetchTickets()
+    } catch (error: any) {
+      console.error("Error assigning ticket:", error)
+      toast.error("Failed to assign ticket")
+    }
+  }
+
+  // Load users when dropdown opens
+  useEffect(() => {
+    if (assignDropdownOpen && assignableUsers.length === 0) {
+      fetchAssignableUsers()
+    }
+  }, [assignDropdownOpen])
 
   // WebSocket connection for real-time updates
   useEffect(() => {
@@ -423,6 +545,17 @@ export default function Support() {
     resolved: tickets.filter(t => t.status === "resolved").length,
   }
 
+  // Copy to clipboard functions
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(`${label} copied to clipboard`)
+    } catch (error) {
+      console.error("Failed to copy:", error)
+      toast.error("Failed to copy to clipboard")
+    }
+  }
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -442,500 +575,655 @@ export default function Support() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto p-8 space-y-8">
-            {/* Page Header */}
-            <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-3xl font-semibold text-[#1F2937] mb-2">Support Tickets</h1>
-                <p className="text-[#6B7280] text-base">View and manage support requests from patients</p>
-              </div>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide">Total Tickets</h3>
-                <div className="bg-[#F3F4F6] rounded-xl p-2">
-                  <MessageSquare className="h-5 w-5 text-[#4FA59C]" />
+        <main className="flex-1 flex overflow-hidden p-4">
+          {/* Main Content Card */}
+          <div className="flex-1 flex rounded-2xl shadow-sm border border-[#E5E7EB] bg-white overflow-hidden">
+            {/* Left Sidebar: Filters */}
+            <div className="w-64 bg-[#1F2937] flex flex-col">
+              <div className="p-4 border-b border-[#374151]">
+                <div className="flex items-center gap-2 mb-4">
+                  <MessageSquare className="h-5 w-5 text-white" />
+                  <h2 className="text-white font-semibold">Support</h2>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#9CA3AF]" />
+                  <input
+                    type="text"
+                    placeholder="Search tickets..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 rounded-lg bg-[#374151] border border-[#4B5563] text-sm text-white placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                  />
                 </div>
               </div>
-              <p className="text-3xl font-bold text-[#1F2937] mb-2">{stats.total}</p>
-              <p className="text-sm text-[#6B7280]">All tickets</p>
-            </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide">New</h3>
-                <div className="bg-blue-50 rounded-xl p-2">
-                  <AlertCircle className="h-5 w-5 text-blue-500" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold text-[#1F2937] mb-2">{stats.new}</p>
-              <p className="text-sm text-[#6B7280]">Unassigned</p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide">In Progress</h3>
-                <div className="bg-yellow-50 rounded-xl p-2">
-                  <Clock className="h-5 w-5 text-yellow-500" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold text-[#1F2937] mb-2">{stats.inProgress}</p>
-              <p className="text-sm text-[#6B7280]">Being handled</p>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 hover:shadow-md transition-all">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide">Resolved</h3>
-                <div className="bg-green-50 rounded-xl p-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold text-[#1F2937] mb-2">{stats.resolved}</p>
-              <p className="text-sm text-[#6B7280]">This month</p>
-            </div>
-          </div>
-
-          {/* Search */}
-          <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[#9CA3AF]" />
-              <input
-                type="text"
-                placeholder="Search tickets by ID, title or description..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-2.5 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Status Filter Buttons */}
-          <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6">
-            <h3 className="text-sm font-semibold text-[#1F2937] mb-4">Filter by Status</h3>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => setFilterStatus("all")}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  filterStatus === "all"
-                    ? "bg-[#4FA59C] text-white shadow-sm"
-                    : "bg-[#F9FAFB] text-[#6B7280] border border-[#E5E7EB] hover:bg-white hover:border-[#4FA59C] hover:text-[#4FA59C]"
-                }`}
-              >
-                <Filter className="h-4 w-4" />
-                All ({tickets.length})
-              </button>
-
-              <button
-                onClick={() => setFilterStatus("resolved")}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  filterStatus === "resolved"
-                    ? "bg-green-500 text-white shadow-sm"
-                    : "bg-green-50 text-green-700 border border-green-200 hover:bg-green-100"
-                }`}
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                Resolved ({tickets.filter(t => t.status === "resolved").length})
-              </button>
-
-              <button
-                onClick={() => setFilterStatus("in_progress")}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  filterStatus === "in_progress"
-                    ? "bg-yellow-500 text-white shadow-sm"
-                    : "bg-yellow-50 text-yellow-700 border border-yellow-200 hover:bg-yellow-100"
-                }`}
-              >
-                <Clock className="h-4 w-4" />
-                In Progress ({tickets.filter(t => t.status === "in_progress").length})
-              </button>
-
-              <button
-                onClick={() => setFilterStatus("new")}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  filterStatus === "new"
-                    ? "bg-blue-500 text-white shadow-sm"
-                    : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
-                }`}
-              >
-                <AlertCircle className="h-4 w-4" />
-                New ({tickets.filter(t => t.status === "new").length})
-              </button>
-
-              <button
-                onClick={() => setFilterStatus("closed")}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  filterStatus === "closed"
-                    ? "bg-gray-500 text-white shadow-sm"
-                    : "bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100"
-                }`}
-              >
-                <XCircle className="h-4 w-4" />
-                Closed ({tickets.filter(t => t.status === "closed").length})
-              </button>
-            </div>
-          </div>
-
-
-          {/* Tickets List */}
-          <div className="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] overflow-hidden">
-            <div className="p-6 border-b border-[#E5E7EB]">
-              <h2 className="text-lg font-semibold text-[#1F2937]">
-                Tickets ({sortedTickets.length})
-              </h2>
-            </div>
-
-            {loading ? (
-              <div className="p-16 text-center">
-                <Loader2 className="h-12 w-12 text-[#4FA59C] animate-spin mx-auto mb-4" />
-                <p className="text-lg text-[#4B5563]">Loading tickets...</p>
-              </div>
-            ) : sortedTickets.length === 0 ? (
-              <div className="p-16 text-center">
-                <div className="bg-[#F3F4F6] rounded-full p-6 w-fit mx-auto mb-4">
-                  <MessageSquare className="h-12 w-12 text-[#9CA3AF]" />
-                </div>
-                <p className="text-lg text-[#4B5563] mb-2">No tickets found</p>
-                <p className="text-sm text-[#6B7280]">Try adjusting your search filters</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-[#E5E7EB]">
-                {sortedTickets.map((ticket) => {
-                  const StatusIcon = statusConfig[ticket.status].icon
-                  return (
-                    <div
-                      key={ticket.id}
-                      className="p-6 hover:bg-[#F9FAFB] transition-all cursor-pointer"
-                      onClick={() => fetchTicketDetails(ticket.id)}
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="mb-6">
+                  <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-3 px-2">Status</h3>
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => setFilterStatus("all")}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterStatus === "all"
+                          ? "bg-[#4FA59C] text-white"
+                          : "text-[#D1D5DB] hover:bg-[#374151]"
+                      }`}
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0 space-y-3">
-                          {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <span>All</span>
+                        <span className="text-xs opacity-70">({tickets.length})</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setFilterStatus("new")}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterStatus === "new"
+                          ? "bg-blue-600 text-white"
+                          : "text-[#D1D5DB] hover:bg-[#374151]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>New</span>
+                        <span className="text-xs opacity-70">({tickets.filter(t => t.status === "new").length})</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setFilterStatus("in_progress")}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterStatus === "in_progress"
+                          ? "bg-yellow-600 text-white"
+                          : "text-[#D1D5DB] hover:bg-[#374151]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>In Progress</span>
+                        <span className="text-xs opacity-70">({tickets.filter(t => t.status === "in_progress").length})</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setFilterStatus("resolved")}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterStatus === "resolved"
+                          ? "bg-green-600 text-white"
+                          : "text-[#D1D5DB] hover:bg-[#374151]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>Resolved</span>
+                        <span className="text-xs opacity-70">({tickets.filter(t => t.status === "resolved").length})</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setFilterStatus("closed")}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterStatus === "closed"
+                          ? "bg-gray-600 text-white"
+                          : "text-[#D1D5DB] hover:bg-[#374151]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>Closed</span>
+                        <span className="text-xs opacity-70">({tickets.filter(t => t.status === "closed").length})</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Assignment Filter */}
+                <div className="mb-6">
+                  <h3 className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-3 px-2">Assignment</h3>
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => setFilterAssignment("all")}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterAssignment === "all"
+                          ? "bg-[#4FA59C] text-white"
+                          : "text-[#D1D5DB] hover:bg-[#374151]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>All Tickets</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setFilterAssignment("mine")}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterAssignment === "mine"
+                          ? "bg-[#4FA59C] text-white"
+                          : "text-[#D1D5DB] hover:bg-[#374151]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>My Tickets</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setFilterAssignment("unassigned")}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        filterAssignment === "unassigned"
+                          ? "bg-[#4FA59C] text-white"
+                          : "text-[#D1D5DB] hover:bg-[#374151]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>Unassigned</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* Middle Column: Tickets List */}
+            <div className="w-96 border-r border-[#E5E7EB] bg-white flex flex-col">
+            {/* Header */}
+            <div className="p-6 border-b border-[#E5E7EB]">
+              <div className="flex items-center justify-between mb-2">
+                <h1 className="text-xl font-semibold text-[#1F2937]">
+                  {filterStatus === "all" ? "All Tickets" : 
+                   filterStatus === "new" ? "New Tickets" :
+                   filterStatus === "in_progress" ? "In Progress" :
+                   filterStatus === "resolved" ? "Resolved" :
+                   filterStatus === "closed" ? "Closed" : "Tickets"}
+                </h1>
+                <span className="text-sm text-[#6B7280]">({sortedTickets.length})</span>
+              </div>
+            </div>
+
+            {/* Tickets List */}
+            <div className="flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="p-8 text-center">
+                  <Loader2 className="h-8 w-8 text-[#4FA59C] animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-[#4B5563]">Loading tickets...</p>
+                </div>
+              ) : sortedTickets.length === 0 ? (
+                <div className="p-8 text-center">
+                  <MessageSquare className="h-10 w-10 text-[#9CA3AF] mx-auto mb-2" />
+                  <p className="text-sm text-[#4B5563] mb-1">No tickets found</p>
+                  <p className="text-xs text-[#6B7280]">Try adjusting your filters</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-[#E5E7EB]">
+                  {sortedTickets.map((ticket) => {
+                    const StatusIcon = statusConfig[ticket.status].icon
+                    const isSelected = selectedTicket?.id === ticket.id
+                    return (
+                      <div
+                        key={ticket.id}
+                        className={`p-4 cursor-pointer transition-all ${
+                          isSelected
+                            ? "bg-[#4FA59C]/10 border-l-4 border-[#4FA59C]"
+                            : "hover:bg-[#F9FAFB]"
+                        }`}
+                        onClick={() => fetchTicketDetails(ticket.id)}
+                      >
+                        <div className="flex items-start gap-3">
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-base font-semibold text-[#1F2937] mb-1">
-                              {ticket.title}
-                            </h3>
-                            <p className="text-sm text-[#6B7280] line-clamp-2">
-                              {ticket.description}
-                            </p>
-                          </div>
-
-                          {/* Meta Info */}
-                          <div className="flex flex-wrap items-center gap-4 text-sm">
-                            {/* Status */}
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${statusConfig[ticket.status].color}`}>
-                              <StatusIcon className="h-3.5 w-3.5" />
-                              {statusConfig[ticket.status].label}
-                            </span>
-
-                            {/* Category */}
-                            <span className="inline-flex items-center gap-1.5 text-[#6B7280]">
-                              <Tag className="h-4 w-4" />
-                              <span className="text-xs">
-                                {categoryConfig[ticket.category].icon} {categoryConfig[ticket.category].label}
-                              </span>
-                            </span>
-
-                            {/* Author */}
-                            <span className="inline-flex items-center gap-1.5 text-[#6B7280]">
-                              <User className="h-4 w-4" />
-                              <span className="text-xs">{`${ticket.author.firstName} ${ticket.author.lastName}`}</span>
-                            </span>
-
-                            {/* Date */}
-                            <span className="inline-flex items-center gap-1.5 text-[#6B7280]">
-                              <Calendar className="h-4 w-4" />
-                              <span className="text-xs">{formatDate(ticket.updatedAt)}</span>
-                            </span>
-
-                            {/* Messages */}
-                            <span className="inline-flex items-center gap-1.5 text-[#6B7280]">
-                              <MessageCircle className="h-4 w-4" />
-                              <span className="text-xs">{ticket.messageCount} messages</span>
-                            </span>
-                          </div>
-
-                          {/* Assigned To */}
-                          {(ticket.assignedTo || ticket.assignedTeam) && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-[#9CA3AF]">Assigned to:</span>
-                              <span className="text-xs font-medium text-[#4FA59C] bg-[#4FA59C]/10 px-2 py-1 rounded-lg">
-                                {ticket.assignedTo ? `${ticket.assignedTo.firstName} ${ticket.assignedTo.lastName}` : ticket.assignedTeam}
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className={`text-sm font-semibold truncate ${
+                                isSelected ? "text-[#4FA59C]" : "text-[#1F2937]"
+                              }`}>
+                                {ticket.title}
+                              </h3>
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border flex-shrink-0 ${statusConfig[ticket.status].color}`}>
+                                <StatusIcon className="h-3 w-3" />
+                                {statusConfig[ticket.status].label}
                               </span>
                             </div>
+                            <p className="text-xs text-[#6B7280] line-clamp-2 mb-2">
+                              {ticket.description}
+                            </p>
+                            <div className="flex items-center gap-3 text-xs text-[#9CA3AF]">
+                              <span>{ticket.author.firstName} {ticket.author.lastName}</span>
+                              <span>•</span>
+                              <span>{formatDate(ticket.updatedAt)}</span>
+                              {ticket.messageCount > 0 && (
+                                <>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1">
+                                    <MessageCircle className="h-3 w-3" />
+                                    {ticket.messageCount}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+            {/* Right Column: Ticket Details */}
+            <div className="flex-1 flex flex-col bg-white">
+              {selectedTicket ? (
+                loadingMessages ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center">
+                      <Loader2 className="h-12 w-12 text-[#4FA59C] animate-spin mx-auto mb-4" />
+                      <p className="text-lg text-[#4B5563]">Loading ticket details...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Header */}
+                    <div className="p-6 border-b border-[#E5E7EB] bg-white">
+                      <div className="flex items-center justify-between h-9">
+                        {/* Left side: Patient name */}
+                        <div className="flex items-center">
+                          <p className="text-lg font-semibold text-[#1F2937]">
+                            {selectedTicket.author.firstName} {selectedTicket.author.lastName}
+                          </p>
+                        </div>
+                        
+                        {/* Right side: Badges and actions */}
+                        <div className="flex items-center gap-3">
+                          {/* Badges */}
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${statusConfig[selectedTicket.status].color}`}>
+                              {statusConfig[selectedTicket.status].label}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#F3F4F6] text-[#6B7280]">
+                              {categoryConfig[selectedTicket.category].icon} {categoryConfig[selectedTicket.category].label}
+                            </span>
+                          </div>
+                          
+                          {/* Assign dropdown */}
+                          <div className="relative" ref={assignDropdownRef}>
+                            <button
+                              onClick={() => setAssignDropdownOpen(!assignDropdownOpen)}
+                              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] transition-all text-sm text-[#6B7280]"
+                            >
+                              <User className="h-4 w-4" />
+                              <span>
+                                {selectedTicket.assignedTo 
+                                  ? `${selectedTicket.assignedTo.firstName} ${selectedTicket.assignedTo.lastName}`
+                                  : selectedTicket.assignedTeam || "Unassigned"
+                                }
+                              </span>
+                              <ChevronDown className="h-4 w-4" />
+                            </button>
+                            
+                            {assignDropdownOpen && (
+                              <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-[#E5E7EB] rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+                                <div className="p-2">
+                                  <div className="px-3 py-2 text-xs font-semibold text-[#9CA3AF] uppercase">
+                                    Assign to
+                                  </div>
+                                  {loadingUsers ? (
+                                    <div className="px-3 py-4 text-center">
+                                      <Loader2 className="h-4 w-4 animate-spin mx-auto text-[#9CA3AF]" />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div 
+                                        className={`px-3 py-2 hover:bg-[#F9FAFB] cursor-pointer rounded flex items-center gap-2 ${
+                                          !selectedTicket.assignedTo ? "bg-[#F9FAFB]" : ""
+                                        }`}
+                                        onClick={() => assignTicket(null)}
+                                      >
+                                        {!selectedTicket.assignedTo && (
+                                          <Check className="h-4 w-4 text-[#4FA59C]" />
+                                        )}
+                                        {selectedTicket.assignedTo && (
+                                          <div className="h-4 w-4" />
+                                        )}
+                                        <span className="text-sm text-[#6B7280]">Unassigned</span>
+                                      </div>
+                                      {assignableUsers.map((user) => (
+                                        <div
+                                          key={user.id}
+                                          className={`px-3 py-2 hover:bg-[#F9FAFB] cursor-pointer rounded flex items-center gap-2 ${
+                                            selectedTicket.assignedTo?.id === user.id ? "bg-[#F9FAFB]" : ""
+                                          }`}
+                                          onClick={() => assignTicket(user.id)}
+                                        >
+                                          {selectedTicket.assignedTo?.id === user.id ? (
+                                            <Check className="h-4 w-4 text-[#4FA59C]" />
+                                          ) : (
+                                            <div className="h-4 w-4" />
+                                          )}
+                                          <div className="flex-1">
+                                            <div className="text-sm text-[#1F2937]">
+                                              {user.firstName} {user.lastName}
+                                            </div>
+                                            <div className="text-xs text-[#9CA3AF]">{user.email}</div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                      {assignableUsers.length === 0 && (
+                                        <div className="px-3 py-2 text-xs text-[#9CA3AF] italic">
+                                          No users available
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Status update icon */}
+                          {getNextStatus(selectedTicket.status) && (
+                            <button 
+                              onClick={updateTicketStatus}
+                              disabled={updatingStatus}
+                              className="p-2 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={`Mark as ${getNextStatus(selectedTicket.status)?.label}`}
+                            >
+                              {getNextStatusIcon(selectedTicket.status) && (
+                                <span className={`${
+                                  selectedTicket.status === "new" ? "text-yellow-600" :
+                                  selectedTicket.status === "in_progress" ? "text-green-600" :
+                                  selectedTicket.status === "resolved" ? "text-gray-600" :
+                                  "text-[#9CA3AF]"
+                                }`}>
+                                  {updatingStatus ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                  ) : (
+                                    getNextStatusIcon(selectedTicket.status)
+                                  )}
+                                </span>
+                              )}
+                            </button>
                           )}
                         </div>
+                      </div>
+                    </div>
 
-                        {/* Actions */}
+                  {/* Content Area */}
+                  <div className="flex-1 flex overflow-hidden">
+                    {/* Left: Comments/Chat */}
+                    <div className="w-1/2 border-r border-[#E5E7EB] flex flex-col bg-[#F9FAFB]">
+                      {/* Comments Header */}
+                      <div className="p-6 border-b border-[#E5E7EB] bg-white">
                         <div className="flex items-center gap-2">
-                          <button className="p-2 text-[#6B7280] hover:text-[#4FA59C] hover:bg-[#F3F4F6] rounded-xl transition-all">
-                            <Eye className="h-5 w-5" />
-                          </button>
-                          <button className="p-2 text-[#6B7280] hover:text-[#4FA59C] hover:bg-[#F3F4F6] rounded-xl transition-all">
-                            <MoreHorizontal className="h-5 w-5" />
+                          <MessageCircle className="h-5 w-5 text-[#4FA59C]" />
+                          <h2 className="text-lg font-semibold text-[#1F2937]">
+                            Comments
+                          </h2>
+                          <span className="text-sm text-[#9CA3AF]">
+                            ({selectedTicket.messageCount})
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Messages */}
+                      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                        {selectedTicket.messages && selectedTicket.messages.length > 0 ? (
+                          selectedTicket.messages.map((msg, index) => {
+                            // Determine message type based on role
+                            const isSystem = msg.role === "system";
+                            const isSupport = msg.role === "support";
+                            const isUser = msg.role === "user";
+                            
+                            // Green messages: system or support
+                            const isGreenMessage = isSystem || isSupport;
+                            
+                            // Determine sender name based on role
+                            let senderName = "";
+                            if (isSystem) {
+                              senderName = "System";
+                            } else if (isSupport) {
+                              senderName = selectedTicket.assignedTo 
+                                ? `${selectedTicket.assignedTo.firstName} ${selectedTicket.assignedTo.lastName}`
+                                : "Support Team";
+                            } else {
+                              senderName = `${selectedTicket.author.firstName} ${selectedTicket.author.lastName}`;
+                            }
+                            
+                            return (
+                            <div
+                              key={index}
+                              className={`flex ${isGreenMessage ? "justify-start" : "justify-end"}`}
+                            >
+                              <div
+                                className={`max-w-[85%] rounded-xl p-4 shadow-sm ${
+                                  isGreenMessage
+                                    ? "bg-teal-50 text-teal-900 border border-teal-200"
+                                    : "bg-blue-50 text-blue-900 border border-blue-200"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-semibold">
+                                    {senderName}
+                                  </span>
+                                  <span className={`text-xs ${
+                                    isGreenMessage
+                                      ? "text-teal-600"
+                                      : "text-blue-600"
+                                  }`}>
+                                    {formatDate(msg.createdAt)}
+                                  </span>
+                                </div>
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                  {msg.message}
+                                </p>
+                              </div>
+                            </div>
+                            )
+                          })
+                        ) : (
+                          <div className="flex items-center justify-center h-full">
+                            <div className="text-center">
+                              <MessageCircle className="h-12 w-12 text-[#9CA3AF] mx-auto mb-2" />
+                              <p className="text-sm text-[#6B7280]">No comments yet</p>
+                              <p className="text-xs text-[#9CA3AF] mt-1">Be the first to reply</p>
+                            </div>
+                          </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                      </div>
+
+                      {/* Message Input */}
+                      <div className="bg-white border-t border-[#E5E7EB] p-4">
+                        <div className="flex gap-3">
+                          <input
+                            type="text"
+                            placeholder="Write a comment..."
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault()
+                                sendMessage()
+                              }
+                            }}
+                            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
+                            disabled={sending}
+                          />
+                          <button
+                            onClick={sendMessage}
+                            disabled={sending || !newMessage.trim()}
+                            className="px-5 py-2.5 bg-[#4FA59C] text-white rounded-lg hover:bg-[#3d8479] transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {sending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Send className="h-4 w-4" />
+                            )}
                           </button>
                         </div>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            )}
+
+                    {/* Right: Ticket Details */}
+                    <div className="w-1/2 overflow-y-auto bg-white">
+                      {/* User Profile Section */}
+                      <div className="p-6 border-b border-[#E5E7EB] bg-white">
+                        <div className="flex gap-4">
+                          {/* Avatar */}
+                          <div className="flex-shrink-0">
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#4FA59C] to-[#3D8B84] flex items-center justify-center text-white font-semibold text-xl">
+                              {selectedTicket.author.firstName.charAt(0)}{selectedTicket.author.lastName.charAt(0)}
+                            </div>
+                          </div>
+                          
+                          {/* Name and Details */}
+                          <div className="flex-1 min-w-0">
+                            <div className="mb-3">
+                              <h2 className="text-lg font-semibold text-[#1F2937]">
+                                {selectedTicket.author.firstName} {selectedTicket.author.lastName}
+                              </h2>
+                              <p className="text-sm text-[#6B7280] mt-0.5">
+                                {selectedTicket.author.email}
+                              </p>
+                            </div>
+
+                            {/* User Info */}
+                            <div className="space-y-2">
+                              {/* Location */}
+                              {(selectedTicket.author.city || selectedTicket.author.state) && (
+                                <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                                  <MapPin className="h-4 w-4 text-[#9CA3AF] flex-shrink-0" />
+                                  <span className="truncate">
+                                    {selectedTicket.author.city && selectedTicket.author.state
+                                      ? `${selectedTicket.author.city}, ${selectedTicket.author.state}`
+                                      : selectedTicket.author.city || selectedTicket.author.state || 'Location not available'}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {/* Company/Clinic */}
+                              {selectedTicket.author.clinic && (
+                                <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                                  <Building2 className="h-4 w-4 text-[#9CA3AF] flex-shrink-0" />
+                                  <span className="truncate">{selectedTicket.author.clinic.name}</span>
+                                </div>
+                              )}
+                              
+                              {/* Role */}
+                              {selectedTicket.author.role && (
+                                <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                                  <User className="h-4 w-4 text-[#9CA3AF] flex-shrink-0" />
+                                  <span className="capitalize">{selectedTicket.author.role}</span>
+                                </div>
+                              )}
+                              
+                              {/* Source */}
+                              <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                                <Globe className="h-4 w-4 text-[#9CA3AF] flex-shrink-0" />
+                                <span>Support Ticket</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Content Section */}
+                      <div className="p-6 space-y-6">
+                        {/* Title */}
+                        <div>
+                          <h1 className="text-2xl font-bold text-[#1F2937] mb-4">
+                            {selectedTicket.title}
+                          </h1>
+                        </div>
+                      
+                      {/* Description */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-[#1F2937] mb-2">Description</h3>
+                        <div className="bg-white rounded-xl p-4 border border-[#E5E7EB] shadow-sm">
+                          <p className="text-sm text-[#6B7280] leading-relaxed">
+                            {selectedTicket.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Tags if any */}
+                      {selectedTicket.tags && selectedTicket.tags.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-[#1F2937] mb-3">Tags</h3>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedTicket.tags.map((tag, index) => (
+                              <span 
+                                key={index}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#E5E7EB] text-[#6B7280]"
+                              >
+                                <Tag className="h-3 w-3" />
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      </div>
+
+                      {/* Separator - Full Width */}
+                      <div className="border-t border-[#E5E7EB]"></div>
+
+                      {/* Data Section */}
+                      <div className="p-6 pt-6">
+                        <h3 className="text-sm font-semibold text-[#1F2937] mb-3">Data</h3>
+                        <div className="bg-white rounded-xl p-4 border border-[#E5E7EB] shadow-sm space-y-3">
+                          {/* Email */}
+                          <div className="flex items-center gap-3 py-2">
+                            <Mail className="h-4 w-4 text-[#9CA3AF] flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-[#9CA3AF]">Email</p>
+                              <p className="text-sm font-medium text-[#1F2937] truncate">{selectedTicket.author.email}</p>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(selectedTicket.author.email, "Email")}
+                              className="flex-shrink-0 p-1.5 rounded-lg hover:bg-[#F3F4F6] transition-colors text-[#6B7280] hover:text-[#1F2937]"
+                              title="Copy email"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </button>
+                          </div>
+
+                          {/* ID */}
+                          <div className="flex items-center gap-3 py-2">
+                            <Hash className="h-4 w-4 text-[#9CA3AF] flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-[#9CA3AF]">ID</p>
+                              <p className="text-sm font-medium text-[#1F2937] font-mono truncate">{selectedTicket.id}</p>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(selectedTicket.id, "ID")}
+                              className="flex-shrink-0 p-1.5 rounded-lg hover:bg-[#F3F4F6] transition-colors text-[#6B7280] hover:text-[#1F2937]"
+                              title="Copy ID"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </button>
+                          </div>
+
+                          {/* Last updated */}
+                          <div className="flex items-center gap-3 py-2">
+                            <Clock className="h-4 w-4 text-[#9CA3AF]" />
+                            <div className="flex-1">
+                              <p className="text-xs text-[#9CA3AF]">Last updated</p>
+                              <p className="text-sm font-medium text-[#1F2937]">
+                                {formatDate(selectedTicket.updatedAt)}
+                              </p>
+                              {selectedTicket.lastUpdatedBy && (
+                                <p className="text-xs text-[#6B7280] mt-0.5">
+                                  by {selectedTicket.lastUpdatedBy.firstName} {selectedTicket.lastUpdatedBy.lastName}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  </>
+                )
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <MessageSquare className="h-16 w-16 text-[#9CA3AF] mx-auto mb-4" />
+                    <p className="text-lg font-medium text-[#4B5563] mb-1">Select a ticket to view details</p>
+                    <p className="text-sm text-[#6B7280]">Choose a ticket from the list on the left</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </main>
       </div>
-
-      {/* Modal overlay tipo ClickUp */}
-      {selectedTicket && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={() => setSelectedTicket(null)}
-        >
-          <div 
-            className="w-full max-w-7xl max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-[#E5E7EB] flex overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {loadingMessages ? (
-              <div className="flex-1 flex items-center justify-center py-20">
-                <div className="text-center">
-                  <Loader2 className="h-12 w-12 text-[#4FA59C] animate-spin mx-auto mb-4" />
-                  <p className="text-lg text-[#4B5563]">Loading ticket details...</p>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Left Column: Ticket Details */}
-                <div className="w-[55%] flex flex-col border-r border-[#E5E7EB]">
-                  {/* Header */}
-                  <div className="p-8 border-b border-[#E5E7EB]">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${statusConfig[selectedTicket.status].color}`}>
-                            {statusConfig[selectedTicket.status].label}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#F3F4F6] text-[#6B7280]">
-                            {categoryConfig[selectedTicket.category].icon} {categoryConfig[selectedTicket.category].label}
-                          </span>
-                          <span className="text-xs font-mono text-[#9CA3AF] bg-[#F3F4F6] px-2 py-1 rounded">
-                            #{selectedTicket.id.slice(0, 8)}
-                          </span>
-                        </div>
-                        <h1 className="text-2xl font-bold text-[#1F2937] mb-1">
-                          {selectedTicket.title}
-                        </h1>
-                      </div>
-
-                      <button
-                        onClick={() => setSelectedTicket(null)}
-                        className="p-2 text-[#6B7280] hover:text-[#4FA59C] hover:bg-[#F3F4F6] rounded-lg transition-all"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
-
-                    {/* Mark as Next Status Button */}
-                    {getNextStatus(selectedTicket.status) && (
-                      <button
-                        onClick={updateTicketStatus}
-                        disabled={updatingStatus}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#4FA59C] text-white rounded-lg hover:bg-[#3d8479] transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {updatingStatus ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Updating...
-                          </>
-                        ) : (
-                          <>
-                            Mark as {getNextStatus(selectedTicket.status)?.label}
-                            <ArrowRight className="h-4 w-4" />
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Scrollable Content */}
-                  <div className="flex-1 overflow-y-auto p-8 space-y-6">
-                    {/* Description */}
-                    <div>
-                      <h3 className="text-sm font-semibold text-[#1F2937] mb-2">Description</h3>
-                      <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
-                        <p className="text-sm text-[#6B7280] leading-relaxed">
-                          {selectedTicket.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Ticket Information */}
-                    <div>
-                      <h3 className="text-sm font-semibold text-[#1F2937] mb-3">Ticket Information</h3>
-                      <div className="space-y-3">
-                        <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
-                          <p className="text-xs font-medium text-[#9CA3AF] mb-1">Created by</p>
-                          <p className="text-sm font-semibold text-[#1F2937]">
-                            {selectedTicket.author.firstName} {selectedTicket.author.lastName}
-                          </p>
-                          <p className="text-xs text-[#6B7280]">{selectedTicket.author.email}</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
-                            <p className="text-xs font-medium text-[#9CA3AF] mb-1">Created at</p>
-                            <p className="text-sm font-semibold text-[#1F2937]">
-                              {new Date(selectedTicket.createdAt).toLocaleDateString('en-US', { 
-                                day: '2-digit', 
-                                month: 'short', 
-                                year: 'numeric'
-                              })}
-                            </p>
-                            <p className="text-xs text-[#6B7280]">
-                              {new Date(selectedTicket.createdAt).toLocaleTimeString('en-US', { 
-                                hour: '2-digit', 
-                                minute: '2-digit'
-                              })}
-                            </p>
-                          </div>
-
-                          <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
-                            <p className="text-xs font-medium text-[#9CA3AF] mb-1">Last updated</p>
-                            <p className="text-sm font-semibold text-[#1F2937]">
-                              {formatDate(selectedTicket.updatedAt)}
-                            </p>
-                          </div>
-                        </div>
-
-                        {(selectedTicket.assignedTo || selectedTicket.assignedTeam) && (
-                          <div className="bg-[#F9FAFB] rounded-xl p-4 border border-[#E5E7EB]">
-                            <p className="text-xs font-medium text-[#9CA3AF] mb-1">Assigned to</p>
-                            <p className="text-sm font-semibold text-[#4FA59C]">
-                              {selectedTicket.assignedTo 
-                                ? `${selectedTicket.assignedTo.firstName} ${selectedTicket.assignedTo.lastName}`
-                                : selectedTicket.assignedTeam
-                              }
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Tags if any */}
-                    {selectedTicket.tags && selectedTicket.tags.length > 0 && (
-                      <div>
-                        <h3 className="text-sm font-semibold text-[#1F2937] mb-3">Tags</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedTicket.tags.map((tag, index) => (
-                            <span 
-                              key={index}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#E5E7EB] text-[#6B7280]"
-                            >
-                              <Tag className="h-3 w-3" />
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Column: Comments/Chat */}
-                <div className="w-[45%] flex flex-col bg-[#F9FAFB]">
-                  {/* Comments Header */}
-                  <div className="p-6 border-b border-[#E5E7EB] bg-white">
-                    <div className="flex items-center gap-2">
-                      <MessageCircle className="h-5 w-5 text-[#4FA59C]" />
-                      <h2 className="text-lg font-semibold text-[#1F2937]">
-                        Comments
-                      </h2>
-                      <span className="text-sm text-[#9CA3AF]">
-                        ({selectedTicket.messageCount})
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Messages */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                    {selectedTicket.messages && selectedTicket.messages.length > 0 ? (
-                      selectedTicket.messages.map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.senderType === "support" ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[85%] rounded-xl p-4 shadow-sm ${
-                              msg.senderType === "support"
-                                ? "bg-[#4FA59C] text-white"
-                                : msg.senderType === "system"
-                                ? "bg-[#F3F4F6] text-[#6B7280] border border-[#E5E7EB]"
-                                : "bg-white text-[#1F2937] border border-[#E5E7EB]"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-xs font-semibold">
-                                {msg.sender.firstName} {msg.sender.lastName}
-                              </span>
-                              <span className={`text-xs ${msg.senderType === "support" ? "text-white/70" : "text-[#9CA3AF]"}`}>
-                                {formatDate(msg.createdAt)}
-                              </span>
-                            </div>
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                              {msg.message}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center">
-                          <MessageCircle className="h-12 w-12 text-[#9CA3AF] mx-auto mb-2" />
-                          <p className="text-sm text-[#6B7280]">No comments yet</p>
-                          <p className="text-xs text-[#9CA3AF] mt-1">Be the first to reply</p>
-                        </div>
-                      </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
-
-                  {/* Message Input */}
-                  <div className="bg-white border-t border-[#E5E7EB] p-4">
-                    <div className="flex gap-3">
-                      <input
-                        type="text"
-                        placeholder="Write a comment..."
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault()
-                            sendMessage()
-                          }
-                        }}
-                        className="flex-1 px-4 py-2.5 rounded-lg border border-[#E5E7EB] bg-white text-sm text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4FA59C] focus:ring-opacity-50 focus:border-[#4FA59C] transition-all"
-                        disabled={sending}
-                      />
-                      <button
-                        onClick={sendMessage}
-                        disabled={sending || !newMessage.trim()}
-                        className="px-5 py-2.5 bg-[#4FA59C] text-white rounded-lg hover:bg-[#3d8479] transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                      >
-                        {sending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Send className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

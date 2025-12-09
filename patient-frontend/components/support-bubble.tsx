@@ -28,13 +28,8 @@ interface Ticket {
 }
 
 interface TicketMessage {
-  id: string;
+  role: "user" | "support" | "system";
   message: string;
-  senderType: "user" | "support" | "system";
-  sender: {
-    firstName: string;
-    lastName: string;
-  };
   createdAt: string;
 }
 
@@ -87,25 +82,13 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated, o
         // Filter out closed tickets
         const ticketsList = allTickets.filter((ticket: Ticket) => ticket.status !== "closed");
         
-        // Fetch details for each ticket to get the last message
-        const ticketsWithDetails = await Promise.all(
-          ticketsList.map(async (ticket: Ticket) => {
-            try {
-              const detailResponse = await apiCall(`/support/tickets/${ticket.id}`, {
-                method: "GET",
-              });
-              if (detailResponse.success && detailResponse.data?.data) {
-                return detailResponse.data.data;
-              }
-              return ticket;
-            } catch (error) {
-              console.error(`Error fetching ticket ${ticket.id} details:`, error);
-              return ticket;
-            }
-          })
-        );
+        // Ensure messages array exists for each ticket (even if empty)
+        const ticketsWithMessages = ticketsList.map((ticket: Ticket) => ({
+          ...ticket,
+          messages: ticket.messages || [],
+        }));
         
-        setTickets(ticketsWithDetails);
+        setTickets(ticketsWithMessages);
       } else {
         setTickets([]);
       }
@@ -178,7 +161,8 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated, o
         
         // Use requestAnimationFrame to ensure DOM updates complete before tab change
         requestAnimationFrame(() => {
-          // Switch to messages tab in bubble after form is unmounted
+          // Open the chat and switch to messages tab
+          setIsOpen(true);
           setActiveTab("messages");
           
           // Wait for tab to change and useEffect to fetch tickets, then select the new ticket
@@ -227,7 +211,7 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated, o
 
   // Load tickets when messages tab is active
   useEffect(() => {
-    if (isOpen && activeTab === "messages" && !selectedTicket) {
+    if (isOpen && activeTab === "messages") {
       fetchTickets();
     }
   }, [isOpen, activeTab]);
@@ -325,6 +309,8 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated, o
                 setDescription("");
                 setSelectedCategory(null);
                 setShowCategorySelection(false);
+                // Reset to home tab when closing
+                setActiveTab("home");
               }
             }}
           />
@@ -386,6 +372,8 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated, o
                       setDescription("");
                       setSelectedCategory(null);
                       setShowCategorySelection(false);
+                      // Reset to home tab when closing
+                      setActiveTab("home");
                     }
                   }}
                   isDisabled={creating || sending}
@@ -529,6 +517,7 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated, o
                                     setIsOpen(false);
                                     setSelectedCategory(null);
                                     setShowCategorySelection(false);
+                                    setActiveTab("home");
                                     onNavigateToMessenger();
                                   }}
                                   className="font-semibold text-blue-700 underline hover:text-blue-800 transition-colors"
@@ -677,38 +666,23 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated, o
                             {/* Messages */}
                             <AnimatePresence>
                               {selectedTicket.messages?.map((msg, index) => {
-                                let isUser = false;
-                                
-                                if (msg.senderType === "support") {
-                                  isUser = false;
-                                } else if (selectedTicket.author) {
-                                  isUser = msg.sender.firstName === selectedTicket.author.firstName && 
-                                           msg.sender.lastName === selectedTicket.author.lastName;
-                                } else if (user) {
-                                  isUser = msg.sender.firstName === user.firstName && 
-                                           msg.sender.lastName === user.lastName;
-                                } else {
-                                  isUser = msg.senderType === "user";
-                                }
-                                
-                                const isSupport = !isUser && msg.senderType !== "system";
+                                // Determine if message is from user based on role
+                                const isUser = msg.role === "user";
+                                const isSupport = msg.role === "support";
+                                const isSystem = msg.role === "system";
                                 
                                 const prevMsg = index > 0 ? selectedTicket.messages?.[index - 1] : null;
-                                const isSameSenderAsPrevious = prevMsg && 
-                                  prevMsg.sender.firstName === msg.sender.firstName &&
-                                  prevMsg.sender.lastName === msg.sender.lastName;
+                                const isSameSenderAsPrevious = prevMsg && prevMsg.role === msg.role;
                                 
                                 const nextMsg = index < (selectedTicket.messages?.length || 0) - 1 ? selectedTicket.messages?.[index + 1] : null;
-                                const isSameSenderAsNext = nextMsg &&
-                                  nextMsg.sender.firstName === msg.sender.firstName &&
-                                  nextMsg.sender.lastName === msg.sender.lastName;
+                                const isSameSenderAsNext = nextMsg && nextMsg.role === msg.role;
                                 
                                 const showHeader = !isSameSenderAsPrevious;
                                 const showTimestamp = !isSameSenderAsNext;
                                 
                                 return (
                                   <motion.div
-                                    key={msg.id}
+                                    key={index}
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: index * 0.05 }}
@@ -822,21 +796,8 @@ export const SupportBubble: React.FC<SupportBubbleProps> = ({ onTicketCreated, o
                               ? ticket.messages[ticket.messages.length - 1]
                               : null;
                             
-                            // Determine if last message is from user or support
-                            let isLastMessageFromUser = false;
-                            if (lastMessage) {
-                              if (lastMessage.senderType === "support") {
-                                isLastMessageFromUser = false;
-                              } else if (ticket.author) {
-                                isLastMessageFromUser = lastMessage.sender.firstName === ticket.author.firstName && 
-                                                       lastMessage.sender.lastName === ticket.author.lastName;
-                              } else if (user) {
-                                isLastMessageFromUser = lastMessage.sender.firstName === user.firstName && 
-                                                       lastMessage.sender.lastName === user.lastName;
-                              } else {
-                                isLastMessageFromUser = lastMessage.senderType === "user";
-                              }
-                            }
+                            // Determine if last message is from user or support based on role
+                            const isLastMessageFromUser = lastMessage?.role === "user";
                             
                             // If no messages, use description as fallback
                             const fullMessage = lastMessage 
