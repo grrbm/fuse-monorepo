@@ -113,6 +113,7 @@ import { assignTemplatesSchema } from "./validators/formTemplates";
 import BrandTreatment from "./models/BrandTreatment";
 import Questionnaire from "./models/Questionnaire";
 import QuestionnaireCustomization from "./models/QuestionnaireCustomization";
+import CustomWebsite from "./models/CustomWebsite";
 import TenantProductService from "./services/tenantProduct.service";
 import QuestionnaireStep from "./models/QuestionnaireStep";
 import DashboardService from "./services/dashboard.service";
@@ -2532,6 +2533,179 @@ app.post(
     }
   }
 );
+
+// ==========================================
+// Custom Website Portal Routes
+// ==========================================
+
+// Get custom website settings for the authenticated user's clinic
+app.get("/custom-website", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(404).json({
+        success: false,
+        message: "User or clinic not found"
+      });
+    }
+
+    let customWebsite = await CustomWebsite.findOne({
+      where: { clinicId: user.clinicId }
+    });
+
+    // If no custom website exists, return default values
+    if (!customWebsite) {
+      return res.status(200).json({
+        success: true,
+        data: null
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: customWebsite
+    });
+  } catch (error) {
+    console.error('Error fetching custom website:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch custom website settings"
+    });
+  }
+});
+
+// Create or update custom website settings
+app.post("/custom-website", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(404).json({
+        success: false,
+        message: "User or clinic not found"
+      });
+    }
+
+    // Only allow brand users to modify portal settings
+    if (!user.hasAnyRoleSync(['brand', 'doctor'])) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    const {
+      portalTitle,
+      portalDescription,
+      primaryColor,
+      fontFamily,
+      logo,
+      heroImageUrl,
+      heroTitle,
+      heroSubtitle
+    } = req.body;
+
+    let customWebsite = await CustomWebsite.findOne({
+      where: { clinicId: user.clinicId }
+    });
+
+    if (customWebsite) {
+      // Update existing
+      await customWebsite.update({
+        portalTitle,
+        portalDescription,
+        primaryColor,
+        fontFamily,
+        logo,
+        heroImageUrl,
+        heroTitle,
+        heroSubtitle
+      });
+    } else {
+      // Create new
+      customWebsite = await CustomWebsite.create({
+        clinicId: user.clinicId,
+        portalTitle,
+        portalDescription,
+        primaryColor,
+        fontFamily,
+        logo,
+        heroImageUrl,
+        heroTitle,
+        heroSubtitle,
+        isActive: true
+      });
+    }
+
+    console.log('🌐 Custom website settings saved for clinic:', user.clinicId);
+
+    res.status(200).json({
+      success: true,
+      message: "Portal settings saved successfully",
+      data: customWebsite
+    });
+  } catch (error) {
+    console.error('Error saving custom website:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save portal settings"
+    });
+  }
+});
+
+// Public endpoint to get custom website by clinic slug (for landing page)
+app.get("/custom-website/by-slug/:slug", async (req, res) => {
+  try {
+    const { slug } = req.params;
+
+    const clinic = await Clinic.findOne({
+      where: { slug }
+    });
+
+    if (!clinic) {
+      return res.status(404).json({
+        success: false,
+        message: "Clinic not found"
+      });
+    }
+
+    const customWebsite = await CustomWebsite.findOne({
+      where: { clinicId: clinic.id }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: customWebsite || null,
+      clinic: {
+        id: clinic.id,
+        name: clinic.name,
+        slug: clinic.slug,
+        logo: clinic.logo
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching custom website by slug:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch portal settings"
+    });
+  }
+});
 
 // Get standardized templates (authenticated version)
 app.get("/questionnaires/standardized", authenticateJWT, async (req, res) => {

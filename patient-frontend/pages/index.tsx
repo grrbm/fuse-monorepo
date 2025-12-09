@@ -65,7 +65,7 @@ export default function LandingPage() {
               Shop All
             </button>
 
-            <button 
+            <button
               onClick={() => router.push('/dashboard')}
               style={{ padding: "0.5rem", border: "none", background: "none", cursor: "pointer" }}
             >
@@ -77,6 +77,76 @@ export default function LandingPage() {
           </div>
         </div>
       </header>
+
+      {/* Hero Section */}
+      <div
+        style={{
+          height: "100vh",
+          width: "100%",
+          position: "relative",
+          overflow: "hidden",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#e8e6e1"
+        }}
+      >
+        <img
+          src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1920&q=80"
+          alt="Hero"
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            position: "absolute",
+            top: 0,
+            left: 0
+          }}
+        />
+        <div
+          style={{
+            position: "relative",
+            zIndex: 10,
+            textAlign: "center",
+            color: "white",
+            maxWidth: "800px",
+            padding: "0 2rem"
+          }}
+        >
+          <h1 style={{
+            fontSize: "4rem",
+            fontWeight: 700,
+            marginBottom: "1.5rem",
+            textShadow: "0 2px 10px rgba(0,0,0,0.3)",
+            fontFamily: "Georgia, serif"
+          }}>
+            Your Daily Health, Simplified
+          </h1>
+          <p style={{
+            fontSize: "1.5rem",
+            marginBottom: "2rem",
+            textShadow: "0 2px 10px rgba(0,0,0,0.3)"
+          }}>
+            All-in-one nutritional support in one simple drink
+          </p>
+          <button
+            style={{
+              backgroundColor: "#004d4d",
+              color: "white",
+              padding: "1rem 3rem",
+              border: "none",
+              borderRadius: "0.25rem",
+              cursor: "pointer",
+              fontSize: "1.125rem",
+              fontWeight: 600,
+              boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+            }}
+          >
+            Shop Now
+          </button>
+        </div>
+      </div>
+
       {/* Main Content */}
       <main style={{ maxWidth: "1280px", margin: "0 auto", padding: "3rem 1.5rem" }}>
         {/* Title Section */}

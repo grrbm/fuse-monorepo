@@ -155,7 +155,7 @@ export default function SignIn() {
 
       // Refresh user state and redirect to dashboard
       await refreshUser();
-      router.push('/');
+      router.push('/dashboard');
 
     } catch (err) {
       // HIPAA Compliance: Don't log the actual error which might contain PHI
@@ -228,7 +228,7 @@ export default function SignIn() {
 
       // Refresh user state and redirect
       await refreshUser();
-      router.push('/');
+      router.push('/dashboard');
 
     } catch (err) {
       console.error('MFA verification error occurred');

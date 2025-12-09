@@ -1,0 +1,499 @@
+import { useState, useEffect } from "react"
+import { useAuth } from "@/contexts/AuthContext"
+import Layout from "@/components/Layout"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Monitor, Smartphone, Upload, Link as LinkIcon } from "lucide-react"
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
+
+const FONT_OPTIONS = [
+  { value: "Playfair Display", label: "Playfair Display", description: "Elegant serif font with a classic feel" },
+  { value: "Inter", label: "Inter", description: "Modern sans-serif, clean and readable" },
+  { value: "Georgia", label: "Georgia", description: "Traditional serif, professional look" },
+  { value: "Poppins", label: "Poppins", description: "Geometric sans-serif, friendly and modern" },
+  { value: "Merriweather", label: "Merriweather", description: "Readable serif designed for screens" },
+  { value: "Roboto", label: "Roboto", description: "Versatile sans-serif, neutral and clean" },
+  { value: "Lora", label: "Lora", description: "Balanced serif with calligraphic roots" },
+  { value: "Open Sans", label: "Open Sans", description: "Humanist sans-serif, excellent legibility" },
+]
+
+interface PortalSettings {
+  portalTitle: string
+  portalDescription: string
+  primaryColor: string
+  fontFamily: string
+  logo: string
+  heroImageUrl: string
+  heroTitle: string
+  heroSubtitle: string
+}
+
+export default function PortalPage() {
+  const { authenticatedFetch } = useAuth()
+  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [logoInputMode, setLogoInputMode] = useState<"file" | "url">("url")
+  const [settings, setSettings] = useState<PortalSettings>({
+    portalTitle: "Welcome to Our Portal",
+    portalDescription: "Your trusted healthcare partner. Browse our products and services below.",
+    primaryColor: "#000000",
+    fontFamily: "Playfair Display",
+    logo: "",
+    heroImageUrl: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1920&q=80",
+    heroTitle: "Your Daily Health, Simplified",
+    heroSubtitle: "All-in-one nutritional support in one simple drink",
+  })
+
+  useEffect(() => {
+    loadSettings()
+  }, [])
+
+  const loadSettings = async () => {
+    try {
+      const response = await authenticatedFetch(`${API_URL}/custom-website`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data) {
+          setSettings({
+            portalTitle: data.data.portalTitle || settings.portalTitle,
+            portalDescription: data.data.portalDescription || settings.portalDescription,
+            primaryColor: data.data.primaryColor || settings.primaryColor,
+            fontFamily: data.data.fontFamily || settings.fontFamily,
+            logo: data.data.logo || settings.logo,
+            heroImageUrl: data.data.heroImageUrl || settings.heroImageUrl,
+            heroTitle: data.data.heroTitle || settings.heroTitle,
+            heroSubtitle: data.data.heroSubtitle || settings.heroSubtitle,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Error loading portal settings:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      const response = await authenticatedFetch(`${API_URL}/custom-website`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      })
+      
+      if (response.ok) {
+        alert("Portal settings saved successfully!")
+      } else {
+        alert("Failed to save settings")
+      }
+    } catch (error) {
+      console.error("Error saving portal settings:", error)
+      alert("Error saving settings")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // For now, convert to base64. In production, you'd upload to S3/CloudFront
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setSettings({ ...settings, logo: reader.result as string })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-96">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </Layout>
+    )
+  }
+
+  return (
+    <Layout>
+      <div className="p-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">Portal Customization</h1>
+          <p className="text-muted-foreground">Customize your patient-facing landing page</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Settings Panel */}
+          <div className="space-y-6">
+            <Tabs defaultValue="branding" className="w-full">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="branding">Branding</TabsTrigger>
+                <TabsTrigger value="hero">Hero</TabsTrigger>
+                <TabsTrigger value="domain">Domain</TabsTrigger>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="branding" className="space-y-4 mt-4">
+                {/* Portal Title */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Portal Title</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Input
+                      value={settings.portalTitle}
+                      onChange={(e) => setSettings({ ...settings, portalTitle: e.target.value })}
+                      placeholder="Enter portal title"
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Portal Description */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Portal Description</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <textarea
+                      className="w-full p-3 border rounded-md text-sm min-h-[80px] resize-none"
+                      value={settings.portalDescription}
+                      onChange={(e) => setSettings({ ...settings, portalDescription: e.target.value })}
+                      placeholder="Enter portal description"
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Primary Color */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Primary Color</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={settings.primaryColor}
+                        onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
+                        className="w-10 h-10 rounded cursor-pointer border-0"
+                      />
+                      <div
+                        className="w-10 h-10 rounded border"
+                        style={{ backgroundColor: settings.primaryColor }}
+                      />
+                      <Input
+                        value={settings.primaryColor}
+                        onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
+                        placeholder="#000000"
+                        className="w-28"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Font Selection */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Choose a Font</CardTitle>
+                    <CardDescription>Previews update in real-time</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <select
+                      className="w-full p-3 border rounded-md text-sm"
+                      value={settings.fontFamily}
+                      onChange={(e) => setSettings({ ...settings, fontFamily: e.target.value })}
+                    >
+                      {FONT_OPTIONS.map((font) => (
+                        <option key={font.value} value={font.value}>
+                          {font.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      {FONT_OPTIONS.find((f) => f.value === settings.fontFamily)?.description}
+                    </p>
+                    
+                    {/* Font Preview */}
+                    <div className="p-4 border rounded-md bg-muted/30">
+                      <p className="text-xs text-muted-foreground mb-2">Preview:</p>
+                      <h3
+                        className="text-xl font-semibold mb-1"
+                        style={{ fontFamily: settings.fontFamily }}
+                      >
+                        {settings.portalTitle || "Sample Title"}
+                      </h3>
+                      <p
+                        className="text-sm text-muted-foreground"
+                        style={{ fontFamily: settings.fontFamily }}
+                      >
+                        We're looking for talented professionals to join our growing team. Apply today and start your
+                        journey with us!
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Logo */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Logo</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {settings.logo && (
+                      <div className="mb-3">
+                        <img
+                          src={settings.logo}
+                          alt="Logo preview"
+                          className="h-12 object-contain"
+                        />
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-2 mb-3">
+                      <Button
+                        variant={logoInputMode === "file" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setLogoInputMode("file")}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload a file
+                      </Button>
+                      <Button
+                        variant={logoInputMode === "url" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setLogoInputMode("url")}
+                      >
+                        <LinkIcon className="w-4 h-4 mr-2" />
+                        Enter URL
+                      </Button>
+                    </div>
+
+                    {logoInputMode === "file" ? (
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                      />
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          value={settings.logo}
+                          onChange={(e) => setSettings({ ...settings, logo: e.target.value })}
+                          placeholder="https://example.com/logo.png"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSettings({ ...settings, logo: "" })}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="hero" className="space-y-4 mt-4">
+                {/* Hero Image */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Hero Image URL</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Input
+                      value={settings.heroImageUrl}
+                      onChange={(e) => setSettings({ ...settings, heroImageUrl: e.target.value })}
+                      placeholder="https://example.com/hero-image.jpg"
+                    />
+                    {settings.heroImageUrl && (
+                      <div className="mt-3 rounded-md overflow-hidden">
+                        <img
+                          src={settings.heroImageUrl}
+                          alt="Hero preview"
+                          className="w-full h-32 object-cover"
+                        />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Hero Title */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Hero Title</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Input
+                      value={settings.heroTitle}
+                      onChange={(e) => setSettings({ ...settings, heroTitle: e.target.value })}
+                      placeholder="Enter hero title"
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Hero Subtitle */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">Hero Subtitle</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Input
+                      value={settings.heroSubtitle}
+                      onChange={(e) => setSettings({ ...settings, heroSubtitle: e.target.value })}
+                      placeholder="Enter hero subtitle"
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="domain" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">Custom Domain</CardTitle>
+                    <CardDescription>Configure your custom domain settings</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      Custom domain configuration coming soon. Contact support for early access.
+                    </p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="settings" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">Portal Settings</CardTitle>
+                    <CardDescription>Advanced portal configuration</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      Advanced settings coming soon.
+                    </p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+
+            {/* Save Button */}
+            <Button onClick={handleSave} className="w-full" disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+
+          {/* Live Preview Panel */}
+          <div className="space-y-4">
+            <Card className="sticky top-6">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium">Live Preview</CardTitle>
+                  <div className="flex gap-1 p-1 bg-muted rounded-lg">
+                    <Button
+                      variant={previewMode === "desktop" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setPreviewMode("desktop")}
+                    >
+                      <Monitor className="w-4 h-4 mr-1" />
+                      Desktop
+                    </Button>
+                    <Button
+                      variant={previewMode === "mobile" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setPreviewMode("mobile")}
+                    >
+                      <Smartphone className="w-4 h-4 mr-1" />
+                      Mobile
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={`bg-white border rounded-lg overflow-hidden shadow-sm ${
+                    previewMode === "mobile" ? "max-w-[375px] mx-auto" : ""
+                  }`}
+                  style={{ fontFamily: settings.fontFamily }}
+                >
+                  {/* Preview Header */}
+                  <div className="border-b bg-white p-3 flex items-center justify-between">
+                    {settings.logo ? (
+                      <img src={settings.logo} alt="Logo" className="h-6 object-contain" />
+                    ) : (
+                      <span className="font-bold text-sm" style={{ color: settings.primaryColor }}>
+                        {settings.portalTitle?.split(" ")[0] || "BRAND"}
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      style={{ backgroundColor: settings.primaryColor }}
+                      className="text-white text-xs"
+                    >
+                      Apply Now
+                    </Button>
+                  </div>
+
+                  {/* Preview Hero */}
+                  <div
+                    className="relative h-64 bg-cover bg-center flex items-center justify-center"
+                    style={{ backgroundImage: `url(${settings.heroImageUrl})` }}
+                  >
+                    <div className="absolute inset-0 bg-black/40" />
+                    <div className="relative z-10 text-center text-white px-4">
+                      <h2
+                        className="text-2xl font-bold mb-2"
+                        style={{ fontFamily: settings.fontFamily }}
+                      >
+                        {settings.heroTitle}
+                      </h2>
+                      <p className="text-sm opacity-90 mb-4">{settings.heroSubtitle}</p>
+                      <div className="flex gap-2 justify-center">
+                        <Button
+                          size="sm"
+                          style={{ backgroundColor: settings.primaryColor }}
+                          className="text-white"
+                        >
+                          View All Products →
+                        </Button>
+                        <Button size="sm" variant="outline" className="bg-white/10 border-white text-white">
+                          Learn More →
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Preview Content */}
+                  <div className="p-4">
+                    <h3 className="text-lg font-semibold mb-2">{settings.portalTitle}</h3>
+                    <p className="text-sm text-gray-600 mb-4">{settings.portalDescription}</p>
+
+                    {/* Sample Product Cards */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="border rounded-lg p-2">
+                          <div
+                            className="h-20 rounded mb-2"
+                            style={{ backgroundColor: `${settings.primaryColor}20` }}
+                          />
+                          <div className="h-3 bg-gray-200 rounded w-3/4 mb-1" />
+                          <div className="h-2 bg-gray-100 rounded w-1/2" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  )
+}
+
