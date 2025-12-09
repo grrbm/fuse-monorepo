@@ -1,4 +1,5 @@
 export const PUBLIC_PATH_PATTERNS = [
+  '/',
   '/signin',
   '/signup',
   '/privacy',
