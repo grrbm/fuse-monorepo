@@ -352,6 +352,7 @@ export default function LandingPage() {
               borderRadius: "0.25rem",
               fontSize: "0.875rem",
               cursor: "pointer",
+
             }}
           >
             Rest & Restore
@@ -367,7 +368,26 @@ export default function LandingPage() {
           }}
         >
           {/* AG1 Pouch */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -413,7 +433,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AG1 Travel Packs */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -459,7 +498,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AGZ */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -504,7 +562,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AG2 Variety Pack */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -541,7 +618,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AG Omega3 */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -580,7 +676,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AG Vitamin D3+K2 */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -683,7 +798,26 @@ export default function LandingPage() {
           }}
         >
           {/* AG1 Pouch */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -729,7 +863,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AG1 Travel Packs */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -775,7 +928,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AGZ */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -820,7 +992,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AG2 Variety Pack */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -857,7 +1048,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AG Omega3 */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -896,7 +1106,26 @@ export default function LandingPage() {
             </div>
           </div>
           {/* AG Vitamin D3+K2 */}
-          <div style={{ cursor: "pointer" }}>
+          <div style={{ cursor: "pointer", position: "relative" }}>
+            <button style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: "50%",
+              width: "2.5rem",
+              height: "2.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 1,
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
             <div
               style={{
                 backgroundColor: "#e8e6e1",
@@ -1259,3 +1488,4 @@ export default function LandingPage() {
     </div>
   )
 }
+

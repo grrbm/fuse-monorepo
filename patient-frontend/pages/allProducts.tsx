@@ -1,0 +1,1261 @@
+import { useRouter } from 'next/router';
+import { useState, useEffect } from 'react';
+import { extractClinicSlugFromDomain } from '../lib/clinic-utils';
+import { apiCall } from '../lib/api';
+
+interface CustomWebsite {
+    portalTitle?: string;
+    portalDescription?: string;
+    primaryColor?: string;
+    fontFamily?: string;
+    logo?: string;
+    heroImageUrl?: string;
+    heroTitle?: string;
+    heroSubtitle?: string;
+}
+
+export default function AllProducts() {
+    const router = useRouter();
+    const [customWebsite, setCustomWebsite] = useState<CustomWebsite | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const loadCustomWebsite = async () => {
+            try {
+                const domainInfo = await extractClinicSlugFromDomain();
+                console.log('🔍 Domain info:', domainInfo);
+
+                // Try to load custom website if we have a clinic slug
+                if (domainInfo.hasClinicSubdomain && domainInfo.clinicSlug) {
+                    console.log('🌐 Fetching custom website for slug:', domainInfo.clinicSlug);
+                    const result = await apiCall(`/custom-website/by-slug/${domainInfo.clinicSlug}`);
+                    console.log('✅ Custom website data:', result);
+                    if (result.success && result.data?.data) {
+                        // API returns { success, data: { data: {...} } }
+                        setCustomWebsite(result.data.data);
+                    } else if (result.success && result.data) {
+                        setCustomWebsite(result.data);
+                    }
+                } else {
+                    // For localhost testing: fetch the default/first available custom website
+                    console.log('🏠 No clinic subdomain detected, loading default custom website for testing...');
+                    try {
+                        const result = await apiCall('/custom-website/default');
+                        console.log('✅ Loaded default custom website:', result);
+                        if (result.success && result.data?.data) {
+                            // API returns { success, data: { data: {...} } }
+                            setCustomWebsite(result.data.data);
+                        } else if (result.success && result.data) {
+                            setCustomWebsite(result.data);
+                        }
+                    } catch (error) {
+                        console.log('ℹ️ No custom website found');
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Error loading custom website:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadCustomWebsite();
+    }, []);
+
+    // Handle nested data structure from API response
+    const websiteData = (customWebsite as any)?.data || customWebsite;
+
+    const heroImageUrl = websiteData?.heroImageUrl || "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1920&q=80";
+    const heroTitle = websiteData?.heroTitle || "Your Daily Health, Simplified";
+    const heroSubtitle = websiteData?.heroSubtitle || "All-in-one nutritional support in one simple drink";
+    const primaryColor = websiteData?.primaryColor || "#004d4d";
+    const fontFamily = websiteData?.fontFamily || "Georgia, serif";
+    const logo = websiteData?.logo;
+
+    console.log('🎨 Rendering with values:', {
+        heroImageUrl,
+        heroTitle,
+        heroSubtitle,
+        primaryColor,
+        fontFamily,
+        logo,
+        customWebsite
+    });
+
+    // Show loading skeleton while fetching custom website
+    if (isLoading) {
+        return (
+            <div style={{ minHeight: "100vh", backgroundColor: "#f5f3ef", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+                {/* Header Skeleton */}
+                <header style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: "white" }}>
+                    <div
+                        style={{
+                            maxWidth: "1280px",
+                            margin: "0 auto",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "1rem 1.5rem",
+                        }}
+                    >
+                        <div style={{ display: "flex", alignItems: "center", gap: "3rem" }}>
+                            <div style={{ width: "120px", height: "32px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+                            <div style={{ display: "flex", gap: "2rem" }}>
+                                <div style={{ width: "100px", height: "14px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+                                <div style={{ width: "80px", height: "14px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+                                <div style={{ width: "90px", height: "14px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+                            </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                            <div style={{ width: "100px", height: "36px", backgroundColor: "#e0e0e0", borderRadius: "4px" }}></div>
+                            <div style={{ width: "32px", height: "32px", backgroundColor: "#e0e0e0", borderRadius: "50%" }}></div>
+                        </div>
+                    </div>
+                </header>
+
+                {/* Hero Skeleton */}
+                <div
+                    style={{
+                        height: "100vh",
+                        width: "100%",
+                        position: "relative",
+                        overflow: "hidden",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: "#e8e6e1"
+                    }}
+                >
+                    <div
+                        style={{
+                            position: "relative",
+                            zIndex: 10,
+                            textAlign: "center",
+                            maxWidth: "800px",
+                            padding: "0 2rem"
+                        }}
+                    >
+                        <div style={{ width: "600px", height: "64px", backgroundColor: "#d0d0d0", borderRadius: "8px", margin: "0 auto 1.5rem" }}></div>
+                        <div style={{ width: "400px", height: "24px", backgroundColor: "#d0d0d0", borderRadius: "8px", margin: "0 auto 2rem" }}></div>
+                        <div style={{ width: "180px", height: "56px", backgroundColor: "#d0d0d0", borderRadius: "4px", margin: "0 auto" }}></div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ minHeight: "100vh", backgroundColor: "#f5f3ef", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+            {/* Header */}
+            <header style={{ borderBottom: "1px solid #e5e5e5", backgroundColor: "white" }}>
+                <div
+                    style={{
+                        maxWidth: "1280px",
+                        margin: "0 auto",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "1rem 1.5rem",
+                    }}
+                >
+                    <div style={{ display: "flex", alignItems: "center", gap: "3rem" }}>
+                        {logo ? (
+                            <img src={logo} alt="Logo" style={{ height: "2rem", objectFit: "contain" }} />
+                        ) : (
+                            <h1 style={{ fontFamily: fontFamily, fontSize: "1.875rem", fontWeight: 400 }}>AG1</h1>
+                        )}
+                        <nav style={{ display: "flex", alignItems: "center", gap: "2rem", fontSize: "0.875rem" }}>
+                            <a href="#" style={{ color: "inherit", textDecoration: "none" }}>
+                                AG1 for Daily Health
+                            </a>
+                            <a
+                                href="#"
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    color: "inherit",
+                                    textDecoration: "none",
+                                }}
+                            >
+                                AG2 for Rest
+                                <span
+                                    style={{
+                                        backgroundColor: "#10b981",
+                                        color: "white",
+                                        fontSize: "0.75rem",
+                                        padding: "0.125rem 0.5rem",
+                                        borderRadius: "0.25rem",
+                                    }}
+                                >
+                                    NEW
+                                </span>
+                            </a>
+                            <a href="#" style={{ color: "inherit", textDecoration: "none" }}>
+                                Learn More
+                            </a>
+                        </nav>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                        <button
+                            style={{
+                                backgroundColor: primaryColor,
+                                color: "white",
+                                padding: "0.5rem 1.5rem",
+                                border: "none",
+                                borderRadius: "0.125rem",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Shop All
+                        </button>
+
+                        <button
+                            onClick={() => router.push('/dashboard')}
+                            style={{ padding: "0.5rem", border: "none", background: "none", cursor: "pointer" }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            {/* Hero Section */}
+            <div
+                style={{
+                    height: "100vh",
+                    width: "100%",
+                    position: "relative",
+                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#e8e6e1"
+                }}
+            >
+                <img
+                    src={heroImageUrl}
+                    alt="Hero"
+                    style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        position: "absolute",
+                        top: 0,
+                        left: 0
+                    }}
+                />
+                <div
+                    style={{
+                        position: "relative",
+                        zIndex: 10,
+                        textAlign: "center",
+                        color: "white",
+                        maxWidth: "800px",
+                        padding: "0 2rem"
+                    }}
+                >
+                    <h1 style={{
+                        fontSize: "4rem",
+                        fontWeight: 700,
+                        marginBottom: "1.5rem",
+                        textShadow: "0 2px 10px rgba(0,0,0,0.3)",
+                        fontFamily: fontFamily
+                    }}>
+                        {heroTitle}
+                    </h1>
+                    <p style={{
+                        fontSize: "1.5rem",
+                        marginBottom: "2rem",
+                        textShadow: "0 2px 10px rgba(0,0,0,0.3)"
+                    }}>
+                        {heroSubtitle}
+                    </p>
+                    <button
+                        style={{
+                            backgroundColor: primaryColor,
+                            color: "white",
+                            padding: "1rem 3rem",
+                            border: "none",
+                            borderRadius: "0.25rem",
+                            cursor: "pointer",
+                            fontSize: "1.125rem",
+                            fontWeight: 600,
+                            boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+                        }}
+                    >
+                        Shop Now
+                    </button>
+                </div>
+            </div>
+
+            {/* Main Content */}
+            <main style={{ maxWidth: "1280px", margin: "0 auto", padding: "3rem 1.5rem" }}>
+                {/* Title Section */}
+                <div style={{ marginBottom: "2rem" }}>
+                    <p style={{ fontSize: "0.875rem", color: "#737373", marginBottom: "0.5rem" }}>SHOP</p>
+                    <h2 style={{ fontFamily: "Georgia, serif", fontSize: "3rem", marginBottom: "0.75rem", fontWeight: 400 }}>
+                        Trending Products
+                    </h2>
+                    <p style={{ color: "#404040" }}>AG1 is so much more than greens. Discover our member favorites here.</p>
+                </div>
+                {/* Filter Tabs */}
+                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "3rem" }}>
+                    <button
+                        style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "#8b7355",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
+                            cursor: "pointer",
+                        }}
+                    >
+                        All
+                    </button>
+                    <button
+                        style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "white",
+                            color: "inherit",
+                            border: "1px solid #d4d4d4",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Bundles
+                    </button>
+                    <button
+                        style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "white",
+                            color: "inherit",
+                            border: "1px solid #d4d4d4",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Daily Health
+                    </button>
+                    <button
+                        style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "white",
+                            color: "inherit",
+                            border: "1px solid #d4d4d4",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Rest & Restore
+                    </button>
+                </div>
+                {/* Products Grid */}
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                        gap: "1.5rem",
+                        marginBottom: "4rem",
+                    }}
+                >
+                    {/* AG1 Pouch */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "8rem",
+                                    height: "12rem",
+                                    backgroundColor: "#004d4d",
+                                    borderRadius: "0.5rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.875rem" }}>AG1</span>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG1 Pouch
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            All-in-one gut and health support in one Daily Health Drink.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>From $79/mo</span>
+                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
+                        </div>
+                        <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
+                        <div style={{ display: "flex", gap: "0.25rem" }}>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
+                        </div>
+                    </div>
+                    {/* AG1 Travel Packs */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "8rem",
+                                    height: "12rem",
+                                    backgroundColor: "#004d4d",
+                                    borderRadius: "0.5rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.875rem" }}>AG1</span>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG1 Travel Packs
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Plan your Daily Health Dose on-the-go with 30 individual Travel Packs.
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>From $89/mo</span>
+                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$109*</span>
+                        </div>
+                        <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
+                        <div style={{ display: "flex", gap: "0.25rem" }}>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
+                        </div>
+                    </div>
+                    {/* AGZ */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "8rem",
+                                    height: "12rem",
+                                    backgroundColor: "#8b7355",
+                                    borderRadius: "0.5rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.875rem" }}>AGZ</span>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AGZ
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Individual Travel Packs, 30 servings. Ease your mind & body into restful sleep without feeling groggy,
+                            magnesium & adaptogens.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>From $79/mo</span>
+                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
+                        </div>
+                        <div style={{ display: "flex", gap: "0.25rem" }}>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#8b7355" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d97706" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#ca8a04" }}></div>
+                        </div>
+                    </div>
+                    {/* AG2 Variety Pack */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div style={{ display: "flex", gap: "0.5rem" }}>
+                                <div
+                                    style={{ width: "2.5rem", height: "10rem", backgroundColor: "#7c3aed", borderRadius: "0.25rem" }}
+                                ></div>
+                                <div
+                                    style={{ width: "2.5rem", height: "10rem", backgroundColor: "#f9a8d4", borderRadius: "0.25rem" }}
+                                ></div>
+                                <div
+                                    style={{ width: "2.5rem", height: "10rem", backgroundColor: "#6ee7b7", borderRadius: "0.25rem" }}
+                                ></div>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG2 Variety Pack (3Pk)
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Ease your mind and body into restful sleep with calming tones, magnesium & adaptogens. Try 10 individual
+                            packs in Berry, Chocolate, Chocolate Mint.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>$39.99</span>
+                        </div>
+                    </div>
+                    {/* AG Omega3 */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "8rem",
+                                    height: "8rem",
+                                    backgroundColor: "#004d4d",
+                                    borderRadius: "50%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.5rem" }}>AG</span>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG Omega3
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Complements AG1 for added brain support with high quality fish oil.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>From $35/mo</span>
+                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$59*</span>
+                        </div>
+                    </div>
+                    {/* AG Vitamin D3+K2 */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div style={{ width: "6rem", height: "10rem", backgroundColor: "#004d4d", borderRadius: "0.5rem" }}></div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG Vitamin D3+K2
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Complements AG1 for added immune support with liquid drops.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>$29</span>
+                        </div>
+                    </div>
+                </div>
+
+
+                {/* SECOND PART */}
+
+                {/* Title Section */}
+                <div style={{ marginBottom: "2rem" }}>
+                    <p style={{ fontSize: "0.875rem", color: "#737373", marginBottom: "0.5rem" }}>SHOP</p>
+                    <h2 style={{ fontFamily: "Georgia, serif", fontSize: "3rem", marginBottom: "0.75rem", fontWeight: 400 }}>
+                        Trending Protocols
+                    </h2>
+                    <p style={{ color: "#404040" }}>AG1 is so much more than greens. Discover our member favorites here.</p>
+                </div>
+                {/* Filter Tabs */}
+                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "3rem" }}>
+                    <button
+                        style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "#8b7355",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
+                            cursor: "pointer",
+                        }}
+                    >
+                        All
+                    </button>
+                    <button
+                        style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "white",
+                            color: "inherit",
+                            border: "1px solid #d4d4d4",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Bundles
+                    </button>
+                    <button
+                        style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "white",
+                            color: "inherit",
+                            border: "1px solid #d4d4d4",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Daily Health
+                    </button>
+                    <button
+                        style={{
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "white",
+                            color: "inherit",
+                            border: "1px solid #d4d4d4",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Rest & Restore
+                    </button>
+                </div>
+                {/* Products Grid */}
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                        gap: "1.5rem",
+                        marginBottom: "4rem",
+                    }}
+                >
+                    {/* AG1 Pouch */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "8rem",
+                                    height: "12rem",
+                                    backgroundColor: "#004d4d",
+                                    borderRadius: "0.5rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.875rem" }}>AG1</span>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG1 Pouch
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            All-in-one gut and health support in one Daily Health Drink.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>From $79/mo</span>
+                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
+                        </div>
+                        <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
+                        <div style={{ display: "flex", gap: "0.25rem" }}>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
+                        </div>
+                    </div>
+                    {/* AG1 Travel Packs */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "8rem",
+                                    height: "12rem",
+                                    backgroundColor: "#004d4d",
+                                    borderRadius: "0.5rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.875rem" }}>AG1</span>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG1 Travel Packs
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Plan your Daily Health Dose on-the-go with 30 individual Travel Packs.
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>From $89/mo</span>
+                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$109*</span>
+                        </div>
+                        <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
+                        <div style={{ display: "flex", gap: "0.25rem" }}>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
+                        </div>
+                    </div>
+                    {/* AGZ */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "8rem",
+                                    height: "12rem",
+                                    backgroundColor: "#8b7355",
+                                    borderRadius: "0.5rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.875rem" }}>AGZ</span>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AGZ
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Individual Travel Packs, 30 servings. Ease your mind & body into restful sleep without feeling groggy,
+                            magnesium & adaptogens.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>From $79/mo</span>
+                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
+                        </div>
+                        <div style={{ display: "flex", gap: "0.25rem" }}>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#8b7355" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d97706" }}></div>
+                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#ca8a04" }}></div>
+                        </div>
+                    </div>
+                    {/* AG2 Variety Pack */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div style={{ display: "flex", gap: "0.5rem" }}>
+                                <div
+                                    style={{ width: "2.5rem", height: "10rem", backgroundColor: "#7c3aed", borderRadius: "0.25rem" }}
+                                ></div>
+                                <div
+                                    style={{ width: "2.5rem", height: "10rem", backgroundColor: "#f9a8d4", borderRadius: "0.25rem" }}
+                                ></div>
+                                <div
+                                    style={{ width: "2.5rem", height: "10rem", backgroundColor: "#6ee7b7", borderRadius: "0.25rem" }}
+                                ></div>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG2 Variety Pack (3Pk)
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Ease your mind and body into restful sleep with calming tones, magnesium & adaptogens. Try 10 individual
+                            packs in Berry, Chocolate, Chocolate Mint.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>$39.99</span>
+                        </div>
+                    </div>
+                    {/* AG Omega3 */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    width: "8rem",
+                                    height: "8rem",
+                                    backgroundColor: "#004d4d",
+                                    borderRadius: "50%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.5rem" }}>AG</span>
+                            </div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG Omega3
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Complements AG1 for added brain support with high quality fish oil.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>From $35/mo</span>
+                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$59*</span>
+                        </div>
+                    </div>
+                    {/* AG Vitamin D3+K2 */}
+                    <div style={{ cursor: "pointer" }}>
+                        <div
+                            style={{
+                                backgroundColor: "#e8e6e1",
+                                borderRadius: "0.5rem",
+                                padding: "2rem",
+                                marginBottom: "1rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1/1",
+                            }}
+                        >
+                            <div style={{ width: "6rem", height: "10rem", backgroundColor: "#004d4d", borderRadius: "0.5rem" }}></div>
+                        </div>
+                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                            AG Vitamin D3+K2
+                        </h3>
+                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
+                            Complements AG1 for added immune support with liquid drops.*
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                            <span style={{ fontWeight: 600 }}>$29</span>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+            {/* Footer */}
+            <footer style={{ backgroundColor: "#0d3d3d", color: "white", padding: "4rem 0 2rem" }}>
+                <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 1.5rem" }}>
+                    <div
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                            gap: "3rem",
+                            marginBottom: "3rem",
+                        }}
+                    >
+                        {/* SHOP Column */}
+                        <div>
+                            <h4 style={{ fontWeight: 600, marginBottom: "1.5rem", fontSize: "0.75rem", letterSpacing: "0.05em" }}>
+                                SHOP
+                            </h4>
+                            <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: "0.875rem" }}>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        All Products
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Gut Health
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Shop Support
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Bundles
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {/* DAILY HEALTH Column */}
+                        <div>
+                            <h4 style={{ fontWeight: 600, marginBottom: "1.5rem", fontSize: "0.75rem", letterSpacing: "0.05em" }}>
+                                DAILY HEALTH
+                            </h4>
+                            <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: "0.875rem" }}>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        What is AG1?
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG1 Research
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG1 Quality & Testing
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG1 Benefits
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG1 Ingredients
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG1 Quiz
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {/* REST & RESTORE Column */}
+                        <div>
+                            <h4 style={{ fontWeight: 600, marginBottom: "1.5rem", fontSize: "0.75rem", letterSpacing: "0.05em" }}>
+                                REST & RESTORE
+                            </h4>
+                            <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: "0.875rem" }}>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        What is AG2?
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG2 Quality & Testing
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG2 Ingredients
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG2 Recipes
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {/* LEARN MORE Column */}
+                        <div>
+                            <h4 style={{ fontWeight: 600, marginBottom: "1.5rem", fontSize: "0.75rem", letterSpacing: "0.05em" }}>
+                                LEARN MORE
+                            </h4>
+                            <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: "0.875rem" }}>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        About Us
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Leadership
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Refer Friends
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Partnerships
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Impact Reports
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG1 Membership
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Accessibility Statement
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        AG1 Reviews
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Blog
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {/* CONTACT & SUPPORT Column */}
+                        <div>
+                            <h4 style={{ fontWeight: 600, marginBottom: "1.5rem", fontSize: "0.75rem", letterSpacing: "0.05em" }}>
+                                CONTACT & SUPPORT
+                            </h4>
+                            <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: "0.875rem" }}>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        My Account
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Track Your Order
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Help
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Careers
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        Product Authentication
+                                    </a>
+                                </li>
+                                <li style={{ marginBottom: "0.75rem" }}>
+                                    <a href="#" style={{ color: "white", textDecoration: "none", opacity: 0.9 }}>
+                                        FAQs
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {/* CONNECT Column */}
+                        <div>
+                            <h4 style={{ fontWeight: 600, marginBottom: "1.5rem", fontSize: "0.75rem", letterSpacing: "0.05em" }}>
+                                CONNECT
+                            </h4>
+                            <div style={{ marginBottom: "1.5rem" }}>
+                                <p style={{ fontSize: "0.875rem", marginBottom: "1rem", opacity: 0.9 }}>Join Our Newsletter</p>
+                                <input
+                                    type="email"
+                                    placeholder="Your Email"
+                                    style={{
+                                        width: "100%",
+                                        padding: "0.75rem 1rem",
+                                        borderRadius: "24px",
+                                        border: "none",
+                                        fontSize: "0.875rem",
+                                    }}
+                                />
+                            </div>
+                            <div style={{ display: "flex", gap: "1rem" }}>
+                                <a href="#" style={{ color: "white", fontSize: "1.25rem" }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                                    </svg>
+                                </a>
+                                <a href="#" style={{ color: "white", fontSize: "1.25rem" }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                                    </svg>
+                                </a>
+                                <a href="#" style={{ color: "white", fontSize: "1.25rem" }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z" />
+                                    </svg>
+                                </a>
+                                <a href="#" style={{ color: "white", fontSize: "1.25rem" }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" />
+                                    </svg>
+                                </a>
+                                <a href="#" style={{ color: "white", fontSize: "1.25rem" }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.2)", marginBottom: "3rem" }}></div>
+                    <div
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 2fr 1fr",
+                            gap: "3rem",
+                            alignItems: "start",
+                            marginBottom: "3rem",
+                        }}
+                    >
+                        {/* AG1 Logo */}
+                        <div>
+                            <div
+                                style={{ fontSize: "4rem", fontWeight: "bold", fontFamily: "Playfair Display, serif", lineHeight: "1" }}
+                            >
+                                AG1<sup style={{ fontSize: "1.5rem" }}>®</sup>
+                            </div>
+                        </div>
+                        {/* Disclaimer Box */}
+                        <div
+                            style={{
+                                border: "1px solid rgba(255,255,255,0.3)",
+                                padding: "1.5rem",
+                                fontSize: "0.75rem",
+                                lineHeight: "1.6",
+                                opacity: 0.8,
+                            }}
+                        >
+                            <p style={{ margin: "0 0 1rem 0" }}>
+                                *These statements have not been evaluated by the Food and Drug Administration. This product is not
+                                intended to diagnose, treat, cure or prevent any disease.
+                            </p>
+                            <p style={{ margin: "0 0 1rem 0" }}>
+                                Information on this site is provided for informational purposes only. It is not meant to substitute for
+                                medical advice from your physician or other medical professional. You should not use the information
+                                contained herein for diagnosing or treating a health problem or disease, or prescribing any medication.
+                                Carefully read all product documentation. If you have or suspect that you have a medical problem,
+                                promptly contact your regular health care provider.
+                            </p>
+                            <p style={{ margin: "0 0 1rem 0" }}>
+                                **AG1 Wellness ID Offer valid for new AG1 subscriptions only. AGZ Prebiotic Offer valid for first AG1
+                                subscription only.
+                            </p>
+                            <p style={{ margin: "0 0 1rem 0" }}>Annual Packaging May Vary</p>
+                            <p style={{ margin: "0" }}>*Free shipping for subscription purchases for select U.S. customers only.</p>
+                        </div>
+                        {/* Language & Currency Selector */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", fontSize: "0.875rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="2" y1="12" x2="22" y2="12" />
+                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                                </svg>
+                                <span>English</span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                                <span>🇺🇸</span>
+                                <span>United States (USD)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            borderTop: "1px solid rgba(255,255,255,0.2)",
+                            paddingTop: "2rem",
+                            fontSize: "0.75rem",
+                            opacity: 0.8,
+                        }}
+                    >
+                        <div style={{ display: "flex", gap: "2rem" }}>
+                            <a href="#" style={{ color: "white", textDecoration: "none" }}>
+                                Privacy
+                            </a>
+                            <a href="#" style={{ color: "white", textDecoration: "none" }}>
+                                Do Not Sell My Personal Info
+                            </a>
+                            <a href="#" style={{ color: "white", textDecoration: "none" }}>
+                                Terms & Conditions
+                            </a>
+                        </div>
+                        <div>© 2025 AG1</div>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    )
+}
