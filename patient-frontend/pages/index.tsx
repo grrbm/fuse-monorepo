@@ -114,8 +114,15 @@ export default function LandingPage() {
   const logo = websiteData?.logo;
 
   // Helper function to render a product card
-  const renderProductCard = (product: Product) => {
+  const renderProductCard = (product: Product, index: number) => {
     const badges = getBadges(product);
+    // Calculate 30% higher price for crossed out display
+    const crossedOutPrice = (product.price * 1.3).toFixed(2);
+    
+    // Alternate rectangle colors: green, green, brown, brown, repeat
+    const rectangleColors = ["#004d4d", "#004d4d", "#8b7355", "#8b7355"];
+    const rectangleColor = rectangleColors[index % 4];
+    
     return (
       <div key={product.id} style={{ cursor: "pointer", position: "relative" }}>
         <button style={{
@@ -165,7 +172,7 @@ export default function LandingPage() {
               style={{
                 width: "8rem",
                 height: "12rem",
-                backgroundColor: primaryColor,
+                backgroundColor: rectangleColor,
                 borderRadius: "0.5rem",
                 display: "flex",
                 alignItems: "center",
@@ -185,12 +192,10 @@ export default function LandingPage() {
           {product.description || "Premium health product"}
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-          <span style={{ fontWeight: 600 }}>${product.price}</span>
-          {product.wholesalePrice && product.wholesalePrice !== product.price && (
-            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>
-              ${product.wholesalePrice}
-            </span>
-          )}
+          <span style={{ fontWeight: 600 }}>From ${product.price.toFixed(2)}/mo</span>
+          <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>
+            ${crossedOutPrice}*
+          </span>
         </div>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           {badges.map((badge, idx) => (
