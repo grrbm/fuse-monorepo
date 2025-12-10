@@ -109,9 +109,6 @@ export default function ScrollingFeaturesBar({ textColor = "#004d4d", position =
           display: flex;
           animation: scrollFeatures 30s linear infinite;
         }
-        .features-scroll-container:hover {
-          animation-play-state: paused;
-        }
       `}</style>
       <div className="features-scroll-container">
         {/* First set of features */}
