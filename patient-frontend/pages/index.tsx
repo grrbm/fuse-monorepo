@@ -118,11 +118,11 @@ export default function LandingPage() {
     const badges = getBadges(product);
     // Calculate 30% higher price for crossed out display
     const crossedOutPrice = (product.price * 1.3).toFixed(2);
-    
+
     // Alternate rectangle colors: green, green, brown, brown, repeat
     const rectangleColors = ["#004d4d", "#004d4d", "#8b7355", "#8b7355"];
     const rectangleColor = rectangleColors[index % 4];
-    
+
     return (
       <div key={product.id} style={{ cursor: "pointer", position: "relative" }}>
         <button style={{
@@ -548,38 +548,19 @@ export default function LandingPage() {
             <p>No products available at the moment.</p>
           </div>
         ) : (
-          <>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                gap: "1.5rem",
-                marginBottom: "2rem",
-              }}
-            >
-              {products.slice(0, 6).map(renderProductCard)}
-            </div>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: "4rem" }}>
-              <button
-                onClick={() => router.push('/all-products')}
-                style={{
-                  backgroundColor: primaryColor,
-                  color: "white",
-                  padding: "1rem 3rem",
-                  border: "none",
-                  borderRadius: "0.25rem",
-                  cursor: "pointer",
-                  fontSize: "1rem",
-                  fontWeight: 600,
-                }}
-              >
-                Show All Products
-              </button>
-            </div>
-          </>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+              gap: "1.5rem",
+              marginBottom: "4rem",
+            }}
+          >
+            {products.slice(0, 6).map(renderProductCard)}
+          </div>
         )}
         {/* Removed hardcoded products - now showing dynamic products from API */}
-        <div style={{display: 'none'}}>
+        <div style={{ display: 'none' }}>
           {/* AG1 Pouch */}
           <div style={{ cursor: "pointer", position: "relative" }}>
             <button style={{
@@ -1417,6 +1398,25 @@ export default function LandingPage() {
               <span style={{ fontWeight: 600 }}>$29</span>
             </div>
           </div>
+        </div>
+
+        {/* Show All Products Button */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "4rem" }}>
+          <button
+            onClick={() => router.push('/all-products')}
+            style={{
+              backgroundColor: primaryColor,
+              color: "white",
+              padding: "1rem 3rem",
+              border: "none",
+              borderRadius: "0.25rem",
+              cursor: "pointer",
+              fontSize: "1rem",
+              fontWeight: 600,
+            }}
+          >
+            Show All Products
+          </button>
         </div>
 
       </main>

@@ -14,10 +14,22 @@ interface CustomWebsite {
     heroSubtitle?: string;
 }
 
+interface Product {
+    id: string;
+    name: string;
+    description?: string;
+    imageUrl?: string;
+    categories: string[];
+    price: number;
+    wholesalePrice?: number;
+}
+
 export default function AllProducts() {
     const router = useRouter();
     const [customWebsite, setCustomWebsite] = useState<CustomWebsite | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [productsLoading, setProductsLoading] = useState(true);
 
     useEffect(() => {
         const loadCustomWebsite = async () => {
@@ -62,8 +74,41 @@ export default function AllProducts() {
         loadCustomWebsite();
     }, []);
 
+    useEffect(() => {
+        const loadProducts = async () => {
+            try {
+                setProductsLoading(true);
+                const result = await apiCall('/public/all-products');
+                console.log('📦 All products response:', result);
+
+                // Handle nested data structure - apiCall might return { data: { success, data } }
+                let productsData = result.data;
+                if (result.data?.data) {
+                    productsData = result.data.data;
+                }
+
+                console.log('📦 Products data:', productsData);
+
+                if (Array.isArray(productsData)) {
+                    setProducts(productsData);
+                } else {
+                    console.error('❌ Products data is not an array:', productsData);
+                    setProducts([]);
+                }
+            } catch (error) {
+                console.error('❌ Error loading products:', error);
+                setProducts([]);
+            } finally {
+                setProductsLoading(false);
+            }
+        };
+
+        loadProducts();
+    }, []);
+
     // Handle nested data structure from API response
     const websiteData = (customWebsite as any)?.data || customWebsite;
+    const clinicData = (customWebsite as any)?.clinic;
 
     const heroImageUrl = websiteData?.heroImageUrl || "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1920&q=80";
     const heroTitle = websiteData?.heroTitle || "Your Daily Health, Simplified";
@@ -71,6 +116,7 @@ export default function AllProducts() {
     const primaryColor = websiteData?.primaryColor || "#004d4d";
     const fontFamily = websiteData?.fontFamily || "Georgia, serif";
     const logo = websiteData?.logo;
+    const clinicName = clinicData?.name || "Clinic";
 
     console.log('🎨 Rendering with values:', {
         heroImageUrl,
@@ -81,6 +127,139 @@ export default function AllProducts() {
         logo,
         customWebsite
     });
+
+    // Helper function to get badges for a product
+    const getBadges = (product: Product) => {
+        const badges: Array<{ label: string; color: string }> = [];
+
+        if (product.categories && Array.isArray(product.categories)) {
+            product.categories.forEach((category: string) => {
+                const lowerCategory = category.toLowerCase();
+                if (lowerCategory.includes('recovery')) {
+                    badges.push({ label: 'Recovery', color: '#10b981' });
+                } else if (lowerCategory.includes('flexibility')) {
+                    badges.push({ label: 'Flexibility', color: '#a855f7' });
+                } else if (lowerCategory.includes('muscle') || lowerCategory.includes('growth')) {
+                    badges.push({ label: 'Muscle Growth', color: '#3b82f6' });
+                } else if (lowerCategory.includes('fat') || lowerCategory.includes('loss')) {
+                    badges.push({ label: 'Fat Loss', color: '#ef4444' });
+                } else if (lowerCategory.includes('wellness')) {
+                    badges.push({ label: 'Wellness', color: '#8b5cf6' });
+                } else if (lowerCategory.includes('performance')) {
+                    badges.push({ label: 'Performance', color: '#f59e0b' });
+                } else if (lowerCategory.includes('weight')) {
+                    badges.push({ label: 'Weight Loss', color: '#ec4899' });
+                }
+            });
+        }
+
+        return badges;
+    };
+
+    // Helper function to render a product card
+    const renderProductCard = (product: Product, index: number) => {
+        const badges = getBadges(product);
+        // Calculate 30% higher price for crossed out display
+        const crossedOutPrice = (product.price * 1.3).toFixed(2);
+
+        // Alternate rectangle colors: green, green, brown, brown, repeat
+        const rectangleColors = ["#004d4d", "#004d4d", "#8b7355", "#8b7355"];
+        const rectangleColor = rectangleColors[index % 4];
+
+        return (
+            <div key={product.id} style={{ cursor: "pointer", position: "relative" }}>
+                <button style={{
+                    position: "absolute",
+                    top: "0.5rem",
+                    right: "0.5rem",
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "50%",
+                    width: "2.5rem",
+                    height: "2.5rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    zIndex: 1,
+                }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>
+                </button>
+                <div
+                    style={{
+                        backgroundColor: "#e8e6e1",
+                        borderRadius: "0.5rem",
+                        padding: "2rem",
+                        marginBottom: "1rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        aspectRatio: "1/1",
+                        overflow: "hidden",
+                    }}
+                >
+                    {product.imageUrl ? (
+                        <img
+                            src={product.imageUrl}
+                            alt={product.name}
+                            style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                            }}
+                        />
+                    ) : (
+                        <div
+                            style={{
+                                width: "8rem",
+                                height: "12rem",
+                                backgroundColor: rectangleColor,
+                                borderRadius: "0.5rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
+                            <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.25rem", textAlign: "center", padding: "1rem" }}>
+                                {product.name.substring(0, 30)}
+                            </span>
+                        </div>
+                    )}
+                </div>
+                <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                    {product.name}
+                </h3>
+                <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem", minHeight: "2.5rem" }}>
+                    {product.description || "Premium health product"}
+                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                    <span style={{ fontWeight: 600 }}>From ${product.price.toFixed(2)}/mo</span>
+                    <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>
+                        ${crossedOutPrice}*
+                    </span>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    {badges.map((badge, idx) => (
+                        <span
+                            key={idx}
+                            style={{
+                                backgroundColor: badge.color,
+                                color: "white",
+                                padding: "0.25rem 0.75rem",
+                                borderRadius: "1rem",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                            }}
+                        >
+                            {badge.label}
+                        </span>
+                    ))}
+                </div>
+            </div>
+        );
+    };
 
     // Show loading skeleton while fetching custom website
     if (isLoading) {
@@ -298,9 +477,9 @@ export default function AllProducts() {
                 <div style={{ marginBottom: "2rem" }}>
                     <p style={{ fontSize: "0.875rem", color: "#737373", marginBottom: "0.5rem" }}>SHOP</p>
                     <h2 style={{ fontFamily: "Georgia, serif", fontSize: "3rem", marginBottom: "0.75rem", fontWeight: 400 }}>
-                        Trending Products
+                        All Products
                     </h2>
-                    <p style={{ color: "#404040" }}>AG1 is so much more than greens. Discover our member favorites here.</p>
+                    <p style={{ color: "#404040" }}>Browse our complete catalog of health and wellness products.</p>
                 </div>
                 {/* Filter Tabs */}
                 <div style={{ display: "flex", gap: "0.5rem", marginBottom: "3rem" }}>
@@ -328,7 +507,7 @@ export default function AllProducts() {
                             cursor: "pointer",
                         }}
                     >
-                        Bundles
+                        Weight Loss
                     </button>
                     <button
                         style={{
@@ -341,7 +520,7 @@ export default function AllProducts() {
                             cursor: "pointer",
                         }}
                     >
-                        Daily Health
+                        Performance
                     </button>
                     <button
                         style={{
@@ -354,334 +533,51 @@ export default function AllProducts() {
                             cursor: "pointer",
                         }}
                     >
-                        Rest & Restore
+                        Wellness
                     </button>
                 </div>
                 {/* Products Grid */}
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                        gap: "1.5rem",
-                        marginBottom: "4rem",
-                    }}
-                >
-                    {/* AG1 Pouch */}
-                    <div style={{ cursor: "pointer" }}>
+                {productsLoading ? (
+                    <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                        <p>Loading products...</p>
+                    </div>
+                ) : products.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                        <p>No products available at the moment.</p>
+                    </div>
+                ) : (
+                    <>
                         <div
                             style={{
-                                backgroundColor: "#e8e6e1",
-                                borderRadius: "0.5rem",
-                                padding: "2rem",
-                                marginBottom: "1rem",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                aspectRatio: "1/1",
+                                display: "grid",
+                                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                                gap: "1.5rem",
+                                marginBottom: "2rem",
                             }}
                         >
-                            <div
+                            {products.map(renderProductCard)}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "center", marginBottom: "4rem" }}>
+                            <button
+                                onClick={() => router.push('/')}
                                 style={{
-                                    width: "8rem",
-                                    height: "12rem",
-                                    backgroundColor: "#004d4d",
-                                    borderRadius: "0.5rem",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
+                                    backgroundColor: primaryColor,
+                                    color: "white",
+                                    padding: "1rem 3rem",
+                                    border: "none",
+                                    borderRadius: "0.25rem",
+                                    cursor: "pointer",
+                                    fontSize: "1rem",
+                                    fontWeight: 600,
                                 }}
                             >
-                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.875rem" }}>AG1</span>
-                            </div>
+                                {clinicName} Products
+                            </button>
                         </div>
-                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
-                            AG1 Pouch
-                        </h3>
-                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
-                            All-in-one gut and health support in one Daily Health Drink.*
-                        </p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                            <span style={{ fontWeight: 600 }}>From $79/mo</span>
-                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
-                        </div>
-                        <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
-                        <div style={{ display: "flex", gap: "0.25rem" }}>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
-                        </div>
-                    </div>
-                    {/* AG1 Travel Packs */}
-                    <div style={{ cursor: "pointer" }}>
-                        <div
-                            style={{
-                                backgroundColor: "#e8e6e1",
-                                borderRadius: "0.5rem",
-                                padding: "2rem",
-                                marginBottom: "1rem",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                aspectRatio: "1/1",
-                            }}
-                        >
-                            <div
-                                style={{
-                                    width: "8rem",
-                                    height: "12rem",
-                                    backgroundColor: "#004d4d",
-                                    borderRadius: "0.5rem",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                }}
-                            >
-                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.875rem" }}>AG1</span>
-                            </div>
-                        </div>
-                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
-                            AG1 Travel Packs
-                        </h3>
-                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
-                            Plan your Daily Health Dose on-the-go with 30 individual Travel Packs.
-                        </p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                            <span style={{ fontWeight: 600 }}>From $89/mo</span>
-                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$109*</span>
-                        </div>
-                        <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
-                        <div style={{ display: "flex", gap: "0.25rem" }}>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
-                        </div>
-                    </div>
-                    {/* AGZ */}
-                    <div style={{ cursor: "pointer" }}>
-                        <div
-                            style={{
-                                backgroundColor: "#e8e6e1",
-                                borderRadius: "0.5rem",
-                                padding: "2rem",
-                                marginBottom: "1rem",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                aspectRatio: "1/1",
-                            }}
-                        >
-                            <div
-                                style={{
-                                    width: "8rem",
-                                    height: "12rem",
-                                    backgroundColor: "#8b7355",
-                                    borderRadius: "0.5rem",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                }}
-                            >
-                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.875rem" }}>AGZ</span>
-                            </div>
-                        </div>
-                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
-                            AGZ
-                        </h3>
-                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
-                            Individual Travel Packs, 30 servings. Ease your mind & body into restful sleep without feeling groggy,
-                            magnesium & adaptogens.*
-                        </p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                            <span style={{ fontWeight: 600 }}>From $79/mo</span>
-                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
-                        </div>
-                        <div style={{ display: "flex", gap: "0.25rem" }}>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#8b7355" }}></div>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d97706" }}></div>
-                            <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#ca8a04" }}></div>
-                        </div>
-                    </div>
-                    {/* AG2 Variety Pack */}
-                    <div style={{ cursor: "pointer" }}>
-                        <div
-                            style={{
-                                backgroundColor: "#e8e6e1",
-                                borderRadius: "0.5rem",
-                                padding: "2rem",
-                                marginBottom: "1rem",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                aspectRatio: "1/1",
-                            }}
-                        >
-                            <div style={{ display: "flex", gap: "0.5rem" }}>
-                                <div
-                                    style={{ width: "2.5rem", height: "10rem", backgroundColor: "#7c3aed", borderRadius: "0.25rem" }}
-                                ></div>
-                                <div
-                                    style={{ width: "2.5rem", height: "10rem", backgroundColor: "#f9a8d4", borderRadius: "0.25rem" }}
-                                ></div>
-                                <div
-                                    style={{ width: "2.5rem", height: "10rem", backgroundColor: "#6ee7b7", borderRadius: "0.25rem" }}
-                                ></div>
-                            </div>
-                        </div>
-                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
-                            AG2 Variety Pack (3Pk)
-                        </h3>
-                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
-                            Ease your mind and body into restful sleep with calming tones, magnesium & adaptogens. Try 10 individual
-                            packs in Berry, Chocolate, Chocolate Mint.*
-                        </p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                            <span style={{ fontWeight: 600 }}>$39.99</span>
-                        </div>
-                    </div>
-                    {/* AG Omega3 */}
-                    <div style={{ cursor: "pointer" }}>
-                        <div
-                            style={{
-                                backgroundColor: "#e8e6e1",
-                                borderRadius: "0.5rem",
-                                padding: "2rem",
-                                marginBottom: "1rem",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                aspectRatio: "1/1",
-                            }}
-                        >
-                            <div
-                                style={{
-                                    width: "8rem",
-                                    height: "8rem",
-                                    backgroundColor: "#004d4d",
-                                    borderRadius: "50%",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                }}
-                            >
-                                <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.5rem" }}>AG</span>
-                            </div>
-                        </div>
-                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
-                            AG Omega3
-                        </h3>
-                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
-                            Complements AG1 for added brain support with high quality fish oil.*
-                        </p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                            <span style={{ fontWeight: 600 }}>From $35/mo</span>
-                            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$59*</span>
-                        </div>
-                    </div>
-                    {/* AG Vitamin D3+K2 */}
-                    <div style={{ cursor: "pointer" }}>
-                        <div
-                            style={{
-                                backgroundColor: "#e8e6e1",
-                                borderRadius: "0.5rem",
-                                padding: "2rem",
-                                marginBottom: "1rem",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                aspectRatio: "1/1",
-                            }}
-                        >
-                            <div style={{ width: "6rem", height: "10rem", backgroundColor: "#004d4d", borderRadius: "0.5rem" }}></div>
-                        </div>
-                        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
-                            AG Vitamin D3+K2
-                        </h3>
-                        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem" }}>
-                            Complements AG1 for added immune support with liquid drops.*
-                        </p>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                            <span style={{ fontWeight: 600 }}>$29</span>
-                        </div>
-                    </div>
-                </div>
-
-
-                {/* SECOND PART */}
-
-                {/* Title Section */}
-                <div style={{ marginBottom: "2rem" }}>
-                    <p style={{ fontSize: "0.875rem", color: "#737373", marginBottom: "0.5rem" }}>SHOP</p>
-                    <h2 style={{ fontFamily: "Georgia, serif", fontSize: "3rem", marginBottom: "0.75rem", fontWeight: 400 }}>
-                        Trending Protocols
-                    </h2>
-                    <p style={{ color: "#404040" }}>AG1 is so much more than greens. Discover our member favorites here.</p>
-                </div>
-                {/* Filter Tabs */}
-                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "3rem" }}>
-                    <button
-                        style={{
-                            padding: "0.5rem 1rem",
-                            backgroundColor: "#8b7355",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "0.25rem",
-                            fontSize: "0.875rem",
-                            cursor: "pointer",
-                        }}
-                    >
-                        All
-                    </button>
-                    <button
-                        style={{
-                            padding: "0.5rem 1rem",
-                            backgroundColor: "white",
-                            color: "inherit",
-                            border: "1px solid #d4d4d4",
-                            borderRadius: "0.25rem",
-                            fontSize: "0.875rem",
-                            cursor: "pointer",
-                        }}
-                    >
-                        Bundles
-                    </button>
-                    <button
-                        style={{
-                            padding: "0.5rem 1rem",
-                            backgroundColor: "white",
-                            color: "inherit",
-                            border: "1px solid #d4d4d4",
-                            borderRadius: "0.25rem",
-                            fontSize: "0.875rem",
-                            cursor: "pointer",
-                        }}
-                    >
-                        Daily Health
-                    </button>
-                    <button
-                        style={{
-                            padding: "0.5rem 1rem",
-                            backgroundColor: "white",
-                            color: "inherit",
-                            border: "1px solid #d4d4d4",
-                            borderRadius: "0.25rem",
-                            fontSize: "0.875rem",
-                            cursor: "pointer",
-                        }}
-                    >
-                        Rest & Restore
-                    </button>
-                </div>
-                {/* Products Grid */}
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                        gap: "1.5rem",
-                        marginBottom: "4rem",
-                    }}
-                >
+                    </>
+                )}
+                {/* Removed hardcoded products - now showing dynamic products from API */}
+                <div style={{ display: 'none' }}>
                     {/* AG1 Pouch */}
                     <div style={{ cursor: "pointer" }}>
                         <div

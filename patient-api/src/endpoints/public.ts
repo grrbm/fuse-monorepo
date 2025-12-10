@@ -92,5 +92,38 @@ export function registerPublicEndpoints(app: Express) {
             });
         }
     });
+
+    // Public endpoint to get ALL products (for all-products page)
+    app.get("/public/all-products", async (req, res) => {
+        try {
+            const allProducts = await Product.findAll({
+                where: { isActive: true },
+                attributes: ['id', 'name', 'description', 'imageUrl', 'categories', 'price'],
+                limit: 100,
+                order: [['createdAt', 'DESC']]
+            });
+
+            const products = allProducts.map((product: any) => ({
+                id: product.id,
+                name: product.name,
+                description: product.description,
+                imageUrl: product.imageUrl,
+                categories: product.categories || [],
+                price: product.price,
+                wholesalePrice: product.price,
+            }));
+
+            res.status(200).json({
+                success: true,
+                data: products
+            });
+        } catch (error) {
+            console.error('Error fetching all products:', error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to fetch all products"
+            });
+        }
+    });
 }
 
