@@ -2,6 +2,7 @@ import { useRouter } from 'next/router';
 import { useState, useEffect, useRef } from 'react';
 import { extractClinicSlugFromDomain } from '../lib/clinic-utils';
 import { apiCall } from '../lib/api';
+import ScrollingFeaturesBar from '../components/ScrollingFeaturesBar';
 
 interface CustomWebsite {
   portalTitle?: string;
@@ -524,6 +525,9 @@ export default function LandingPage() {
           </button>
         </div>
       </div>
+
+      {/* Scrolling Features Bar */}
+      <ScrollingFeaturesBar textColor={primaryColor} />
 
       {/* Main Content */}
       <main style={{ maxWidth: "1280px", margin: "0 auto", padding: "3rem 1.5rem" }}>
