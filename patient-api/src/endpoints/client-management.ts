@@ -523,27 +523,32 @@ export function registerClientManagementEndpoints(
       }
 
       // Get or create UserRoles
-      let userRoles = await UserRoles.findOne({ where: { userId } });
+      let userRoles = await UserRoles.findOne({ 
+        where: { userId },
+        attributes: ['id', 'deletedAt', 'userId', 'patient', 'doctor', 'admin', 'brand', 'superAdmin', 'createdAt', 'updatedAt']
+      });
 
       if (!userRoles) {
-        // Create new UserRoles record
-        userRoles = await UserRoles.create({
+        // Create new UserRoles record (exclude superAdmin - column may not exist in DB)
+        const createData: any = {
           userId,
           patient: patient ?? false,
           doctor: doctor ?? false,
           admin: admin ?? false,
           brand: brand ?? false,
-          superAdmin: superAdmin ?? false,
-        });
+        };
+        // Note: superAdmin column may not exist in database, so we exclude it from create
+        userRoles = await UserRoles.create(createData);
         console.log(`✅ [Client Mgmt] Created UserRoles for user ${userId}`);
       } else {
-        // Update existing roles
+        // Update existing roles (exclude superAdmin - column may not exist in DB)
         const updates: any = {};
         if (typeof patient === "boolean") updates.patient = patient;
         if (typeof doctor === "boolean") updates.doctor = doctor;
         if (typeof admin === "boolean") updates.admin = admin;
         if (typeof brand === "boolean") updates.brand = brand;
-        if (typeof superAdmin === "boolean") updates.superAdmin = superAdmin;
+        // Note: superAdmin column may not exist in database, so we exclude it from update
+        // To set superAdmin, add the column to the database first
 
         await userRoles.update(updates);
         console.log(
@@ -622,7 +627,10 @@ export function registerClientManagementEndpoints(
       }
 
       // Update UserRoles table - set only the specified role to true, others to false
-      let userRoles = await UserRoles.findOne({ where: { userId } });
+      let userRoles = await UserRoles.findOne({ 
+        where: { userId },
+        attributes: ['id', 'deletedAt', 'userId', 'patient', 'doctor', 'admin', 'brand', 'superAdmin', 'createdAt', 'updatedAt']
+      });
 
       if (!userRoles) {
         userRoles = await UserRoles.create({

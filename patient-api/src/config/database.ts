@@ -543,7 +543,8 @@ export async function initializeDatabase() {
       for (const user of users) {
         // Check if UserRoles entry already exists
         const existingRoles = await UserRoles.findOne({
-          where: { userId: user.id }
+          where: { userId: user.id },
+          attributes: ['id', 'deletedAt', 'userId', 'patient', 'doctor', 'admin', 'brand', 'createdAt', 'updatedAt']
         });
 
         if (!existingRoles) {
