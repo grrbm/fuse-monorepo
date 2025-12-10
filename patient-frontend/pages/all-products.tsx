@@ -30,6 +30,7 @@ export default function AllProducts() {
     const [isLoading, setIsLoading] = useState(true);
     const [products, setProducts] = useState<Product[]>([]);
     const [productsLoading, setProductsLoading] = useState(true);
+    const [hoveredCardIndex, setHoveredCardIndex] = useState<number | null>(null);
 
     useEffect(() => {
         const loadCustomWebsite = async () => {
@@ -166,8 +167,20 @@ export default function AllProducts() {
         const rectangleColors = ["#004d4d", "#004d4d", "#8b7355", "#8b7355"];
         const rectangleColor = rectangleColors[index % 4];
 
+        const isHovered = hoveredCardIndex === index;
+
         return (
-            <div key={product.id} style={{ cursor: "pointer", position: "relative" }}>
+            <div
+                key={product.id}
+                onMouseEnter={() => setHoveredCardIndex(index)}
+                onMouseLeave={() => setHoveredCardIndex(null)}
+                style={{
+                    cursor: "pointer",
+                    position: "relative",
+                    transform: isHovered ? "scale(1.05)" : "scale(1)",
+                    transition: "transform 0.3s ease",
+                }}
+            >
                 <button style={{
                     position: "absolute",
                     top: "0.5rem",
@@ -208,6 +221,8 @@ export default function AllProducts() {
                                 width: "100%",
                                 height: "100%",
                                 objectFit: "cover",
+                                transform: isHovered ? "scale(1.1)" : "scale(1)",
+                                transition: "transform 0.3s ease",
                             }}
                         />
                     ) : (
@@ -220,6 +235,8 @@ export default function AllProducts() {
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
+                                transform: isHovered ? "scale(1.15)" : "scale(1)",
+                                transition: "transform 0.3s ease",
                             }}
                         >
                             <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.25rem", textAlign: "center", padding: "1rem" }}>
@@ -228,7 +245,14 @@ export default function AllProducts() {
                         </div>
                     )}
                 </div>
-                <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+                <h3 style={{
+                    fontFamily: "Georgia, serif",
+                    fontSize: "1.25rem",
+                    marginBottom: "0.5rem",
+                    fontWeight: 400,
+                    color: isHovered ? "#38bdf8" : "inherit",
+                    transition: "color 0.3s ease",
+                }}>
                     {product.name}
                 </h3>
                 <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem", minHeight: "2.5rem" }}>
