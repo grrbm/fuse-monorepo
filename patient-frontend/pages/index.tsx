@@ -548,16 +548,35 @@ export default function LandingPage() {
             <p>No products available at the moment.</p>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-              gap: "1.5rem",
-              marginBottom: "4rem",
-            }}
-          >
-            {products.slice(0, 6).map(renderProductCard)}
-          </div>
+          <>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                gap: "1.5rem",
+                marginBottom: "2rem",
+              }}
+            >
+              {products.slice(0, 6).map(renderProductCard)}
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "4rem" }}>
+              <button
+                onClick={() => router.push('/all-products')}
+                style={{
+                  backgroundColor: primaryColor,
+                  color: "white",
+                  padding: "1rem 3rem",
+                  border: "none",
+                  borderRadius: "0.25rem",
+                  cursor: "pointer",
+                  fontSize: "1rem",
+                  fontWeight: 600,
+                }}
+              >
+                Show All Products
+              </button>
+            </div>
+          </>
         )}
         {/* Removed hardcoded products - now showing dynamic products from API */}
         <div style={{display: 'none'}}>
