@@ -83,11 +83,9 @@ export class AuditService {
 
         try {
             const userRoles = await UserRoles.findOne({ 
-                where: { userId },
-                attributes: ['id', 'deletedAt', 'userId', 'patient', 'doctor', 'admin', 'brand', 'superAdmin', 'createdAt', 'updatedAt']
+                where: { userId }
             });
-            // superAdmin may not exist in DB, so check safely
-            return (userRoles as any)?.superAdmin === true;
+            return userRoles?.superAdmin === true;
         } catch (error) {
             // If we can't check, assume not superAdmin and continue logging
             return false;

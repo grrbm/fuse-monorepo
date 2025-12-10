@@ -28,7 +28,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = (props) => 
     questionnaire,
     loading,
     // State
-    currentStepIndex,
+        currentStepIndex,
     answers,
     errors,
     selectedProducts,
@@ -61,7 +61,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = (props) => 
     setEmailModalError,
     // Plans & theme
     plans,
-    selectedPlan,
+        selectedPlan,
     theme,
     themeVars,
     pharmacyCoverages,

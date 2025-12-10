@@ -122,23 +122,16 @@ export function registerAuditLogsEndpoints(
       const superAdminUserIds = new Set<string>();
 
       if (userIds.length > 0) {
-        try {
-          const superAdminRoles = await UserRoles.findAll({
-            where: {
-              userId: { [Op.in]: userIds },
-            },
-            attributes: ['id', 'deletedAt', 'userId', 'patient', 'doctor', 'admin', 'brand', 'superAdmin', 'createdAt', 'updatedAt']
-          });
-          // Filter for superAdmin (may not exist in DB, so check safely)
-          superAdminRoles.forEach((r) => {
-            if ((r as any)?.superAdmin === true) {
-              superAdminUserIds.add(r.userId);
-            }
-          });
-        } catch (error) {
-          // If superAdmin column doesn't exist, skip this check
-          console.warn('⚠️ superAdmin column not available, skipping superAdmin check');
-        }
+        const superAdminRoles = await UserRoles.findAll({
+          where: {
+            userId: { [Op.in]: userIds },
+          },
+        });
+        superAdminRoles.forEach((r) => {
+          if (r.superAdmin === true) {
+            superAdminUserIds.add(r.userId);
+          }
+        });
       }
 
       // Add isSuperAdmin flag to each log

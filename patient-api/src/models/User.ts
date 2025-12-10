@@ -361,11 +361,8 @@ export default class User extends Entity {
       return this.userRoles;
     }
 
-    // Explicitly select only columns that exist in the database
-    // Exclude superAdmin if column doesn't exist
     let roles = await UserRoles.findOne({ 
-      where: { userId: this.id },
-      attributes: ['id', 'deletedAt', 'userId', 'patient', 'doctor', 'admin', 'brand', 'createdAt', 'updatedAt']
+      where: { userId: this.id }
     });
     if (!roles) {
       // Create roles based on deprecated role field

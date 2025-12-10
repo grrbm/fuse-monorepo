@@ -46,10 +46,10 @@ export default class UserRoles extends Entity {
 
     @Column({
         type: DataType.BOOLEAN,
-        allowNull: true,
+        allowNull: false,
         defaultValue: false,
     })
-    declare superAdmin?: boolean;
+    declare superAdmin: boolean;
 
     @BelongsTo(() => User)
     declare user: User;
