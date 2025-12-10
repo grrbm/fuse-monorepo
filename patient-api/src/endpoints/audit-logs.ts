@@ -125,6 +125,7 @@ export function registerAuditLogsEndpoints(
         const superAdminRoles = await UserRoles.findAll({
           where: {
             userId: { [Op.in]: userIds },
+            superAdmin: true,
           },
         });
         superAdminRoles.forEach((r) => {

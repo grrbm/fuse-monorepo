@@ -535,6 +535,7 @@ export function registerClientManagementEndpoints(
           doctor: doctor ?? false,
           admin: admin ?? false,
           brand: brand ?? false,
+          superAdmin: superAdmin ?? false,
         });
         console.log(`✅ [Client Mgmt] Created UserRoles for user ${userId}`);
       } else {
@@ -544,6 +545,7 @@ export function registerClientManagementEndpoints(
         if (typeof doctor === "boolean") updates.doctor = doctor;
         if (typeof admin === "boolean") updates.admin = admin;
         if (typeof brand === "boolean") updates.brand = brand;
+        if (typeof superAdmin === "boolean") updates.superAdmin = superAdmin;
 
         await userRoles.update(updates);
         console.log(
