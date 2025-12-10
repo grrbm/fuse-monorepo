@@ -13,20 +13,17 @@ class SmsService {
    */
   async send(to: string, body: string): Promise<void> {
     if (!TWILIO_API_KEY) {
-      console.warn('⚠️ TWILIO_API_KEY not configured. SMS sending is disabled.');
       return;
     }
 
-    const parts = TWILIO_API_KEY.split(':');
+    const parts = TWILIO_API_KEY.split(":");
     if (parts.length < 3) {
-      console.warn('⚠️ TWILIO_API_KEY format invalid. Expected "accountSid:authToken:fromNumber"');
       return;
     }
 
     const [accountSid, authToken, fromNumber] = parts;
 
     if (!accountSid || !authToken || !fromNumber) {
-      console.warn('⚠️ TWILIO_API_KEY missing account SID, auth token, or from number');
       return;
     }
 
@@ -34,7 +31,6 @@ class SmsService {
     const normalizedPhone = this.normalizePhoneNumber(to);
 
     if (!normalizedPhone) {
-      console.warn(`⚠️ Invalid phone number format: ${to}`);
       return;
     }
 
@@ -47,23 +43,20 @@ class SmsService {
 
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${Buffer.from(
+            `${accountSid}:${authToken}`
+          ).toString("base64")}`,
+          "Content-Type": "application/x-www-form-urlencoded",
         },
         body: params.toString(),
       });
 
       if (!response.ok) {
-        const text = await response.text();
-        console.error('❌ Twilio SMS send failed:', text);
         throw new Error(`Twilio SMS failed with status ${response.status}`);
       }
-
-      console.log('📱 SMS sent via Twilio:', { to: normalizedPhone });
     } catch (error) {
-      console.error('❌ Error sending SMS:', error);
       throw error;
     }
   }
@@ -76,7 +69,7 @@ class SmsService {
     if (!phone) return null;
 
     // Remove all non-digit characters
-    const digits = phone.replace(/\D/g, '');
+    const digits = phone.replace(/\D/g, "");
 
     // If it's a 10-digit US number, add +1
     if (digits.length === 10) {
@@ -84,12 +77,12 @@ class SmsService {
     }
 
     // If it's 11 digits starting with 1, add +
-    if (digits.length === 11 && digits.startsWith('1')) {
+    if (digits.length === 11 && digits.startsWith("1")) {
       return `+${digits}`;
     }
 
     // If it already starts with +, return as is
-    if (phone.startsWith('+')) {
+    if (phone.startsWith("+")) {
       return phone;
     }
 
@@ -103,4 +96,3 @@ class SmsService {
 }
 
 export default new SmsService();
-

@@ -14,30 +14,26 @@ export async function apiCall<T = any>(
 ): Promise<ApiResponse<T>> {
   try {
     // Get JWT token from localStorage
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth-token') : null;
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("auth-token") : null;
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
-    console.log('API URL being used:', apiUrl, 'Environment variable:', process.env.NEXT_PUBLIC_API_URL);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
 
     const response = await fetch(`${apiUrl}${endpoint}`, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
+        "Content-Type": "application/json",
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
     });
 
-    console.log('📡 Response Debug:');
-    console.log('  Status:', response.status);
-    console.log('  Status Text:', response.statusText);
-    console.log('  Response headers:', Object.fromEntries(response.headers.entries()));
-
     const data = await response.json();
-    console.log('  Response data:', data);
 
     if (!response.ok) {
-      console.error('❌ API call failed:', endpoint, '- Status:', response.status);
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ API call failed with status", response.status);
+      }
       return {
         success: false,
         error: data.message || `Request failed with status ${response.status}`,
@@ -45,15 +41,23 @@ export async function apiCall<T = any>(
     }
 
     // If this is a successful signin, store the token
-    if (endpoint === '/auth/signin' && data.token && typeof window !== 'undefined') {
-      localStorage.setItem('auth-token', data.token);
-      console.log('✅ Token stored in localStorage');
+    if (
+      endpoint === "/auth/signin" &&
+      data.token &&
+      typeof window !== "undefined"
+    ) {
+      localStorage.setItem("auth-token", data.token);
+      if (process.env.NODE_ENV === "development") {
+        console.log("✅ Token stored in localStorage");
+      }
     }
 
     // If this is a signout, remove the token
-    if (endpoint === '/auth/signout' && typeof window !== 'undefined') {
-      localStorage.removeItem('auth-token');
-      console.log('✅ Token removed from localStorage');
+    if (endpoint === "/auth/signout" && typeof window !== "undefined") {
+      localStorage.removeItem("auth-token");
+      if (process.env.NODE_ENV === "development") {
+        console.log("✅ Token removed from localStorage");
+      }
     }
 
     return {
@@ -62,10 +66,12 @@ export async function apiCall<T = any>(
     };
   } catch (error) {
     // Don't log the actual error - could contain PHI
-    console.error(`Network error on API call: ${endpoint}`);
+    if (process.env.NODE_ENV === "development") {
+      console.error("Network error on API call");
+    }
     return {
       success: false,
-      error: 'Network error occurred. Please try again.',
+      error: "Network error occurred. Please try again.",
     };
   }
 }
@@ -73,34 +79,46 @@ export async function apiCall<T = any>(
 // Specialized authentication API calls
 export const authApi = {
   signIn: async (email: string, password: string) => {
-    console.log('🔐 SignIn attempt:', { email, passwordLength: password.length });
-    const result = await apiCall('/auth/signin', {
-      method: 'POST',
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔐 SignIn attempt");
+    }
+    const result = await apiCall("/auth/signin", {
+      method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    console.log('🔐 SignIn result:', result);
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔐 SignIn result", { success: result.success });
+    }
     return result;
   },
 
   // MFA verification endpoint
   verifyMfa: async (mfaToken: string, code: string) => {
-    console.log('🔐 MFA verify attempt');
-    const result = await apiCall('/auth/mfa/verify', {
-      method: 'POST',
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔐 MFA verify attempt");
+    }
+    const result = await apiCall("/auth/mfa/verify", {
+      method: "POST",
       body: JSON.stringify({ mfaToken, code }),
     });
-    console.log('🔐 MFA verify result:', result);
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔐 MFA verify result", { success: result.success });
+    }
     return result;
   },
 
   // MFA resend code endpoint
   resendMfaCode: async (mfaToken: string) => {
-    console.log('🔐 MFA resend attempt');
-    const result = await apiCall('/auth/mfa/resend', {
-      method: 'POST',
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔐 MFA resend attempt");
+    }
+    const result = await apiCall("/auth/mfa/resend", {
+      method: "POST",
       body: JSON.stringify({ mfaToken }),
     });
-    console.log('🔐 MFA resend result:', result);
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔐 MFA resend result", { success: result.success });
+    }
     return result;
   },
 
@@ -109,24 +127,21 @@ export const authApi = {
     lastName: string;
     email: string;
     password: string;
-    role: 'patient' | 'provider';
+    role: "patient" | "provider";
     dateOfBirth?: string;
     phoneNumber?: string;
     clinicName?: string;
   }) =>
-    apiCall('/auth/signup', {
-      method: 'POST',
+    apiCall("/auth/signup", {
+      method: "POST",
       body: JSON.stringify(userData),
     }),
 
-  signOut: async () =>
-    apiCall('/auth/signout', { method: 'POST' }),
+  signOut: async () => apiCall("/auth/signout", { method: "POST" }),
 
-  getUser: async () =>
-    apiCall('/auth/me'),
+  getUser: async () => apiCall("/auth/me"),
 
-  refreshSession: async () =>
-    apiCall('/auth/refresh', { method: 'POST' }),
+  refreshSession: async () => apiCall("/auth/refresh", { method: "POST" }),
 
   updateProfile: async (profileData: {
     firstName: string;
@@ -138,8 +153,8 @@ export const authApi = {
     state?: string;
     zipCode?: string;
   }) =>
-    apiCall('/auth/profile', {
-      method: 'PUT',
+    apiCall("/auth/profile", {
+      method: "PUT",
       body: JSON.stringify(profileData),
     }),
 };
@@ -156,23 +171,26 @@ export async function fetchWithAuth<T>(endpoint: string): Promise<T | null> {
 }
 
 // Upload file function (for chat attachments)
-export async function uploadFile(file: File): Promise<ApiResponse<{
-  url: string;
-  fileName: string;
-  contentType: string;
-  size: number;
-}>> {
+export async function uploadFile(file: File): Promise<
+  ApiResponse<{
+    url: string;
+    fileName: string;
+    contentType: string;
+    size: number;
+  }>
+> {
   try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth-token') : null;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api';
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("auth-token") : null;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     const response = await fetch(`${apiUrl}/patient/chat/upload-file`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        ...(token && { 'Authorization': `Bearer ${token}` }),
+        ...(token && { Authorization: `Bearer ${token}` }),
         // No Content-Type header - browser sets it automatically with boundary for FormData
       },
       body: formData,
@@ -181,7 +199,11 @@ export async function uploadFile(file: File): Promise<ApiResponse<{
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('❌ File upload failed:', response.status);
+      if (process.env.NODE_ENV === "development") {
+        console.error("❌ File upload failed with status", response.status);
+      } else {
+        console.error("❌ File upload failed");
+      }
       return {
         success: false,
         error: data.message || `Upload failed with status ${response.status}`,
@@ -193,10 +215,12 @@ export async function uploadFile(file: File): Promise<ApiResponse<{
       data: data.data,
     };
   } catch (error) {
-    console.error('Network error on file upload');
+    if (process.env.NODE_ENV === "development") {
+      console.error("Network error on file upload");
+    }
     return {
       success: false,
-      error: 'Network error occurred during upload. Please try again.',
+      error: "Network error occurred during upload. Please try again.",
     };
   }
 }
