@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { extractClinicSlugFromDomain } from '../lib/clinic-utils';
 import { apiCall } from '../lib/api';
 
@@ -31,6 +31,8 @@ export default function LandingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
+  const [isCarouselHovered, setIsCarouselHovered] = useState(false);
+  const carouselRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const loadCustomWebsite = async () => {
@@ -102,6 +104,33 @@ export default function LandingPage() {
 
     loadProducts();
   }, []);
+
+  // Auto-scroll carousel effect
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    if (!carousel || isCarouselHovered || productsLoading || products.length === 0) return;
+
+    const scrollSpeed = 1; // pixels per frame
+    let animationFrameId: number;
+
+    const scroll = () => {
+      if (carousel && !isCarouselHovered) {
+        // If we've scrolled to the end, reset to the beginning
+        if (carousel.scrollLeft >= carousel.scrollWidth - carousel.clientWidth) {
+          carousel.scrollLeft = 0;
+        } else {
+          carousel.scrollLeft += scrollSpeed;
+        }
+      }
+      animationFrameId = requestAnimationFrame(scroll);
+    };
+
+    animationFrameId = requestAnimationFrame(scroll);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [isCarouselHovered, productsLoading, products.length]);
 
   // Handle nested data structure from API response
   const websiteData = (customWebsite as any)?.data || customWebsite;
@@ -538,7 +567,7 @@ export default function LandingPage() {
             Rest & Restore
           </button>
         </div>
-        {/* Products Grid */}
+        {/* Products Carousel */}
         {productsLoading ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
             <p>Loading products...</p>
@@ -548,16 +577,37 @@ export default function LandingPage() {
             <p>No products available at the moment.</p>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-              gap: "1.5rem",
-              marginBottom: "4rem",
-            }}
-          >
-            {products.slice(0, 6).map(renderProductCard)}
-          </div>
+          <>
+            <style jsx global>{`
+              .products-carousel::-webkit-scrollbar {
+                display: none;
+              }
+            `}</style>
+            <div
+              ref={carouselRef}
+              className="products-carousel"
+              onMouseEnter={() => setIsCarouselHovered(true)}
+              onMouseLeave={() => setIsCarouselHovered(false)}
+              style={{
+                display: "flex",
+                gap: "1.5rem",
+                marginBottom: "4rem",
+                overflowX: "auto",
+                scrollBehavior: "smooth",
+                paddingBottom: "1rem",
+                // Hide scrollbar but keep functionality
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+              }}
+            >
+              {/* Duplicate products for infinite scroll effect */}
+              {[...products.slice(0, 6), ...products.slice(0, 6)].map((product, index) => (
+                <div key={`${product.id}-${index}`} style={{ minWidth: "280px", maxWidth: "280px", flexShrink: 0 }}>
+                  {renderProductCard(product, index)}
+                </div>
+              ))}
+            </div>
+          </>
         )}
         {/* Removed hardcoded products - now showing dynamic products from API */}
         <div style={{ display: 'none' }}>
