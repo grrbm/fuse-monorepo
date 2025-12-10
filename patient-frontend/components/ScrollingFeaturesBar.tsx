@@ -78,9 +78,10 @@ const FeatureIcon = ({ icon }: { icon: string }) => {
 
 interface ScrollingFeaturesBarProps {
   textColor?: string;
+  position?: "static" | "absolute";
 }
 
-export default function ScrollingFeaturesBar({ textColor = "#004d4d" }: ScrollingFeaturesBarProps) {
+export default function ScrollingFeaturesBar({ textColor = "#004d4d", position = "static" }: ScrollingFeaturesBarProps) {
   return (
     <div
       style={{
@@ -88,7 +89,11 @@ export default function ScrollingFeaturesBar({ textColor = "#004d4d" }: Scrollin
         color: textColor,
         padding: "1rem 0",
         overflow: "hidden",
-        position: "relative",
+        position: position,
+        bottom: position === "absolute" ? 0 : undefined,
+        left: position === "absolute" ? 0 : undefined,
+        right: position === "absolute" ? 0 : undefined,
+        zIndex: position === "absolute" ? 20 : undefined,
       }}
     >
       <style jsx global>{`

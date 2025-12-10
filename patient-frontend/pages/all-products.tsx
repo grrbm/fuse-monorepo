@@ -494,10 +494,9 @@ export default function AllProducts() {
                         Shop Now
                     </button>
                 </div>
+                {/* Scrolling Features Bar - positioned at bottom of hero */}
+                <ScrollingFeaturesBar textColor="white" position="absolute" />
             </div>
-
-            {/* Scrolling Features Bar */}
-            <ScrollingFeaturesBar textColor={primaryColor} />
 
             {/* Main Content */}
             <main style={{ maxWidth: "1280px", margin: "0 auto", padding: "3rem 1.5rem" }}>
