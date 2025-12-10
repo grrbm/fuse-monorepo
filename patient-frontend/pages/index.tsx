@@ -14,10 +14,23 @@ interface CustomWebsite {
   heroSubtitle?: string;
 }
 
+interface Product {
+  id: string;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  category?: string;
+  categories?: string[];
+  price: number;
+  wholesalePrice?: number;
+}
+
 export default function LandingPage() {
   const router = useRouter();
   const [customWebsite, setCustomWebsite] = useState<CustomWebsite | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
 
   useEffect(() => {
     const loadCustomWebsite = async () => {
@@ -62,6 +75,34 @@ export default function LandingPage() {
     loadCustomWebsite();
   }, []);
 
+  // Fetch products
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const domainInfo = await extractClinicSlugFromDomain();
+        const endpoint = domainInfo.hasClinicSubdomain && domainInfo.clinicSlug
+          ? `/public/products/${domainInfo.clinicSlug}`
+          : `/public/products`;
+
+        console.log('🛍️ Fetching products from:', endpoint);
+        const result = await apiCall(endpoint);
+
+        if (result.success && result.data?.data) {
+          setProducts(result.data.data);
+        } else if (result.success && result.data) {
+          setProducts(result.data);
+        }
+        console.log('✅ Loaded products:', result);
+      } catch (error) {
+        console.error('❌ Error loading products:', error);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, []);
+
   // Handle nested data structure from API response
   const websiteData = (customWebsite as any)?.data || customWebsite;
 
@@ -71,6 +112,140 @@ export default function LandingPage() {
   const primaryColor = websiteData?.primaryColor || "#004d4d";
   const fontFamily = websiteData?.fontFamily || "Georgia, serif";
   const logo = websiteData?.logo;
+
+  // Helper function to render a product card
+  const renderProductCard = (product: Product) => {
+    const badges = getBadges(product);
+    return (
+      <div key={product.id} style={{ cursor: "pointer", position: "relative" }}>
+        <button style={{
+          position: "absolute",
+          top: "0.5rem",
+          right: "0.5rem",
+          background: "white",
+          border: "1px solid #e2e8f0",
+          borderRadius: "50%",
+          width: "2.5rem",
+          height: "2.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          zIndex: 1,
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+          </svg>
+        </button>
+        <div
+          style={{
+            backgroundColor: "#e8e6e1",
+            borderRadius: "0.5rem",
+            padding: "2rem",
+            marginBottom: "1rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            aspectRatio: "1/1",
+            overflow: "hidden",
+          }}
+        >
+          {product.imageUrl ? (
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: "8rem",
+                height: "12rem",
+                backgroundColor: primaryColor,
+                borderRadius: "0.5rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span style={{ fontFamily: "Georgia, serif", color: "white", fontSize: "1.25rem", textAlign: "center", padding: "1rem" }}>
+                {product.name.substring(0, 30)}
+              </span>
+            </div>
+          )}
+        </div>
+        <h3 style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", marginBottom: "0.5rem", fontWeight: 400 }}>
+          {product.name}
+        </h3>
+        <p style={{ fontSize: "0.875rem", color: "#525252", marginBottom: "0.75rem", minHeight: "2.5rem" }}>
+          {product.description || "Premium health product"}
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+          <span style={{ fontWeight: 600 }}>${product.price}</span>
+          {product.wholesalePrice && product.wholesalePrice !== product.price && (
+            <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>
+              ${product.wholesalePrice}
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          {badges.map((badge, idx) => (
+            <span
+              key={idx}
+              style={{
+                backgroundColor: badge.color,
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}
+            >
+              {badge.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Helper function to get badges based on product category/categories
+  const getBadges = (product: Product) => {
+    const categories = product.categories || [product.category] || [];
+    const badgeMap: { [key: string]: { label: string; color: string } } = {
+      'weightloss': { label: 'Weight Loss', color: '#ef4444' },
+      'weight-loss': { label: 'Weight Loss', color: '#ef4444' },
+      'hairgrowth': { label: 'Hair Growth', color: '#8b5cf6' },
+      'hair-growth': { label: 'Hair Growth', color: '#8b5cf6' },
+      'performance': { label: 'Muscle Growth', color: '#3b82f6' },
+      'recovery': { label: 'Recovery', color: '#10b981' },
+      'flexibility': { label: 'Flexibility', color: '#a855f7' },
+      'sexual-health': { label: 'Sexual Health', color: '#ec4899' },
+      'skincare': { label: 'Better Skin', color: '#f59e0b' },
+      'wellness': { label: 'Wellness', color: '#06b6d4' },
+      'energy': { label: 'More Energy', color: '#eab308' },
+      'sleep': { label: 'Better Sleep', color: '#6366f1' },
+    };
+
+    const badges = categories
+      .map((cat: string) => {
+        const normalized = cat.toLowerCase().replace(/\s+/g, '-');
+        return badgeMap[normalized];
+      })
+      .filter(Boolean)
+      .slice(0, 2); // Max 2 badges per product
+
+    // Default badges if none found
+    if (badges.length === 0) {
+      badges.push({ label: 'Wellness', color: '#06b6d4' });
+    }
+
+    return badges;
+  };
 
   console.log('🎨 Rendering with values:', {
     heroImageUrl,
@@ -359,14 +534,28 @@ export default function LandingPage() {
           </button>
         </div>
         {/* Products Grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-            gap: "1.5rem",
-            marginBottom: "4rem",
-          }}
-        >
+        {productsLoading ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+            <p>Loading products...</p>
+          </div>
+        ) : products.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+            <p>No products available at the moment.</p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+              gap: "1.5rem",
+              marginBottom: "4rem",
+            }}
+          >
+            {products.slice(0, 6).map(renderProductCard)}
+          </div>
+        )}
+        {/* Removed hardcoded products - now showing dynamic products from API */}
+        <div style={{display: 'none'}}>
           {/* AG1 Pouch */}
           <div style={{ cursor: "pointer", position: "relative" }}>
             <button style={{

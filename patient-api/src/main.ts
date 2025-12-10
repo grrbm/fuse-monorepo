@@ -13219,6 +13219,10 @@ async function startServer() {
     }
   });
 
+  // ============= PUBLIC ENDPOINTS (No Auth Required) =============
+  const { registerPublicEndpoints } = await import("./endpoints/public");
+  registerPublicEndpoints(app);
+
   // ============= DOCTOR PORTAL ENDPOINTS =============
   const { registerDoctorEndpoints } = await import("./endpoints/doctor");
   registerDoctorEndpoints(app, authenticateJWT, getCurrentUser);
