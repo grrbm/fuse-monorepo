@@ -424,12 +424,15 @@ export default function LandingPage() {
               <span style={{ fontWeight: 600 }}>From $79/mo</span>
               <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
             </div>
-            <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
-            <div style={{ display: "flex", gap: "0.25rem" }}>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <span style={{
+                backgroundColor: "#10b981",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Recovery</span>
             </div>
           </div>
           {/* AG1 Travel Packs */}
@@ -489,12 +492,23 @@ export default function LandingPage() {
               <span style={{ fontWeight: 600 }}>From $89/mo</span>
               <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$109*</span>
             </div>
-            <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
-            <div style={{ display: "flex", gap: "0.25rem" }}>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <span style={{
+                backgroundColor: "#10b981",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Recovery</span>
+              <span style={{
+                backgroundColor: "#a855f7",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Flexibility</span>
             </div>
           </div>
           {/* AGZ */}
@@ -555,10 +569,23 @@ export default function LandingPage() {
               <span style={{ fontWeight: 600 }}>From $79/mo</span>
               <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
             </div>
-            <div style={{ display: "flex", gap: "0.25rem" }}>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#8b7355" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d97706" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#ca8a04" }}></div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <span style={{
+                backgroundColor: "#3b82f6",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Muscle Growth</span>
+              <span style={{
+                backgroundColor: "#ef4444",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Fat Loss</span>
             </div>
           </div>
           {/* AG2 Variety Pack */}
@@ -854,12 +881,15 @@ export default function LandingPage() {
               <span style={{ fontWeight: 600 }}>From $79/mo</span>
               <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
             </div>
-            <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
-            <div style={{ display: "flex", gap: "0.25rem" }}>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <span style={{
+                backgroundColor: "#10b981",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Recovery</span>
             </div>
           </div>
           {/* AG1 Travel Packs */}
@@ -919,12 +949,23 @@ export default function LandingPage() {
               <span style={{ fontWeight: 600 }}>From $89/mo</span>
               <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$109*</span>
             </div>
-            <p style={{ fontSize: "0.75rem", color: "#737373", marginBottom: "0.75rem" }}>Original Flavor</p>
-            <div style={{ display: "flex", gap: "0.25rem" }}>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#004d4d" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#facc15" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#f9a8d4" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d8b4fe" }}></div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <span style={{
+                backgroundColor: "#10b981",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Recovery</span>
+              <span style={{
+                backgroundColor: "#a855f7",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Flexibility</span>
             </div>
           </div>
           {/* AGZ */}
@@ -985,10 +1026,23 @@ export default function LandingPage() {
               <span style={{ fontWeight: 600 }}>From $79/mo</span>
               <span style={{ fontSize: "0.875rem", color: "#737373", textDecoration: "line-through" }}>$99*</span>
             </div>
-            <div style={{ display: "flex", gap: "0.25rem" }}>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#8b7355" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#d97706" }}></div>
-              <div style={{ width: "1rem", height: "1rem", borderRadius: "50%", backgroundColor: "#ca8a04" }}></div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <span style={{
+                backgroundColor: "#3b82f6",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Muscle Growth</span>
+              <span style={{
+                backgroundColor: "#ef4444",
+                color: "white",
+                padding: "0.25rem 0.75rem",
+                borderRadius: "1rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}>Fat Loss</span>
             </div>
           </div>
           {/* AG2 Variety Pack */}
