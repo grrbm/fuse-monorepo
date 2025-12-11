@@ -4,6 +4,8 @@ import Product from "../models/Product";
 import TenantProduct from "../models/TenantProduct";
 import PharmacyCoverage from "../models/PharmacyCoverage";
 import Pharmacy from "../models/Pharmacy";
+import Questionnaire from "../models/Questionnaire";
+import TenantProductForm from "../models/TenantProductForm";
 
 /**
  * Public endpoints that don't require authentication
@@ -19,21 +21,35 @@ export function registerPublicEndpoints(app: Express) {
                 as: "product",
                 where: { isActive: true },
                 required: true,
-                attributes: ['id', 'name', 'description', 'imageUrl', 'categories', 'price']
+                attributes: ['id', 'name', 'description', 'imageUrl', 'categories', 'price', 'slug'],
             }],
             limit: 50,
             order: [['createdAt', 'DESC']]
         });
 
-        return tenantProducts.map((tp: any) => ({
-            id: tp.product.id,
-            name: tp.product.name,
-            description: tp.product.description,
-            imageUrl: tp.product.imageUrl,
-            categories: tp.product.categories || [],
-            price: tp.price || tp.product.price,
-            wholesalePrice: tp.product.price,
+        // For each product, get the first TenantProductForm (the form ID used in URLs)
+        const results = await Promise.all(tenantProducts.map(async (tp: any) => {
+            // Get the first TenantProductForm for this product and clinic (sorted by createdAt ascending)
+            const firstForm = await TenantProductForm.findOne({
+                where: { productId: tp.product.id, clinicId },
+                order: [['createdAt', 'ASC']],
+                attributes: ['id'],
+            });
+
+            return {
+                id: tp.product.id,
+                name: tp.product.name,
+                description: tp.product.description,
+                imageUrl: tp.product.imageUrl,
+                categories: tp.product.categories || [],
+                price: tp.price || tp.product.price,
+                wholesalePrice: tp.product.price,
+                slug: tp.product.slug,
+                formId: firstForm?.id || null, // TenantProductForm.id - used in URLs
+            };
         }));
+
+        return results;
     };
 
     // Public endpoint to get products for landing page (with clinic slug)
@@ -100,19 +116,30 @@ export function registerPublicEndpoints(app: Express) {
         try {
             const allProducts = await Product.findAll({
                 where: { isActive: true },
-                attributes: ['id', 'name', 'description', 'imageUrl', 'categories', 'price'],
+                attributes: ['id', 'name', 'description', 'imageUrl', 'categories', 'price', 'slug', 'createdAt'],
                 limit: 100,
                 order: [['createdAt', 'DESC']]
             });
 
-            const products = allProducts.map((product: any) => ({
-                id: product.id,
-                name: product.name,
-                description: product.description,
-                imageUrl: product.imageUrl,
-                categories: product.categories || [],
-                price: product.price,
-                wholesalePrice: product.price,
+            // For each product, get the first TenantProductForm (if any exists)
+            const products = await Promise.all(allProducts.map(async (product: any) => {
+                const firstForm = await TenantProductForm.findOne({
+                    where: { productId: product.id },
+                    order: [['createdAt', 'ASC']],
+                    attributes: ['id'],
+                });
+
+                return {
+                    id: product.id,
+                    name: product.name,
+                    description: product.description,
+                    imageUrl: product.imageUrl,
+                    categories: product.categories || [],
+                    price: product.price,
+                    wholesalePrice: product.price,
+                    slug: product.slug,
+                    formId: firstForm?.id || null, // TenantProductForm.id - used in URLs
+                };
             }));
 
             res.status(200).json({
@@ -138,23 +165,36 @@ export function registerPublicEndpoints(app: Express) {
                 as: "product",
                 where: { isActive: true },
                 required: true,
-                include: [{
-                    model: PharmacyCoverage,
-                    as: "pharmacyCoverages",
-                    include: [{
-                        model: Pharmacy,
-                        as: "pharmacy",
-                        attributes: ['id', 'name']
-                    }]
-                }]
+                attributes: ['id', 'name', 'description', 'imageUrl', 'categories', 'price', 'slug'],
+                include: [
+                    {
+                        model: PharmacyCoverage,
+                        as: "pharmacyCoverages",
+                        include: [{
+                            model: Pharmacy,
+                            as: "pharmacy",
+                            attributes: ['id', 'name']
+                        }]
+                    }
+                ]
             }],
             order: [['createdAt', 'DESC']]
         });
 
         // Filter to only products with more than one PharmacyCoverage (bundles)
-        const bundles = tenantProducts
-            .filter((tp: any) => tp.product.pharmacyCoverages && tp.product.pharmacyCoverages.length > 1)
-            .map((tp: any) => ({
+        const bundleProducts = tenantProducts.filter(
+            (tp: any) => tp.product.pharmacyCoverages && tp.product.pharmacyCoverages.length > 1
+        );
+
+        // For each bundle, get the first TenantProductForm (the form ID used in URLs)
+        const bundles = await Promise.all(bundleProducts.map(async (tp: any) => {
+            const firstForm = await TenantProductForm.findOne({
+                where: { productId: tp.product.id, clinicId },
+                order: [['createdAt', 'ASC']],
+                attributes: ['id'],
+            });
+
+            return {
                 id: tp.product.id,
                 name: tp.product.name,
                 description: tp.product.description,
@@ -162,6 +202,8 @@ export function registerPublicEndpoints(app: Express) {
                 categories: tp.product.categories || [],
                 price: tp.price || tp.product.price,
                 wholesalePrice: tp.product.price,
+                slug: tp.product.slug,
+                formId: firstForm?.id || null, // TenantProductForm.id - used in URLs
                 // Include the items in the bundle (PharmacyCoverages)
                 includedItems: tp.product.pharmacyCoverages.map((pc: any) => ({
                     id: pc.id,
@@ -169,7 +211,8 @@ export function registerPublicEndpoints(app: Express) {
                     customSig: pc.customSig,
                     pharmacyName: pc.pharmacy?.name || 'Unknown Pharmacy'
                 }))
-            }));
+            };
+        }));
 
         return bundles;
     };
@@ -229,6 +272,93 @@ export function registerPublicEndpoints(app: Express) {
             res.status(500).json({
                 success: false,
                 message: "Failed to fetch bundles"
+            });
+        }
+    });
+
+    // DEBUG: Find a questionnaire by ID
+    app.get("/public/debug/questionnaire/:id", async (req, res) => {
+        try {
+            const { id } = req.params;
+
+            const questionnaire = await Questionnaire.findByPk(id);
+
+            if (!questionnaire) {
+                return res.status(404).json({
+                    success: false,
+                    message: `Questionnaire with id "${id}" not found`
+                });
+            }
+
+            res.status(200).json({
+                success: true,
+                questionnaire: {
+                    id: questionnaire.id,
+                    title: questionnaire.title,
+                    formTemplateType: questionnaire.formTemplateType,
+                    productId: questionnaire.productId,
+                    createdAt: questionnaire.createdAt,
+                }
+            });
+        } catch (error) {
+            console.error('Error in debug endpoint:', error);
+            res.status(500).json({
+                success: false,
+                message: "Debug endpoint failed",
+                error: String(error)
+            });
+        }
+    });
+
+    // DEBUG: Get TenantProductForms for a specific product by slug
+    app.get("/public/debug/product-forms/:slug", async (req, res) => {
+        try {
+            const { slug } = req.params;
+
+            // Find the product by slug
+            const product = await Product.findOne({
+                where: { slug },
+            });
+
+            if (!product) {
+                return res.status(404).json({
+                    success: false,
+                    message: `Product with slug "${slug}" not found`
+                });
+            }
+
+            // Get all TenantProductForms for this product (these are the forms used in URLs!)
+            const tenantProductForms = await TenantProductForm.findAll({
+                where: { productId: product.id },
+                order: [['createdAt', 'ASC']],
+            });
+
+            const firstForm = tenantProductForms[0];
+
+            res.status(200).json({
+                success: true,
+                productId: product.id,
+                productName: product.name,
+                productSlug: product.slug,
+                tenantProductForms: tenantProductForms.map((tpf: any) => ({
+                    id: tpf.id,
+                    clinicId: tpf.clinicId,
+                    productId: tpf.productId,
+                    currentFormVariant: tpf.currentFormVariant,
+                    globalFormStructureId: tpf.globalFormStructureId,
+                    createdAt: tpf.createdAt,
+                })),
+                selectedFormId: firstForm?.id || null,
+                expectedUrl: firstForm
+                    ? `http://limitless.localhost:3000/my-products/${firstForm.id}/${slug}`
+                    : null
+            });
+        } catch (error) {
+            console.error('Error in debug endpoint:', error);
+            res.status(500).json({
+                success: false,
+                message: "Debug endpoint failed",
+                error: String(error)
             });
         }
     });

@@ -24,6 +24,8 @@ interface Product {
   categories?: string[];
   price: number;
   wholesalePrice?: number;
+  slug?: string;
+  formId?: string;
 }
 
 export default function LandingPage() {
@@ -224,7 +226,7 @@ export default function LandingPage() {
             ${crossedOutPrice}*
           </span>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
           {badges.map((badge, idx) => (
             <span
               key={idx}
@@ -241,6 +243,49 @@ export default function LandingPage() {
             </span>
           ))}
         </div>
+        {product.formId && product.slug ? (
+          <a
+            href={`/my-products/${product.formId}/${product.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              backgroundColor: primaryColor,
+              color: "white",
+              padding: "0.5rem 1rem",
+              borderRadius: "0.25rem",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              textDecoration: "none",
+              cursor: "pointer",
+            }}
+          >
+            Get Started
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M5 12l7-7M12 5H5v7" />
+            </svg>
+          </a>
+        ) : (
+          <button
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              backgroundColor: "#e0e0e0",
+              color: "#666",
+              padding: "0.5rem 1rem",
+              borderRadius: "0.25rem",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              border: "none",
+              cursor: "not-allowed",
+            }}
+          >
+            Coming Soon
+          </button>
+        )}
       </div>
     );
   };

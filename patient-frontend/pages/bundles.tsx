@@ -29,6 +29,8 @@ interface Bundle {
     categories?: string[];
     price: number;
     wholesalePrice?: number;
+    slug?: string;
+    formId?: string;
     includedItems: IncludedItem[];
 }
 
@@ -257,29 +259,59 @@ export default function BundlesPage() {
                             </span>
                         </div>
                     )}
-                    <button
-                        style={{
-                            position: "absolute",
-                            bottom: "1.5rem",
-                            right: "1.5rem",
-                            backgroundColor: primaryColor,
-                            color: "#fff",
-                            border: "none",
-                            padding: "0.75rem 1.5rem",
-                            fontSize: "0.9rem",
-                            fontWeight: "500",
-                            borderRadius: "25px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                        }}
-                    >
-                        Add to Cart
-                        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.6 5.2M17 13l1.6 5.2" />
-                        </svg>
-                    </button>
+                    {bundle.formId && bundle.slug ? (
+                        <a
+                            href={`/my-products/${bundle.formId}/${bundle.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                position: "absolute",
+                                bottom: "1.5rem",
+                                right: "1.5rem",
+                                backgroundColor: primaryColor,
+                                color: "#fff",
+                                border: "none",
+                                padding: "0.75rem 1.5rem",
+                                fontSize: "0.9rem",
+                                fontWeight: "500",
+                                borderRadius: "25px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                textDecoration: "none",
+                            }}
+                        >
+                            Get Started
+                            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M5 12l7-7M12 5H5v7" />
+                            </svg>
+                        </a>
+                    ) : (
+                        <button
+                            style={{
+                                position: "absolute",
+                                bottom: "1.5rem",
+                                right: "1.5rem",
+                                backgroundColor: primaryColor,
+                                color: "#fff",
+                                border: "none",
+                                padding: "0.75rem 1.5rem",
+                                fontSize: "0.9rem",
+                                fontWeight: "500",
+                                borderRadius: "25px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                            }}
+                        >
+                            Get Started
+                            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M5 12l7-7M12 5H5v7" />
+                            </svg>
+                        </button>
+                    )}
                 </div>
 
                 {/* Product Info */}
@@ -692,9 +724,9 @@ export default function BundlesPage() {
                                             gap: "0.5rem",
                                         }}
                                     >
-                                        Add to Cart
+                                        Get Started
                                         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.6 5.2M17 13l1.6 5.2" />
+                                            <path d="M5 12l7-7M12 5H5v7" />
                                         </svg>
                                     </button>
                                 </div>
@@ -929,9 +961,9 @@ export default function BundlesPage() {
                                         gap: "0.5rem",
                                     }}
                                 >
-                                    Add to Cart
+                                    Get Started
                                     <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.6 5.2M17 13l1.6 5.2" />
+                                        <path d="M5 12l7-7M12 5H5v7" />
                                     </svg>
                                 </button>
                             </div>
