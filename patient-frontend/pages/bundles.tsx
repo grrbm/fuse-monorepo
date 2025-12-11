@@ -205,6 +205,7 @@ export default function BundlesPage() {
                     }}
                 >
                     <button
+                        onClick={() => window.location.href = "/"}
                         style={{
                             padding: "0.5rem 1rem",
                             backgroundColor: "white",
