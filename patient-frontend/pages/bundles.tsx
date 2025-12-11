@@ -643,8 +643,8 @@ export default function BundlesPage() {
                             {/* Dynamic bundles from database */}
                             {bundles.map(renderBundleCard)}
 
-                            {/* Full Foundation Stack - Placeholder */}
-                            <div
+                            {/* Full Foundation Stack - Placeholder - HIDDEN */}
+                            {false && <div
                                 style={{
                                     backgroundColor: "#fff",
                                     borderRadius: "12px",
@@ -860,247 +860,248 @@ export default function BundlesPage() {
                                         *Value of one-time purchase
                                     </div>
                                 </div>
-                            </div>
+                            </div>}
                         </div>
                     )}
                 </div>
             </section>
 
-            {/* Home & Away Pack - Placeholder */}
-            <section
-                style={{
-                    backgroundColor: "#f5f3ef",
-                    padding: "0 2rem 4rem",
-                }}
-            >
-                <div
+            {/* Home & Away Pack - Placeholder - HIDDEN */}
+            {false &&
+                <section
                     style={{
-                        maxWidth: "1400px",
-                        margin: "0 auto",
+                        backgroundColor: "#f5f3ef",
+                        padding: "0 2rem 4rem",
                     }}
                 >
                     <div
                         style={{
-                            backgroundColor: "#fff",
-                            borderRadius: "12px",
-                            overflow: "hidden",
-                            display: "grid",
-                            gridTemplateColumns: "400px 1fr",
-                            maxWidth: "900px",
+                            maxWidth: "1400px",
+                            margin: "0 auto",
                         }}
                     >
-                        {/* Product Image */}
                         <div
                             style={{
-                                backgroundColor: "#e8e6e1",
-                                padding: "3rem",
-                                display: "flex",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                position: "relative",
-                                minHeight: "550px",
+                                backgroundColor: "#fff",
+                                borderRadius: "12px",
+                                overflow: "hidden",
+                                display: "grid",
+                                gridTemplateColumns: "400px 1fr",
+                                maxWidth: "900px",
                             }}
                         >
-                            <img
-                                src="/ag1-two-pouches-with-travel-packs-canister-shaker-.jpg"
-                                alt="Home & Away Pack"
-                                style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "contain",
-                                }}
-                            />
-                            <button
-                                style={{
-                                    position: "absolute",
-                                    bottom: "1.5rem",
-                                    right: "1.5rem",
-                                    backgroundColor: primaryColor,
-                                    color: "#fff",
-                                    border: "none",
-                                    padding: "0.75rem 1.5rem",
-                                    fontSize: "0.9rem",
-                                    fontWeight: "500",
-                                    borderRadius: "25px",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.5rem",
-                                }}
-                            >
-                                Add to Cart
-                                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.6 5.2M17 13l1.6 5.2" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Product Info */}
-                        <div style={{ padding: "2rem" }}>
-                            <h3
-                                style={{
-                                    fontSize: "1.75rem",
-                                    fontFamily,
-                                    fontWeight: "400",
-                                    marginBottom: "0.5rem",
-                                }}
-                            >
-                                Home & Away Pack
-                            </h3>
+                            {/* Product Image */}
                             <div
                                 style={{
-                                    fontSize: "1.1rem",
-                                    marginBottom: "1.5rem",
+                                    backgroundColor: "#e8e6e1",
+                                    padding: "3rem",
+                                    display: "flex",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                    position: "relative",
+                                    minHeight: "550px",
                                 }}
                             >
-                                <span style={{ fontWeight: "600" }}>$168/ships every 60 days</span>
-                                <span
+                                <img
+                                    src="/ag1-two-pouches-with-travel-packs-canister-shaker-.jpg"
+                                    alt="Home & Away Pack"
                                     style={{
-                                        textDecoration: "line-through",
-                                        color: "#999",
-                                        marginLeft: "0.5rem",
-                                        fontSize: "0.95rem",
+                                        width: "100%",
+                                        height: "100%",
+                                        objectFit: "contain",
+                                    }}
+                                />
+                                <button
+                                    style={{
+                                        position: "absolute",
+                                        bottom: "1.5rem",
+                                        right: "1.5rem",
+                                        backgroundColor: primaryColor,
+                                        color: "#fff",
+                                        border: "none",
+                                        padding: "0.75rem 1.5rem",
+                                        fontSize: "0.9rem",
+                                        fontWeight: "500",
+                                        borderRadius: "25px",
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "0.5rem",
                                     }}
                                 >
-                                    $208¹
-                                </span>
+                                    Add to Cart
+                                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-1.6 5.2M17 13l1.6 5.2" />
+                                    </svg>
+                                </button>
                             </div>
 
-                            <div
-                                style={{
-                                    fontSize: "0.7rem",
-                                    letterSpacing: "0.1em",
-                                    textTransform: "uppercase",
-                                    color: "#666",
-                                    marginBottom: "1rem",
-                                    fontWeight: "500",
-                                }}
-                            >
-                                WHAT'S INCLUDED
-                            </div>
-
-                            {/* Included Items - Two Columns */}
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                                {/* AG1 Pouch */}
-                                <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
-                                    <div
+                            {/* Product Info */}
+                            <div style={{ padding: "2rem" }}>
+                                <h3
+                                    style={{
+                                        fontSize: "1.75rem",
+                                        fontFamily,
+                                        fontWeight: "400",
+                                        marginBottom: "0.5rem",
+                                    }}
+                                >
+                                    Home & Away Pack
+                                </h3>
+                                <div
+                                    style={{
+                                        fontSize: "1.1rem",
+                                        marginBottom: "1.5rem",
+                                    }}
+                                >
+                                    <span style={{ fontWeight: "600" }}>$168/ships every 60 days</span>
+                                    <span
                                         style={{
-                                            width: "45px",
-                                            height: "45px",
-                                            backgroundColor: "#e8e6e1",
-                                            borderRadius: "8px",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            flexShrink: 0,
+                                            textDecoration: "line-through",
+                                            color: "#999",
+                                            marginLeft: "0.5rem",
+                                            fontSize: "0.95rem",
                                         }}
                                     >
-                                        <img src="/ag1-pouch-icon.jpg" alt="AG1 Pouch" style={{ width: "30px" }} />
+                                        $208¹
+                                    </span>
+                                </div>
+
+                                <div
+                                    style={{
+                                        fontSize: "0.7rem",
+                                        letterSpacing: "0.1em",
+                                        textTransform: "uppercase",
+                                        color: "#666",
+                                        marginBottom: "1rem",
+                                        fontWeight: "500",
+                                    }}
+                                >
+                                    WHAT'S INCLUDED
+                                </div>
+
+                                {/* Included Items - Two Columns */}
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                                    {/* AG1 Pouch */}
+                                    <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+                                        <div
+                                            style={{
+                                                width: "45px",
+                                                height: "45px",
+                                                backgroundColor: "#e8e6e1",
+                                                borderRadius: "8px",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            <img src="/ag1-pouch-icon.jpg" alt="AG1 Pouch" style={{ width: "30px" }} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: "600", fontSize: "0.85rem", marginBottom: "0.25rem" }}>AG1: Pouch</div>
+                                            <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
+                                                Nutrients and gut health support in one Daily Health Drink™ — 30 servings shipped every 60 days.
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: "600", fontSize: "0.85rem", marginBottom: "0.25rem" }}>AG1: Pouch</div>
-                                        <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
-                                            Nutrients and gut health support in one Daily Health Drink™ — 30 servings shipped every 60 days.
+
+                                    {/* AG1: Travel Packs */}
+                                    <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+                                        <div
+                                            style={{
+                                                width: "45px",
+                                                height: "45px",
+                                                backgroundColor: "#e8e6e1",
+                                                borderRadius: "8px",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            <img src="/travel-packs-icon.jpg" alt="Travel Packs" style={{ width: "30px" }} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: "600", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
+                                                AG1: Travel Packs
+                                            </div>
+                                            <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
+                                                Take your Daily Health Drink on-the-go with 30 individual Travel Packs — 30 servings shipped every 60 days.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Free Bottle of AG Vitamin D3+K2 */}
+                                    <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+                                        <div
+                                            style={{
+                                                width: "45px",
+                                                height: "45px",
+                                                backgroundColor: "#e8e6e1",
+                                                borderRadius: "8px",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            <img src="/vitamin-d-dropper-bottle-icon.jpg" alt="Vitamin D3+K2" style={{ width: "30px" }} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: "600", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
+                                                Free Bottle of AG Vitamin D3+K2
+                                            </div>
+                                            <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
+                                                Complements AG1 for added immune support with liquid drops.*
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* More Included */}
+                                    <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+                                        <div
+                                            style={{
+                                                width: "45px",
+                                                height: "45px",
+                                                backgroundColor: "#d4b896",
+                                                borderRadius: "8px",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                flexShrink: 0,
+                                                fontSize: "1rem",
+                                                fontWeight: "600",
+                                                color: "#fff",
+                                            }}
+                                        >
+                                            +1
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: "600", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
+                                                More Included!
+                                            </div>
+                                            <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
+                                                Learn more to see the complete set of what's in this bundle.
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* AG1: Travel Packs */}
-                                <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
-                                    <div
-                                        style={{
-                                            width: "45px",
-                                            height: "45px",
-                                            backgroundColor: "#e8e6e1",
-                                            borderRadius: "8px",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            flexShrink: 0,
-                                        }}
-                                    >
-                                        <img src="/travel-packs-icon.jpg" alt="Travel Packs" style={{ width: "30px" }} />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: "600", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
-                                            AG1: Travel Packs
-                                        </div>
-                                        <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
-                                            Take your Daily Health Drink on-the-go with 30 individual Travel Packs — 30 servings shipped every 60 days.
-                                        </div>
-                                    </div>
+                                <div
+                                    style={{
+                                        fontSize: "0.75rem",
+                                        color: "#999",
+                                        marginTop: "1.5rem",
+                                        fontStyle: "italic",
+                                    }}
+                                >
+                                    *Value of one-time purchase
                                 </div>
-
-                                {/* Free Bottle of AG Vitamin D3+K2 */}
-                                <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
-                                    <div
-                                        style={{
-                                            width: "45px",
-                                            height: "45px",
-                                            backgroundColor: "#e8e6e1",
-                                            borderRadius: "8px",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            flexShrink: 0,
-                                        }}
-                                    >
-                                        <img src="/vitamin-d-dropper-bottle-icon.jpg" alt="Vitamin D3+K2" style={{ width: "30px" }} />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: "600", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
-                                            Free Bottle of AG Vitamin D3+K2
-                                        </div>
-                                        <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
-                                            Complements AG1 for added immune support with liquid drops.*
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* More Included */}
-                                <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
-                                    <div
-                                        style={{
-                                            width: "45px",
-                                            height: "45px",
-                                            backgroundColor: "#d4b896",
-                                            borderRadius: "8px",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            flexShrink: 0,
-                                            fontSize: "1rem",
-                                            fontWeight: "600",
-                                            color: "#fff",
-                                        }}
-                                    >
-                                        +1
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: "600", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
-                                            More Included!
-                                        </div>
-                                        <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
-                                            Learn more to see the complete set of what's in this bundle.
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div
-                                style={{
-                                    fontSize: "0.75rem",
-                                    color: "#999",
-                                    marginTop: "1.5rem",
-                                    fontStyle: "italic",
-                                }}
-                            >
-                                *Value of one-time purchase
                             </div>
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>}
 
             {/* Back to Products Button */}
             <section style={{ backgroundColor: "#f5f3ef", padding: "0 2rem 4rem" }}>
