@@ -226,7 +226,7 @@ export default function BundlesPage() {
                         display: "flex",
                         justifyContent: "center",
                         alignItems: "center",
-                        minHeight: "300px",
+                        height: "550px",
                         position: "relative",
                     }}
                 >
@@ -235,9 +235,8 @@ export default function BundlesPage() {
                             src={bundle.imageUrl}
                             alt={bundle.name}
                             style={{
-                                maxWidth: "100%",
-                                maxHeight: "250px",
-                                height: "auto",
+                                width: "100%",
+                                height: "100%",
                                 objectFit: "contain",
                             }}
                         />
@@ -662,7 +661,7 @@ export default function BundlesPage() {
                                         display: "flex",
                                         justifyContent: "center",
                                         alignItems: "center",
-                                        minHeight: "300px",
+                                        height: "550px",
                                         position: "relative",
                                     }}
                                 >
@@ -670,8 +669,9 @@ export default function BundlesPage() {
                                         src="/ag1-pouch-with-ag-omega-bottle-travel-packs-canist.jpg"
                                         alt="Full Foundation Stack"
                                         style={{
-                                            maxWidth: "100%",
-                                            height: "auto",
+                                            width: "100%",
+                                            height: "100%",
+                                            objectFit: "contain",
                                         }}
                                     />
                                     <button
@@ -898,14 +898,16 @@ export default function BundlesPage() {
                                 justifyContent: "center",
                                 alignItems: "center",
                                 position: "relative",
+                                minHeight: "550px",
                             }}
                         >
                             <img
                                 src="/ag1-two-pouches-with-travel-packs-canister-shaker-.jpg"
                                 alt="Home & Away Pack"
                                 style={{
-                                    maxWidth: "100%",
-                                    height: "auto",
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "contain",
                                 }}
                             />
                             <button
