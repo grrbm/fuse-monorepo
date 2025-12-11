@@ -2,6 +2,7 @@ import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import { extractClinicSlugFromDomain } from '../lib/clinic-utils';
 import { apiCall } from '../lib/api';
+import GetStartedButton from '../components/GetStartedButton';
 
 interface CustomWebsite {
     portalTitle?: string;
@@ -259,59 +260,17 @@ export default function BundlesPage() {
                             </span>
                         </div>
                     )}
-                    {bundle.formId && bundle.slug ? (
-                        <a
-                            href={`/my-products/${bundle.formId}/${bundle.slug}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                                position: "absolute",
-                                bottom: "1.5rem",
-                                right: "1.5rem",
-                                backgroundColor: primaryColor,
-                                color: "#fff",
-                                border: "none",
-                                padding: "0.75rem 1.5rem",
-                                fontSize: "0.9rem",
-                                fontWeight: "500",
-                                borderRadius: "25px",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "0.5rem",
-                                textDecoration: "none",
-                            }}
-                        >
-                            Get Started
-                            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M5 12l7-7M12 5H5v7" />
-                            </svg>
-                        </a>
-                    ) : (
-                        <button
-                            style={{
-                                position: "absolute",
-                                bottom: "1.5rem",
-                                right: "1.5rem",
-                                backgroundColor: primaryColor,
-                                color: "#fff",
-                                border: "none",
-                                padding: "0.75rem 1.5rem",
-                                fontSize: "0.9rem",
-                                fontWeight: "500",
-                                borderRadius: "25px",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "0.5rem",
-                            }}
-                        >
-                            Get Started
-                            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M5 12l7-7M12 5H5v7" />
-                            </svg>
-                        </button>
-                    )}
+                    <GetStartedButton
+                        formId={bundle.formId}
+                        slug={bundle.slug}
+                        primaryColor={primaryColor}
+                        variant="pill"
+                        style={{
+                            position: "absolute",
+                            bottom: "1.5rem",
+                            right: "1.5rem",
+                        }}
+                    />
                 </div>
 
                 {/* Product Info */}
@@ -706,29 +665,15 @@ export default function BundlesPage() {
                                             objectFit: "contain",
                                         }}
                                     />
-                                    <button
+                                    <GetStartedButton
+                                        primaryColor={primaryColor}
+                                        variant="pill"
                                         style={{
                                             position: "absolute",
                                             bottom: "1.5rem",
                                             right: "1.5rem",
-                                            backgroundColor: primaryColor,
-                                            color: "#fff",
-                                            border: "none",
-                                            padding: "0.75rem 1.5rem",
-                                            fontSize: "0.9rem",
-                                            fontWeight: "500",
-                                            borderRadius: "25px",
-                                            cursor: "pointer",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "0.5rem",
                                         }}
-                                    >
-                                        Get Started
-                                        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M5 12l7-7M12 5H5v7" />
-                                        </svg>
-                                    </button>
+                                    />
                                 </div>
 
                                 {/* Product Info */}
@@ -943,29 +888,15 @@ export default function BundlesPage() {
                                         objectFit: "contain",
                                     }}
                                 />
-                                <button
+                                <GetStartedButton
+                                    primaryColor={primaryColor}
+                                    variant="pill"
                                     style={{
                                         position: "absolute",
                                         bottom: "1.5rem",
                                         right: "1.5rem",
-                                        backgroundColor: primaryColor,
-                                        color: "#fff",
-                                        border: "none",
-                                        padding: "0.75rem 1.5rem",
-                                        fontSize: "0.9rem",
-                                        fontWeight: "500",
-                                        borderRadius: "25px",
-                                        cursor: "pointer",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "0.5rem",
                                     }}
-                                >
-                                    Get Started
-                                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M5 12l7-7M12 5H5v7" />
-                                    </svg>
-                                </button>
+                                />
                             </div>
 
                             {/* Product Info */}

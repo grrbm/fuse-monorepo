@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { extractClinicSlugFromDomain } from '../lib/clinic-utils';
 import { apiCall } from '../lib/api';
 import ScrollingFeaturesBar from '../components/ScrollingFeaturesBar';
+import GetStartedButton from '../components/GetStartedButton';
 
 interface CustomWebsite {
     portalTitle?: string;
@@ -284,49 +285,11 @@ export default function AllProducts() {
                         </span>
                     ))}
                 </div>
-                {product.formId && product.slug ? (
-                    <a
-                        href={`/my-products/${product.formId}/${product.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            backgroundColor: primaryColor,
-                            color: "white",
-                            padding: "0.5rem 1rem",
-                            borderRadius: "0.25rem",
-                            fontSize: "0.875rem",
-                            fontWeight: 600,
-                            textDecoration: "none",
-                            cursor: "pointer",
-                        }}
-                    >
-                        Get Started
-                        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M5 12l7-7M12 5H5v7" />
-                        </svg>
-                    </a>
-                ) : (
-                    <button
-                        style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            backgroundColor: "#e0e0e0",
-                            color: "#666",
-                            padding: "0.5rem 1rem",
-                            borderRadius: "0.25rem",
-                            fontSize: "0.875rem",
-                            fontWeight: 600,
-                            border: "none",
-                            cursor: "not-allowed",
-                        }}
-                    >
-                        Coming Soon
-                    </button>
-                )}
+                <GetStartedButton
+                    formId={product.formId}
+                    slug={product.slug}
+                    primaryColor={primaryColor}
+                />
             </div>
         );
     };
