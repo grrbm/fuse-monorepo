@@ -6,6 +6,7 @@ export const PUBLIC_PATH_PATTERNS = [
   '/terms',
   '/hipaa-notice',
   '/all-products',
+  '/bundles',
   '/treatments/weightloss',
   '/my-treatments/[slug]',
   '/treatments/[slug]',

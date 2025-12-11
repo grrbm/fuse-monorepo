@@ -527,6 +527,7 @@ export default function LandingPage() {
             All
           </button>
           <button
+            onClick={() => window.location.href = "/bundles"}
             style={{
               padding: "0.5rem 1rem",
               backgroundColor: "white",
@@ -1025,6 +1026,7 @@ export default function LandingPage() {
             All
           </button>
           <button
+            onClick={() => window.location.href = "/bundles"}
             style={{
               padding: "0.5rem 1rem",
               backgroundColor: "white",
