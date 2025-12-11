@@ -2,6 +2,8 @@ import { Express } from "express";
 import Clinic from "../models/Clinic";
 import Product from "../models/Product";
 import TenantProduct from "../models/TenantProduct";
+import PharmacyCoverage from "../models/PharmacyCoverage";
+import Pharmacy from "../models/Pharmacy";
 
 /**
  * Public endpoints that don't require authentication
@@ -122,6 +124,111 @@ export function registerPublicEndpoints(app: Express) {
             res.status(500).json({
                 success: false,
                 message: "Failed to fetch all products"
+            });
+        }
+    });
+
+    // Helper function to fetch bundles for a clinic
+    // A bundle is a product with more than one PharmacyCoverage
+    const fetchBundlesForClinic = async (clinicId: string) => {
+        const tenantProducts = await TenantProduct.findAll({
+            where: { clinicId },
+            include: [{
+                model: Product,
+                as: "product",
+                where: { isActive: true },
+                required: true,
+                include: [{
+                    model: PharmacyCoverage,
+                    as: "pharmacyCoverages",
+                    include: [{
+                        model: Pharmacy,
+                        as: "pharmacy",
+                        attributes: ['id', 'name']
+                    }]
+                }]
+            }],
+            order: [['createdAt', 'DESC']]
+        });
+
+        // Filter to only products with more than one PharmacyCoverage (bundles)
+        const bundles = tenantProducts
+            .filter((tp: any) => tp.product.pharmacyCoverages && tp.product.pharmacyCoverages.length > 1)
+            .map((tp: any) => ({
+                id: tp.product.id,
+                name: tp.product.name,
+                description: tp.product.description,
+                imageUrl: tp.product.imageUrl,
+                categories: tp.product.categories || [],
+                price: tp.price || tp.product.price,
+                wholesalePrice: tp.product.price,
+                // Include the items in the bundle (PharmacyCoverages)
+                includedItems: tp.product.pharmacyCoverages.map((pc: any) => ({
+                    id: pc.id,
+                    customName: pc.customName,
+                    customSig: pc.customSig,
+                    pharmacyName: pc.pharmacy?.name || 'Unknown Pharmacy'
+                }))
+            }));
+
+        return bundles;
+    };
+
+    // Public endpoint to get bundles for a clinic (with clinic slug)
+    app.get("/public/bundles/:clinicSlug", async (req, res) => {
+        try {
+            const { clinicSlug } = req.params;
+
+            const clinic = await Clinic.findOne({
+                where: { slug: clinicSlug }
+            });
+
+            if (!clinic) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Clinic not found"
+                });
+            }
+
+            const bundles = await fetchBundlesForClinic(clinic.id);
+
+            res.status(200).json({
+                success: true,
+                data: bundles
+            });
+        } catch (error) {
+            console.error('Error fetching public bundles:', error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to fetch bundles"
+            });
+        }
+    });
+
+    // Public endpoint to get bundles (without clinic slug - for localhost testing)
+    app.get("/public/bundles", async (req, res) => {
+        try {
+            // For localhost testing: get any clinic
+            const anyClinic = await Clinic.findOne();
+
+            if (!anyClinic) {
+                return res.status(404).json({
+                    success: false,
+                    message: "No clinic found"
+                });
+            }
+
+            const bundles = await fetchBundlesForClinic(anyClinic.id);
+
+            res.status(200).json({
+                success: true,
+                data: bundles
+            });
+        } catch (error) {
+            console.error('Error fetching public bundles:', error);
+            res.status(500).json({
+                success: false,
+                message: "Failed to fetch bundles"
             });
         }
     });
