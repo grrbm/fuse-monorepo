@@ -127,32 +127,26 @@ export default function BundlesPage() {
                     <div>
                         <div
                             style={{
-                                fontSize: "0.75rem",
-                                letterSpacing: "0.1em",
-                                textTransform: "uppercase",
-                                marginBottom: "1rem",
-                                fontWeight: "500",
+                                fontSize: "0.875rem",
+                                color: "#737373",
+                                marginBottom: "0.5rem",
                             }}
                         >
                             SHOP
                         </div>
                         <h1
                             style={{
-                                fontSize: "4.5rem",
+                                fontSize: "3rem",
                                 fontFamily: "Georgia, serif",
                                 fontWeight: "400",
-                                lineHeight: "1.1",
-                                marginBottom: "1rem",
-                                letterSpacing: "-0.02em",
+                                marginBottom: "0.75rem",
                             }}
                         >
                             Bundle & Save
                         </h1>
                         <p
                             style={{
-                                fontSize: "1rem",
-                                color: "#333",
-                                lineHeight: "1.6",
+                                color: "#404040",
                             }}
                         >
                             Our best offerings and all include Welcome Kit and Shaker**
@@ -207,58 +201,57 @@ export default function BundlesPage() {
                         maxWidth: "1400px",
                         margin: "0 auto",
                         display: "flex",
-                        gap: "1rem",
+                        gap: "0.5rem",
                     }}
                 >
                     <button
                         style={{
-                            backgroundColor: "transparent",
-                            border: "1px solid #666",
-                            padding: "0.6rem 1.5rem",
-                            fontSize: "0.9rem",
-                            borderRadius: "25px",
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "white",
+                            color: "inherit",
+                            border: "1px solid #d4d4d4",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
                             cursor: "pointer",
-                            color: "#333",
                         }}
                     >
                         All
                     </button>
                     <button
                         style={{
-                            backgroundColor: "#6b5244",
-                            border: "1px solid #6b5244",
-                            padding: "0.6rem 1.5rem",
-                            fontSize: "0.9rem",
-                            borderRadius: "25px",
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "#8b7355",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
                             cursor: "pointer",
-                            color: "#fff",
-                            fontWeight: "500",
                         }}
                     >
                         Bundles
                     </button>
                     <button
                         style={{
-                            backgroundColor: "transparent",
-                            border: "1px solid #666",
-                            padding: "0.6rem 1.5rem",
-                            fontSize: "0.9rem",
-                            borderRadius: "25px",
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "white",
+                            color: "inherit",
+                            border: "1px solid #d4d4d4",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
                             cursor: "pointer",
-                            color: "#333",
                         }}
                     >
                         Daily Health
                     </button>
                     <button
                         style={{
-                            backgroundColor: "transparent",
-                            border: "1px solid #666",
-                            padding: "0.6rem 1.5rem",
-                            fontSize: "0.9rem",
-                            borderRadius: "25px",
+                            padding: "0.5rem 1rem",
+                            backgroundColor: "white",
+                            color: "inherit",
+                            border: "1px solid #d4d4d4",
+                            borderRadius: "0.25rem",
+                            fontSize: "0.875rem",
                             cursor: "pointer",
-                            color: "#333",
                         }}
                     >
                         Rest & Restore
@@ -382,7 +375,7 @@ export default function BundlesPage() {
                             </div>
 
                             {/* Included Items */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem" }}>
                                 {/* AG1 Pouch */}
                                 <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
                                     <div
@@ -573,7 +566,7 @@ export default function BundlesPage() {
                             </div>
 
                             {/* Included Items */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1.5rem" }}>
                                 {/* AG1 Pouch */}
                                 <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
                                     <div
