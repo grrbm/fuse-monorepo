@@ -41,7 +41,7 @@ import { replaceVariables, getVariablesFromClinic } from "../../lib/templateVari
 import { useClinicFromDomain } from "../../hooks/useClinicFromDomain";
 import { trackFormView, trackFormConversion, trackFormDropOff } from "../../lib/analytics";
 import { signInUser, createUserAccount as createUserAccountAPI, signInWithGoogle } from "./auth";
-import { AccountCreationStep, EmailVerificationStep, EmailInputModal } from "./AccountCreationStep";
+import { AccountCreationStep, EmailVerificationStep, EmailInputModal, SignInOptionsStep } from "./AccountCreationStep";
 import { createEmailVerificationHandlers } from "./emailVerification";
 
 export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
@@ -81,6 +81,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
   // Sign-in/Sign-up toggle
   const [isSignInMode, setIsSignInMode] = React.useState(false);
+  const [isSignInOptionsMode, setIsSignInOptionsMode] = React.useState(false);
+  const [isPasswordSignInMode, setIsPasswordSignInMode] = React.useState(false);
   const [signInEmail, setSignInEmail] = React.useState('');
   const [signInPassword, setSignInPassword] = React.useState('');
   const [signInError, setSignInError] = React.useState('');
@@ -948,6 +950,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       // DON'T reset hasHandledGoogleAuthRef - we want to keep it across modal reopens
       // Reset sign-in state
       setIsSignInMode(false);
+      setIsSignInOptionsMode(false);
+      setIsPasswordSignInMode(false);
       setSignInEmail('');
       setSignInPassword('');
       setSignInError('');
@@ -2116,10 +2120,10 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       });
 
       const requestBody: any = {
-          tenantProductId: tenantProductId,
-          stripePriceId: stripePriceId || undefined, // Let backend create if missing
-          userDetails: userDetails,
-          questionnaireAnswers: questionnaireAnswers, // This is now the structured format
+        tenantProductId: tenantProductId,
+        stripePriceId: stripePriceId || undefined, // Let backend create if missing
+        userDetails: userDetails,
+        questionnaireAnswers: questionnaireAnswers, // This is now the structured format
         shippingInfo: shippingInfo,
         clinicName: domainClinic?.name // For dynamic statement descriptor
       };
@@ -2526,8 +2530,138 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           isLoadingClinic={isLoadingClinic}
                         />
 
-                        {/* Questions */}
-                        {currentStep?.title === 'Recommended Treatment' ? (
+                        {/* Sign-in Options (can appear on any step) */}
+                        {isSignInOptionsMode ? (
+                          isEmailVerificationMode ? (
+                            <EmailVerificationStep
+                              email={verificationEmail}
+                              code={verificationCode}
+                              onCodeChange={setVerificationCode}
+                              onVerify={emailVerificationHandlers.handleVerifyCode}
+                              onBack={() => {
+                                setIsEmailVerificationMode(false);
+                                setVerificationCode('');
+                                setVerificationError('');
+                              }}
+                              onResendCode={emailVerificationHandlers.handleResendCode}
+                              error={verificationError}
+                              isVerifying={isVerifying}
+                              clinicName={domainClinic?.name}
+                            />
+                          ) : isPasswordSignInMode ? (
+                            // Password Sign-In Form
+                            <div className="space-y-4">
+                              <div>
+                                <h3 className="text-2xl font-medium text-gray-900 mb-3">Sign in with password</h3>
+                                <p className="text-gray-600 text-base">Enter your email and password to continue</p>
+                              </div>
+
+                              <div className="space-y-6">
+                                {/* Email Address */}
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                                  <input
+                                    type="email"
+                                    value={signInEmail}
+                                    onChange={(e) => {
+                                      setSignInEmail(e.target.value);
+                                      setSignInError('');
+                                    }}
+                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    placeholder="john.cena@gmail.com"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleSignIn();
+                                      }
+                                    }}
+                                  />
+                                </div>
+
+                                {/* Password */}
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                                  <input
+                                    type="password"
+                                    value={signInPassword}
+                                    onChange={(e) => {
+                                      setSignInPassword(e.target.value);
+                                      setSignInError('');
+                                    }}
+                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    placeholder="Enter your password"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleSignIn();
+                                      }
+                                    }}
+                                  />
+                                </div>
+
+                                {/* Error Message */}
+                                {signInError && (
+                                  <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                                    <p className="text-sm text-red-600">{signInError}</p>
+                                  </div>
+                                )}
+
+                                {/* Sign In Button */}
+                                <button
+                                  onClick={handleSignIn}
+                                  disabled={isSigningIn || !signInEmail || !signInPassword}
+                                  className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
+                                >
+                                  {isSigningIn ? (
+                                    <>
+                                      <Icon icon="lucide:loader-2" className="animate-spin" />
+                                      <span>Signing in...</span>
+                                    </>
+                                  ) : (
+                                    'Sign In'
+                                  )}
+                                </button>
+                              </div>
+
+                              {/* Back to Sign-In Options */}
+                              <div className="text-center pt-4">
+                                <button
+                                  onClick={() => {
+                                    setIsPasswordSignInMode(false);
+                                    setSignInEmail('');
+                                    setSignInPassword('');
+                                    setSignInError('');
+                                  }}
+                                  className="text-gray-600 hover:text-gray-900 font-medium transition-colors flex items-center justify-center gap-1 mx-auto"
+                                >
+                                  <Icon icon="lucide:arrow-left" className="text-sm" />
+                                  <span>Back to sign-in options</span>
+                                </button>
+                              </div>
+
+                              {/* Privacy Notice */}
+                              <div className="bg-gray-100 rounded-xl p-4 mt-6">
+                                <div className="flex items-start gap-3">
+                                  <Icon icon="lucide:lock" className="text-gray-600 text-lg flex-shrink-0 mt-0.5" />
+                                  <p className="text-sm text-gray-600 leading-relaxed">
+                                    {domainClinic?.name || 'Hims'} takes your privacy seriously with industry leading encryption.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            // Sign-In Options (Google, Email OTP, Password)
+                            <SignInOptionsStep
+                              onBack={() => {
+                                setIsSignInOptionsMode(false);
+                                setIsPasswordSignInMode(false);
+                              }}
+                              onGoogleSignIn={handleGoogleSignIn}
+                              onEmailSignIn={emailVerificationHandlers.handleEmailSignIn}
+                              onPasswordSignIn={() => setIsPasswordSignInMode(true)}
+                              clinicId={domainClinic?.id}
+                              clinicName={domainClinic?.name}
+                            />
+                          )
+                        ) : currentStep?.title === 'Recommended Treatment' ? (
                           // Custom treatment recommendation page
                           (() => {
                             const medications = [
@@ -2941,55 +3075,26 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                             </div>
                           </div>
                         ) : currentStep?.title === 'Create Your Account' ? (
-                          isEmailVerificationMode ? (
-                            <EmailVerificationStep
-                              email={verificationEmail}
-                              code={verificationCode}
-                              onCodeChange={setVerificationCode}
-                              onVerify={emailVerificationHandlers.handleVerifyCode}
-                              onBack={() => {
-                                setIsEmailVerificationMode(false);
-                                setVerificationCode('');
-                                setVerificationError('');
-                              }}
-                              onResendCode={emailVerificationHandlers.handleResendCode}
-                              error={verificationError}
-                              isVerifying={isVerifying}
-                              clinicName={domainClinic?.name}
-                            />
-                          ) : (
-                            <AccountCreationStep
-                              isSignInMode={isSignInMode}
-                              onToggleMode={() => {
-                                setIsSignInMode(!isSignInMode);
-                                setSignInEmail('');
-                                setSignInPassword('');
-                                setSignInError('');
-                              }}
-                              firstName={answers['firstName'] || ''}
-                              lastName={answers['lastName'] || ''}
-                              email={answers['email'] || ''}
-                              mobile={answers['mobile'] || ''}
-                              onFieldChange={handleAnswerChange}
-                              signInEmail={signInEmail}
-                              signInPassword={signInPassword}
-                              signInError={signInError}
-                              isSigningIn={isSigningIn}
-                              onSignInEmailChange={(value) => {
-                                setSignInEmail(value);
-                                setSignInError('');
-                              }}
-                              onSignInPasswordChange={(value) => {
-                                setSignInPassword(value);
-                                setSignInError('');
-                              }}
-                              onSignIn={handleSignIn}
-                              onEmailSignIn={emailVerificationHandlers.handleEmailSignIn}
-                              onGoogleSignIn={handleGoogleSignIn}
-                              clinicId={domainClinic?.id}
-                              clinicName={domainClinic?.name}
-                            />
-                          )
+                          <AccountCreationStep
+                            isSignInMode={false}
+                            onToggleMode={() => { }}
+                            firstName={answers['firstName'] || ''}
+                            lastName={answers['lastName'] || ''}
+                            email={answers['email'] || ''}
+                            mobile={answers['mobile'] || ''}
+                            onFieldChange={handleAnswerChange}
+                            signInEmail={signInEmail}
+                            signInPassword={signInPassword}
+                            signInError={signInError}
+                            isSigningIn={isSigningIn}
+                            onSignInEmailChange={() => { }}
+                            onSignInPasswordChange={() => { }}
+                            onSignIn={() => { }}
+                            onEmailSignIn={() => { }}
+                            onGoogleSignIn={() => { }}
+                            clinicId={domainClinic?.id}
+                            clinicName={domainClinic?.name}
+                          />
                         ) : currentStep?.questions && currentStep.questions.length > 0 ? (
                           <div className="space-y-6">
                             {currentStep.questions
@@ -3153,8 +3258,8 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           </div>
                         )}
 
-                        {/* Continue button for regular steps (but not during sign-in or email verification on account creation step) */}
-                        {!(isCheckoutStep() && paymentStatus !== 'succeeded') && !(currentStep?.title === 'Create Your Account' && (isSignInMode || isEmailVerificationMode)) && (() => {
+                        {/* Continue button for regular steps (but not during sign-in modes) */}
+                        {!(isCheckoutStep() && paymentStatus !== 'succeeded') && !isSignInOptionsMode && !isEmailVerificationMode && (() => {
                           // Check if step itself is dead end OR if any VISIBLE question is a dead end
                           // Use same filter logic as question rendering above
                           const visibleQuestions = currentStep?.questions?.filter((question: any) => {
@@ -3211,21 +3316,35 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                               </button>
                             </div>
                           ) : (
-                            <button
-                              onClick={handleNext}
-                              disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
-                              className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                              style={{
-                                backgroundColor: theme.primary,
-                                ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
-                              }}
-                            >
-                              {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
-                                (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
-                                  isProductSelectionStep() ? 'Continue to Checkout' :
-                                    isCheckoutStep() ? 'Complete Order' : 'Continue'}
-                              <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
-                            </button>
+                            <>
+                              <button
+                                onClick={handleNext}
+                                disabled={isCheckoutStep() && paymentStatus !== 'succeeded'}
+                                className="w-full text-white font-medium py-4 px-6 rounded-2xl text-base h-auto flex items-center justify-center transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                style={{
+                                  backgroundColor: theme.primary,
+                                  ...(isCheckoutStep() && paymentStatus !== 'succeeded' ? {} : { boxShadow: `0 10px 20px -10px ${theme.primaryDark}` })
+                                }}
+                              >
+                                {isLastStep ? (isCheckoutStep() ? 'Complete Order' : 'Continue') :
+                                  (isCheckoutStep() && paymentStatus === 'succeeded') ? 'Continue' :
+                                    isProductSelectionStep() ? 'Continue to Checkout' :
+                                      isCheckoutStep() ? 'Complete Order' : 'Continue'}
+                                <Icon icon="lucide:chevron-right" className="ml-2 h-4 w-4" />
+                              </button>
+
+                              {/* "Need to sign in?" link - shown on all steps when user is not signed in */}
+                              {!accountCreated && !userId && (
+                                <div className="text-center pt-2">
+                                  <button
+                                    onClick={() => setIsSignInOptionsMode(true)}
+                                    className="text-gray-500 text-sm hover:text-gray-700 hover:underline transition-colors"
+                                  >
+                                    Need to sign in?
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )
                         })()}
                       </>

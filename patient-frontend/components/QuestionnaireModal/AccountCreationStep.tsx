@@ -206,54 +206,18 @@ export const AccountCreationStep: React.FC<AccountCreationStepProps> = ({
             </div>
           </div>
 
-          {/* OAuth Section */}
-          <div className="space-y-4 pt-4">
-            {/* Already have an account */}
-            <div className="text-center">
-              <span className="text-gray-600">Already have an account? </span>
-              <button
-                onClick={onToggleMode}
-                className="text-gray-900 font-medium hover:underline"
-              >
-                Sign In
-              </button>
-            </div>
-
-            {/* Divider with "or" */}
-            <div className="relative flex items-center">
-              <div className="flex-grow border-t border-gray-300"></div>
-              <span className="flex-shrink mx-4 text-gray-500 font-medium">or</span>
-              <div className="flex-grow border-t border-gray-300"></div>
-            </div>
-
-            {/* OAuth Buttons */}
-            <div className="space-y-3">
-              {/* Continue with Google */}
-              <GoogleSignInButton clinicId={clinicId} />
-
-              {/* Continue with Email */}
-              <button
-                onClick={onEmailSignIn}
-                className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-              >
-                <Icon icon="lucide:mail" className="text-xl" />
-                <span>Continue with Email</span>
-              </button>
-            </div>
-
-            {/* Terms and Privacy */}
-            <p className="text-center text-xs text-gray-500 leading-relaxed px-4">
-              By creating an account, I agree to the{' '}
-              <a href="#" className="text-gray-700 underline hover:text-gray-900">
-                Terms & Conditions
-              </a>
-              {' '}and acknowledge the{' '}
-              <a href="#" className="text-gray-700 underline hover:text-gray-900">
-                Privacy Policy
-              </a>
-              .
-            </p>
-          </div>
+          {/* Terms and Privacy */}
+          <p className="text-center text-xs text-gray-500 leading-relaxed px-4 pt-4">
+            By creating an account, I agree to the{' '}
+            <a href="#" className="text-gray-700 underline hover:text-gray-900">
+              Terms & Conditions
+            </a>
+            {' '}and acknowledge the{' '}
+            <a href="#" className="text-gray-700 underline hover:text-gray-900">
+              Privacy Policy
+            </a>
+            .
+          </p>
 
           {/* Privacy Notice */}
           <div className="bg-gray-100 rounded-xl p-4 mt-6">
@@ -405,6 +369,78 @@ export const EmailInputModal: React.FC<EmailInputModalProps> = ({
   }
 
   return null;
+};
+
+// Sign In Options Step Component
+interface SignInOptionsStepProps {
+  onBack: () => void;
+  onGoogleSignIn: (credential: string) => void;
+  onEmailSignIn: () => void;
+  onPasswordSignIn: () => void;
+  clinicId?: string;
+  clinicName?: string;
+}
+
+export const SignInOptionsStep: React.FC<SignInOptionsStepProps> = ({
+  onBack,
+  onGoogleSignIn,
+  onEmailSignIn,
+  onPasswordSignIn,
+  clinicId,
+  clinicName
+}) => {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-2xl font-medium text-gray-900 mb-3">Welcome back</h3>
+        <p className="text-gray-600 text-base">Sign in to continue with your account</p>
+      </div>
+
+      <div className="space-y-3 pt-4">
+        {/* Continue with Google */}
+        <GoogleSignInButton clinicId={clinicId} />
+
+        {/* Continue with Email (OTP) */}
+        <button
+          onClick={onEmailSignIn}
+          className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+        >
+          <Icon icon="lucide:mail" className="text-xl" />
+          <span>Continue with Email</span>
+        </button>
+
+        {/* Sign in with Password */}
+        <button
+          onClick={onPasswordSignIn}
+          className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+        >
+          <Icon icon="lucide:key" className="text-xl" />
+          <span>Sign in with Password</span>
+        </button>
+      </div>
+
+      {/* Back to Create Account */}
+      <div className="text-center pt-4">
+        <button
+          onClick={onBack}
+          className="text-gray-600 hover:text-gray-900 font-medium transition-colors flex items-center justify-center gap-1 mx-auto"
+        >
+          <Icon icon="lucide:arrow-left" className="text-sm" />
+          <span>Back to create account</span>
+        </button>
+      </div>
+
+      {/* Privacy Notice */}
+      <div className="bg-gray-100 rounded-xl p-4 mt-6">
+        <div className="flex items-start gap-3">
+          <Icon icon="lucide:lock" className="text-gray-600 text-lg flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-gray-600 leading-relaxed">
+            {clinicName || 'Hims'} takes your privacy seriously with industry leading encryption.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // Email Verification Code Input Component
