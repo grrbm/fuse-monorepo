@@ -1,12 +1,27 @@
 import { useEffect, useRef } from "react";
 
+interface GoogleMfaSetters {
+  setIsGoogleMfaMode?: (mode: boolean) => void;
+  setGoogleMfaToken?: (token: string) => void;
+  setGoogleMfaEmail?: (email: string) => void;
+  setGoogleMfaCode?: (code: string[]) => void;
+  setGoogleMfaError?: (error: string) => void;
+}
+
+interface SignInModeSetters {
+  setIsSignInOptionsMode?: (mode: boolean) => void;
+  setIsPasswordSignInMode?: (mode: boolean) => void;
+}
+
 export function useGoogleOAuth(
   answers: Record<string, any>,
   setAnswers: React.Dispatch<React.SetStateAction<Record<string, any>>>,
   setPatientFirstName: React.Dispatch<React.SetStateAction<string>>,
   setPatientName: React.Dispatch<React.SetStateAction<string>>,
   setUserId: React.Dispatch<React.SetStateAction<string | null>>,
-  setAccountCreated: React.Dispatch<React.SetStateAction<boolean>>
+  setAccountCreated: React.Dispatch<React.SetStateAction<boolean>>,
+  googleMfaSetters?: GoogleMfaSetters,
+  signInModeSetters?: SignInModeSetters
 ) {
   const hasHandledGoogleAuthRef = useRef(false);
 
@@ -50,23 +65,49 @@ export function useGoogleOAuth(
         setUserId(userData.id);
         setAccountCreated(true);
 
+        // Exit any sign-in modes
+        signInModeSetters?.setIsSignInOptionsMode?.(false);
+        signInModeSetters?.setIsPasswordSignInMode?.(false);
+
         // Mark that we've handled Google OAuth - this prevents step reset
         hasHandledGoogleAuthRef.current = true;
 
         console.log('✅ [GOOGLE OAUTH] User data loaded, accountCreated set to true, marked as handled');
 
-        // Clean URL but KEEP skipAccount flag for step initialization
-        if (skipAccount === 'true') {
-          const cleanUrl = `${window.location.pathname}?skipAccount=true`;
-          console.log('🧹 [GOOGLE OAUTH] Cleaning URL but keeping skipAccount flag');
-          console.log('🧹 [GOOGLE OAUTH] Before:', window.location.href);
-          console.log('🧹 [GOOGLE OAUTH] After:', cleanUrl);
-          window.history.replaceState({}, document.title, cleanUrl);
-        }
+        // Clean URL
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
 
       } catch (error) {
         console.error('❌ [GOOGLE OAUTH] Failed to parse user data:', error);
       }
+    } else if (googleAuth === 'mfa_required') {
+      // MFA is required - show MFA verification UI
+      const mfaToken = urlParams.get('mfaToken');
+      const email = urlParams.get('email');
+      console.log('🔐 [GOOGLE OAUTH] MFA required for email:', email);
+      console.log('🔐 [GOOGLE OAUTH] MFA token:', mfaToken);
+
+      if (mfaToken && email && googleMfaSetters) {
+        // Set MFA state to show verification UI
+        googleMfaSetters.setIsGoogleMfaMode?.(true);
+        googleMfaSetters.setGoogleMfaToken?.(mfaToken);
+        googleMfaSetters.setGoogleMfaEmail?.(decodeURIComponent(email));
+        googleMfaSetters.setGoogleMfaCode?.(['', '', '', '', '', '']);
+        googleMfaSetters.setGoogleMfaError?.('');
+
+        // Exit other sign-in modes
+        signInModeSetters?.setIsSignInOptionsMode?.(false);
+        signInModeSetters?.setIsPasswordSignInMode?.(false);
+
+        // Mark that we've handled Google OAuth
+        hasHandledGoogleAuthRef.current = true;
+
+        console.log('✅ [GOOGLE OAUTH] MFA mode activated, waiting for code verification');
+      }
+
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     } else if (googleAuth === 'error') {
       alert('Google sign-in failed. Please try again.');
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -77,4 +118,3 @@ export function useGoogleOAuth(
 
   return { hasHandledGoogleAuthRef };
 }
-

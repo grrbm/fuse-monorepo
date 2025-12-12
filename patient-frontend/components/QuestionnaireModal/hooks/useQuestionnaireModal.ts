@@ -7,13 +7,12 @@ import { trackFormConversion } from "../../../lib/analytics";
 import { QuestionnaireModalProps, QuestionnaireData, PlanOption } from "../types";
 import { useQuestionnaireData } from "./useQuestionnaireData";
 import { useGoogleOAuth } from "./useGoogleOAuth";
+import { useGoogleMfa } from "./useGoogleMfa";
 import { useQuestionnaireAnalytics } from "./useQuestionnaireAnalytics";
 import { useQuestionnairePlans } from "./useQuestionnairePlans";
 import { useQuestionnaireTheme } from "./useQuestionnaireTheme";
 import { usePharmacyCoverages } from "./usePharmacyCoverages";
 
-// This is a large hook that combines all the logic from the component
-// Following vertical slice pattern - all related logic stays together
 export function useQuestionnaireModal(
   props: QuestionnaireModalProps,
   domainClinic: any,
@@ -57,6 +56,8 @@ export function useQuestionnaireModal(
 
   // Auth state
   const [isSignInMode, setIsSignInMode] = useState(false);
+  const [isSignInOptionsMode, setIsSignInOptionsMode] = useState(false);
+  const [isPasswordSignInMode, setIsPasswordSignInMode] = useState(false);
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
   const [signInError, setSignInError] = useState('');
@@ -70,38 +71,42 @@ export function useQuestionnaireModal(
   const [emailModalLoading, setEmailModalLoading] = useState(false);
   const [emailModalError, setEmailModalError] = useState('');
 
-  // Google OAuth
+  // Track initialization
+  const hasInitializedStepRef = useRef(false);
+
+  // Debug sign-in mode changes
+  useEffect(() => {
+    console.log('🔴 [SIGN IN MODE] isSignInOptionsMode changed to:', isSignInOptionsMode);
+  }, [isSignInOptionsMode]);
+
+  useEffect(() => {
+    console.log('🔴 [SIGN IN MODE] isPasswordSignInMode changed to:', isPasswordSignInMode);
+  }, [isPasswordSignInMode]);
+
+  // Google MFA
+  const googleMfa = useGoogleMfa(
+    setAnswers, setPatientFirstName, setPatientName, setUserId, setAccountCreated, answers
+  );
+
+  // Google OAuth - pass MFA and sign-in mode setters
   const { hasHandledGoogleAuthRef } = useGoogleOAuth(
-    answers, setAnswers, setPatientFirstName, setPatientName, setUserId, setAccountCreated
+    answers, setAnswers, setPatientFirstName, setPatientName, setUserId, setAccountCreated,
+    {
+      setIsGoogleMfaMode: googleMfa.setIsGoogleMfaMode,
+      setGoogleMfaToken: googleMfa.setGoogleMfaToken,
+      setGoogleMfaEmail: googleMfa.setGoogleMfaEmail,
+      setGoogleMfaCode: googleMfa.setGoogleMfaCode,
+      setGoogleMfaError: googleMfa.setGoogleMfaError,
+    },
+    {
+      setIsSignInOptionsMode,
+      setIsPasswordSignInMode,
+    }
   );
 
-  // Analytics
-  const getCurrentStage = useCallback((): 'product' | 'payment' | 'account' => {
-    if (isCheckoutStep()) return 'payment';
-    const currentStep = getCurrentQuestionnaireStep();
-    if (currentStep?.category === 'user_profile') return 'account';
-    return 'product';
-  }, [currentStepIndex, questionnaire]);
-
-  const { trackConversion, resetTrackingFlags } = useQuestionnaireAnalytics(
-    isOpen, questionnaireId, tenantProductFormId, tenantProductId, domainClinic, productName,
-    currentStepIndex, getCurrentStage, questionnaire
-  );
-
-  // Plans and theme
-  const { plans, selectedPlan, setSelectedPlan } = useQuestionnairePlans(
-    questionnaire, props.productPrice, props.productStripePriceId, props.productName, props.tenantProductId
-  );
-  const { theme, themeVars } = useQuestionnaireTheme(isOpen, questionnaireId, questionnaire, domainClinic);
-  const pharmacyCoverages = usePharmacyCoverages(isOpen, tenantProductId);
-
-  // Step helpers
-  const getTotalSteps = useCallback((): number => {
-    if (!questionnaire) return 0;
-    return questionnaire.steps.length + 1;
-  }, [questionnaire]);
-
+  // Step helpers - must be defined before getCurrentStage
   const isProductSelectionStep = useCallback((): boolean => false, []);
+
   const isCheckoutStep = useCallback((): boolean => {
     if (!questionnaire) return false;
     const checkoutPos = questionnaire.checkoutStepPosition;
@@ -145,8 +150,20 @@ export function useQuestionnaireModal(
     if (checkoutPos !== -1 && currentStepIndex > checkoutPos + 1) {
       actualStepIndex = currentStepIndex - 2;
     }
+
+    // Check if user is signed in
+    const isSignedIn = accountCreated || userId;
+
+    // Find the next visible step starting from actualStepIndex
     for (let i = actualStepIndex; i < questionnaire.steps.length; i++) {
       const step = questionnaire.steps[i];
+
+      // Skip user_profile steps if user is signed in
+      if (isSignedIn && step.category === 'user_profile') {
+        console.log('⏭️ Skipping user_profile step (user signed in):', step.title);
+        continue;
+      }
+
       if (evaluateStepConditionalLogic(step)) {
         if (i !== actualStepIndex) {
           setCurrentStepIndex(currentStepIndex + (i - actualStepIndex));
@@ -155,7 +172,58 @@ export function useQuestionnaireModal(
       }
     }
     return null;
-  }, [questionnaire, currentStepIndex, isProductSelectionStep, isCheckoutStep, evaluateStepConditionalLogic]);
+  }, [questionnaire, currentStepIndex, isProductSelectionStep, isCheckoutStep, evaluateStepConditionalLogic, accountCreated, userId]);
+
+  // Analytics
+  const getCurrentStage = useCallback((): 'product' | 'payment' | 'account' => {
+    if (isCheckoutStep()) return 'payment';
+    const currentStep = getCurrentQuestionnaireStep();
+    if (currentStep?.category === 'user_profile') return 'account';
+    return 'product';
+  }, [isCheckoutStep, getCurrentQuestionnaireStep]);
+
+  const { trackConversion, resetTrackingFlags } = useQuestionnaireAnalytics(
+    isOpen, questionnaireId, tenantProductFormId, tenantProductId, domainClinic, productName,
+    currentStepIndex, getCurrentStage, questionnaire
+  );
+
+  // Plans and theme
+  const { plans, selectedPlan, setSelectedPlan } = useQuestionnairePlans(
+    questionnaire, props.productPrice, props.productStripePriceId, props.productName, props.tenantProductId
+  );
+  const { theme, themeVars } = useQuestionnaireTheme(isOpen, questionnaireId, questionnaire, domainClinic);
+  const pharmacyCoverages = usePharmacyCoverages(isOpen, tenantProductId);
+
+  // Helper: Get total steps (excluding user_profile if signed in)
+  const getTotalSteps = useCallback((): number => {
+    if (!questionnaire) return 0;
+    const isSignedIn = accountCreated || userId;
+    const visibleSteps = questionnaire.steps.filter(step => {
+      if (isSignedIn && step.category === 'user_profile') return false;
+      return true;
+    }).length;
+    return visibleSteps + 1; // +1 for checkout
+  }, [questionnaire, accountCreated, userId]);
+
+  // Get current visible step number for progress display
+  const getCurrentVisibleStepNumber = useCallback((): number => {
+    if (!questionnaire) return 1;
+    const isSignedIn = accountCreated || userId;
+    const checkoutPos = questionnaire.checkoutStepPosition;
+    const checkoutStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
+
+    if (currentStepIndex >= checkoutStepIndex) {
+      return getTotalSteps();
+    }
+
+    let visibleCount = 0;
+    for (let i = 0; i <= currentStepIndex && i < questionnaire.steps.length; i++) {
+      const step = questionnaire.steps[i];
+      if (isSignedIn && step.category === 'user_profile') continue;
+      visibleCount++;
+    }
+    return visibleCount;
+  }, [questionnaire, currentStepIndex, accountCreated, userId, getTotalSteps]);
 
   // Build questionnaire answers
   const buildQuestionnaireAnswers = useCallback((currentAnswers: Record<string, any>) => {
@@ -200,13 +268,8 @@ export function useQuestionnaireModal(
       if (currentAnswers[key]) {
         legacyAnswers[label] = currentAnswers[key];
         structuredAnswers.push({
-          questionId: key,
-          stepId: 'account-creation',
-          stepCategory: 'user_profile',
-          questionText: label,
-          answerType: 'text',
-          answer: currentAnswers[key],
-          answeredAt: new Date().toISOString()
+          questionId: key, stepId: 'account-creation', stepCategory: 'user_profile',
+          questionText: label, answerType: 'text', answer: currentAnswers[key], answeredAt: new Date().toISOString()
         });
       }
     });
@@ -216,14 +279,13 @@ export function useQuestionnaireModal(
     };
   }, [questionnaire]);
 
-  // Answer handlers - simplified versions
+  // Answer handlers
   const handleAnswerChange = useCallback((questionId: string, value: any) => {
     if (questionId === 'mobile') {
       const numericValue = String(value).replace(/\D/g, '');
       if (numericValue.length <= 10) {
         setAnswers(prev => ({ ...prev, [questionId]: numericValue }));
         if (errors[questionId]) setErrors(prev => { const next = { ...prev }; delete next[questionId]; return next; });
-        return;
       }
       return;
     }
@@ -237,11 +299,7 @@ export function useQuestionnaireModal(
         const heightInMeters = totalInches * 0.0254;
         const weightInKg = weight * 0.453592;
         const bmi = weightInKg / (heightInMeters * heightInMeters);
-        let category = '';
-        if (bmi < 18.5) category = 'Underweight';
-        else if (bmi < 25) category = 'Normal';
-        else if (bmi < 30) category = 'Overweight';
-        else category = 'Obese';
+        let category = bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Overweight' : 'Obese';
         newAnswers['bmi'] = bmi.toFixed(1);
         newAnswers['bmiCategory'] = category;
         newAnswers['heightAndWeight'] = `${weight} lbs, ${feet}'${inches}"`;
@@ -359,7 +417,10 @@ export function useQuestionnaireModal(
       setUserId(result.userData.id);
       setAccountCreated(true);
       setIsSignInMode(false);
+      setIsSignInOptionsMode(false);
+      setIsPasswordSignInMode(false);
       setIsSigningIn(false);
+      console.log('✅ User signed in successfully');
     } else {
       setSignInError(result.error || 'Sign-in failed');
       setIsSigningIn(false);
@@ -384,17 +445,14 @@ export function useQuestionnaireModal(
       setUserId(result.userData.id);
       setAccountCreated(true);
       setIsSignInMode(false);
+      setIsSignInOptionsMode(false);
+      setIsPasswordSignInMode(false);
       setIsSigningIn(false);
-      setTimeout(() => {
-        if (questionnaire && currentStepIndex < getTotalSteps() - 1) {
-          setCurrentStepIndex(prev => prev + 1);
-        }
-      }, 150);
     } else {
       setSignInError(result.error || 'Google sign-in failed');
       setIsSigningIn(false);
     }
-  }, [answers, domainClinic, questionnaire, currentStepIndex, getTotalSteps]);
+  }, [answers, domainClinic]);
 
   const createUserAccount = useCallback(async () => {
     const firstName = answers['firstName'] || '';
@@ -416,7 +474,8 @@ export function useQuestionnaireModal(
     answers, verificationEmail, verificationCode, questionnaire, currentStepIndex,
     setVerificationError, setVerificationEmail, setIsEmailVerificationMode, setIsVerifying, setVerificationCode,
     setAnswers, setPatientFirstName, setPatientName, setUserId, setAccountCreated, setCurrentStepIndex,
-    getTotalSteps, setShowEmailModal, setEmailModalLoading, setEmailModalError
+    getTotalSteps, setShowEmailModal, setEmailModalLoading, setEmailModalError,
+    setIsSignInOptionsMode, setIsPasswordSignInMode
   });
 
   // Payment handlers
@@ -426,10 +485,8 @@ export function useQuestionnaireModal(
       const selectedPlanData = plans.find(plan => plan.id === planId);
       const stripePriceId = selectedPlanData?.stripePriceId;
       const userDetails = {
-        firstName: answers['firstName'],
-        lastName: answers['lastName'],
-        email: answers['email'],
-        phoneNumber: answers['mobile']
+        firstName: answers['firstName'], lastName: answers['lastName'],
+        email: answers['email'], phoneNumber: answers['mobile']
       };
       const questionnaireAnswersData = buildQuestionnaireAnswers(answers);
       const clinicMerchantOfRecord = (domainClinic as any)?.merchantOfRecord;
@@ -443,10 +500,7 @@ export function useQuestionnaireModal(
         clinicName: domainClinic?.name
       };
       if (isClinicMOR) requestBody.useOnBehalfOf = true;
-      const result = await apiCall('/payments/product/sub', {
-        method: 'POST',
-        body: JSON.stringify(requestBody)
-      });
+      const result = await apiCall('/payments/product/sub', { method: 'POST', body: JSON.stringify(requestBody) });
       if (result.success && result.data) {
         const subscriptionData = result.data.data || result.data;
         if (subscriptionData.clientSecret) {
@@ -468,9 +522,7 @@ export function useQuestionnaireModal(
   const handlePlanSelection = useCallback(async (planId: string) => {
     setSelectedPlan(planId);
     setClientSecret(null);
-    setTimeout(async () => {
-      await createSubscriptionForPlan(planId);
-    }, 100);
+    setTimeout(async () => { await createSubscriptionForPlan(planId); }, 100);
   }, [setSelectedPlan, createSubscriptionForPlan]);
 
   const triggerCheckoutSequenceRun = useCallback(async () => {
@@ -521,32 +573,80 @@ export function useQuestionnaireModal(
     return replaceVariables(text, variables);
   }, [domainClinic, props.productName, patientFirstName, patientName]);
 
+  const handleSubmit = useCallback(async () => {
+    if (isCheckoutStep()) {
+      alert('Order submitted successfully!');
+      onClose();
+    } else {
+      alert('Questionnaire submitted!');
+      onClose();
+    }
+  }, [isCheckoutStep, onClose]);
+
   const handleNext = useCallback(async () => {
     if (validateCurrentStep() && questionnaire) {
       const currentStep = getCurrentQuestionnaireStep();
+
+      // If we're on checkout step and payment succeeded, submit the form
+      if (isCheckoutStep() && paymentStatus === 'succeeded') {
+        console.log('✅ Checkout complete with payment succeeded, submitting questionnaire');
+        handleSubmit();
+        return;
+      }
+
+      // If we just completed "Create Your Account" step and haven't created account yet, do it now
       if (currentStep?.title === 'Create Your Account' && !accountCreated) {
         await createUserAccount();
       }
-      const totalSteps = getTotalSteps();
-      if (currentStepIndex < totalSteps - 1) {
-        setCurrentStepIndex(prev => prev + 1);
-      } else {
-        if (isCheckoutStep()) {
-          alert('Order submitted successfully!');
-          onClose();
-        } else {
-          alert('Questionnaire submitted!');
-          onClose();
+
+      const isSignedIn = accountCreated || userId;
+      const checkoutPos = questionnaire.checkoutStepPosition;
+      const checkoutStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
+
+      // Find the next valid step (skipping user_profile if signed in)
+      let nextIndex = currentStepIndex + 1;
+
+      while (nextIndex < questionnaire.steps.length) {
+        const step = questionnaire.steps[nextIndex];
+        if (step && isSignedIn && step.category === 'user_profile') {
+          console.log('⏭️ Skipping user_profile step when advancing (user signed in):', step.title);
+          nextIndex++;
+          continue;
         }
+        break;
+      }
+
+      if (nextIndex >= questionnaire.steps.length) {
+        console.log('⏭️ No more valid questionnaire steps, advancing to checkout');
+        setCurrentStepIndex(checkoutStepIndex);
+      } else if (nextIndex <= checkoutStepIndex) {
+        setCurrentStepIndex(nextIndex);
+      } else {
+        handleSubmit();
       }
     }
-  }, [validateCurrentStep, questionnaire, getCurrentQuestionnaireStep, accountCreated, createUserAccount, getTotalSteps, currentStepIndex, isCheckoutStep, onClose]);
+  }, [validateCurrentStep, questionnaire, getCurrentQuestionnaireStep, isCheckoutStep, paymentStatus, accountCreated, userId, createUserAccount, currentStepIndex, handleSubmit]);
 
   const handlePrevious = useCallback(() => {
-    if (currentStepIndex > 0) {
-      setCurrentStepIndex(prev => prev - 1);
+    if (currentStepIndex > 0 && questionnaire) {
+      const isSignedIn = accountCreated || userId;
+      let targetIndex = currentStepIndex - 1;
+
+      while (targetIndex >= 0) {
+        const step = questionnaire.steps[targetIndex];
+        if (step && isSignedIn && step.category === 'user_profile') {
+          console.log('⏭️ Skipping user_profile step when going back (user signed in):', step.title);
+          targetIndex--;
+          continue;
+        }
+        break;
+      }
+
+      if (targetIndex >= 0) {
+        setCurrentStepIndex(targetIndex);
+      }
     }
-  }, [currentStepIndex]);
+  }, [currentStepIndex, questionnaire, accountCreated, userId]);
 
   const handleProductQuantityChange = useCallback((productId: string, quantity: number) => {
     setSelectedProducts(prev => ({ ...prev, [productId]: quantity }));
@@ -555,17 +655,33 @@ export function useQuestionnaireModal(
   // Step initialization
   useEffect(() => {
     if (questionnaire && isOpen) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const skipAccount = urlParams.get('skipAccount');
-      if (skipAccount === 'true' && questionnaire.steps) {
-        const accountStepIndex = questionnaire.steps.findIndex((step: any) => step.title === 'Create Your Account');
-        if (accountStepIndex >= 0) {
-          setCurrentStepIndex(accountStepIndex + 1);
-          return;
+      console.log('🟡 [STEP INIT] Effect triggered');
+
+      // If user just signed in via Google OAuth, find the first non-user_profile step
+      if (hasHandledGoogleAuthRef.current && !hasInitializedStepRef.current) {
+        console.log('🔍 [STEP INIT] Google OAuth handled, finding first non-user_profile step');
+        let targetStepIndex = 0;
+        for (let i = 0; i < questionnaire.steps.length; i++) {
+          const step = questionnaire.steps[i];
+          if (step.category !== 'user_profile') {
+            targetStepIndex = i;
+            break;
+          }
         }
+        if (targetStepIndex === 0 && questionnaire.steps[0]?.category === 'user_profile') {
+          const checkoutPos = questionnaire.checkoutStepPosition;
+          targetStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
+          console.log('⏭️ [STEP INIT] All steps are user_profile, going to checkout:', targetStepIndex);
+        }
+        setCurrentStepIndex(targetStepIndex);
+        hasInitializedStepRef.current = true;
+        return;
       }
-      if (!hasHandledGoogleAuthRef.current) {
+
+      if (!hasInitializedStepRef.current) {
+        console.log('📍 [STEP INIT] First initialization, starting at step 0');
         setCurrentStepIndex(0);
+        hasInitializedStepRef.current = true;
       }
     }
   }, [questionnaire, isOpen, hasHandledGoogleAuthRef]);
@@ -584,12 +700,15 @@ export function useQuestionnaireModal(
       setSelectedPlan("monthly");
       resetTrackingFlags();
       setIsSignInMode(false);
+      setIsSignInOptionsMode(false);
+      setIsPasswordSignInMode(false);
       setSignInEmail('');
       setSignInPassword('');
       setSignInError('');
       setIsSigningIn(false);
       setShippingInfo({ address: "", apartment: "", city: "", state: "", zipCode: "", country: "us" });
       setCheckoutPaymentInfo({ cardNumber: "", expiryDate: "", securityCode: "", country: "brazil" });
+      hasInitializedStepRef.current = false;
     }
   }, [isOpen, setQuestionnaire, setSelectedPlan, resetTrackingFlags]);
 
@@ -608,6 +727,8 @@ export function useQuestionnaireModal(
     checkoutPaymentInfo, setCheckoutPaymentInfo,
     // Auth state
     isSignInMode, setIsSignInMode,
+    isSignInOptionsMode, setIsSignInOptionsMode,
+    isPasswordSignInMode, setIsPasswordSignInMode,
     signInEmail, setSignInEmail,
     signInPassword, setSignInPassword,
     signInError, setSignInError,
@@ -620,12 +741,14 @@ export function useQuestionnaireModal(
     showEmailModal, setShowEmailModal,
     emailModalLoading, setEmailModalLoading,
     emailModalError, setEmailModalError,
+    // Google MFA
+    ...googleMfa,
     // Plans & theme
     plans, selectedPlan, setSelectedPlan,
     theme, themeVars,
     pharmacyCoverages,
     // Helpers
-    getTotalSteps, isProductSelectionStep, isCheckoutStep, getCurrentQuestionnaireStep,
+    getTotalSteps, getCurrentVisibleStepNumber, isProductSelectionStep, isCheckoutStep, getCurrentQuestionnaireStep,
     replaceCurrentVariables,
     // Handlers
     handleAnswerChange, handleRadioChange, handleCheckboxChange,
@@ -633,8 +756,7 @@ export function useQuestionnaireModal(
     validateCurrentStep,
     handleSignIn, handleGoogleSignIn, createUserAccount, emailVerificationHandlers,
     handlePlanSelection, createSubscriptionForPlan, handlePaymentSuccess, handlePaymentError,
-    handleNext, handlePrevious,
+    handleNext, handlePrevious, handleSubmit,
     buildQuestionnaireAnswers
   };
 }
-
