@@ -42,7 +42,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = (props) => 
   const progressPercent = (currentVisibleStep / totalSteps) * 100;
   const isLastStep = currentVisibleStep === totalSteps;
   const currentStep = modal.getCurrentQuestionnaireStep();
-  
+
   console.log('🔵 [INDEX RENDER]', {
     currentStepIndex: modal.currentStepIndex,
     currentVisibleStep,

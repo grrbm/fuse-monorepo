@@ -1091,59 +1091,28 @@ app.get("/auth/google/callback", async (req, res) => {
       return res.redirect(redirectUrl);
     }
 
-    // Non-superAdmin: Require MFA even for Google OAuth
-    const otpCode = MfaToken.generateCode();
-    const mfaSessionToken = MfaToken.generateMfaToken();
-    const expiresAt = MfaToken.getExpirationTime();
+    // Google OAuth: Skip MFA - Google already provides strong authentication
+    // Update last login time
+    await user.updateLastLogin();
 
-    // Delete any existing MFA tokens for this user (cleanup)
-    await MfaToken.destroy({ where: { userId: user.id } });
+    // Create JWT token
+    const token = createJWTToken(user);
 
-    // Create new MFA token record
-    await MfaToken.create({
-      userId: user.id,
-      code: otpCode,
-      mfaToken: mfaSessionToken,
-      expiresAt,
+    if (process.env.NODE_ENV === "development") {
+      console.log(`🔓 Google OAuth: MFA skipped for user ${user.id}`);
+    }
+
+    // HIPAA Audit: Log successful Google OAuth login
+    await AuditService.logLogin(req, {
+      id: user.id,
       email: user.email,
-      verified: false,
-      resendCount: 0,
-      failedAttempts: 0,
-    });
-
-    // Send OTP email
-    const emailSent = await MailsSender.sendMfaCode(
-      user.email,
-      otpCode,
-      user.firstName
-    );
-
-    if (!emailSent) {
-      console.error("❌ Failed to send MFA code email");
-      return res.redirect(
-        `${returnUrl}?googleAuth=error&reason=mfa_email_failed`
-      );
-    }
-
-    // HIPAA Audit: Log MFA code sent (Google OAuth callback)
-    await AuditService.log({
-      action: AuditAction.MFA_CODE_SENT,
-      resourceType: AuditResourceType.USER,
-      resourceId: user.id,
-      userId: user.id,
       clinicId: user.clinicId,
-      details: { email: user.email, method: "google_oauth_callback" },
-      ipAddress: req.ip || req.connection?.remoteAddress,
-      userAgent: req.headers["user-agent"],
     });
 
+    // Redirect back to frontend with token
+    const redirectUrl = `${returnUrl}?googleAuth=success&skipAccount=true&token=${token}&user=${encodeURIComponent(JSON.stringify(user.toSafeJSON()))}`;
     if (process.env.NODE_ENV === "development") {
-      console.log("🔐 MFA code sent to Google user (callback)");
-    }
-    // Redirect to frontend with MFA required flag
-    const redirectUrl = `${returnUrl}?googleAuth=mfa_required&mfaToken=${mfaSessionToken}&email=${encodeURIComponent(user.email)}`;
-    if (process.env.NODE_ENV === "development") {
-      console.log("🔗 Redirecting to MFA");
+      console.log("🔗 Redirecting with token");
     }
     res.redirect(redirectUrl);
   } catch (error) {
@@ -1239,63 +1208,31 @@ app.post("/auth/google", async (req, res) => {
       });
     }
 
-    // Non-superAdmin: Require MFA even for Google OAuth
-    const otpCode = MfaToken.generateCode();
-    const mfaSessionToken = MfaToken.generateMfaToken();
-    const expiresAt = MfaToken.getExpirationTime();
+    // Google OAuth: Skip MFA - Google already provides strong authentication
+    // Update last login time
+    await user.updateLastLogin();
 
-    // Delete any existing MFA tokens for this user (cleanup)
-    await MfaToken.destroy({ where: { userId: user.id } });
-
-    // Create new MFA token record
-    await MfaToken.create({
-      userId: user.id,
-      code: otpCode,
-      mfaToken: mfaSessionToken,
-      expiresAt,
-      email: user.email,
-      verified: false,
-      resendCount: 0,
-      failedAttempts: 0,
-    });
-
-    // Send OTP email
-    const emailSent = await MailsSender.sendMfaCode(
-      user.email,
-      otpCode,
-      user.firstName
-    );
-
-    if (!emailSent) {
-      console.error("❌ Failed to send MFA code email");
-      return res.status(500).json({
-        success: false,
-        message: "Failed to send verification code. Please try again.",
-      });
-    }
-
-    // HIPAA Audit: Log MFA code sent (Google OAuth)
-    await AuditService.log({
-      action: AuditAction.MFA_CODE_SENT,
-      resourceType: AuditResourceType.USER,
-      resourceId: user.id,
-      userId: user.id,
-      clinicId: user.clinicId,
-      details: { email: user.email, method: "google_oauth" },
-      ipAddress: req.ip || req.connection?.remoteAddress,
-      userAgent: req.headers["user-agent"],
-    });
+    // Create JWT token directly
+    const token = createJWTToken(user);
 
     if (process.env.NODE_ENV === "development") {
-      console.log("🔐 MFA code sent to Google user");
+      console.log(`🔓 Google OAuth: MFA skipped for user ${user.id}`);
     }
 
-    // Return MFA required response
+    // HIPAA Audit: Log successful Google OAuth login
+    await AuditService.logLogin(req, {
+      id: user.id,
+      email: user.email,
+      clinicId: user.clinicId,
+    });
+
+    // Return success with token
     res.status(200).json({
       success: true,
-      requiresMfa: true,
-      mfaToken: mfaSessionToken,
-      message: "Verification code sent to your email",
+      requiresMfa: false,
+      token: token,
+      user: user.toSafeJSON(),
+      message: "Authentication successful",
     });
   } catch (error) {
     // HIPAA: Do not log detailed errors in production
