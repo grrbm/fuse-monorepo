@@ -407,7 +407,7 @@ export const SignInOptionsStep: React.FC<SignInOptionsStepProps> = ({
           className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
         >
           <Icon icon="lucide:mail" className="text-xl" />
-          <span>Continue with Email</span>
+          <span>Continue with OTP</span>
         </button>
 
         {/* Sign in with Password */}

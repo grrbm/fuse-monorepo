@@ -2299,6 +2299,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     if (validateCurrentStep() && questionnaire) {
       const currentStep = getCurrentQuestionnaireStep();
 
+      // If we're on checkout step and payment succeeded, submit the form
+      if (isCheckoutStep() && paymentStatus === 'succeeded') {
+        console.log('✅ Checkout complete with payment succeeded, submitting questionnaire');
+        handleSubmit();
+        return;
+      }
+
       // If we just completed "Create Your Account" step and haven't created account yet, do it now
       if (currentStep?.title === 'Create Your Account' && !accountCreated) {
         await createUserAccount();
