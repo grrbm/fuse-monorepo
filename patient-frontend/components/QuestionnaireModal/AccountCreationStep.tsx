@@ -402,6 +402,7 @@ export const SignInOptionsStep: React.FC<SignInOptionsStepProps> = ({
 
         {/* Continue with Email (OTP) */}
         <button
+          type="button"
           onClick={onEmailSignIn}
           className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
         >
@@ -411,6 +412,7 @@ export const SignInOptionsStep: React.FC<SignInOptionsStepProps> = ({
 
         {/* Sign in with Password */}
         <button
+          type="button"
           onClick={onPasswordSignIn}
           className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:bg-gray-50 transition-colors"
         >
@@ -422,6 +424,7 @@ export const SignInOptionsStep: React.FC<SignInOptionsStepProps> = ({
       {/* Back to Create Account */}
       <div className="text-center pt-4">
         <button
+          type="button"
           onClick={onBack}
           className="text-gray-600 hover:text-gray-900 font-medium transition-colors flex items-center justify-center gap-1 mx-auto"
         >

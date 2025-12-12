@@ -20,7 +20,7 @@ import {
   Divider
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { apiCall } from "../../lib/api";
+import { apiCall, authApi } from "../../lib/api";
 import { Elements } from "@stripe/react-stripe-js";
 import { stripePromise } from "../../lib/stripe";
 import { StripePaymentForm } from "../StripePaymentForm";
@@ -83,6 +83,15 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [isSignInMode, setIsSignInMode] = React.useState(false);
   const [isSignInOptionsMode, setIsSignInOptionsMode] = React.useState(false);
   const [isPasswordSignInMode, setIsPasswordSignInMode] = React.useState(false);
+
+  // Debug: Log sign-in mode changes
+  React.useEffect(() => {
+    console.log('🔴 [SIGN IN MODE] isSignInOptionsMode changed to:', isSignInOptionsMode);
+  }, [isSignInOptionsMode]);
+
+  React.useEffect(() => {
+    console.log('🔴 [SIGN IN MODE] isPasswordSignInMode changed to:', isPasswordSignInMode);
+  }, [isPasswordSignInMode]);
   const [signInEmail, setSignInEmail] = React.useState('');
   const [signInPassword, setSignInPassword] = React.useState('');
   const [signInError, setSignInError] = React.useState('');
@@ -99,6 +108,15 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   const [showEmailModal, setShowEmailModal] = React.useState(false);
   const [emailModalLoading, setEmailModalLoading] = React.useState(false);
   const [emailModalError, setEmailModalError] = React.useState('');
+
+  // Google MFA state
+  const [isGoogleMfaMode, setIsGoogleMfaMode] = React.useState(false);
+  const [googleMfaToken, setGoogleMfaToken] = React.useState('');
+  const [googleMfaEmail, setGoogleMfaEmail] = React.useState('');
+  const [googleMfaCode, setGoogleMfaCode] = React.useState(['', '', '', '', '', '']);
+  const [googleMfaError, setGoogleMfaError] = React.useState('');
+  const [isVerifyingGoogleMfa, setIsVerifyingGoogleMfa] = React.useState(false);
+  const googleMfaInputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
   // Checkout form state
   const [selectedPlan, setSelectedPlan] = React.useState("monthly");
@@ -150,23 +168,49 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         setUserId(userData.id);
         setAccountCreated(true);
 
+        // Exit any sign-in modes
+        setIsSignInOptionsMode(false);
+        setIsPasswordSignInMode(false);
+
         // Mark that we've handled Google OAuth - this prevents step reset
         hasHandledGoogleAuthRef.current = true;
 
         console.log('✅ [GOOGLE OAUTH] User data loaded, accountCreated set to true, marked as handled');
 
-        // Clean URL but KEEP skipAccount flag for step initialization
-        if (skipAccount === 'true') {
-          const cleanUrl = `${window.location.pathname}?skipAccount=true`;
-          console.log('🧹 [GOOGLE OAUTH] Cleaning URL but keeping skipAccount flag');
-          console.log('🧹 [GOOGLE OAUTH] Before:', window.location.href);
-          console.log('🧹 [GOOGLE OAUTH] After:', cleanUrl);
-          window.history.replaceState({}, document.title, cleanUrl);
-        }
+        // Clean URL
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
 
       } catch (error) {
         console.error('❌ [GOOGLE OAUTH] Failed to parse user data:', error);
       }
+    } else if (googleAuth === 'mfa_required') {
+      // MFA is required - show MFA verification UI
+      const mfaToken = urlParams.get('mfaToken');
+      const email = urlParams.get('email');
+      console.log('🔐 [GOOGLE OAUTH] MFA required for email:', email);
+      console.log('🔐 [GOOGLE OAUTH] MFA token:', mfaToken);
+
+      if (mfaToken && email) {
+        // Set MFA state to show verification UI
+        setIsGoogleMfaMode(true);
+        setGoogleMfaToken(mfaToken);
+        setGoogleMfaEmail(decodeURIComponent(email));
+        setGoogleMfaCode(['', '', '', '', '', '']);
+        setGoogleMfaError('');
+
+        // Exit other sign-in modes
+        setIsSignInOptionsMode(false);
+        setIsPasswordSignInMode(false);
+
+        // Mark that we've handled Google OAuth
+        hasHandledGoogleAuthRef.current = true;
+
+        console.log('✅ [GOOGLE OAUTH] MFA mode activated, waiting for code verification');
+      }
+
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     } else if (googleAuth === 'error') {
       alert('Google sign-in failed. Please try again.');
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -973,44 +1017,68 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   }, [isOpen]);
 
+  // Track if we've already initialized the step (to prevent re-running on questionnaire reference changes)
+  const hasInitializedStepRef = React.useRef(false);
+
   // Set initial step when questionnaire loads
   React.useEffect(() => {
+    console.log('🟡 [STEP INIT EFFECT] ===== EFFECT TRIGGERED =====');
+    console.log('🟡 [STEP INIT EFFECT] questionnaire:', !!questionnaire);
+    console.log('🟡 [STEP INIT EFFECT] isOpen:', isOpen);
+    console.log('🟡 [STEP INIT EFFECT] currentStepIndex:', currentStepIndex);
+    console.log('🟡 [STEP INIT EFFECT] isSignInOptionsMode:', isSignInOptionsMode);
+
     if (questionnaire && isOpen) {
-      console.log('🔍 [STEP INIT] Current URL:', window.location.href);
       console.log('🔍 [STEP INIT] hasHandledGoogleAuthRef:', hasHandledGoogleAuthRef.current);
+      console.log('🔍 [STEP INIT] hasInitializedStepRef:', hasInitializedStepRef.current);
 
-      const urlParams = new URLSearchParams(window.location.search);
-      const skipAccount = urlParams.get('skipAccount');
-      console.log('🔍 [STEP INIT] skipAccount flag:', skipAccount);
+      // If user just signed in via Google OAuth, find the first non-user_profile step
+      if (hasHandledGoogleAuthRef.current && questionnaire.steps) {
+        console.log('🔍 [STEP INIT] Google OAuth handled, finding first non-user_profile step');
 
-      // If coming from Google OAuth, skip to the step AFTER account creation
-      if (skipAccount === 'true' && questionnaire.steps) {
-        const accountStepIndex = questionnaire.steps.findIndex(
-          (step: any) => step.title === 'Create Your Account'
-        );
-
-        console.log('🔍 [STEP INIT] Account step index:', accountStepIndex);
-
-        if (accountStepIndex >= 0) {
-          const targetStep = accountStepIndex + 1;
-          console.log('⏭️ [STEP INIT] Skipping account step - starting at step:', targetStep);
-          setCurrentStepIndex(targetStep);
-
-          // DON'T clean URL - keep the skipAccount flag so it works on modal reopen
-          console.log('✅ [STEP INIT] Keeping skipAccount flag in URL for persistence');
-          return;
+        // Find the first step that's not user_profile
+        let targetStepIndex = 0;
+        for (let i = 0; i < questionnaire.steps.length; i++) {
+          const step = questionnaire.steps[i];
+          if (step.category !== 'user_profile') {
+            targetStepIndex = i;
+            break;
+          }
         }
+
+        // If all steps are user_profile, go to checkout
+        if (targetStepIndex === 0 && questionnaire.steps[0]?.category === 'user_profile') {
+          const checkoutPos = questionnaire.checkoutStepPosition;
+          targetStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
+          console.log('⏭️ [STEP INIT] All questionnaire steps are user_profile, going to checkout:', targetStepIndex);
+        } else {
+          console.log('⏭️ [STEP INIT] Setting step to first non-user_profile step:', targetStepIndex);
+        }
+
+        setCurrentStepIndex(targetStepIndex);
+        hasInitializedStepRef.current = true;
+        return;
       }
 
-      // Otherwise, start at step 0 (but not if we've already handled Google OAuth)
-      if (!hasHandledGoogleAuthRef.current) {
-        console.log('📍 [STEP INIT] Starting at step 0');
+      // Only set to step 0 on FIRST initialization, not on subsequent questionnaire changes
+      if (!hasInitializedStepRef.current) {
+        console.log('📍 [STEP INIT] First initialization, starting at step 0');
         setCurrentStepIndex(0);
+        hasInitializedStepRef.current = true;
       } else {
-        console.log('⏭️ [STEP INIT] Skipping reset - Google OAuth handled, keeping current step');
+        console.log('⏭️ [STEP INIT] Already initialized, keeping current step:', currentStepIndex);
       }
     }
   }, [questionnaire, isOpen]);
+
+  // Reset the initialization flag when modal closes
+  React.useEffect(() => {
+    console.log('🟣 [MODAL CLOSE EFFECT] isOpen changed to:', isOpen);
+    if (!isOpen) {
+      console.log('🟣 [MODAL CLOSE EFFECT] Resetting hasInitializedStepRef');
+      hasInitializedStepRef.current = false;
+    }
+  }, [isOpen]);
 
   // Create subscription when entering checkout step (DISABLED - now done on payment submit)
   React.useEffect(() => {
@@ -2000,6 +2068,147 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     }
   };
 
+  // Handle Google MFA code input
+  const handleGoogleMfaInput = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return; // Only allow digits
+
+    const newCode = [...googleMfaCode];
+    newCode[index] = value.slice(-1); // Only keep last digit
+    setGoogleMfaCode(newCode);
+    setGoogleMfaError('');
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      googleMfaInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleGoogleMfaKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !googleMfaCode[index] && index > 0) {
+      googleMfaInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleGoogleMfaPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pastedData.length > 0) {
+      const newCode = [...googleMfaCode];
+      for (let i = 0; i < pastedData.length; i++) {
+        newCode[i] = pastedData[i];
+      }
+      setGoogleMfaCode(newCode);
+      // Focus on the next empty input or last input
+      const nextEmptyIndex = Math.min(pastedData.length, 5);
+      googleMfaInputRefs.current[nextEmptyIndex]?.focus();
+    }
+  };
+
+  // Handle Google MFA verification
+  const handleGoogleMfaVerify = async () => {
+    const code = googleMfaCode.join('');
+    if (code.length !== 6 || !googleMfaToken) {
+      setGoogleMfaError('Please enter the 6-digit code');
+      return;
+    }
+
+    setIsVerifyingGoogleMfa(true);
+    setGoogleMfaError('');
+
+    try {
+      console.log('🔐 [GOOGLE MFA] Verifying code...');
+      const result = await authApi.verifyMfa(googleMfaToken, code);
+
+      if (result.success && result.data) {
+        console.log('✅ [GOOGLE MFA] Verification successful');
+
+        // Store JWT token
+        if (result.data.token) {
+          localStorage.setItem('auth-token', result.data.token);
+        }
+
+        // Get user data from the response
+        const userData = result.data.user;
+        if (userData) {
+          // Pre-fill the form with user's existing data
+          const newAnswers = {
+            ...answers,
+            firstName: userData.firstName || '',
+            lastName: userData.lastName || '',
+            email: userData.email || googleMfaEmail,
+            mobile: userData.phoneNumber || ''
+          };
+
+          setAnswers(newAnswers);
+
+          // Set patient variables
+          const firstName = userData.firstName || '';
+          const lastName = userData.lastName || '';
+          const fullName = `${firstName} ${lastName}`.trim();
+          setPatientFirstName(firstName);
+          setPatientName(fullName);
+
+          // Mark as already having an account
+          setUserId(userData.id);
+          setAccountCreated(true);
+
+          console.log('✅ [GOOGLE MFA] User data set, account created');
+        } else {
+          // No user data in response, but token is valid
+          // Mark as signed in with email
+          setAnswers(prev => ({ ...prev, email: googleMfaEmail }));
+          setAccountCreated(true);
+          console.log('✅ [GOOGLE MFA] Token stored, user authenticated');
+        }
+
+        // Exit MFA mode
+        setIsGoogleMfaMode(false);
+        setGoogleMfaToken('');
+        setGoogleMfaEmail('');
+        setGoogleMfaCode(['', '', '', '', '', '']);
+
+      } else {
+        // Handle specific error cases
+        if (result.data?.expired) {
+          setGoogleMfaError('Verification code expired. Please sign in again.');
+          setTimeout(() => {
+            setIsGoogleMfaMode(false);
+          }, 2000);
+        } else if (result.data?.rateLimited) {
+          setGoogleMfaError('Too many failed attempts. Please sign in again.');
+          setTimeout(() => {
+            setIsGoogleMfaMode(false);
+          }, 2000);
+        } else {
+          const attemptsRemaining = result.data?.attemptsRemaining;
+          setGoogleMfaError(
+            attemptsRemaining
+              ? `Invalid code. ${attemptsRemaining} attempts remaining.`
+              : result.error || 'Invalid verification code'
+          );
+          setGoogleMfaCode(['', '', '', '', '', '']);
+          googleMfaInputRefs.current[0]?.focus();
+        }
+      }
+    } catch (error) {
+      console.error('❌ [GOOGLE MFA] Verification error:', error);
+      setGoogleMfaError('Verification failed. Please try again.');
+      setGoogleMfaCode(['', '', '', '', '', '']);
+      googleMfaInputRefs.current[0]?.focus();
+    } finally {
+      setIsVerifyingGoogleMfa(false);
+    }
+  };
+
+  // Handle Google MFA cancel
+  const handleGoogleMfaCancel = () => {
+    setIsGoogleMfaMode(false);
+    setGoogleMfaToken('');
+    setGoogleMfaEmail('');
+    setGoogleMfaCode(['', '', '', '', '', '']);
+    setGoogleMfaError('');
+  };
+
   // Auto-advance to next step after successful sign-in
   const shouldAdvanceAfterSignInRef = React.useRef(false);
 
@@ -2430,12 +2639,21 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     );
   }
 
+  console.log('🟢 [RENDER] ===== MAIN RENDER =====');
+  console.log('🟢 [RENDER] currentStepIndex:', currentStepIndex);
+  console.log('🟢 [RENDER] isSignInOptionsMode:', isSignInOptionsMode);
+  console.log('🟢 [RENDER] isPasswordSignInMode:', isPasswordSignInMode);
+  console.log('🟢 [RENDER] isEmailVerificationMode:', isEmailVerificationMode);
+  console.log('🟢 [RENDER] accountCreated:', accountCreated);
+  console.log('🟢 [RENDER] userId:', userId);
+
   const totalSteps = getTotalSteps();
   const currentVisibleStep = getCurrentVisibleStepNumber();
   const progressPercent = (currentVisibleStep / totalSteps) * 100;
   const isLastStep = currentVisibleStep === totalSteps;
 
   const currentStep = getCurrentQuestionnaireStep();
+  console.log('🟢 [RENDER] currentStep:', currentStep?.title, 'category:', currentStep?.category);
 
   // Determine step title and description
   let stepTitle = '';
@@ -2650,8 +2868,82 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           </div>
                         )}
 
-                        {/* Sign-in Options (can appear on any step) */}
-                        {isSignInOptionsMode ? (
+                        {/* Google MFA Verification (takes precedence over other modes) */}
+                        {isGoogleMfaMode ? (
+                          <div className="space-y-6">
+                            <div className="text-center">
+                              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Icon icon="lucide:shield-check" className="text-3xl text-emerald-600" />
+                              </div>
+                              <h3 className="text-2xl font-medium text-gray-900 mb-2">Verify your identity</h3>
+                              <p className="text-gray-600">
+                                We sent a verification code to <strong>{googleMfaEmail}</strong>
+                              </p>
+                            </div>
+
+                            {/* 6-digit code input */}
+                            <div className="flex justify-center gap-2">
+                              {googleMfaCode.map((digit, index) => (
+                                <input
+                                  key={index}
+                                  ref={(el) => { googleMfaInputRefs.current[index] = el; }}
+                                  type="text"
+                                  inputMode="numeric"
+                                  maxLength={1}
+                                  value={digit}
+                                  onChange={(e) => handleGoogleMfaInput(index, e.target.value)}
+                                  onKeyDown={(e) => handleGoogleMfaKeyDown(index, e)}
+                                  onPaste={handleGoogleMfaPaste}
+                                  className="w-12 h-14 text-center text-2xl font-semibold border-2 border-gray-200 rounded-lg focus:border-emerald-500 focus:outline-none transition-colors"
+                                  autoFocus={index === 0}
+                                />
+                              ))}
+                            </div>
+
+                            {/* Error Message */}
+                            {googleMfaError && (
+                              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                                <p className="text-sm text-red-600 text-center">{googleMfaError}</p>
+                              </div>
+                            )}
+
+                            {/* Verify Button */}
+                            <button
+                              onClick={handleGoogleMfaVerify}
+                              disabled={isVerifyingGoogleMfa || googleMfaCode.join('').length !== 6}
+                              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
+                            >
+                              {isVerifyingGoogleMfa ? (
+                                <>
+                                  <Icon icon="lucide:loader-2" className="animate-spin" />
+                                  <span>Verifying...</span>
+                                </>
+                              ) : (
+                                'Verify Code'
+                              )}
+                            </button>
+
+                            {/* Cancel Button */}
+                            <div className="text-center">
+                              <button
+                                onClick={handleGoogleMfaCancel}
+                                className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+                              >
+                                Cancel and try again
+                              </button>
+                            </div>
+
+                            {/* Privacy Notice */}
+                            <div className="bg-gray-100 rounded-xl p-4">
+                              <div className="flex items-start gap-3">
+                                <Icon icon="lucide:lock" className="text-gray-600 text-lg flex-shrink-0 mt-0.5" />
+                                <p className="text-sm text-gray-600 leading-relaxed">
+                                  This additional verification step helps protect your account and health information.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : isSignInOptionsMode ? (
                           isEmailVerificationMode ? (
                             <EmailVerificationStep
                               email={verificationEmail}
