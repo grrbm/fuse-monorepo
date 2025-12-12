@@ -28,6 +28,8 @@ interface EmailVerificationState {
   setShowEmailModal: (show: boolean) => void;
   setEmailModalLoading: (loading: boolean) => void;
   setEmailModalError: (error: string) => void;
+  setIsSignInOptionsMode: (mode: boolean) => void;
+  setIsPasswordSignInMode: (mode: boolean) => void;
 }
 
 export const createEmailVerificationHandlers = (
@@ -88,20 +90,13 @@ export const createEmailVerificationHandlers = (
         state.setUserId(result.userData.id);
         state.setAccountCreated(true);
 
-        // Exit verification mode and advance
+        // Exit all sign-in modes
         state.setIsEmailVerificationMode(false);
+        state.setIsSignInOptionsMode(false);
+        state.setIsPasswordSignInMode(false);
         state.setVerificationCode('');
 
-        console.log('✅ Existing user verified, advancing');
-
-        setTimeout(() => {
-          if (state.questionnaire) {
-            const totalSteps = state.getTotalSteps();
-            if (state.currentStepIndex < totalSteps - 1) {
-              state.setCurrentStepIndex((prev: number) => prev + 1);
-            }
-          }
-        }, 150);
+        console.log('✅ Existing user verified, getCurrentQuestionnaireStep will skip user_profile steps');
       } else {
         // New user - email verified, stay on form to complete signup
         state.setAnswers((prev: any) => ({ ...prev, email: result.email || state.verificationEmail }));

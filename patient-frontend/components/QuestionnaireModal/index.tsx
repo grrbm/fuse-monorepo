@@ -1126,8 +1126,48 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   // Helper functions for checkout steps
   const getTotalSteps = (): number => {
     if (!questionnaire) return 0;
-    // Questionnaire steps + Checkout
-    return questionnaire.steps.length + 1;
+
+    // Check if user is signed in
+    const isSignedIn = accountCreated || userId;
+
+    // Count visible steps (exclude user_profile if signed in)
+    const visibleSteps = questionnaire.steps.filter(step => {
+      // Skip user_profile steps if user is signed in
+      if (isSignedIn && step.category === 'user_profile') {
+        return false;
+      }
+      return true;
+    }).length;
+
+    // Visible questionnaire steps + Checkout
+    return visibleSteps + 1;
+  };
+
+  // Get the current visible step number (1-indexed for display)
+  const getCurrentVisibleStepNumber = (): number => {
+    if (!questionnaire) return 1;
+
+    const isSignedIn = accountCreated || userId;
+    const checkoutPos = questionnaire.checkoutStepPosition;
+    const checkoutStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
+
+    // If we're on checkout, return the total visible steps count
+    if (currentStepIndex >= checkoutStepIndex) {
+      return getTotalSteps();
+    }
+
+    // Count visible steps up to and including current index
+    let visibleCount = 0;
+    for (let i = 0; i <= currentStepIndex && i < questionnaire.steps.length; i++) {
+      const step = questionnaire.steps[i];
+      // Skip user_profile steps if signed in
+      if (isSignedIn && step.category === 'user_profile') {
+        continue;
+      }
+      visibleCount++;
+    }
+
+    return visibleCount;
   };
 
   const isProductSelectionStep = (): boolean => {
@@ -1230,9 +1270,19 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       actualStepIndex = currentStepIndex - 2;
     }
 
+    // Check if user is signed in
+    const isSignedIn = accountCreated || userId;
+
     // Find the next visible step starting from actualStepIndex
     for (let i = actualStepIndex; i < questionnaire.steps.length; i++) {
       const step = questionnaire.steps[i];
+
+      // Skip user_profile steps if user is signed in
+      if (isSignedIn && step.category === 'user_profile') {
+        console.log('⏭️ Skipping user_profile step (user signed in):', step.title);
+        continue;
+      }
+
       if (evaluateStepConditionalLogic(step)) {
         // Update currentStepIndex to this visible step's index
         if (i !== actualStepIndex) {
@@ -1890,11 +1940,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setUserId(result.userData.id);
       setAccountCreated(true);
 
-      // Exit sign-in mode - this will trigger the useEffect below to advance the step
+      // Exit all sign-in modes
       setIsSignInMode(false);
+      setIsSignInOptionsMode(false);
+      setIsPasswordSignInMode(false);
       setIsSigningIn(false);
 
-      console.log('✅ User signed in successfully, will auto-advance to next step:', newAnswers);
+      console.log('✅ User signed in successfully, getCurrentQuestionnaireStep will skip user_profile steps:', newAnswers);
     } else {
       setSignInError(result.error || 'Sign-in failed');
       setIsSigningIn(false);
@@ -1935,22 +1987,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
       setUserId(result.userData.id);
       setAccountCreated(true);
 
-      // Exit sign-in mode
+      // Exit all sign-in modes
       setIsSignInMode(false);
-
-      console.log('✅ User signed in with Google successfully, advancing to next step');
-
-      // Advance to next step after successful sign-in
+      setIsSignInOptionsMode(false);
+      setIsPasswordSignInMode(false);
       setIsSigningIn(false);
 
-      setTimeout(() => {
-        if (questionnaire) {
-          const totalSteps = getTotalSteps();
-          if (currentStepIndex < totalSteps - 1) {
-            setCurrentStepIndex(prev => prev + 1);
-          }
-        }
-      }, 150);
+      console.log('✅ User signed in with Google successfully, getCurrentQuestionnaireStep will skip user_profile steps');
     } else {
       setSignInError(result.error || 'Google sign-in failed');
       setIsSigningIn(false);
@@ -2038,7 +2081,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
     getTotalSteps,
     setShowEmailModal,
     setEmailModalLoading,
-    setEmailModalError
+    setEmailModalError,
+    setIsSignInOptionsMode,
+    setIsPasswordSignInMode
   });
 
   const handleNext = async () => {
@@ -2050,10 +2095,35 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
         await createUserAccount();
       }
 
-      const totalSteps = getTotalSteps();
-      if (currentStepIndex < totalSteps - 1) {
-        setCurrentStepIndex(prev => prev + 1);
+      const isSignedIn = accountCreated || userId;
+      const checkoutPos = questionnaire.checkoutStepPosition;
+      const checkoutStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
+
+      // Find the next valid step (skipping user_profile if signed in)
+      let nextIndex = currentStepIndex + 1;
+
+      while (nextIndex < questionnaire.steps.length) {
+        const step = questionnaire.steps[nextIndex];
+
+        // Skip user_profile steps if user is signed in
+        if (step && isSignedIn && step.category === 'user_profile') {
+          console.log('⏭️ Skipping user_profile step when advancing (user signed in):', step.title);
+          nextIndex++;
+          continue;
+        }
+
+        // Found a valid step
+        break;
+      }
+
+      // If we've gone past all questionnaire steps, go to checkout
+      if (nextIndex >= questionnaire.steps.length) {
+        console.log('⏭️ No more valid questionnaire steps, advancing to checkout');
+        setCurrentStepIndex(checkoutStepIndex);
+      } else if (nextIndex <= checkoutStepIndex) {
+        setCurrentStepIndex(nextIndex);
       } else {
+        // Already at or past checkout - submit
         handleSubmit();
       }
     }
@@ -2061,8 +2131,28 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
   // Navigate to previous step
   const handlePrevious = () => {
-    if (currentStepIndex > 0) {
-      setCurrentStepIndex(prev => prev - 1);
+    if (currentStepIndex > 0 && questionnaire) {
+      const isSignedIn = accountCreated || userId;
+      let targetIndex = currentStepIndex - 1;
+
+      // Skip user_profile steps when going backwards if user is signed in
+      while (targetIndex >= 0) {
+        const step = questionnaire.steps[targetIndex];
+
+        // If step exists and is user_profile, skip it
+        if (step && isSignedIn && step.category === 'user_profile') {
+          console.log('⏭️ Skipping user_profile step when going back (user signed in):', step.title);
+          targetIndex--;
+          continue;
+        }
+
+        // Found a valid step
+        break;
+      }
+
+      if (targetIndex >= 0) {
+        setCurrentStepIndex(targetIndex);
+      }
     }
   };
 
@@ -2341,8 +2431,9 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   }
 
   const totalSteps = getTotalSteps();
-  const progressPercent = ((currentStepIndex + 1) / totalSteps) * 100;
-  const isLastStep = currentStepIndex === totalSteps - 1;
+  const currentVisibleStep = getCurrentVisibleStepNumber();
+  const progressPercent = (currentVisibleStep / totalSteps) * 100;
+  const isLastStep = currentVisibleStep === totalSteps;
 
   const currentStep = getCurrentQuestionnaireStep();
 
@@ -2363,8 +2454,14 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
   }
 
   if (!currentStep && !isProductSelectionStep() && !isCheckoutStep()) {
-    // No more questionnaire steps - advance to next phase (product selection or checkout)
-    handleNext();
+    // No more questionnaire steps - advance directly to checkout (not handleSubmit!)
+    // This can happen when user signs in and all remaining steps are user_profile
+    if (questionnaire) {
+      const checkoutPos = questionnaire.checkoutStepPosition;
+      const checkoutStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
+      console.log('⏭️ No more visible questionnaire steps, advancing to checkout at index:', checkoutStepIndex);
+      setCurrentStepIndex(checkoutStepIndex);
+    }
     return null; // Prevent rendering empty step
   }
 
@@ -2410,7 +2507,7 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
 
               <div className="text-center">
                 <p className="text-sm text-gray-600">
-                  Step {currentStepIndex + 1} of {totalSteps}
+                  Step {currentVisibleStep} of {totalSteps}
                 </p>
               </div>
 
@@ -2442,6 +2539,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
                           isLoadingClinic={isLoadingClinic}
                         />
+
+                        {/* DEBUG: Show step category */}
+                        <div className="bg-yellow-100 border border-yellow-400 rounded-lg p-2 mb-4">
+                          <p className="text-sm font-mono">
+                            <strong>DEBUG Category:</strong> checkout (special step)
+                          </p>
+                        </div>
 
                         <div className="bg-white rounded-2xl p-6 space-y-6">
                           <CheckoutView
@@ -2489,6 +2593,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                         {/* Progress Bar */}
                         <ProgressBar progressPercent={progressPercent} color={theme.primary} />
 
+                        {/* DEBUG: Show step category */}
+                        <div className="bg-yellow-100 border border-yellow-400 rounded-lg p-2 mb-4">
+                          <p className="text-sm font-mono">
+                            <strong>DEBUG Category:</strong> product_selection (special step)
+                          </p>
+                        </div>
+
                         <div className="bg-white rounded-2xl p-6 space-y-6">
                           <ProductSelection
                             products={questionnaire.treatment?.products}
@@ -2529,6 +2640,15 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = ({
                           clinic={domainClinic ? { name: domainClinic.name, logo: (domainClinic as any).logo } : null}
                           isLoadingClinic={isLoadingClinic}
                         />
+
+                        {/* DEBUG: Show step category */}
+                        {currentStep && (
+                          <div className="bg-yellow-100 border border-yellow-400 rounded-lg p-2 mb-4">
+                            <p className="text-sm font-mono">
+                              <strong>DEBUG Category:</strong> {currentStep.category || 'undefined'}
+                            </p>
+                          </div>
+                        )}
 
                         {/* Sign-in Options (can appear on any step) */}
                         {isSignInOptionsMode ? (
