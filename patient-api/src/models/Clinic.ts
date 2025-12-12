@@ -4,6 +4,7 @@ import Subscription from './Subscription';
 import Treatment from './Treatment';
 import TenantProduct from './TenantProduct';
 import Sale from './Sale';
+import CustomWebsite from './CustomWebsite';
 
 
 export enum PaymentStatus {
@@ -147,4 +148,6 @@ export default class Clinic extends Entity {
     @HasMany(() => Sale)
     declare sales: Sale[];
 
+    @HasOne(() => CustomWebsite)
+    declare customWebsite?: CustomWebsite;
 }

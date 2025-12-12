@@ -21,6 +21,7 @@ import {
   FileText,
   UserCircle,
   Tag,
+  Globe,
 } from "lucide-react"
 import Tutorial from "./ui/tutorial"
 
@@ -46,7 +47,10 @@ const services: { name: string; icon: any; current: boolean; href?: string; hasS
   // Add services here when needed
 ]
 
-const configuration = [{ name: "Settings", icon: Settings, current: false, href: "/settings" }]
+const configuration = [
+  { name: "Portal", icon: Globe, current: false, href: "/portal" },
+  { name: "Settings", icon: Settings, current: false, href: "/settings" },
+]
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 

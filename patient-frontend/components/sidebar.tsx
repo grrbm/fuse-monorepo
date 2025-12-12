@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Button, Avatar, Badge } from "@heroui/react";
 import { Icon } from "@iconify/react";
+import { useRouter } from "next/router";
 import { useChat } from "../hooks/useChat";
 import { apiCall } from "../lib/api";
 import { motion } from "framer-motion";
@@ -29,6 +30,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user }) => {
+  const router = useRouter();
   const [clinic, setClinic] = React.useState<Clinic | null>(null);
   const [loadingClinic, setLoadingClinic] = React.useState(false);
   const [loadingLogo, setLoadingLogo] = React.useState(false);
@@ -242,6 +244,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
               )}
             </li>
           ))}
+
+          {/* Shop Button */}
+          <li>
+            <Button
+              variant="flat"
+              color="default"
+              className="w-full justify-start bg-transparent transition-all duration-200"
+              startContent={
+                <Icon
+                  icon="lucide:shopping-bag"
+                  className="text-lg text-foreground-500"
+                />
+              }
+              onPress={() => router.push('/')}
+            >
+              <span>Shop</span>
+            </Button>
+          </li>
         </ul>
       </nav>
 
