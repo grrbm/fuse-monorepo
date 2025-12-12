@@ -26,7 +26,7 @@ export const ModalHeader: React.FC<ModalHeaderProps> = ({
 
       <div className="text-center">
         <p className="text-sm text-gray-600">
-          Step {currentStep + 1} of {totalSteps}
+          Step {currentStep} of {totalSteps}
         </p>
       </div>
 

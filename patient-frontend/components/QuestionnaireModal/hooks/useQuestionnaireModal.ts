@@ -154,7 +154,8 @@ export function useQuestionnaireModal(
     // Check if user is signed in
     const isSignedIn = accountCreated || userId;
 
-    // Find the next visible step starting from actualStepIndex
+    // Find the current visible step at actualStepIndex
+    // Don't modify currentStepIndex during render - that should only happen in handleNext/handlePrevious
     for (let i = actualStepIndex; i < questionnaire.steps.length; i++) {
       const step = questionnaire.steps[i];
 
@@ -165,9 +166,8 @@ export function useQuestionnaireModal(
       }
 
       if (evaluateStepConditionalLogic(step)) {
-        if (i !== actualStepIndex) {
-          setCurrentStepIndex(currentStepIndex + (i - actualStepIndex));
-        }
+        // Return the step but DON'T modify currentStepIndex here
+        // The index will be correct when handleNext advances properly
         return step;
       }
     }
@@ -212,17 +212,40 @@ export function useQuestionnaireModal(
     const checkoutPos = questionnaire.checkoutStepPosition;
     const checkoutStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
 
+    // Log all steps with their categories for debugging
+    const stepCategories = questionnaire.steps.map((s, i) => `${i}:${s.category}`);
+    console.log('📊 [STEP NUM] Calculating visible step number:', {
+      currentStepIndex,
+      isSignedIn,
+      accountCreated,
+      userId,
+      checkoutStepIndex,
+      totalQuestionnaireSteps: questionnaire.steps.length,
+      stepCategories
+    });
+
+    // If we're on checkout step
     if (currentStepIndex >= checkoutStepIndex) {
       return getTotalSteps();
     }
 
+    // Count visible steps up to and including current index
     let visibleCount = 0;
     for (let i = 0; i <= currentStepIndex && i < questionnaire.steps.length; i++) {
       const step = questionnaire.steps[i];
-      if (isSignedIn && step.category === 'user_profile') continue;
+      // Skip user_profile steps ONLY if signed in
+      if (isSignedIn && step.category === 'user_profile') {
+        console.log(`📊 [STEP NUM] Skipping step ${i} (${step.category}) - user signed in`);
+        continue;
+      }
       visibleCount++;
+      console.log(`📊 [STEP NUM] Counting step ${i} (${step.category}) - visibleCount now ${visibleCount}`);
     }
-    return visibleCount;
+
+    console.log('📊 [STEP NUM] Final result:', { visibleCount, returning: Math.max(visibleCount, 1) });
+
+    // Ensure we return at least 1
+    return Math.max(visibleCount, 1);
   }, [questionnaire, currentStepIndex, accountCreated, userId, getTotalSteps]);
 
   // Build questionnaire answers
@@ -655,7 +678,12 @@ export function useQuestionnaireModal(
   // Step initialization
   useEffect(() => {
     if (questionnaire && isOpen) {
-      console.log('🟡 [STEP INIT] Effect triggered');
+      console.log('🟡 [STEP INIT] Effect triggered', {
+        hasHandledGoogleAuth: hasHandledGoogleAuthRef.current,
+        hasInitializedStep: hasInitializedStepRef.current,
+        currentStepIndex,
+        stepsCount: questionnaire.steps.length
+      });
 
       // If user just signed in via Google OAuth, find the first non-user_profile step
       if (hasHandledGoogleAuthRef.current && !hasInitializedStepRef.current) {
@@ -673,15 +701,18 @@ export function useQuestionnaireModal(
           targetStepIndex = checkoutPos === -1 ? questionnaire.steps.length : checkoutPos;
           console.log('⏭️ [STEP INIT] All steps are user_profile, going to checkout:', targetStepIndex);
         }
+        console.log('📍 [STEP INIT] Setting step to:', targetStepIndex);
         setCurrentStepIndex(targetStepIndex);
         hasInitializedStepRef.current = true;
         return;
       }
 
       if (!hasInitializedStepRef.current) {
-        console.log('📍 [STEP INIT] First initialization, starting at step 0');
+        console.log('📍 [STEP INIT] First initialization, setting to step 0');
         setCurrentStepIndex(0);
         hasInitializedStepRef.current = true;
+      } else {
+        console.log('⏭️ [STEP INIT] Already initialized, keeping step:', currentStepIndex);
       }
     }
   }, [questionnaire, isOpen, hasHandledGoogleAuthRef]);
