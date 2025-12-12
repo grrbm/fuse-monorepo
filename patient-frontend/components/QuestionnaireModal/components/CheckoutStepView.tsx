@@ -21,7 +21,7 @@ interface CheckoutStepViewProps {
   onShippingInfoChange: (field: string, value: any) => void;
   onRetryPaymentSetup: () => void;
   onCreateSubscription: (planId: string) => Promise<void>;
-  onPaymentSuccess: () => void;
+  onPaymentSuccess: () => Promise<void>;
   onPaymentError: (error: string) => void;
   stripePromise: any;
   questionnaireProducts: any;

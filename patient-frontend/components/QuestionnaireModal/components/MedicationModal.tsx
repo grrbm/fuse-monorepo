@@ -6,7 +6,7 @@ interface Medication {
   name: string;
   type: string;
   badge: string | null;
-  badgeColor: string;
+  badgeColor?: string;
   subtitle: string;
   description: string;
   benefits: string[];
