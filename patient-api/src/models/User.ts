@@ -412,7 +412,7 @@ export default class User extends Entity {
    * Note: Make sure to include UserRoles in your query or this will use the deprecated role field
    * Example: User.findByPk(id, { include: [{ model: UserRoles, as: 'userRoles' }] })
    */
-  public hasRoleSync(role: 'patient' | 'doctor' | 'admin' | 'brand'): boolean {
+  public hasRoleSync(role: 'patient' | 'doctor' | 'admin' | 'brand' | 'superAdmin'): boolean {
     // If userRoles is loaded, use it
     if (this.userRoles) {
       return this.userRoles.hasRole(role);
@@ -428,7 +428,7 @@ export default class User extends Entity {
    * Note: Make sure to include UserRoles in your query or this will use the deprecated role field
    * Example: User.findByPk(id, { include: [{ model: UserRoles, as: 'userRoles' }] })
    */
-  public hasAnyRoleSync(roles: Array<'patient' | 'doctor' | 'admin' | 'brand'>): boolean {
+  public hasAnyRoleSync(roles: Array<'patient' | 'doctor' | 'admin' | 'brand' | 'superAdmin'>): boolean {
     // If userRoles is loaded, use it
     if (this.userRoles) {
       return this.userRoles.hasAnyRole(roles);

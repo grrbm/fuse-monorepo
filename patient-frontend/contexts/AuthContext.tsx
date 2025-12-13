@@ -71,8 +71,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('🔍 AuthContext - Loaded user data:', userData);
       console.log('🔍 AuthContext - User clinicId:', userData?.clinicId);
       
+      // Check if currently impersonating (superAdmin viewing as patient)
+      const isImpersonating = localStorage.getItem("impersonating") === "true";
+      
       // Check if user has valid access to patient-frontend (patient or brand role)
-      if (userData && !hasPatientFrontendAccess(userData)) {
+      // Skip this check if impersonating (superAdmin can view as patient)
+      if (userData && !isImpersonating && !hasPatientFrontendAccess(userData)) {
         console.warn('⚠️ AuthContext - User does not have patient or brand role, denying access');
         setUser(null);
         return;

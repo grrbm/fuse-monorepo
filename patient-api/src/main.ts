@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import multer from "multer";
 import dns from "dns/promises";
+import jwt from "jsonwebtoken";
 import { initializeDatabase } from "./config/database";
 import { MailsSender } from "./services/mailsSender";
 import Treatment from "./models/Treatment";
@@ -8118,6 +8119,189 @@ app.get(
     }
   }
 );
+
+// Admin: Get list of patients for impersonation
+app.get("/admin/patients/list", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Only superAdmins can impersonate
+    const user = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: "userRoles", required: false }],
+    });
+    if (!user || !user.hasRoleSync("superAdmin")) {
+      return res.status(403).json({ success: false, message: "Forbidden: SuperAdmin access required" });
+    }
+
+    // Fetch all users with patient role (excluding current user)
+    const patients = await User.findAll({
+      where: {
+        id: { [Op.ne]: currentUser.id }, // Exclude current user
+      },
+      include: [
+        {
+          model: UserRoles,
+          as: "userRoles",
+          where: {
+            patient: true,
+          },
+          required: true,
+        },
+      ],
+      attributes: ["id", "email", "firstName", "lastName"],
+      order: [["email", "ASC"]],
+      limit: 500, // Reasonable limit
+    });
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📋 Found ${patients.length} patients available for impersonation`);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        patients: patients.map((p) => ({
+          id: p.id,
+          email: p.email,
+          firstName: p.firstName,
+          lastName: p.lastName,
+        })),
+      },
+    });
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("❌ Error listing patients:", error);
+    }
+    res.status(500).json({ success: false, message: "Failed to list patients" });
+  }
+});
+
+// Admin: Start impersonating a user
+app.post("/admin/impersonate", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Only superAdmins can impersonate
+    const admin = await User.findByPk(currentUser.id, {
+      include: [{ model: UserRoles, as: "userRoles", required: false }],
+    });
+    if (!admin || !admin.hasRoleSync("superAdmin")) {
+      return res.status(403).json({ success: false, message: "Forbidden: SuperAdmin access required" });
+    }
+
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "userId is required" });
+    }
+
+    // Fetch the user to impersonate
+    const targetUser = await User.findByPk(userId, {
+      include: [{ model: UserRoles, as: "userRoles", required: false }],
+    });
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Only allow impersonating patients
+    if (!targetUser.hasRoleSync("patient")) {
+      return res.status(400).json({ success: false, message: "Can only impersonate patients" });
+    }
+
+    // Create impersonation JWT token
+    const impersonationToken = jwt.sign(
+      {
+        userId: targetUser.id,
+        userRole: "patient", // Always patient for impersonation
+        clinicId: targetUser.clinicId,
+        loginTime: new Date().toISOString(),
+        impersonatedBy: admin.id, // Store original admin ID
+        impersonating: true,
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: "24h" }
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        token: impersonationToken,
+        impersonatedUser: {
+          id: targetUser.id,
+          email: targetUser.email,
+          firstName: targetUser.firstName,
+          lastName: targetUser.lastName,
+        },
+      },
+    });
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("❌ Error starting impersonation:", error);
+    }
+    res.status(500).json({ success: false, message: "Failed to start impersonation" });
+  }
+});
+
+// Admin: Exit impersonation and return to original admin account
+app.post("/admin/exit-impersonation", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ success: false, message: "Not authenticated" });
+    }
+
+    // Check if currently impersonating
+    const impersonatedBy = (req as any).user?.impersonatedBy;
+    if (!impersonatedBy) {
+      return res.status(400).json({ success: false, message: "Not currently impersonating" });
+    }
+
+    // Fetch the original admin user
+    const admin = await User.findByPk(impersonatedBy, {
+      include: [{ model: UserRoles, as: "userRoles", required: false }],
+    });
+    if (!admin) {
+      return res.status(404).json({ success: false, message: "Original admin user not found" });
+    }
+
+    // Determine admin role for JWT
+    let adminRole: string = "admin";
+    if (admin.hasRoleSync("superAdmin")) {
+      adminRole = "superAdmin";
+    } else if (admin.hasRoleSync("admin")) {
+      adminRole = "admin";
+    }
+
+    // Create new JWT token for original admin
+    const adminToken = jwt.sign(
+      {
+        userId: admin.id,
+        userRole: adminRole,
+        clinicId: admin.clinicId,
+        loginTime: new Date().toISOString(),
+      },
+      process.env.JWT_SECRET!,
+      { expiresIn: "24h" }
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        token: adminToken,
+      },
+    });
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("❌ Error exiting impersonation:", error);
+    }
+    res.status(500).json({ success: false, message: "Failed to exit impersonation" });
+  }
+});
 
 app.get("/questionnaires/templates", authenticateJWT, async (req, res) => {
   try {

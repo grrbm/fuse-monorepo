@@ -1,69 +1,213 @@
-import React from "react";
-import { Avatar, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/react";
+import React, { useState, useEffect } from "react";
+import { Avatar, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Select, SelectItem, Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 import { getAvatarEmoji } from "../lib/avatarUtils";
-import { getPrimaryRole } from "../lib/auth";
+import { getPrimaryRole, hasRole } from "../lib/auth";
+import { apiCall } from "../lib/api";
+
+interface Patient {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+}
 
 export const Header: React.FC = () => {
   const { user, signOut } = useAuth();
   const primaryRole = getPrimaryRole(user);
+  const isSuperAdmin = hasRole(user, "superAdmin");
+  
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>("");
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [originalUser, setOriginalUser] = useState<typeof user | null>(null);
+  
+  // Load patients list if superAdmin
+  useEffect(() => {
+    if (isSuperAdmin) {
+      loadPatients();
+    }
+  }, [isSuperAdmin]);
+  
+  const loadPatients = async () => {
+    try {
+      const result = await apiCall("/admin/patients/list");
+      console.log("📋 Patients API response:", result);
+      if (result.success && result.data?.data?.patients) {
+        setPatients(result.data.data.patients);
+        console.log("✅ Loaded patients:", result.data.data.patients.length);
+      } else if (result.success && result.data?.patients) {
+        // Fallback in case structure changes
+        setPatients(result.data.patients);
+        console.log("✅ Loaded patients (fallback):", result.data.patients.length);
+      }
+    } catch (error) {
+      console.error("Failed to load patients:", error);
+    }
+  };
+  
+  const handleImpersonate = async (patientId: string) => {
+    if (!patientId) return;
+    
+    try {
+      const result = await apiCall("/admin/impersonate", {
+        method: "POST",
+        body: JSON.stringify({ userId: patientId }),
+      });
+      
+      if (result.success && result.data?.token) {
+        // Store original user before impersonating
+        setOriginalUser(user);
+        setIsImpersonating(true);
+        
+        // Replace token with impersonation token
+        localStorage.setItem("auth-token", result.data.token);
+        localStorage.setItem("impersonating", "true");
+        
+        // Reload the page to fetch impersonated user data
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error("Failed to impersonate:", error);
+    }
+  };
+  
+  const handleExitImpersonation = async () => {
+    try {
+      const result = await apiCall("/admin/exit-impersonation", {
+        method: "POST",
+      });
+      
+      if (result.success && result.data?.token) {
+        // Restore original token
+        localStorage.setItem("auth-token", result.data.token);
+        localStorage.removeItem("impersonating");
+        setIsImpersonating(false);
+        setOriginalUser(null);
+        
+        // Reload to restore original user
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error("Failed to exit impersonation:", error);
+    }
+  };
+  
+  // Check if currently impersonating on mount
+  useEffect(() => {
+    const impersonating = localStorage.getItem("impersonating");
+    if (impersonating === "true") {
+      setIsImpersonating(true);
+    }
+  }, []);
 
   return (
-    <motion.header 
-      className="h-16 border-b border-content3 bg-content1 flex items-center justify-between px-6"
-      initial={{ y: -10, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-    >
-      {/* Welcome Message */}
-      <div className="flex items-center gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}
-          </h2>
-          <p className="text-sm text-foreground-600 capitalize">
-            {primaryRole || 'patient'} Dashboard
-          </p>
+    <>
+      {/* Impersonation Banner */}
+      {isImpersonating && (
+        <div className="bg-warning-100 border-b border-warning-300 px-6 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Icon icon="lucide:eye" className="text-warning-700" />
+            <span className="text-sm font-medium text-warning-900">
+              Viewing as: {user?.firstName} {user?.lastName} ({user?.email})
+            </span>
+          </div>
+          <Button
+            size="sm"
+            color="warning"
+            variant="flat"
+            onPress={handleExitImpersonation}
+            startContent={<Icon icon="lucide:log-out" />}
+          >
+            Exit Impersonation
+          </Button>
         </div>
-      </div>
-
-      <div className="flex items-center gap-4">
-        {/* User Profile Dropdown */}
-        <Dropdown placement="bottom-end">
-          <DropdownTrigger>
-            <Avatar
-              name={user?.firstName || user?.email || 'User'}
-              className="cursor-pointer transition-transform hover:scale-105"
+      )}
+      
+      <motion.header 
+        className="h-16 border-b border-content3 bg-content1 flex items-center justify-between px-6"
+        initial={{ y: -10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      >
+        {/* Welcome Message */}
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">
+              Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}
+            </h2>
+            <p className="text-sm text-foreground-600 capitalize">
+              {primaryRole || 'patient'} Dashboard
+            </p>
+          </div>
+        </div>
+        
+        {/* SuperAdmin Impersonation Selector */}
+        {isSuperAdmin && !isImpersonating && (
+          <div className="flex items-center gap-2">
+            <Icon icon="lucide:user-cog" className="text-primary" />
+            <Select
+              placeholder="Impersonate patient..."
+              className="w-64"
               size="sm"
-              fallback={
-                <span className="text-2xl">{getAvatarEmoji(user)}</span>
-              }
-            />
-          </DropdownTrigger>
-          <DropdownMenu aria-label="Profile Actions" variant="flat">
-            <DropdownItem key="profile" className="h-14 gap-2">
-              <p className="font-semibold">Signed in as</p>
-              <p className="font-semibold">{user?.email}</p>
-            </DropdownItem>
-            <DropdownItem key="settings" startContent={<Icon icon="lucide:settings" />}>
-              Settings
-            </DropdownItem>
-            <DropdownItem key="help" startContent={<Icon icon="lucide:help-circle" />}>
-              Help & Support
-            </DropdownItem>
-            <DropdownItem 
-              key="logout" 
-              color="danger" 
-              startContent={<Icon icon="lucide:log-out" />}
-              onPress={signOut}
+              selectedKeys={selectedPatientId ? [selectedPatientId] : []}
+              onSelectionChange={(keys) => {
+                const selectedKey = Array.from(keys)[0] as string;
+                if (selectedKey) {
+                  setSelectedPatientId(selectedKey);
+                  handleImpersonate(selectedKey);
+                }
+              }}
             >
-              Sign Out
-            </DropdownItem>
-          </DropdownMenu>
-        </Dropdown>
-      </div>
-    </motion.header>
+              {patients.map((patient) => (
+                <SelectItem key={patient.id}>
+                  {patient.firstName && patient.lastName
+                    ? `${patient.firstName} ${patient.lastName} (${patient.email})`
+                    : patient.email}
+                </SelectItem>
+              ))}
+            </Select>
+          </div>
+        )}
+
+        <div className="flex items-center gap-4">
+          {/* User Profile Dropdown */}
+          <Dropdown placement="bottom-end">
+            <DropdownTrigger>
+              <Avatar
+                name={user?.firstName || user?.email || 'User'}
+                className="cursor-pointer transition-transform hover:scale-105"
+                size="sm"
+                fallback={
+                  <span className="text-2xl">{getAvatarEmoji(user)}</span>
+                }
+              />
+            </DropdownTrigger>
+            <DropdownMenu aria-label="Profile Actions" variant="flat">
+              <DropdownItem key="profile" className="h-14 gap-2">
+                <p className="font-semibold">Signed in as</p>
+                <p className="font-semibold">{user?.email}</p>
+              </DropdownItem>
+              <DropdownItem key="settings" startContent={<Icon icon="lucide:settings" />}>
+                Settings
+              </DropdownItem>
+              <DropdownItem key="help" startContent={<Icon icon="lucide:help-circle" />}>
+                Help & Support
+              </DropdownItem>
+              <DropdownItem 
+                key="logout" 
+                color="danger" 
+                startContent={<Icon icon="lucide:log-out" />}
+                onPress={signOut}
+              >
+                Sign Out
+              </DropdownItem>
+            </DropdownMenu>
+          </Dropdown>
+        </div>
+      </motion.header>
+    </>
   );
 };
