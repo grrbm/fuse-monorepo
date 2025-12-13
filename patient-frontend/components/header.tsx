@@ -4,9 +4,11 @@ import { Icon } from "@iconify/react";
 import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 import { getAvatarEmoji } from "../lib/avatarUtils";
+import { getPrimaryRole } from "../lib/auth";
 
 export const Header: React.FC = () => {
   const { user, signOut } = useAuth();
+  const primaryRole = getPrimaryRole(user);
 
   return (
     <motion.header 
@@ -22,7 +24,7 @@ export const Header: React.FC = () => {
             Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}
           </h2>
           <p className="text-sm text-foreground-600 capitalize">
-            {user?.role || 'User'} Dashboard
+            {primaryRole || 'patient'} Dashboard
           </p>
         </div>
       </div>

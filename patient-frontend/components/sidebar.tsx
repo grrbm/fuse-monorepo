@@ -6,8 +6,9 @@ import { useChat } from "../hooks/useChat";
 import { apiCall } from "../lib/api";
 import { motion } from "framer-motion";
 import { getAvatarEmoji } from "../lib/avatarUtils";
+import { User, hasRole, getPrimaryRole } from "../lib/auth";
 
-interface User {
+interface OldUser {
   id: string;
   email: string;
   role: 'patient' | 'doctor' | 'admin';
@@ -164,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user,
   ];
 
   // Add Branding item for doctors
-  const navItems = user?.role === 'doctor'
+  const navItems = hasRole(user, 'doctor')
     ? [
       ...baseNavItems.slice(0, 3), // dashboard, treatments, messenger
       { id: "branding", label: "Branding", icon: "lucide:palette" },
@@ -284,7 +285,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user,
               }
             </p>
             <p className="text-xs text-foreground-500 capitalize">
-              {user?.role || "User"}
+              {getPrimaryRole(user) || "patient"}
             </p>
           </div>
         </div>

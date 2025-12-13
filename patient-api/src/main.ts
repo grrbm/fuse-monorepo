@@ -242,21 +242,21 @@ app.use(
       const allowedOrigins =
         process.env.NODE_ENV === "production"
           ? [
-              process.env.FRONTEND_URL,
-              // Add additional production domains via environment variables only
-              process.env.ADDITIONAL_ALLOWED_ORIGINS?.split(",").map((o) =>
-                o.trim()
-              ),
-            ]
-              .flat()
-              .filter(Boolean)
+            process.env.FRONTEND_URL,
+            // Add additional production domains via environment variables only
+            process.env.ADDITIONAL_ALLOWED_ORIGINS?.split(",").map((o) =>
+              o.trim()
+            ),
+          ]
+            .flat()
+            .filter(Boolean)
           : [
-              "http://localhost:3000",
-              "http://localhost:3002",
-              "http://localhost:3003",
-              "http://localhost:3030",
-              // Development only - no production domains
-            ];
+            "http://localhost:3000",
+            "http://localhost:3002",
+            "http://localhost:3003",
+            "http://localhost:3030",
+            // Development only - no production domains
+          ];
 
       // SECURITY: Validate all origins are HTTPS in production
       if (process.env.NODE_ENV === "production") {
@@ -1125,7 +1125,7 @@ app.get("/auth/google/callback", async (req, res) => {
     }
     const returnUrl = req.query.state
       ? JSON.parse(Buffer.from(req.query.state as string, "base64").toString())
-          .returnUrl
+        .returnUrl
       : "http://localhost:3000";
     res.redirect(`${returnUrl}?googleAuth=error`);
   }
@@ -1972,8 +1972,10 @@ app.get("/auth/me", authenticateJWT, async (req, res) => {
     // Get user data from JWT
     const currentUser = getCurrentUser(req);
 
-    // Optionally fetch fresh user data from database
-    const user = await User.findByPk(currentUser?.id);
+    // Fetch fresh user data from database with UserRoles
+    const user = await User.findByPk(currentUser?.id, {
+      include: [{ model: UserRoles, as: 'userRoles', required: false }],
+    });
     if (!user) {
       // User was deleted from database but JWT token still exists
       return res.status(401).json({
@@ -3302,7 +3304,7 @@ app.get("/products/:id", async (req, res) => {
         } catch (e: any) {
           const isUniqueViolation = Boolean(
             e?.name === "SequelizeUniqueConstraintError" ||
-              e?.parent?.code === "23505"
+            e?.parent?.code === "23505"
           );
           if (!isUniqueViolation) {
             if (process.env.NODE_ENV === "development") {
@@ -4467,11 +4469,11 @@ app.get(
 
       const brandTreatments = treatmentIds.length
         ? await BrandTreatment.findAll({
-            where: {
-              userId: currentUser.id,
-              treatmentId: treatmentIds,
-            },
-          })
+          where: {
+            userId: currentUser.id,
+            treatmentId: treatmentIds,
+          },
+        })
         : [];
 
       const brandTreatmentByTreatmentId = new Map(
@@ -4969,22 +4971,22 @@ app.get("/getTreatments", authenticateJWT, async (req, res) => {
           // Treatment Plan info
           treatmentPlan: treatmentPlan
             ? {
-                id: treatmentPlan.id,
-                name: treatmentPlan.name,
-                price: treatmentPlan.price,
-                billingInterval: treatmentPlan.billingInterval,
-              }
+              id: treatmentPlan.id,
+              name: treatmentPlan.name,
+              price: treatmentPlan.price,
+              billingInterval: treatmentPlan.billingInterval,
+            }
             : null,
           // Subscription info
           subscription: subscription
             ? {
-                id: subscription.id,
-                status: subscription.status,
-                stripeSubscriptionId: subscription.stripeSubscriptionId,
-                cancelledAt: subscription.cancelledAt,
-                paymentDue: subscription.paymentDue,
-                paidAt: subscription.paidAt,
-              }
+              id: subscription.id,
+              status: subscription.status,
+              stripeSubscriptionId: subscription.stripeSubscriptionId,
+              cancelledAt: subscription.cancelledAt,
+              paymentDue: subscription.paymentDue,
+              paidAt: subscription.paidAt,
+            }
             : null,
           // Order info
           orderId: order.id,
@@ -5611,10 +5613,10 @@ app.post("/orders/create-payment-intent", authenticateJWT, async (req, res) => {
       brandAmountUsd = Math.max(
         0,
         totalPaid -
-          platformFeeUsd -
-          stripeFeeUsd -
-          doctorUsd -
-          pharmacyWholesaleTotal
+        platformFeeUsd -
+        stripeFeeUsd -
+        doctorUsd -
+        pharmacyWholesaleTotal
       );
     } catch (e) {
       if (process.env.NODE_ENV === "development") {
@@ -5900,10 +5902,10 @@ app.post(
       const brandAmountUsd = Math.max(
         0,
         totalPaid -
-          platformFeeUsd -
-          stripeFeeUsd -
-          doctorUsd -
-          pharmacyWholesaleUsd
+        platformFeeUsd -
+        stripeFeeUsd -
+        doctorUsd -
+        pharmacyWholesaleUsd
       );
 
       if (process.env.NODE_ENV === "development") {
@@ -6118,7 +6120,7 @@ app.post("/payments/product/sub", async (req, res) => {
     if (authHeader) {
       try {
         currentUser = getCurrentUser(req);
-      } catch {}
+      } catch { }
     }
 
     if (!currentUser) {
@@ -6272,10 +6274,10 @@ app.post("/payments/product/sub", async (req, res) => {
     const brandAmountUsd = Math.max(
       0,
       totalPaid -
-        platformFeeUsd -
-        stripeFeeUsd -
-        doctorUsd -
-        pharmacyWholesaleUsd
+      platformFeeUsd -
+      stripeFeeUsd -
+      doctorUsd -
+      pharmacyWholesaleUsd
     );
 
     console.log("💰 Fee breakdown calculated:", {
@@ -8293,10 +8295,10 @@ app.post("/questionnaires/templates", authenticateJWT, async (req, res) => {
       category,
       formTemplateType:
         formTemplateType === "normal" ||
-        formTemplateType === "user_profile" ||
-        formTemplateType === "doctor" ||
-        formTemplateType === "master_template" ||
-        formTemplateType === "standardized_template"
+          formTemplateType === "user_profile" ||
+          formTemplateType === "doctor" ||
+          formTemplateType === "master_template" ||
+          formTemplateType === "standardized_template"
           ? formTemplateType
           : null,
       createdById: currentUser.id,
@@ -12164,16 +12166,16 @@ app.put("/organization/update", authenticateJWT, async (req, res) => {
       data: {
         clinic: updatedClinic
           ? {
-              id: updatedClinic.id,
-              slug: updatedClinic.slug,
-              name: updatedClinic.name,
-              isCustomDomain: updatedClinic.isCustomDomain,
-              customDomain: updatedClinic.customDomain,
-              logo: updatedClinic.logo,
-              active: updatedClinic.isActive,
-              status: updatedClinic.status,
-              defaultFormColor: updatedClinic.defaultFormColor,
-            }
+            id: updatedClinic.id,
+            slug: updatedClinic.slug,
+            name: updatedClinic.name,
+            isCustomDomain: updatedClinic.isCustomDomain,
+            customDomain: updatedClinic.customDomain,
+            logo: updatedClinic.logo,
+            active: updatedClinic.isActive,
+            status: updatedClinic.status,
+            defaultFormColor: updatedClinic.defaultFormColor,
+          }
           : null,
       },
     });
@@ -13564,11 +13566,11 @@ async function startServer() {
           ...chat.toJSON(),
           patient: patient
             ? {
-                id: patient.id,
-                firstName: patient.firstName,
-                lastName: patient.lastName,
-                email: patient.email,
-              }
+              id: patient.id,
+              firstName: patient.firstName,
+              lastName: patient.lastName,
+              email: patient.email,
+            }
             : null,
         };
 
@@ -15279,12 +15281,12 @@ app.get(
         `📦 [PUBLIC] Found customization:`,
         customization
           ? {
-              id: customization.id,
-              questionnaireId: customization.questionnaireId,
-              customColor: customization.customColor,
-              isActive: customization.isActive,
-              userId: customization.userId,
-            }
+            id: customization.id,
+            questionnaireId: customization.questionnaireId,
+            customColor: customization.customColor,
+            isActive: customization.isActive,
+            userId: customization.userId,
+          }
           : null
       );
 
@@ -15486,8 +15488,8 @@ app.get("/public/products/:productId/pharmacy-coverages", async (req, res) => {
         pharmacyProduct:
           c.assignments && c.assignments.length > 0
             ? {
-                pharmacyProductName: c.assignments[0].pharmacyProductName,
-              }
+              pharmacyProductName: c.assignments[0].pharmacyProductName,
+            }
             : null,
       })),
     });
@@ -15627,15 +15629,15 @@ app.post(
       const sanitized = {
         products: Array.isArray(req.body?.products)
           ? req.body.products.map((p: any) => {
-              const obj: any = { productId: p?.productId };
-              if (
-                typeof p?.questionnaireId === "string" &&
-                p.questionnaireId.length > 0
-              ) {
-                obj.questionnaireId = p.questionnaireId;
-              }
-              return obj;
-            })
+            const obj: any = { productId: p?.productId };
+            if (
+              typeof p?.questionnaireId === "string" &&
+              p.questionnaireId.length > 0
+            ) {
+              obj.questionnaireId = p.questionnaireId;
+            }
+            return obj;
+          })
           : [],
       };
 

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, checkAuth, signOut } from '../lib/auth';
+import { User, checkAuth, signOut, hasPatientFrontendAccess } from '../lib/auth';
 import { useRouter } from 'next/router';
 import { SessionTimeoutManager } from '../lib/sessionTimeout';
 import { SessionWarning } from '../components/SessionWarning';
@@ -70,6 +70,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userData = await checkAuth();
       console.log('🔍 AuthContext - Loaded user data:', userData);
       console.log('🔍 AuthContext - User clinicId:', userData?.clinicId);
+      
+      // Check if user has valid access to patient-frontend (patient or brand role)
+      if (userData && !hasPatientFrontendAccess(userData)) {
+        console.warn('⚠️ AuthContext - User does not have patient or brand role, denying access');
+        setUser(null);
+        return;
+      }
+      
       setUser(userData);
     } catch (error) {
       console.error('Failed to refresh user');
