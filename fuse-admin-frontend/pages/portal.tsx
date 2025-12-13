@@ -1,13 +1,17 @@
 import { useState, useEffect } from "react"
+import { useRouter } from "next/router"
 import { useAuth } from "@/contexts/AuthContext"
 import Layout from "@/components/Layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Monitor, Smartphone, Upload, Link as LinkIcon, Globe } from "lucide-react"
+import { Monitor, Smartphone, Upload, Link as LinkIcon, Globe, Crown } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
+
+// Plan types that have access to Portal customization
+const PORTAL_ALLOWED_PLAN_TYPES = ['standard', 'professional', 'enterprise']
 
 const FONT_OPTIONS = [
   { value: "Playfair Display", label: "Playfair Display", description: "Elegant serif font with a classic feel" },
@@ -33,7 +37,8 @@ interface PortalSettings {
 }
 
 export default function PortalPage() {
-  const { authenticatedFetch } = useAuth()
+  const router = useRouter()
+  const { authenticatedFetch, subscription } = useAuth()
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -54,9 +59,22 @@ export default function PortalPage() {
   })
   const [isTogglingActive, setIsTogglingActive] = useState(false)
 
+  // Check if user has access to Portal based on their subscription plan
+  const hasPortalAccess = subscription?.plan?.type && PORTAL_ALLOWED_PLAN_TYPES.includes(subscription.plan.type)
+
+  // Redirect if user doesn't have portal access
   useEffect(() => {
-    loadSettings()
-  }, [])
+    // Wait for subscription to be loaded before checking access
+    if (subscription !== null && !hasPortalAccess) {
+      router.replace('/plans?message=Upgrade to Standard or higher to access Portal customization.')
+    }
+  }, [subscription, hasPortalAccess, router])
+
+  useEffect(() => {
+    if (hasPortalAccess) {
+      loadSettings()
+    }
+  }, [hasPortalAccess])
 
   const loadSettings = async () => {
     try {
@@ -186,6 +204,28 @@ export default function PortalPage() {
     } finally {
       setIsUploadingHero(false)
     }
+  }
+
+  // Show upgrade required message if user doesn't have access
+  if (subscription !== null && !hasPortalAccess) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center h-96 gap-6">
+          <div className="p-4 rounded-full bg-amber-100">
+            <Crown className="h-12 w-12 text-amber-600" />
+          </div>
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-2">Upgrade Required</h2>
+            <p className="text-muted-foreground mb-4">
+              Portal customization is available on Standard plan and above.
+            </p>
+            <Button onClick={() => router.push('/plans')}>
+              View Plans
+            </Button>
+          </div>
+        </div>
+      </Layout>
+    )
   }
 
   if (isLoading) {

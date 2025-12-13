@@ -34,6 +34,7 @@ export default function LandingPage() {
   const router = useRouter();
   const [customWebsite, setCustomWebsite] = useState<CustomWebsite | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [hoveredCardIndex, setHoveredCardIndex] = useState<number | null>(null);
@@ -77,14 +78,15 @@ export default function LandingPage() {
         // Check if custom website is active - if not, redirect to dashboard
         if (!websiteData || websiteData.isActive === false) {
           console.log('🔀 Custom website is not active, redirecting to dashboard...');
+          setIsRedirecting(true);
           router.replace('/dashboard');
-          return;
+          return; // Don't set isLoading to false - keep showing nothing while redirecting
         }
 
         setCustomWebsite(websiteData);
+        setIsLoading(false);
       } catch (error) {
         console.error('❌ Error loading custom website:', error);
-      } finally {
         setIsLoading(false);
       }
     };
@@ -308,6 +310,11 @@ export default function LandingPage() {
     logo,
     customWebsite
   });
+
+  // Show nothing while redirecting (prevents flash of content)
+  if (isRedirecting) {
+    return null;
+  }
 
   // Show loading skeleton while fetching custom website
   if (isLoading) {
