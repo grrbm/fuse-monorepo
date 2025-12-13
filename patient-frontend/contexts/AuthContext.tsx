@@ -72,7 +72,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('🔍 AuthContext - User clinicId:', userData?.clinicId);
       
       // Check if currently impersonating (superAdmin viewing as patient)
-      const isImpersonating = localStorage.getItem("impersonating") === "true";
+      // This is now determined by the user.impersonating field from the JWT
+      const isImpersonating = userData?.impersonating === true;
       
       // Check if user has valid access to patient-frontend (patient or brand role)
       // Skip this check if impersonating (superAdmin can view as patient)
@@ -99,6 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Remove JWT token from localStorage (using same key as api.ts)
       localStorage.removeItem('auth-token');
+      // Clear impersonation flag on sign out
+      localStorage.removeItem('impersonating');
 
       await signOut();
       setUser(null);

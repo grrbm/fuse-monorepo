@@ -21,15 +21,17 @@ export const Header: React.FC = () => {
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>("");
-  const [isImpersonating, setIsImpersonating] = useState(false);
-  const [originalUser, setOriginalUser] = useState<typeof user | null>(null);
 
-  // Load patients list if superAdmin
+  // Check if currently impersonating from the user object (set by backend in JWT)
+  // The user object will have impersonating: true if the JWT was created during impersonation
+  const isImpersonating = user?.impersonating === true;
+
+  // Load patients list if superAdmin and NOT impersonating
   useEffect(() => {
-    if (isSuperAdmin) {
+    if (isSuperAdmin && !isImpersonating) {
       loadPatients();
     }
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, isImpersonating]);
 
   const loadPatients = async () => {
     try {
@@ -66,7 +68,6 @@ export const Header: React.FC = () => {
 
         // Replace token with impersonation token
         localStorage.setItem("auth-token", token);
-        localStorage.setItem("impersonating", "true");
 
         // Reload the page to fetch impersonated user data
         window.location.reload();
@@ -95,9 +96,6 @@ export const Header: React.FC = () => {
 
         // Restore original token
         localStorage.setItem("auth-token", token);
-        localStorage.removeItem("impersonating");
-        setIsImpersonating(false);
-        setOriginalUser(null);
 
         // Reload to restore original user
         window.location.reload();
@@ -110,14 +108,6 @@ export const Header: React.FC = () => {
       alert("Failed to exit impersonation: " + error);
     }
   };
-
-  // Check if currently impersonating on mount
-  useEffect(() => {
-    const impersonating = localStorage.getItem("impersonating");
-    if (impersonating === "true") {
-      setIsImpersonating(true);
-    }
-  }, []);
 
   return (
     <>

@@ -20,6 +20,9 @@ export interface User {
   createdAt?: string;
   lastLoginAt?: string;
   gender?: string;
+  // Impersonation fields (set when superAdmin is viewing as another user)
+  impersonating?: boolean;
+  impersonatedBy?: string;
 }
 
 /**

@@ -1985,9 +1985,16 @@ app.get("/auth/me", authenticateJWT, async (req, res) => {
       });
     }
 
+    // Include impersonation fields from JWT if present
+    const userData = user.toSafeJSON();
+    if (currentUser?.impersonating) {
+      userData.impersonating = true;
+      userData.impersonatedBy = currentUser.impersonatedBy;
+    }
+
     res.status(200).json({
       success: true,
-      user: user.toSafeJSON(),
+      user: userData,
     });
   } catch (error) {
     if (process.env.NODE_ENV === "development") {
