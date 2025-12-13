@@ -2610,6 +2610,71 @@ app.post("/custom-website", authenticateJWT, async (req, res) => {
   }
 });
 
+// Toggle custom website active status
+app.post("/custom-website/toggle-active", authenticateJWT, async (req, res) => {
+  try {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+
+    const user = await User.findByPk(currentUser.id);
+    if (!user || !user.clinicId) {
+      return res.status(404).json({
+        success: false,
+        message: "User or clinic not found"
+      });
+    }
+
+    // Only allow brand users to toggle portal status
+    if (!user.hasAnyRoleSync(['brand', 'doctor'])) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied"
+      });
+    }
+
+    const { isActive } = req.body;
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: "isActive must be a boolean"
+      });
+    }
+
+    let customWebsite = await CustomWebsite.findOne({
+      where: { clinicId: user.clinicId }
+    });
+
+    if (customWebsite) {
+      await customWebsite.update({ isActive });
+    } else {
+      // Create a new custom website with default values and the specified isActive state
+      customWebsite = await CustomWebsite.create({
+        clinicId: user.clinicId,
+        isActive
+      });
+    }
+
+    console.log(`🌐 Custom website ${isActive ? 'activated' : 'deactivated'} for clinic:`, user.clinicId);
+
+    res.status(200).json({
+      success: true,
+      message: `Portal ${isActive ? 'activated' : 'deactivated'} successfully`,
+      data: customWebsite
+    });
+  } catch (error) {
+    console.error('Error toggling custom website status:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to toggle portal status"
+    });
+  }
+});
+
 // Upload portal logo to S3
 app.post("/custom-website/upload-logo", authenticateJWT, upload.single('logo'), async (req, res) => {
   try {

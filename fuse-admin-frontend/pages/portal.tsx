@@ -4,7 +4,8 @@ import Layout from "@/components/Layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Monitor, Smartphone, Upload, Link as LinkIcon } from "lucide-react"
+import { Monitor, Smartphone, Upload, Link as LinkIcon, Globe } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
 
@@ -28,6 +29,7 @@ interface PortalSettings {
   heroImageUrl: string
   heroTitle: string
   heroSubtitle: string
+  isActive: boolean
 }
 
 export default function PortalPage() {
@@ -48,7 +50,9 @@ export default function PortalPage() {
     heroImageUrl: "https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=1920&q=80",
     heroTitle: "Your Daily Health, Simplified",
     heroSubtitle: "All-in-one nutritional support in one simple drink",
+    isActive: true,
   })
+  const [isTogglingActive, setIsTogglingActive] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -69,6 +73,7 @@ export default function PortalPage() {
             heroImageUrl: data.data.heroImageUrl || settings.heroImageUrl,
             heroTitle: data.data.heroTitle || settings.heroTitle,
             heroSubtitle: data.data.heroSubtitle || settings.heroSubtitle,
+            isActive: data.data.isActive ?? true,
           })
         }
       }
@@ -98,6 +103,28 @@ export default function PortalPage() {
       alert("Error saving settings")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleToggleActive = async (checked: boolean) => {
+    setIsTogglingActive(true)
+    try {
+      const response = await authenticatedFetch(`${API_URL}/custom-website/toggle-active`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: checked }),
+      })
+      
+      if (response.ok) {
+        setSettings({ ...settings, isActive: checked })
+      } else {
+        alert("Failed to toggle portal status")
+      }
+    } catch (error) {
+      console.error("Error toggling portal status:", error)
+      alert("Error toggling portal status")
+    } finally {
+      setIsTogglingActive(false)
     }
   }
 
@@ -178,6 +205,38 @@ export default function PortalPage() {
           <h1 className="text-2xl font-bold">Portal Customization</h1>
           <p className="text-muted-foreground">Customize your patient-facing landing page</p>
         </div>
+
+        {/* Custom Website Activation Toggle */}
+        <Card className={`mb-6 ${settings.isActive ? 'border-green-200 bg-green-50/30' : 'border-gray-200'}`}>
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-full ${settings.isActive ? 'bg-green-100' : 'bg-gray-100'}`}>
+                  <Globe className={`h-6 w-6 ${settings.isActive ? 'text-green-600' : 'text-gray-400'}`} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Custom Website</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {settings.isActive 
+                      ? "Your custom landing page is live and visible to visitors"
+                      : "Enable to show your custom landing page to visitors"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-sm font-medium ${settings.isActive ? 'text-green-600' : 'text-gray-500'}`}>
+                  {settings.isActive ? "Activated" : "Deactivated"}
+                </span>
+                <Switch
+                  checked={settings.isActive}
+                  onCheckedChange={handleToggleActive}
+                  disabled={isTogglingActive}
+                  className="data-[state=checked]:bg-green-600"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Settings Panel */}
