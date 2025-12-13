@@ -361,7 +361,9 @@ export default class User extends Entity {
       return this.userRoles;
     }
 
-    let roles = await UserRoles.findOne({ where: { userId: this.id } });
+    let roles = await UserRoles.findOne({ 
+      where: { userId: this.id }
+    });
     if (!roles) {
       // Create roles based on deprecated role field
       roles = await UserRoles.create({

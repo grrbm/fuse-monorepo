@@ -27,9 +27,10 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   user?: User | null;
+  hasTickets?: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user, hasTickets = false }) => {
   const router = useRouter();
   const [clinic, setClinic] = React.useState<Clinic | null>(null);
   const [loadingClinic, setLoadingClinic] = React.useState(false);
@@ -289,17 +290,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, user 
         </div>
       </div>
 
-      {/* Help Button - Moved above user profile */}
-      <div className="p-3 border-t border-content3">
-        <Button
-          variant="flat"
-          color="default"
-          className="w-full justify-start"
-          startContent={<Icon icon="lucide:help-circle" className="text-lg text-foreground-500" />}
-        >
-          Help
-        </Button>
-      </div>
     </motion.div>
   );
 };
