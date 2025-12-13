@@ -18,19 +18,19 @@ export const Header: React.FC = () => {
   const { user, signOut } = useAuth();
   const primaryRole = getPrimaryRole(user);
   const isSuperAdmin = hasRole(user, "superAdmin");
-  
+
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>("");
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [originalUser, setOriginalUser] = useState<typeof user | null>(null);
-  
+
   // Load patients list if superAdmin
   useEffect(() => {
     if (isSuperAdmin) {
       loadPatients();
     }
   }, [isSuperAdmin]);
-  
+
   const loadPatients = async () => {
     try {
       const result = await apiCall("/admin/patients/list");
@@ -47,54 +47,70 @@ export const Header: React.FC = () => {
       console.error("Failed to load patients:", error);
     }
   };
-  
+
   const handleImpersonate = async (patientId: string) => {
     if (!patientId) return;
-    
+
     try {
+      console.log("🎭 Starting impersonation for patient:", patientId);
       const result = await apiCall("/admin/impersonate", {
         method: "POST",
         body: JSON.stringify({ userId: patientId }),
       });
-      
-      if (result.success && result.data?.token) {
-        // Store original user before impersonating
-        setOriginalUser(user);
-        setIsImpersonating(true);
-        
+
+      console.log("🎭 Impersonation API result:", result);
+
+      if (result.success && result.data?.data?.token) {
+        const token = result.data.data.token;
+        console.log("🎭 Got impersonation token, reloading...");
+
         // Replace token with impersonation token
-        localStorage.setItem("auth-token", result.data.token);
+        localStorage.setItem("auth-token", token);
         localStorage.setItem("impersonating", "true");
-        
+
         // Reload the page to fetch impersonated user data
         window.location.reload();
+      } else {
+        console.error("❌ Impersonation failed - no token in response:", result);
+        alert("Failed to impersonate user. Check console for details.");
       }
     } catch (error) {
-      console.error("Failed to impersonate:", error);
+      console.error("❌ Failed to impersonate:", error);
+      alert("Failed to impersonate user: " + error);
     }
   };
-  
+
   const handleExitImpersonation = async () => {
     try {
+      console.log("🚪 Exiting impersonation...");
       const result = await apiCall("/admin/exit-impersonation", {
         method: "POST",
       });
-      
-      if (result.success && result.data?.token) {
+
+      console.log("🚪 Exit impersonation result:", result);
+
+      if (result.success && result.data?.data?.token) {
+        const token = result.data.data.token;
+        console.log("🚪 Got admin token, reloading...");
+
         // Restore original token
-        localStorage.setItem("auth-token", result.data.token);
+        localStorage.setItem("auth-token", token);
         localStorage.removeItem("impersonating");
         setIsImpersonating(false);
         setOriginalUser(null);
-        
+
         // Reload to restore original user
         window.location.reload();
+      } else {
+        console.error("❌ Exit impersonation failed - no token in response:", result);
+        alert("Failed to exit impersonation. Check console for details.");
       }
     } catch (error) {
-      console.error("Failed to exit impersonation:", error);
+      console.error("❌ Failed to exit impersonation:", error);
+      alert("Failed to exit impersonation: " + error);
     }
   };
-  
+
   // Check if currently impersonating on mount
   useEffect(() => {
     const impersonating = localStorage.getItem("impersonating");
@@ -125,8 +141,8 @@ export const Header: React.FC = () => {
           </Button>
         </div>
       )}
-      
-      <motion.header 
+
+      <motion.header
         className="h-16 border-b border-content3 bg-content1 flex items-center justify-between px-6"
         initial={{ y: -10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -143,7 +159,7 @@ export const Header: React.FC = () => {
             </p>
           </div>
         </div>
-        
+
         {/* SuperAdmin Impersonation Selector */}
         {isSuperAdmin && !isImpersonating && (
           <div className="flex items-center gap-2">
@@ -196,9 +212,9 @@ export const Header: React.FC = () => {
               <DropdownItem key="help" startContent={<Icon icon="lucide:help-circle" />}>
                 Help & Support
               </DropdownItem>
-              <DropdownItem 
-                key="logout" 
-                color="danger" 
+              <DropdownItem
+                key="logout"
+                color="danger"
                 startContent={<Icon icon="lucide:log-out" />}
                 onPress={signOut}
               >
