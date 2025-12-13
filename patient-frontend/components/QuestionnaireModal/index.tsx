@@ -329,13 +329,13 @@ export const QuestionnaireModal: React.FC<QuestionnaireModalProps> = (props) => 
                         />
 
                         {/* DEBUG: Show step category */}
-                        {currentStep && (
+                        {/* {currentStep && (
                           <div className="bg-yellow-100 border border-yellow-400 rounded-lg p-2 mb-4">
                             <p className="text-sm font-mono">
                               <strong>DEBUG Category:</strong> {currentStep.category || 'undefined'}
                             </p>
                           </div>
-                        )}
+                        )} */}
 
                         {renderStepContent()}
 
